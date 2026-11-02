@@ -1,6 +1,6 @@
 # Outpost ⚔️
 
-**Original Android-first isometric 3D RPG | Godot 4.6.x | v0.2.0-dev**
+**Original Android-first isometric 3D RPG | Godot 4.7.x | v0.2.1-dev**
 
 A small original fantasy sandbox RPG inspired by the *genre* of games like Albion Online. This repository contains playable Godot source, not a compiled APK. Five Star Interactive project.
 
@@ -15,7 +15,7 @@ A small original fantasy sandbox RPG inspired by the *genre* of games like Albio
 - Automatic local JSON persistence (single device; no cloud storage).
 
 ## Android first-run
-1. Install the official **Godot 4.6 Android editor**: https://godotengine.org/download/android/
+1. Install the official **Godot 4.7 Android editor**: https://godotengine.org/download/android/
 2. Download the repository ZIP: https://github.com/Smurfis/outpost-rpg/archive/refs/heads/main.zip
 3. Extract the ZIP into Documents or Downloads. **Do not import the ZIP itself.**
 4. Godot Project Manager → Import → open the extracted `project.godot`.
@@ -40,6 +40,6 @@ docs/ROADMAP.md
 ```
 
 ## Status / limitations
-**Source added to repository, but NOT yet run in a Godot 4.6 runtime or verified on an Android device.** Please report any Godot Parser/Debugger errors. No touch interaction with world objects yet, no animation rig, audio, multiplayer, trading or server economy. Generated meshes are deliberate temporary low-poly art, not finished models. Godot is not an MMO host.
+**Source added to repository, but NOT yet run in a Godot 4.7 runtime or verified on an Android device.** Please report any Godot Parser/Debugger errors. No touch interaction with world objects yet, no animation rig, audio, multiplayer, trading or server economy. Generated meshes are deliberate temporary low-poly art, not finished models. Godot is not an MMO host.
 
 License: MIT for code and original artwork (see LICENSE).
