@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-dev — Playable systems expansion
+- Working recipe panel, inventory panel and six recipes with ingredient costs and ownership checks.
+- Added fiber and berries gathering, healing meals, tool bonuses, shield damage reduction and weapon swings.
+- Removed empty-action notification spam and disabled irrelevant interaction buttons.
+- Added distinct resource visuals, extra 3D world dressing, faceted characters/enemies and 7 original SVG item sprites.
+- Existing v0.2 saves load into updated inventory; local progression remains device-only.
+- Still pending Godot 4.7.2 testing on Android; review parser/debugger errors before calling release stable.
+
 ## 0.2.1-dev — Android 4.7.2 compatibility hotfix
 - Fixed fatal GDScript type inference in scripts/game.gd input registration (line 45).
 - Explicitly cast input key values when defining actions.

@@ -190,10 +190,28 @@ func _world() -> void:
 		if absf(x) < 5.3 and absf(z) < 5.3:
 			continue
 		var mesh := SphereMesh.new()
+		mesh.radial_segments = 7
+		mesh.rings = 3
 		mesh.radius = rng.randf_range(0.15, 0.38)
 		mesh.height = 0.40
 		var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
 		tuft.scale = Vector3(1.4, 0.53, 1.0)
+	# Details: timber palisade sections, supply crates, stumps and path stones
+	for i in range(12):
+		var px: float = -10.0 + float(i) * 1.75
+		if i < 5 or i > 8:
+			block(Vector3(0.25, 1.1, 0.25), Vector3(px, 0.55, 6.9), Color("735239"))
+			block(Vector3(1.65, 0.16, 0.18), Vector3(px, 0.82, 6.9), Color("b1844c"))
+	for x in [-4.2, -3.5, 2.4]:
+		block(Vector3(0.85, 0.78, 0.85), Vector3(x, 0.39, 4.3), Color("946d45"))
+		block(Vector3(0.90, 0.08, 0.9), Vector3(x, 0.82, 4.3), Color("be9867"))
+	for i in range(17):
+		var stones := CylinderMesh.new()
+		stones.top_radius = 0.18
+		stones.bottom_radius = 0.22
+		stones.height = 0.045
+		stones.radial_segments = 6
+		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
 	# Invisible boundary
 	_wall(Vector3(-23, 1.5, 0), Vector3(0.5, 3, 46))
 	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
@@ -356,6 +374,8 @@ func craft_item(id: String) -> void:
 	if result_id == "spear":
 		spear_crafted = true
 		hero.set_spear(true)
+	if result_id == "shield":
+		hero.set_shield(true)
 	experience += 8
 	hud.toast("Crafted %s! +8 XP" % str(recipe.get("name", "item")))
 	_save()

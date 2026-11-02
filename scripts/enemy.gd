@@ -32,6 +32,10 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 		_sphere(Vector3(x, 1.03, -0.90), Vector3(0.062, 0.070, 0.06), Color("242a29"))
 		_sphere(Vector3(x, 0.32, -0.95), Vector3(0.13, 0.22, 0.15), Color("f0d4a0"))
 	_sphere(Vector3(0, 0.93, 0.82), Vector3(0.15, 0.15, 0.66), Color("5f3c31"))
+	for x in [-0.47, 0.47]:
+		_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, 0.55), Color("51382f"))
+		_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, -0.55), Color("51382f"))
+		_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
 	add_to_group("enemies")
 
 func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
@@ -39,6 +43,8 @@ func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
 	var mesh := SphereMesh.new()
 	mesh.radius = 0.5
 	mesh.height = 1.0
+	mesh.radial_segments = 9
+	mesh.rings = 5
 	n.mesh = mesh
 	n.position = pos
 	n.scale = scale_by
@@ -46,6 +52,17 @@ func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
 	mat.albedo_color = c
 	n.material_override = mat
 	visual.add_child(n)
+
+func _box(size: Vector3, at: Vector3, tint: Color) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var body := MeshInstance3D.new()
+	body.mesh = mesh
+	body.position = at
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = tint
+	body.material_override = mat
+	visual.add_child(body)
 
 func _physics_process(delta: float) -> void:
 	if not alive:

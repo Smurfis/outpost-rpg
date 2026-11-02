@@ -132,7 +132,7 @@ func _row() -> HBoxContainer:
 func _icon(name: String) -> TextureRect:
 	var node := TextureRect.new()
 	var safe: String = name
-	if safe not in ["wood", "stone", "hide", "coins", "gather", "attack", "craft", "heart", "spear", "flag"]:
+	if safe not in ["wood", "stone", "hide", "coins", "gather", "attack", "craft", "heart", "spear", "flag", "fiber", "berries", "axe", "pickaxe", "shield", "satchel", "meal"]:
 		safe = "craft"
 	node.texture = load("res://assets/icons/" + safe + ".svg") as Texture2D
 	node.custom_minimum_size = Vector2(52, 52)
