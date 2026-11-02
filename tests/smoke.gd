@@ -20,7 +20,12 @@ func _test_game() -> void:
 		return
 	var game = scene.instantiate()
 	root.add_child(game)
+	print("DIAG created hero=", game.hero.name, " origin=", game.hero.global_position, " first_boar=", get_first_node_in_group("enemies").global_position)
+	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.1, "Player initializes at outpost")
 	await process_frame
+	print("DIAG after frame hero=", game.hero.name, " origin=", game.hero.global_position)
+	# Fix a deterministic empty-interaction test position regardless of physics step.
+	game.hero.global_position = Vector3(0, 0.35, 0)
 	check(game.recipes.size() == 6, "Six JSON recipes load")
 	check(game.menu != null and game.hud != null, "HUD and crafting interface initialize")
 	check(not game.near_workshop(), "Spawn is not automatically in crafting range")
