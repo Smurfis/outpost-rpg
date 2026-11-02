@@ -2,7 +2,7 @@
 
 ## Required
 - Android phone with OpenGL 3 or newer; enough free storage for the Godot Android editor.
-- Godot 4.6 Standard Android editor from https://godotengine.org/download/android/
+- Godot 4.7.2 Standard Android editor from https://godotengine.org/download/android/
 - An archive manager, or the Android built-in Files app for ZIP extraction.
 - GitHub account (optional for downloading, useful for contributions).
 
@@ -24,4 +24,4 @@ Download/extract the latest repository ZIP, or use Git in Termux. Back up projec
 ## Debugging
 If you see a red parse error, tap the bottom Debugger/Errors tab in the Godot editor; copy the first complete error including script path and line number back into ChatGPT. Runtime testing has not yet been performed.
 
-Godot Android documentation: https://docs.godotengine.org/en/4.6/tutorials/editor/using_the_android_editor.html
+Godot Android documentation: https://docs.godotengine.org/en/stable/tutorials/editor/using_the_android_editor.html
