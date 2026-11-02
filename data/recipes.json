@@ -1,0 +1,68 @@
+[
+  {
+    "id": "spear",
+    "name": "Forest Spear",
+    "result": "spear",
+    "amount": 1,
+    "desc": "Deal 16 damage instead of 8. Your first weapon upgrade.",
+    "ingredients": {
+      "wood": 3,
+      "stone": 2
+    }
+  },
+  {
+    "id": "axe",
+    "name": "Woodcutter Axe",
+    "result": "axe",
+    "amount": 1,
+    "desc": "Collect 2 wood instead of 1 per successful gather.",
+    "ingredients": {
+      "wood": 4,
+      "stone": 2
+    }
+  },
+  {
+    "id": "pickaxe",
+    "name": "Stone Pickaxe",
+    "result": "pickaxe",
+    "amount": 1,
+    "desc": "Collect 2 stone instead of 1 per successful gather.",
+    "ingredients": {
+      "wood": 3,
+      "stone": 4
+    }
+  },
+  {
+    "id": "shield",
+    "name": "Leather Shield",
+    "result": "shield",
+    "amount": 1,
+    "desc": "Reduce incoming boar damage by 40%.",
+    "ingredients": {
+      "wood": 3,
+      "hide": 2
+    }
+  },
+  {
+    "id": "satchel",
+    "name": "Forager Satchel",
+    "result": "satchel",
+    "amount": 1,
+    "desc": "Gather 2 fiber instead of 1.",
+    "ingredients": {
+      "fiber": 5,
+      "hide": 1
+    }
+  },
+  {
+    "id": "meal",
+    "name": "Camp Meal",
+    "result": "meal",
+    "amount": 1,
+    "desc": "Consumable: restore 40 health (use BAG or HEAL).",
+    "ingredients": {
+      "berries": 3,
+      "fiber": 1
+    }
+  }
+]

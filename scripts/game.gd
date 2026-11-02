@@ -1,23 +1,29 @@
 extends Node3D
-## Outpost 0.2: an original single-player, Android-first vertical slice.
+## Outpost 0.3: an original single-player, Android-first vertical slice.
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
+const MENU = preload("res://scripts/menu.gd")
 const SAVE = "user://outpost_progress_v02.json"
 
 var hero
 var hud
 var camera: Camera3D
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0}
+var menu
+var recipes: Array = []
 var experience: int = 0
 var kills: int = 0
 var spear_crafted: bool = false
 var attack_delay: float = 0.0
+var gather_delay: float = 0.0
+var world_time: float = 0.0
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
 func _ready() -> void:
 	_register_keys()
+	_load_recipes()
 	_lighting()
 	_world()
 	camera = Camera3D.new()
@@ -36,11 +42,14 @@ func _ready() -> void:
 	_resources()
 	_enemies()
 	_load()
+	menu = MENU.new()
+	menu.setup(self)
+	add_child(menu)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Gather 3 wood and 2 stone.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H]}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -57,24 +66,33 @@ func _unhandled_input(event: InputEvent) -> void:
 		attack()
 	elif event.is_action_pressed("outpost_craft"):
 		craft()
+	elif event.is_action_pressed("outpost_bag"):
+		show_inventory()
+	elif event.is_action_pressed("outpost_heal"):
+		use_meal()
 
 func _process(delta: float) -> void:
 	attack_delay = maxf(0.0, attack_delay - delta)
+	gather_delay = maxf(0.0, gather_delay - delta)
+	world_time += delta
 	_camera(delta)
 	if hero == null or hud == null:
 		return
-	var goal := "Gather 3 wood + 2 stone; craft a spear"
+	var goal: String = "Gather wood and stone, then craft a spear at the workshop"
 	if spear_crafted:
-		goal = "Defeat a wild boar" if kills == 0 else "Quest complete! Explore & collect"
-	var hint := "Explore the forest to find trees and stone."
+		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
 	var resource = _nearest_resource()
+	var enemy = _nearest_enemy()
+	var hint: String = "Approach a tree, rock or bush to gather."
 	if resource != null:
-		hint = "GATHER: %s (%d hits left)" % [resource.kind.capitalize(), resource.hits_left]
-	elif hero.global_position.distance_to(workshop) < 3.3:
-		hint = "CRAFT: Workshop requires 3 wood + 2 stone"
-	elif _nearest_enemy() != null:
-		hint = "ATTACK: Wild boar"
+		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
+	elif enemy != null:
+		hint = "Wild boar nearby • use ATTACK"
+	elif near_workshop():
+		hint = "Workshop in range • open CRAFT for real recipes"
 	hud.render_status(hero.health, inventory, experience, kills, spear_crafted, goal, hint)
+	hud.update_context(resource != null, enemy != null, near_workshop())
+
 
 func _camera(delta: float) -> void:
 	if hero == null:
@@ -203,6 +221,16 @@ func _resources() -> void:
 		add_child(rock)
 		rock.position = pos
 		rock.setup("stone")
+	for pos in [Vector3(-4, 0, -9), Vector3(3, 0, -12), Vector3(12, 0, 9), Vector3(-15, 0, 4)]:
+		var bush = NODE.new()
+		add_child(bush)
+		bush.position = pos
+		bush.setup("fiber")
+	for pos in [Vector3(-10, 0, 3), Vector3(8, 0, -3), Vector3(-17, 0, 16)]:
+		var berry = NODE.new()
+		add_child(berry)
+		berry.position = pos
+		berry.setup("berries")
 
 func _enemies() -> void:
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
@@ -234,60 +262,142 @@ func _nearest_enemy():
 			best = boar
 	return best
 
+func near_workshop() -> bool:
+	return hero != null and hero.global_position.distance_to(workshop) < 4.2
+
 func gather() -> void:
+	if gather_delay > 0.0:
+		return
 	var resource = _nearest_resource()
 	if resource == null:
-		hud.toast("Stand next to a tree or rock.")
-		return
+		return # No alerts on empty interaction or held buttons.
+	gather_delay = 0.33
 	var item: String = resource.harvest()
 	if item == "":
 		return
-	inventory[item] = int(inventory.get(item, 0)) + 1
-	experience += 2
-	hud.toast("+1 %s  +2 XP" % item.capitalize())
+	var amount: int = 1
+	if item == "wood" and int(inventory.get("axe", 0)) > 0:
+		amount = 2
+	elif item == "stone" and int(inventory.get("pickaxe", 0)) > 0:
+		amount = 2
+	elif item == "fiber" and int(inventory.get("satchel", 0)) > 0:
+		amount = 2
+	inventory[item] = int(inventory.get(item, 0)) + amount
+	experience += 2 * amount
+	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
 	_save()
+	_refresh_menu()
+
+func _load_recipes() -> void:
+	var file: FileAccess = FileAccess.open("res://data/recipes.json", FileAccess.READ)
+	if file == null:
+		push_error("Missing data/recipes.json")
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if parsed is Array:
+		recipes = parsed
 
 func craft() -> void:
-	if spear_crafted:
-		hud.toast("Forest Spear already crafted.")
+	show_crafting()
+
+func show_crafting() -> void:
+	if menu != null:
+		menu.open("craft")
+
+func show_inventory() -> void:
+	if menu != null:
+		menu.open("bag")
+
+func _refresh_menu() -> void:
+	if menu != null:
+		menu.refresh()
+
+func _recipe_by_id(id: String) -> Dictionary:
+	for entry in recipes:
+		if entry is Dictionary and str(entry.get("id", "")) == id:
+			return entry
+	return {}
+
+func owns_unique(item_id: String) -> bool:
+	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel"] and int(inventory.get(item_id, 0)) > 0
+
+func can_craft(id: String) -> bool:
+	var recipe: Dictionary = _recipe_by_id(id)
+	if recipe.is_empty() or not near_workshop():
+		return false
+	var result_id: String = str(recipe.get("result", ""))
+	if owns_unique(result_id):
+		return false
+	var ingredients: Dictionary = recipe.get("ingredients", {})
+	for key in ingredients:
+		if int(inventory.get(str(key), 0)) < int(ingredients[key]):
+			return false
+	return true
+
+func craft_item(id: String) -> void:
+	var recipe: Dictionary = _recipe_by_id(id)
+	if recipe.is_empty():
 		return
-	if hero.global_position.distance_to(workshop) > 3.3:
-		hud.toast("Go to the outpost workbench.")
+	if not near_workshop():
+		hud.toast("Go to the wooden workshop bench to craft.")
 		return
-	if int(inventory["wood"]) < 3 or int(inventory["stone"]) < 2:
-		hud.toast("Need 3 wood and 2 stone.")
+	var result_id: String = str(recipe.get("result", ""))
+	if owns_unique(result_id):
+		hud.toast("You already own this equipment.")
 		return
-	inventory["wood"] -= 3
-	inventory["stone"] -= 2
-	spear_crafted = true
-	hero.set_spear(true)
-	experience += 10
-	hud.toast("FOREST SPEAR EQUIPPED! +10 XP")
+	if not can_craft(id):
+		hud.toast("Not enough ingredients. Gather more first.")
+		return
+	var ingredients: Dictionary = recipe.get("ingredients", {})
+	for key in ingredients:
+		inventory[str(key)] = int(inventory.get(str(key), 0)) - int(ingredients[key])
+	inventory[result_id] = int(inventory.get(result_id, 0)) + int(recipe.get("amount", 1))
+	if result_id == "spear":
+		spear_crafted = true
+		hero.set_spear(true)
+	experience += 8
+	hud.toast("Crafted %s! +8 XP" % str(recipe.get("name", "item")))
 	_save()
+	_refresh_menu()
+
+func use_meal() -> void:
+	if int(inventory.get("meal", 0)) <= 0:
+		hud.toast("No meals left. Craft one at the workshop.")
+		return
+	if hero.health >= 99.9:
+		return
+	inventory["meal"] = int(inventory["meal"]) - 1
+	hero.health = minf(100.0, hero.health + 40.0)
+	hud.toast("Ate camp meal. +40 health")
+	_save()
+	_refresh_menu()
 
 func attack() -> void:
-	if attack_delay > 0.0:
+	if attack_delay > 0.0 or menu != null and menu.visible:
 		return
-	attack_delay = 0.6
 	var target = _nearest_enemy()
 	if target == null:
-		hud.toast("Move close to a boar to attack.")
-		return
-	target.receive_damage(14.0 if spear_crafted else 7.0)
+		return # No popup spam when outside combat range.
+	attack_delay = 0.55
+	hero.swing()
+	var damage: float = 16.0 if spear_crafted else 8.0
+	target.receive_damage(damage)
 	if target.alive:
-		hud.toast("Hit! Boar health: %d" % int(ceilf(target.hp)))
+		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
 
 func on_enemy_killed() -> void:
 	kills += 1
 	inventory["hide"] += 1
 	inventory["coins"] += 3
 	experience += 12
-	hud.toast("Wild boar defeated! +1 hide, +3 coins")
+	hud.toast("Boar defeated! +1 hide  +3 coins  +12 XP")
 	_save()
+	_refresh_menu()
 
 func _save() -> void:
-	var data := {"version": 2, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
-	var f := FileAccess.open(SAVE, FileAccess.WRITE)
+	var data: Dictionary = {"version": 3, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
+	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
@@ -295,17 +405,23 @@ func _save() -> void:
 func _load() -> void:
 	if not FileAccess.file_exists(SAVE):
 		return
-	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
-	if typeof(data) != TYPE_DICTIONARY or int(data.get("version", 0)) != 2:
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
+	if not (data is Dictionary):
 		return
-	var stored = data.get("inventory", {})
-	if typeof(stored) == TYPE_DICTIONARY:
+	var version: int = int(data.get("version", 0))
+	if version != 2 and version != 3:
+		return
+	var stored: Variant = data.get("inventory", {})
+	if stored is Dictionary:
 		for key in inventory:
 			inventory[key] = maxi(0, int(stored.get(key, 0)))
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
-	spear_crafted = bool(data.get("spear", false))
+	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
+	if spear_crafted:
+		inventory["spear"] = maxi(1, int(inventory.get("spear", 0)))
 	hero.set_spear(spear_crafted)
+
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
