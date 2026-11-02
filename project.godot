@@ -1,12 +1,12 @@
-; Outpost | Godot 4.6.x | Android landscape
+; Outpost | Godot 4.7.x | Android landscape
 config_version=5
 
 [application]
 config/name="Outpost"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.7", "GL Compatibility")
 config/description="Original isometric fantasy crafting RPG prototype"
-config/version="0.2.0-dev"
+config/version="0.2.1-dev"
 
 [display]
 window/size/viewport_width=1280
