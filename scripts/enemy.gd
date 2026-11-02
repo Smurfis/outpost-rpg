@@ -15,6 +15,8 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	position = at
 	spawn_pos = at
 	name = "WildBoar"
+	collision_layer = 2 # Melee checks use distance. Ignore player collision layer 1.
+	collision_mask = 1 # Still collide with terrain.
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.46
 	capsule.height = 1.1
@@ -72,7 +74,7 @@ func _physics_process(delta: float) -> void:
 			hp = 32.0
 			global_position = spawn_pos
 			visible = true
-			collision_layer = 1
+			collision_layer = 2
 			collision_mask = 1
 		return
 	var direction: Vector3 = hero.global_position - global_position
