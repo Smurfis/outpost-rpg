@@ -89,7 +89,9 @@ func swing() -> void:
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
-	var control := Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
+	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
+	if game.menu != null and game.menu.visible:
+		control = Vector2.ZERO
 	if hud != null and hud.move_vector.length() > 0.12:
 		control = hud.move_vector
 	var forward := -camera.global_transform.basis.z
@@ -106,12 +108,12 @@ func _physics_process(delta: float) -> void:
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
 		walking_phase += delta * 11.0
-		visual.position.y = absf(sinf(walking_phase)) * 0.065
+		visual.position.y = absf(sin(walking_phase)) * 0.065
 	else:
 		visual.position.y = lerpf(visual.position.y, 0.0, minf(delta * 9.0, 1.0))
 	strike_phase = maxf(0.0, strike_phase - delta * 3.4)
 	if blade != null:
-		blade.rotation.x = sinf(strike_phase * PI) * -1.7
+		blade.rotation.x = sin(strike_phase * PI) * -1.7
 	if elapsed - last_hit > 6.0:
 		health = minf(100.0, health + delta * 2.0)
 

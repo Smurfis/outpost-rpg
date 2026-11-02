@@ -43,8 +43,8 @@ XP 0   KILLS 0", 19, Color("efdfba"), 0.026, 0.023, 0.42, 0.095)
 		start_x += 0.103
 	_panel(0.56, 0.015, 0.989, 0.116, Color(0.10, 0.14, 0.105, 0.84))
 	quest = _label("Gather 3 wood and 2 stone", 19, Color("e7d7a2"), 0.574, 0.033, 0.970, 0.102)
-	_panel(0.285, 0.865, 0.685, 0.974, Color(0.05, 0.09, 0.12, 0.83))
-	hint = _label("Explore the forest", 18, Color("f9efd1"), 0.297, 0.885, 0.671, 0.958)
+	_panel(0.255, 0.865, 0.545, 0.974, Color(0.05, 0.09, 0.12, 0.83))
+	hint = _label("Explore the forest", 18, Color("f9efd1"), 0.266, 0.885, 0.536, 0.958)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast_label = _label("", 22, Color("ffe5a4"), 0.26, 0.21, 0.75, 0.33)

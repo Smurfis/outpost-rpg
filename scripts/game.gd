@@ -281,7 +281,7 @@ func _nearest_enemy():
 	return best
 
 func near_workshop() -> bool:
-	return hero != null and hero.global_position.distance_to(workshop) < 4.2
+	return hero != null and hero.global_position.distance_to(workshop) < 3.0
 
 func gather() -> void:
 	if gather_delay > 0.0:
