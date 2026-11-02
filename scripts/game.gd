@@ -42,12 +42,12 @@ func _ready() -> void:
 func _register_keys() -> void:
 	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C]}
 	for action in binds:
-		var key_name := "outpost_" + action
+		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
 		for code in binds[action]:
 			var event := InputEventKey.new()
-			event.physical_keycode = code
+			event.physical_keycode = int(code)
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
