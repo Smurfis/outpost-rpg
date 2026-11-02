@@ -2,6 +2,7 @@
 
 - [x] v0.2 source repository, mobile movement, HUD art and single player gameplay loop
 - [x] v0.2 confirmed running on user Android 4.7.2; initial parser fix committed
+- [x] v0.3.0 passes Godot 4.7.2 headless startup and gameplay-regression CI
 - [ ] Run v0.3.0 on Android; verify recipe UI, context actions and resource respawns
 - [x] v0.3 first inventory and recipe panels, contextual buttons and simple hit animation
 - [ ] v0.3.1 responsive screen polish, equipment panel previews, hit feedback and balancing

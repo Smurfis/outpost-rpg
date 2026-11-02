@@ -6,7 +6,9 @@
 - Removed empty-action notification spam and disabled irrelevant interaction buttons.
 - Added distinct resource visuals, extra 3D world dressing, faceted characters/enemies and 7 original SVG item sprites.
 - Existing v0.2 saves load into updated inventory; local progression remains device-only.
-- Added GitHub Actions automated 4.7.2 headless import and runtime smoke checks.
+- Added GitHub Actions automated 4.7.2 headless import and runtime smoke checks plus playable-system tests.
+- Fixed a first-physics-frame teleport to the first boar by placing enemies on a separate collision layer.
+- Verified zero gameplay regression assertions failing on GitHub CI for the 4.7.2 engine.
 - Still pending Godot 4.7.2 testing on Android; review parser/debugger errors before calling release stable.
 
 ## 0.2.1-dev — Android 4.7.2 compatibility hotfix

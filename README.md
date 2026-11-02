@@ -49,7 +49,7 @@ docs/ROADMAP.md
 ```
 
 ## Automated checks
-The GitHub Actions workflow `.github/workflows/godot-smoke.yml` attempts a headless Godot 4.7.2 import and 120-frame game startup. See the Actions tab for the check result; this does not substitute for Android touchscreen testing.
+The GitHub Actions workflow `.github/workflows/godot-smoke.yml` runs official Godot 4.7.2 headless import, a 120-frame game startup, and the regression suite `tests/smoke.gd` (movement spawn, no empty interaction spam, gathering, recipe crafting, inventory, healing, and spear combat). These checks have passed on GitHub; Android controls and performance still require device testing.
 
 ## Status / limitations
 **Source added to repository, but NOT yet run in a Godot 4.7 runtime or verified on an Android device.** Please report any Godot Parser/Debugger errors. No touch interaction with world objects yet, no animation rig, audio, multiplayer, trading or server economy. Generated meshes are deliberate temporary low-poly art, not finished models. Godot is not an MMO host.

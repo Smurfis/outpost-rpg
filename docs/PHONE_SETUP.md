@@ -13,7 +13,9 @@
 4. Ensure access to files is granted; reopen the project if file permissions were denied.
 5. Wait until the bottom status indicates file imports have finished (SVG assets).
 6. Press Play (triangle icon) in the editor. Set landscape orientation.
-7. Use left virtual joystick to walk; right buttons to gather, attack and craft.
+7. You should begin at the outpost; move with the left joystick. GATHER and ATTACK are disabled unless a valid target is close.
+8. Tap CRAFT to browse recipes, stand near the workbench to make items, and use BAG to inspect inventory or eat a meal.
+9. The source passed Godot 4.7.2 headless gameplay tests on GitHub, but touchscreen usability must be checked on your phone.
 
 ## Expected game loop
 Gather 3 wood, 2 stone. Craft at the bench. Kill a boar. Close/reopen and check that XP and loot remain.

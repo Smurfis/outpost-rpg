@@ -20,19 +20,15 @@ func _test_game() -> void:
 		return
 	var game = scene.instantiate()
 	root.add_child(game)
-	print("DIAG created hero=", game.hero.name, " origin=", game.hero.global_position, " first_boar=", get_first_node_in_group("enemies").global_position)
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.1, "Player initializes at outpost")
 	await process_frame
-	print("DIAG after frame hero=", game.hero.name, " origin=", game.hero.global_position)
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.6, "Hero remains at spawn through first physics frame")
 	check(game.recipes.size() == 6, "Six JSON recipes load")
 	check(game.menu != null and game.hud != null, "HUD and crafting interface initialize")
 	check(not game.near_workshop(), "Spawn is not automatically in crafting range")
 	var before: int = int(game.inventory.get("wood", 0))
 	var message: String = game.hud.toast_label.text
-	print("DIAG empty pos=", game.hero.global_position, " nearest=", game._nearest_resource(), " delay=", game.gather_delay, " before toast=", message)
 	game.gather()
-	print("DIAG empty after toast=", game.hud.toast_label.text, " delay=", game.gather_delay, " inventory=", game.inventory)
 	check(int(game.inventory.get("wood", 0)) == before, "Empty gathering awards no item")
 	check(game.hud.toast_label.text == message, "Empty gather produces no popup")
 	var target = null
@@ -43,9 +39,7 @@ func _test_game() -> void:
 	check(target != null, "Wood resource exists")
 	if target != null:
 		game.hero.global_position = target.global_position + Vector3(1, 0.35, 0)
-		print("DIAG near wood pos=", game.hero.global_position, " target=", target.global_position, " nearest=", game._nearest_resource(), " delay=", game.gather_delay)
 		game.gather()
-		print("DIAG after wood inventory=", game.inventory, " hits=", target.hits_left)
 		check(int(game.inventory.get("wood", 0)) == before + 1, "Gathering awards wood")
 		check(target.hits_left == 2, "Resource durability decreases")
 	game.hero.global_position = game.workshop + Vector3(0, 0.35, 0)
