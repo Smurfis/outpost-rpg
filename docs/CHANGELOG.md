@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1-dev — Android 4.7.2 compatibility hotfix
+- Fixed fatal GDScript type inference in scripts/game.gd input registration (line 45).
+- Explicitly cast input key values when defining actions.
+- Set project feature version to 4.7 for the user's Godot 4.7.2 editor.
+- Updated Android setup instructions. No engine runtime validation yet.
+
 ## 0.2.0-dev — 2026-11-02
 - Created the GitHub source tree and renamed game/branding to Outpost.
 - Added 10 original SVG resource/ability/item art assets and integrated them with HUD.
