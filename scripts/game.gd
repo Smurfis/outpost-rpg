@@ -93,18 +93,18 @@ func material(color: Color) -> StandardMaterial3D:
 	m.roughness = 1.0
 	return m
 
-func part(mesh: Mesh, at: Vector3, color: Color, parent: Node3D = self) -> MeshInstance3D:
+func part(mesh: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	var inst := MeshInstance3D.new()
 	inst.mesh = mesh
 	inst.position = at
 	inst.material_override = material(color)
-	parent.add_child(inst)
+	add_child(inst)
 	return inst
 
-func block(size: Vector3, at: Vector3, color: Color, parent: Node3D = self) -> MeshInstance3D:
+func block(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
-	return part(mesh, at, color, parent)
+	return part(mesh, at, color)
 
 func _lighting() -> void:
 	var w := WorldEnvironment.new()
