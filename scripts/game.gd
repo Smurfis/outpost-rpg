@@ -626,7 +626,7 @@ func attack() -> void:
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage)
 	if target.alive:
-		var enemy_name: String = "guardian" if target.name == "CryptGuardian" else "boar"
+		var enemy_name: String = "guardian" if target.is_in_group("dungeon_guardians") else "boar"
 		hud.toast("%d damage  •  %s %d HP" % [int(damage), enemy_name, int(ceilf(target.hp))])
 
 func on_enemy_killed() -> void:
