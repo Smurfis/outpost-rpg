@@ -72,7 +72,7 @@ func _run() -> void:
 	var instance = manager.active_instance
 	var gold_before: int = int(game.inventory.get("coins", 0))
 	for enemy in get_nodes_in_group("enemies"):
-		if enemy.get("dungeon") == instance:
+		if enemy.name == "CryptGuardian" and enemy.dungeon == instance:
 			enemy.receive_damage(10000.0)
 	check(instance.guards_remaining == 0 and instance.can_claim_chest(), "Guardians unlock final chest")
 	game.hero.global_position = instance.chest_world_position() + Vector3(0, 0.35, 1.5)
@@ -95,6 +95,17 @@ func _run() -> void:
 	check(manager.active_instance == null, "Leaving without chest unloads dungeon")
 	check(manager.entrances.has("preview_uncommon:0"), "Abandoned entrance remains available to retry")
 	check(not manager.completed_ids.has("preview_uncommon:0"), "Abandoning does not record a clear")
+
+	game.hero.global_position = remaining.global_position + Vector3(0.5, 0.35, 0)
+	manager._on_portal_selected(remaining)
+	manager._enter_confirmed()
+	check(manager.active_instance != null, "Abandoned dungeon can be re-entered")
+	game.hero.health = 1.0
+	game.hero.take_hit(200.0)
+	manager._physics_process(0.016)
+	check(manager.active_instance == null, "Death releases active dungeon instance")
+	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 1.0, "Death preserves existing outpost respawn position")
+	check(manager.entrances.has("preview_uncommon:0"), "Death does not consume entrance")
 
 	game.queue_free()
 	DirAccess.remove_absolute(file_path)
