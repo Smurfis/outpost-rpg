@@ -1,14 +1,11 @@
 # Outpost roadmap
 
-- [x] v0.2 source repository, mobile movement, HUD art and single player gameplay loop
-- [x] v0.2 confirmed running on user Android 4.7.2; initial parser fix committed
-- [x] v0.3.0 passes Godot 4.7.2 headless startup and gameplay-regression CI
-- [ ] Run v0.3.0 on Android; verify recipe UI, context actions and resource respawns
-- [x] v0.3 first inventory and recipe panels, contextual buttons and simple hit animation
-- [ ] v0.3.1 responsive screen polish, equipment panel previews, hit feedback and balancing
-- [ ] v0.4 imported 3D character and world assets, animations, sound and item pickups
-- [ ] v0.5 data-driven recipes, gathering tiers and multiple zones
-- [ ] v0.6 prototype online authoritative multiplayer (separately hosted)
-- [ ] Later: economies, trade, territory, PvP and larger persistent maps
+- [x] v0.2 early Godot Android world and movement prototype
+- [x] v0.3 working inventory, recipe list, harvesting and basic combat
+- [x] v0.4 10 gatherable types, 13 recipes, four stations and interactive crafting interface
+- [ ] Playtest v0.4 on Android 4.7.2: touchscreen layout, material loading, work taps and performance
+- [ ] v0.4.1 graphics and 3D models (currently original faceted placeholders)
+- [ ] v0.5 item tiers, production work orders, additional maps and equipment visuals
+- [ ] Later: authoritative multiplayer hosted separately, trading, economies and zones
 
-Keep every milestone playable; never treat GitHub as a server. Use original art and identities.
+Keep source on GitHub; engine smoke tests and gameplay regression checks are automated.

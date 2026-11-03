@@ -1,0 +1,63 @@
+[
+  {
+    "id": "wood",
+    "display": "Pine wood",
+    "rarity": "Common",
+    "harvest": "Axe",
+    "station": "workbench"
+  },
+  {
+    "id": "stone",
+    "display": "Fieldstone",
+    "rarity": "Common",
+    "harvest": "Pickaxe"
+  },
+  {
+    "id": "fiber",
+    "display": "Wild fibers",
+    "rarity": "Common",
+    "harvest": "Hands"
+  },
+  {
+    "id": "berries",
+    "display": "Forest berries",
+    "rarity": "Common",
+    "harvest": "Hands"
+  },
+  {
+    "id": "iron",
+    "display": "Iron ore",
+    "rarity": "Uncommon",
+    "harvest": "Pickaxe"
+  },
+  {
+    "id": "coal",
+    "display": "Coal",
+    "rarity": "Uncommon",
+    "harvest": "Pickaxe"
+  },
+  {
+    "id": "clay",
+    "display": "Clay",
+    "rarity": "Common",
+    "harvest": "Hands"
+  },
+  {
+    "id": "herbs",
+    "display": "Healing herbs",
+    "rarity": "Uncommon",
+    "harvest": "Hands"
+  },
+  {
+    "id": "mushrooms",
+    "display": "Wild mushrooms",
+    "rarity": "Common",
+    "harvest": "Hands"
+  },
+  {
+    "id": "reeds",
+    "display": "River reeds",
+    "rarity": "Common",
+    "harvest": "Hands"
+  }
+]

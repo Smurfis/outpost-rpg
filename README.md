@@ -1,57 +1,59 @@
-# Outpost ⚔️
+# Outpost — Mobile Sandbox RPG
 
-**Original Android-first isometric 3D RPG | Godot 4.7.x | v0.3.0-dev**
+**Five Star Interactive · Godot 4.7.2 · v0.4.0-dev**
 
-A small original fantasy sandbox RPG inspired by the *genre* of games like Albion Online. This repository contains playable Godot source, not a compiled APK. Five Star Interactive project.
+Original isometric 3D fantasy sandbox RPG, developed for Android. **Source code and Godot project**, not an Android APK or multiplayer server.
 
-## Current vertical slice — v0.3.0-dev
-- Isometric 3D forest outpost with low-poly pines, rocks, a tent and crafting bench.
-- Adventurer character with visible training blade / crafted spear.
-- Mobile touchscreen joystick and large icon-based gathering, attack and crafting buttons; keyboard alternative.
-- 10 original SVG HUD/action/item sprites in `assets/icons/`.
-- Mine stone, chop trees, forage fiber and berries (2–3 hits per node, 18-second respawn); harvesting tools double specific yields.
-- Actual workshop recipe browser: craft six item types, including axe, pickaxe, shield, satchel, spear and consumable healing meals.
-- Fight boars with weapon swings, automatically loot hides/coins, earn XP; crafted shield reduces damage.
-- Automatic local JSON persistence with v0.2 save migration (single device; no cloud storage).
-- Context-sensitive interaction gating prevents repeated warnings and disables gather/attack when no target is close.
+## What's playable?
+- An explorable forest outpost with mobile joystick and contextual action buttons
+- **10 resources:** wood, stone, fiber, berries, iron, coal, clay, herbs, mushrooms, reeds
+- **4 3D production stations:** workbench, forge, loom and campfire
+- **13 recipes**, including tools, armour, food, refined materials and weapons
+- **Interactive crafting:** pick a recipe, tap each material slot to load it, start crafting, perform hammer/forge/weave/stir actions while the station animates, then see the finished item revealed
+- Equipment improves gathering yield, character speed, damage or defence
+- Wild boars, hides, coins, health and experience; automatic local saves
+- Original scalable vector icons and procedurally built low-poly meshes (not yet polished asset-pack quality)
 
-## v0.3 controls
-- **GATHER** works only in range of a resource and is dimmed otherwise.
-- **ATTACK** works only in range of a boar and is dimmed otherwise.
-- **CRAFT** opens the recipe menu anywhere, but you must stand near the workbench to actually make an item.
-- **BAG** opens inventory; **HEAL** consumes a crafted meal when injured.
-- Keyboard: WASD/arrows, E gather, F attack, C craft, B/I bag, H heal.
-- Craft unique equipment once, or repeat consumable recipes. Crafting consumes real inventory quantities.
+## How to craft
+1. Walk up to any station identified by its floating label: **WOODWORK**, **FORGE**, **LOOM**, or **CAMPFIRE**.
+2. Tap **CRAFT** (you can browse anywhere; crafting itself requires proximity to the correct station).
+3. Select the station tab and choose an item from the left recipe list.
+4. Tap the required ingredient slots on the right to load each material.
+5. Press **BEGIN CRAFTING**, then tap **HAMMER / STRIKE / WEAVE / STIR** the indicated number of times as the progress bar fills.
+6. The item appears in the completion screen and your BAG when it is finished.
 
-## Android first-run
-1. Install the official **Godot 4.7 Android editor**: https://godotengine.org/download/android/
-2. Download the repository ZIP: https://github.com/Smurfis/outpost-rpg/archive/refs/heads/main.zip
-3. Extract the ZIP into Documents or Downloads. **Do not import the ZIP itself.**
-4. Godot Project Manager → Import → open the extracted `project.godot`.
-5. Allow initial asset imports to finish, then press ▶ Run. Rotate your phone to landscape.
-6. Use joystick on the left; action buttons on the right. Optional keyboard: WASD/arrows, E gather, C craft, F/Space attack.
+**Example production chain:** gather iron + coal → smelt iron ingot at Forge → craft an Iron Blade with two ingots and wood.
 
-**Quest:** gather 3 wood and 2 stone → return to workshop, open CRAFT and select Forest Spear → kill a wild boar. Restart and verify save. Tap outside a resource or enemy to see an instructional toast.
+Materials are spent only on completion. If the app closes or you stop mid-craft, materials remain in your inventory.
 
-## Source map
+## Android phone-only install
+1. Install the standard Godot 4.7.2 Android editor (or use your existing installation).
+2. Download repository source: https://github.com/Smurfis/outpost-rpg/archive/refs/heads/main.zip
+3. Extract into a **fresh folder**; select `project.godot` via Godot Project Manager → Import.
+4. After asset imports, press Play in landscape.
+5. Left virtual joystick moves; GATHER, ATTACK, CRAFT, BAG and HEAL buttons perform actions.
+6. You can also use WASD, E gather, F attack, C craft, B bag, H eat meal.
+
+The save file remains at `user://outpost_progress_v02.json` and old v0.2/v0.3 inventory and progression can be loaded. Fresh extracted projects may use a separate save location.
+
+## Source overview
 ```text
 project.godot
 scenes/main.tscn
-scripts/game.gd              main world + progression + persistence
-scripts/player.gd            movement + original stylized character
-scripts/resource_node.gd     harvestable trees / ore rocks
-scripts/enemy.gd             boar combat AI
-scripts/hud.gd               Android controls + SVG inventory icons
-assets/icons/*.svg           original scalable 2D art (10 sprites)
-docs/PHONE_SETUP.md
-docs/CHANGELOG.md
-docs/ROADMAP.md
+scripts/game.gd           World, inventory, recipe processing, saves
+scripts/menu.gd           Touch crafting screen, ingredient slots and work animation
+scripts/station.gd        Four visible 3D stations with activity effects
+scripts/resource_node.gd  Ten distinct gathering nodes
+scripts/player.gd         Character, equipment and controls
+scripts/enemy.gd          Wild boar enemy
+scripts/hud.gd            Mobile HUD and joystick
+data/recipes.json         Costs, station, production time, strokes, category
+data/resources.json       Resource descriptions and tools
+assets/icons/*.svg        Original item icons
+tests/smoke.gd            Automated gameplay regression checks
 ```
 
-## Automated checks
-The GitHub Actions workflow `.github/workflows/godot-smoke.yml` runs official Godot 4.7.2 headless import, a 120-frame game startup, and the regression suite `tests/smoke.gd` (movement spawn, no empty interaction spam, gathering, recipe crafting, inventory, healing, and spear combat). These checks have passed on GitHub; Android controls and performance still require device testing.
+## Validation
+GitHub Actions runs the official Godot 4.7.2 Linux editor headlessly to import sprites, start the game, and run a scripted gameplay regression suite. This is **not** the same as playing on Android, so graphical usability and FPS still require your device test.
 
-## Status / limitations
-**Source added to repository, but NOT yet run in a Godot 4.7 runtime or verified on an Android device.** Please report any Godot Parser/Debugger errors. No touch interaction with world objects yet, no animation rig, audio, multiplayer, trading or server economy. Generated meshes are deliberate temporary low-poly art, not finished models. Godot is not an MMO host.
-
-License: MIT for code and original artwork (see LICENSE).
+License: MIT (original source + icons).

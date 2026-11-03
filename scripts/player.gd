@@ -9,6 +9,7 @@ var last_hit := -100.0
 var visual: Node3D
 var blade: MeshInstance3D
 var shield_visual: MeshInstance3D
+var cloak_visual: MeshInstance3D
 var strike_phase: float = 0.0
 var walking_phase: float = 0.0
 
@@ -43,6 +44,8 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	_box(Vector3(0.55, 0.12, 0.50), Vector3(0.21, 0.12, -0.1), Color("4a342c"))
 	shield_visual = _box(Vector3(0.22, 0.80, 0.58), Vector3(-0.72, 1.15, -0.12), Color("ab8452"))
 	shield_visual.visible = false
+	cloak_visual = _box(Vector3(0.95, 1.22, 0.10), Vector3(0, 1.02, 0.42), Color("4b8068"))
+	cloak_visual.visible = false
 	blade = _box(Vector3(0.10, 0.90, 0.12), Vector3(0.62, 1.04, -0.22), Color("b9d2d2"))
 	_box(Vector3(0.34, 0.11, 0.12), Vector3(0.62, 0.65, -0.22), Color("d1ad5c"))
 
@@ -84,6 +87,10 @@ func set_shield(equipped: bool) -> void:
 	if shield_visual != null:
 		shield_visual.visible = equipped
 
+func set_cloak(equipped: bool) -> void:
+	if cloak_visual != null:
+		cloak_visual.visible = equipped
+
 func swing() -> void:
 	strike_phase = 1.0
 
@@ -92,7 +99,7 @@ func _physics_process(delta: float) -> void:
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if game.menu != null and game.menu.visible:
 		control = Vector2.ZERO
-	if hud != null and hud.move_vector.length() > 0.12:
+	if (game.menu == null or not game.menu.visible) and hud != null and hud.move_vector.length() > 0.12:
 		control = hud.move_vector
 	var forward := -camera.global_transform.basis.z
 	forward.y = 0.0
@@ -101,8 +108,9 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var direction: Vector3 = (right * control.x - forward * control.y).normalized()
-	velocity.x = direction.x * 5.2
-	velocity.z = direction.z * 5.2
+	var speed: float = 6.0 if int(game.inventory.get("cloak", 0)) > 0 else 5.2
+	velocity.x = direction.x * speed
+	velocity.z = direction.z * speed
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
 	move_and_slide()
 	if direction.length() > 0.05:
@@ -119,6 +127,8 @@ func _physics_process(delta: float) -> void:
 
 func take_hit(amount: float) -> void:
 	var protection: float = 0.6 if int(game.inventory.get("shield", 0)) > 0 else 1.0
+	if int(game.inventory.get("cloak", 0)) > 0:
+		protection *= 0.9
 	var actual: float = amount * protection
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
