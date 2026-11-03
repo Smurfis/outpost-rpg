@@ -722,6 +722,43 @@ func socket_skill(uid: String, index: int, skill_id: String) -> bool:
 	_refresh_menu()
 	return true
 
+func craft_skill_book(skill_id: String) -> bool:
+	if not near_station("skill_forge"):
+		return false
+	var definition: Dictionary = SKILLS.definition(skill_id)
+	if definition.is_empty():
+		return false
+	var costs: Dictionary = {"ether_dust": 3, "linen": 1, "crystal_shard": 1}
+	if not GEAR.can_pay(inventory, costs):
+		return false
+	for item in costs:
+		inventory[str(item)] = int(inventory.get(str(item), 0)) - int(costs[item])
+	var book: String = str(definition.get("book", ""))
+	inventory[book] = int(inventory.get(book, 0)) + 1
+	_save()
+	_refresh_menu()
+	return true
+
+func apply_prismatic_gem(uid: String) -> bool:
+	if not near_station("skill_forge") or int(inventory.get("prismatic_gem", 0)) < 1:
+		return false
+	for item in crafted_gear:
+		if not (item is Dictionary) or str(item.get("uid", "")) != uid:
+			continue
+		if int(item.get("rarity", 0)) != 4 or int(item.get("item_level", 0)) < 15:
+			return false
+		var sockets: Array = item.get("sockets", [])
+		for socket in sockets:
+			if str(socket.get("color", "")) == "prismatic":
+				return false
+		sockets.append({"color": "prismatic", "skill": ""})
+		item["sockets"] = sockets
+		inventory["prismatic_gem"] = int(inventory["prismatic_gem"]) - 1
+		_save()
+		_refresh_menu()
+		return true
+	return false
+
 func toggle_gear_flag(uid: String, flag: String) -> bool:
 	if flag not in ["locked", "favourite"]:
 		return false
