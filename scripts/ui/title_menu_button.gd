@@ -1,7 +1,7 @@
 @tool
 extends Button
 ## Outpost's re-usable textured, touch-friendly title menu button.
-## Every icon and plank asset is an independent transparent SVG.
+## Transparent PNG artwork takes priority over independent SVG fallback assets.
 @export_enum("play", "continue", "settings", "quit") var button_kind: String = "play"
 @export var button_caption: String = ""
 
@@ -18,7 +18,7 @@ func _ready() -> void:
 func _apply_appearance() -> void:
 	var kind: String = button_kind if CAPTIONS.has(button_kind) else "play"
 	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
-	var picture: Texture2D = load(ASSET_BASE + "icons/" + kind + ".svg") as Texture2D
+	var picture: Texture2D = _find_art("icon_", kind, "icons")
 	if picture != null:
 		icon = picture
 	icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -31,7 +31,7 @@ func _apply_appearance() -> void:
 	add_theme_color_override("font_disabled_color", Color("b3a79d"))
 	add_theme_color_override("font_outline_color", Color("3b2021"))
 	add_theme_constant_override("outline_size", 3)
-	var image: Texture2D = load(ASSET_BASE + "buttons/" + kind + ".svg") as Texture2D
+	var image: Texture2D = _find_art("btn_", kind, "buttons")
 	if image == null:
 		return
 	_set_plaque("normal", image, Color.WHITE)
@@ -58,3 +58,18 @@ func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	style.content_margin_bottom = 7.0
 	style.modulate_color = tint
 	add_theme_stylebox_override(state, style)
+
+func _find_art(prefix: String, kind: String, category: String) -> Texture2D:
+	# Import e.g. res://assets/ui/title/btn_play.png, icon_play.png.
+	# Keep the SVG placeholders functional until every PNG passes visual review.
+	var candidates: Array[String] = [
+		ASSET_BASE + prefix + kind + ".png",
+		ASSET_BASE + category + "/" + kind + ".png",
+		ASSET_BASE + category + "/" + kind + ".svg"
+	]
+	for path in candidates:
+		if ResourceLoader.exists(path):
+			var asset: Texture2D = load(path) as Texture2D
+			if asset != null:
+				return asset
+	return null
