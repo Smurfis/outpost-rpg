@@ -44,3 +44,18 @@ static func crate() -> MeshInstance3D:
 	PIXELS.box(st, Vector3(0, 0.46, 0), Vector3(0.92, 0.92, 0.92), 11, 8)
 	PIXELS.box(st, Vector3(0, 0.91, 0), Vector3(1.04, 0.12, 1.04), 11, 11)
 	return PIXELS.as_instance(st, "VoxelCrate")
+
+
+static func tent() -> MeshInstance3D:
+	# Deliberately stepped canvas tent instead of a smooth primitive cone.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	PIXELS.box(st, Vector3(0, 0.06, 0), Vector3(3.9, 0.12, 3.2), 11, 8)
+	for layer in range(5):
+		var level: float = float(layer)
+		PIXELS.box(st, Vector3(0, 0.29 + level * 0.31, 0),
+			Vector3(3.2 - level * 0.49, 0.31, 3.05), 5, 5)
+	PIXELS.box(st, Vector3(0, 1.83, 0), Vector3(0.28, 0.2, 3.3), 8, 8)
+	PIXELS.box(st, Vector3(0, 0.64, 1.55), Vector3(0.97, 1.03, 0.09), 8, 8)
+	PIXELS.box(st, Vector3(0, 0.2, 1.63), Vector3(0.95, 0.39, 0.09), 15, 15)
+	return PIXELS.as_instance(st, "VoxelCanvasTent")
