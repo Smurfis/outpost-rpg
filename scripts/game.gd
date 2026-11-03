@@ -624,7 +624,8 @@ func attack() -> void:
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage)
 	if target.alive:
-		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
+		var enemy_name: String = "boar" if target.get("display_name") == null else str(target.get("display_name"))
+		hud.toast("%d damage  •  %s %d HP" % [int(damage), enemy_name, int(ceilf(target.hp))])
 
 func on_enemy_killed() -> void:
 	kills += 1
