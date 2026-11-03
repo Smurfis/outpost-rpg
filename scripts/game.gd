@@ -10,6 +10,7 @@ const GEAR = preload("res://scripts/progression/gear_service.gd")
 const SKILLS = preload("res://scripts/progression/skill_service.gd")
 const SALVAGE = preload("res://scripts/progression/salvage_service.gd")
 const PROGRESSION_UI = preload("res://scripts/progression/progression_ui.gd")
+const FRONTIER = preload("res://scripts/world/frontier.gd")
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE
 
@@ -24,6 +25,7 @@ var gear_serial: int = 0
 var skill_cooldowns: Dictionary = {}
 var skill_buffs: Dictionary = {}
 var progression_ui
+var frontier
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var recipes: Array = []
@@ -45,6 +47,7 @@ func _ready() -> void:
 	_load_recipes()
 	_lighting()
 	_world()
+	_frontier()
 	_stations()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -239,11 +242,13 @@ func _world() -> void:
 		stones.height = 0.045
 		stones.radial_segments = 6
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
-	# Invisible boundary
-	_wall(Vector3(-23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(0, 1.5, -23), Vector3(46, 3, 0.5))
-	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
+	# The frontier module supplies the distant world boundaries.
+	# No interior invisible wall blocks travel into the surrounding sectors.
+
+func _frontier() -> void:
+	frontier = FRONTIER.new()
+	add_child(frontier)
+	frontier.populate(self)
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
 	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
@@ -409,13 +414,22 @@ func gather() -> void:
 	var amount: int = 1
 	if item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
 		amount = 2
-	elif item in ["stone", "iron", "coal"] and str(equipment.get("tool_mining", "")) == "pickaxe":
-		amount = 2
+	elif item in ["stone", "iron", "coal", "copper", "tin", "silver_ore", "gold_ore", "quartz", "mithril_ore"]:
+		var mining_tool: String = str(equipment.get("tool_mining", ""))
+		var grade: int = int(NODE.ore_definition(item).get("tier", 1))
+		if mining_tool == "mithril_pickaxe":
+			amount = 3
+		elif mining_tool == "steel_pickaxe":
+			amount = 3 if grade <= 3 else 2
+		elif mining_tool == "bronze_pickaxe" or mining_tool == "iron_pickaxe":
+			amount = 2 if grade <= 3 else 1
+		elif mining_tool == "pickaxe":
+			amount = 2 if grade <= 2 else 1
 	elif item in ["fiber", "reeds"] and str(equipment.get("tool_forage", "")) == "satchel":
 		amount = 2
 	inventory[item] = int(inventory.get(item, 0)) + amount
 	experience += 2 * amount
-	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
+	hud.toast("+%d %s  •  +%d XP" % [amount, item.replace("_", " ").capitalize(), 2 * amount])
 	_save()
 	_refresh_menu()
 
@@ -492,7 +506,7 @@ func equipment_slot(item_id: String) -> String:
 		return "back"
 	if item_id == "axe":
 		return "tool_wood"
-	if item_id == "pickaxe":
+	if item_id in ["pickaxe", "bronze_pickaxe", "iron_pickaxe", "steel_pickaxe", "mithril_pickaxe"]:
 		return "tool_mining"
 	if item_id == "satchel":
 		return "tool_forage"
@@ -525,7 +539,7 @@ func _apply_equipment() -> void:
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "bronze_pickaxe", "iron_pickaxe", "steel_pickaxe", "mithril_pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)

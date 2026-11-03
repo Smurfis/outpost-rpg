@@ -178,7 +178,7 @@ func _center() -> Vector2:
 	return joystick.position + joystick.size * 0.5
 
 func _input(event: InputEvent) -> void:
-	if game != null and game.menu != null and game.menu.visible:
+	if game != null and ((game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible)):
 		move_vector = Vector2.ZERO
 		return
 	if event is InputEventScreenTouch:

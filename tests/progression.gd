@@ -107,10 +107,15 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	game.hero.global_position = game.station_positions["forge"] + Vector3(0,0.35,0)
-	game.inventory["wood"] = 100
-	game.inventory["iron_ingot"] = 100
+	for item_id in GEAR.recipe_cost("pioneer_blade",20,2):
+		game.inventory[str(item_id)] = 100
 	check(game.craft_gear("pioneer_blade",20,2), "Physical forge crafts instanced gear")
 	check(game.crafted_gear.size() == 1, "Forged item added exactly once")
+	if game.crafted_gear.is_empty():
+		game.queue_free()
+		print("PROGRESSION RESULT: %d failed assertion(s)." % failures)
+		quit(1)
+		return
 	var crafted: Dictionary = game.crafted_gear[0]
 	var original_sockets: Array = crafted["sockets"].duplicate(true)
 	check(game.equip_crafted(str(crafted["uid"])), "Crafted gear equips by unique ID")
