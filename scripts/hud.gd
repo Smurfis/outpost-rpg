@@ -13,6 +13,10 @@ var knob: Panel
 var move_vector := Vector2.ZERO
 var finger := -1
 var mouse_stick := false
+var touches_seen: int = 0
+var mice_seen: int = 0
+var last_input_source: String = "NONE"
+var input_diagnostic: Label
 var gather_button: Button
 var attack_button: Button
 var craft_button: Button
@@ -78,6 +82,9 @@ XP 0   KILLS 0", 19, Color("efdfba"), 0.026, 0.023, 0.42, 0.095)
 	knob.add_theme_stylebox_override("panel", _style(Color(0.84, 0.85, 0.76, 0.90), 90))
 	joystick.add_child(knob)
 	knob.size = Vector2(67, 67)
+	input_diagnostic = _label("INPUT CHECK: none", 14, Color("bfe6cd"), 0.018, 0.603, 0.375, 0.659)
+	input_diagnostic.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	input_diagnostic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_position_stick()
 
 func _anchors(n: Control, left: float, top: float, right: float, bottom: float) -> void:
@@ -164,6 +171,10 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 
 func _process(delta: float) -> void:
 	_position_stick()
+	if input_diagnostic != null:
+		var is_locked: bool = game != null and game.hero != null and game.hero.interaction_locked
+		var ui_open: bool = game != null and ((game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible))
+		input_diagnostic.text = "INPUT %s T:%d M:%d  |  STICK %.2f  |  LOCK %s UI %s" % [last_input_source, touches_seen, mice_seen, move_vector.length(), str(is_locked), str(ui_open)]
 	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 53.0
 	if toast_time > 0.0:
 		toast_time -= delta
@@ -175,7 +186,7 @@ func _position_stick() -> void:
 	joystick.position = Vector2(35, screen.y - 204)
 
 func _center() -> Vector2:
-	return joystick.position + joystick.size * 0.5
+	return joystick.get_global_rect().get_center()
 
 func _reset_joystick() -> void:
 	finger = -1
@@ -189,27 +200,37 @@ func _input(event: InputEvent) -> void:
 		or (game.hero != null and game.hero.interaction_locked)
 	)
 	if modal_open:
-		# Never retain finger ID when a modal consumes the touch release.
+		# Modals can consume a touch release. Never retain the old finger.
 		_reset_joystick()
 		return
 	if event is InputEventScreenTouch:
+		touches_seen += 1
+		last_input_source = "TOUCH"
 		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 150.0:
+			# A real touch takes precedence over its emulated mouse twin.
+			mouse_stick = false
 			finger = event.index
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
 			_reset_joystick()
-	elif event is InputEventScreenDrag and event.index == finger:
-		_stick(event.position)
-	elif not OS.has_feature("mobile") and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		# Android emits synthetic mouse events from touch; never let them
-		# compete with the actual finger pointer.
-		if event.pressed and not mouse_stick and event.position.distance_to(_center()) < 150.0:
-			mouse_stick = true
+	elif event is InputEventScreenDrag:
+		if event.index == finger:
+			last_input_source = "DRAG"
 			_stick(event.position)
-		elif not event.pressed and mouse_stick:
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		# Android editor can deliver emulated mouse events; rejecting them on
+		# mobile caused a dead joystick on devices without direct touch events.
+		mice_seen += 1
+		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 150.0:
+			mouse_stick = true
+			last_input_source = "MOUSE"
+			_stick(event.position)
+		elif not event.pressed and mouse_stick and finger == -1:
 			_reset_joystick()
-	elif not OS.has_feature("mobile") and event is InputEventMouseMotion and mouse_stick:
-		_stick(event.position)
+	elif event is InputEventMouseMotion:
+		if mouse_stick and finger == -1:
+			last_input_source = "MOUSE-DRAG"
+			_stick(event.position)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
