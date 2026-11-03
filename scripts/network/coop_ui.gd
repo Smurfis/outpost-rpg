@@ -1,6 +1,6 @@
 extends CanvasLayer
 ## Compact LAN co-op lobby. Solo gameplay stays unchanged when closed/offline.
-var session: Node3D
+var session
 var shell: Control
 var header: Label
 var status: Label

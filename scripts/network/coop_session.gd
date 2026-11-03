@@ -12,7 +12,7 @@ const PORT: int = 30115
 const MAX_CLIENTS: int = 3
 const TICK: float = 0.12
 
-var game: Node3D
+var game
 var display_name: String = "Adventurer"
 var mode: String = "solo"
 var status_message: String = "Offline — solo adventure"
@@ -302,7 +302,7 @@ func _sync_preview() -> void:
 	# A local deterministic copy allows each peer to walk the same seeded rooms.
 	# Enemy combat, damage, loot and final completion are intentionally disabled
 	# until they can be governed by one authoritative encounter simulation.
-	var dungeon: Node3D = INSTANCE.new()
+	var dungeon = INSTANCE.new()
 	dungeon.name = "PartyDungeonPreview"
 	add_child(dungeon)
 	dungeon.position = Vector3(0.0, 10.0, -800.0 - float(party_id()) * 700.0)
