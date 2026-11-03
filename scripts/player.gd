@@ -1,6 +1,7 @@
 extends CharacterBody3D
 ## Outpost v0.5: modular original OBJ adventurer with animated limbs and equipment.
 const MODEL_ROOT: String = "res://assets/models/"
+const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 
 var game
 var hud
@@ -66,9 +67,13 @@ func _pivot(id: String, location: Vector3) -> Node3D:
 	return pivot
 
 func _model(id: String, parent: Node3D, position_at: Vector3) -> MeshInstance3D:
-	var model := MeshInstance3D.new()
+	var model: MeshInstance3D
+	if game != null and bool(game.get("voxel_art_enabled")):
+		model = VOXEL_CHARACTER.create_part(id)
+	if model == null:
+		model = MeshInstance3D.new()
+		model.mesh = load(MODEL_ROOT + id + ".obj") as Mesh
 	model.name = id
-	model.mesh = load(MODEL_ROOT + id + ".obj") as Mesh
 	model.position = position_at
 	parent.add_child(model)
 	return model

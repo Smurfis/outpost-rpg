@@ -1,4 +1,5 @@
 extends Node3D
+const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 ## Four readable 3D crafting stations. Built-in meshes; original, mobile-friendly.
 var station_id: String = "workbench"
 var activity: float = 0.0
@@ -23,6 +24,32 @@ func _part(mesh: Mesh, at: Vector3, tint: Color) -> MeshInstance3D:
 	return mesh_node
 
 func _block(size: Vector3, at: Vector3, tint: Color) -> MeshInstance3D:
+	if get_parent() != null and bool(get_parent().get("voxel_art_enabled")):
+		var top_tile: int = 11
+		var side_tile: int = 8
+		match station_id:
+			"forge":
+				top_tile = 4
+				side_tile = 12
+				if tint.v < 0.40:
+					top_tile = 15
+			"loom":
+				top_tile = 11
+				side_tile = 8
+			"campfire":
+				top_tile = 8
+				side_tile = 8
+			"workbench":
+				if tint.s < 0.22:
+					top_tile = 4
+					side_tile = 4
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		VOXEL_PALETTE.box(st, Vector3.ZERO, size, top_tile, side_tile)
+		var mesh_node: MeshInstance3D = VOXEL_PALETTE.as_instance(st, "PixelCraftingBlock")
+		mesh_node.position = at
+		add_child(mesh_node)
+		return mesh_node
 	var shape := BoxMesh.new()
 	shape.size = size
 	return _part(shape, at, tint)
