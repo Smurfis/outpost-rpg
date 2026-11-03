@@ -27,7 +27,7 @@ func setup(ref: Node) -> void:
 	game = ref
 
 func _ready() -> void:
-	layer = 12
+	layer = 26
 	root = Control.new()
 	root.name = "ProgressionOverlay"
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -293,12 +293,27 @@ func _render_skills() -> void:
 		var color_name: String = str(skill.get("family", ""))
 		var owned: bool = bool(game.learned_skills.get(id, false))
 		var caption: String = ("%s %s " % ["✓" if owned else "○", str(skill.get("name", id))]) + "(" + color_name.to_upper() + ")"
-		listing.add_child(_button(caption, _select_skill.bind(id), false, COLORS.get(color_name, Color.WHITE)))
+		var entry_line := HBoxContainer.new()
+		listing.add_child(entry_line)
+		var image := TextureRect.new()
+		image.texture = load("res://assets/icons/skills/" + id + ".svg") as Texture2D
+		image.custom_minimum_size = Vector2(51, 51)
+		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		entry_line.add_child(image)
+		entry_line.add_child(_button(caption, _select_skill.bind(id), false, COLORS.get(color_name, Color.WHITE)))
 	var skill: Dictionary = SKILLS.definition(selected_skill)
 	if skill.is_empty():
 		return
 	var card := _panel(details)
 	var family: String = str(skill.get("family", ""))
+	var large_icon := TextureRect.new()
+	large_icon.texture = load("res://assets/icons/skills/" + selected_skill + ".svg") as Texture2D
+	large_icon.custom_minimum_size = Vector2(82, 82)
+	large_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	large_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	card.add_child(large_icon)
 	card.add_child(_text(str(skill.get("name", "")), 23, COLORS.get(family, Color.WHITE)))
 	card.add_child(_text(str(skill.get("desc", "")), 18))
 	card.add_child(_text("Colour: %s    Cooldown: %.1fs" % [family.to_upper(), float(skill.get("cooldown", 0))], 16))
@@ -352,7 +367,8 @@ func _assign(uid: String, index: int, id: String) -> void:
 
 func _cast() -> void:
 	close_page()
-	game.cast_skill()
+	if not game.cast_skill(selected_skill):
+		game.cast_skill()
 
 func _render_salvage() -> void:
 	var protected_count: int = 0
