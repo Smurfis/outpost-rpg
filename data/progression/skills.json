@@ -1,0 +1,92 @@
+[
+  {
+    "id": "power_strike",
+    "book": "book_power_strike",
+    "name": "Power Strike",
+    "family": "red",
+    "type": "physical",
+    "value": 1.55,
+    "cooldown": 7,
+    "desc": "Strike for 155% Damage."
+  },
+  {
+    "id": "cleave",
+    "book": "book_cleave",
+    "name": "Cleave",
+    "family": "red",
+    "type": "physical",
+    "value": 1.1,
+    "cooldown": 10,
+    "desc": "Heavy cleave dealing 110% Damage to the target."
+  },
+  {
+    "id": "sundering_blow",
+    "book": "book_sundering_blow",
+    "name": "Sundering Blow",
+    "family": "red",
+    "type": "physical",
+    "value": 1.35,
+    "cooldown": 11,
+    "desc": "Physical blow dealing 135% Damage."
+  },
+  {
+    "id": "quickstep",
+    "book": "book_quickstep",
+    "name": "Quickstep",
+    "family": "yellow",
+    "type": "speed",
+    "value": 1.4,
+    "cooldown": 13,
+    "desc": "Move 40% faster for four seconds."
+  },
+  {
+    "id": "rapid_strikes",
+    "book": "book_rapid_strikes",
+    "name": "Rapid Strikes",
+    "family": "yellow",
+    "type": "physical",
+    "value": 1.6,
+    "cooldown": 9,
+    "desc": "Two rapid precision attacks totalling 160% Damage."
+  },
+  {
+    "id": "focus",
+    "book": "book_focus",
+    "name": "Focus",
+    "family": "yellow",
+    "type": "crit",
+    "value": 0.18,
+    "cooldown": 17,
+    "desc": "Gain 18% critical chance for five seconds."
+  },
+  {
+    "id": "arcane_bolt",
+    "book": "book_arcane_bolt",
+    "name": "Arcane Bolt",
+    "family": "blue",
+    "type": "magic",
+    "value": 1.8,
+    "cooldown": 6,
+    "desc": "Magic damage: 180% Ability Power plus 6."
+  },
+  {
+    "id": "mend",
+    "book": "book_mend",
+    "name": "Mend",
+    "family": "blue",
+    "type": "heal",
+    "value": 1.8,
+    "cooldown": 12,
+    "desc": "Heal: 180% Ability Power plus 14."
+  },
+  {
+    "id": "healing_pulse",
+    "book": "book_healing_pulse",
+    "name": "Healing Pulse",
+    "family": "blue",
+    "type": "heal",
+    "value": 2.4,
+    "cooldown": 18,
+    "desc": "Restorative pulse: 240% Ability Power plus 20."
+  }
+]
