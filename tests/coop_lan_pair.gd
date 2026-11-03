@@ -39,8 +39,8 @@ func _run() -> void:
 	else:
 		check(game.coop.join_lan("127.0.0.1", "LAN Guest") == OK, "Client attempts localhost UDP")
 	var joined: bool = false
-	for i in range(520):
-		await process_frame
+	for i in range(260):
+		await create_timer(0.05).timeout
 		if game.coop.roster.size() >= 2 and game.coop.party_id() == 1:
 			joined = true
 			break
@@ -58,14 +58,14 @@ func _run() -> void:
 		await frames(24)
 		got_run = game.coop.run_preview != null and int(game.coop.preview_descriptor.get("floor", 0)) == 1
 		check(got_run, "Host creates one dungeon preview for the party")
-		await frames(140)
+		await create_timer(1.5).timeout
 		game.coop.request_end_preview()
 		await frames(30)
 		got_exit = game.coop.run_preview == null
 		check(got_exit, "Host ends preview for party")
 	else:
-		for i in range(420):
-			await process_frame
+		for i in range(240):
+			await create_timer(0.05).timeout
 			if game.coop.run_preview != null and str(game.coop.preview_descriptor.get("entrance_id", "")) == "lan_pair_caverns":
 				got_run = true
 				break
