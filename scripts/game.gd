@@ -49,7 +49,12 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
-	_load()
+	# Startup menu's Play skips the old save once; Continue preserves it.
+	# Do not delete the previous save before the user actually plays/saves.
+	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
+	get_tree().root.remove_meta("outpost_new_adventure") if get_tree().root.has_meta("outpost_new_adventure") else null
+	if not fresh_start:
+		_load()
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
