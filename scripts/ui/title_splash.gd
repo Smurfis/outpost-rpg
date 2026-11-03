@@ -1,7 +1,8 @@
 @tool
 extends Label
 ## Dynamic, locally editable Minecraft/Terraria-style title splash.
-## Replace/update phrases without redrawing a PNG or baking text into the backdrop.
+## Rotates editable phrases; for the hero slogan, prefers hand-lettered transparent PNG.
+## All other phrases remain editable Godot Labels, with matching colors and outline.
 @export var messages: PackedStringArray = PackedStringArray([
 	"Now with deeper\\ndungeons!",
 	"Adventure awaits!",
@@ -15,6 +16,9 @@ extends Label
 
 var _elapsed := 0.0
 var _message_index := 0
+var _hero_texture: TextureRect
+const HERO_LINE := "Now with deeper\ndungeons!"
+const HERO_ART := "res://assets/ui/title/splash_deeper_dungeons.png"
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -31,12 +35,27 @@ func _ready() -> void:
 	style.shadow_color = Color("301c25")
 	style.shadow_offset = Vector2i(3, 5)
 	label_settings = style
+	if ResourceLoader.exists(HERO_ART):
+		_hero_texture = TextureRect.new()
+		_hero_texture.name = "HandLetteredHero"
+		_hero_texture.texture = load(HERO_ART) as Texture2D
+		_hero_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_hero_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_hero_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_hero_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		add_child(_hero_texture)
 	if not messages.is_empty():
 		set_message(messages[0])
 	set_process(not Engine.is_editor_hint())
 
 func set_message(message: String) -> void:
-	text = message.replace("\\n", "\n")
+	var resolved: String = message.replace("\\n", "\n")
+	var use_illustration: bool = _hero_texture != null and resolved == HERO_LINE
+	if _hero_texture != null:
+		_hero_texture.visible = use_illustration
+	text = "" if use_illustration else resolved
+	# The approved drawn PNG is already tilted; rotate only dynamic text.
+	rotation_degrees = 0.0 if use_illustration else rotation_angle
 
 func _process(delta: float) -> void:
 	_elapsed += delta
