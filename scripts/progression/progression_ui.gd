@@ -265,6 +265,10 @@ func _render_equipment() -> void:
 	section.add_child(_button("UNEQUIP" if equipped else "EQUIP", _equip.bind(uid)))
 	section.add_child(_button("UNLOCK ITEM" if bool(current.get("locked", false)) else "LOCK ITEM", _toggle_flag.bind(uid,"locked")))
 	section.add_child(_button("REMOVE FAVOURITE" if bool(current.get("favourite", false)) else "FAVOURITE", _toggle_flag.bind(uid,"favourite")))
+	var equipped_item: Dictionary = GEAR.get_equipped(game.crafted_gear, game.gear_loadout, str(current.get("slot", "")))
+	if not equipped_item.is_empty() and str(equipped_item.get("uid", "")) != uid:
+		var old_stats: Dictionary = GEAR.item_stats(equipped_item)
+		section.add_child(_text("VERSUS EQUIPPED %s  •  DAMAGE %+.1f  SPEED %+.2f  CRIT %+.1f%%  AP %+.1f" % [str(equipped_item.get("name", "")), float(stats["damage"]) - float(old_stats["damage"]), float(stats["attack_speed"]) - float(old_stats["attack_speed"]), (float(stats["crit"]) - float(old_stats["crit"])) * 100.0, float(stats["ability_power"]) - float(old_stats["ability_power"])], 16, Color("c6d8d4")))
 	section.add_child(_text("Sockets (rolled at crafting, never on equip/reload)", 17, Color("d5c7ae")))
 	var sockets: Array = current.get("sockets", [])
 	for i in range(sockets.size()):
@@ -272,6 +276,12 @@ func _render_equipment() -> void:
 		var color_name: String = str(socket.get("color", ""))
 		var skill_name: String = str(socket.get("skill", ""))
 		section.add_child(_text("%d. %s SOCKET  •  %s" % [i + 1, color_name.to_upper(), ("EMPTY" if skill_name == "" else skill_name.replace("_"," ").capitalize())], 17, COLORS.get(color_name, Color.WHITE)))
+	if int(current.get("rarity", 0)) == 4 and int(current.get("item_level", 0)) >= 15:
+		var exists: bool = false
+		for socket in sockets:
+			if str(socket.get("color", "")) == "prismatic":
+				exists = true
+		section.add_child(_button("INSTALL PRISMATIC GEM  •  OWNED %d" % int(game.inventory.get("prismatic_gem", 0)), _install_gem.bind(uid), exists or int(game.inventory.get("prismatic_gem", 0)) < 1 or not game.near_station("skill_forge"), Color("dcb4f6")))
 	section.add_child(_button("OPEN SKILL LIBRARY / FORGE", _change_page.bind("skills")))
 	_stats()
 
@@ -321,6 +331,8 @@ func _render_skills() -> void:
 	var count: int = int(game.inventory.get(book_id, 0))
 	var known: bool = bool(game.learned_skills.get(selected_skill, false))
 	card.add_child(_text("Skill book: %d owned  •  %s" % [count, "LEARNED" if known else "NOT LEARNED"], 18))
+	card.add_child(_text("CRAFT A BOOK: 3 ether dust + 1 linen + 1 crystal shard", 16, Color("cfddd5")))
+	card.add_child(_button("FORGE SKILL BOOK", _craft_book.bind(selected_skill), not game.near_station("skill_forge") or not GEAR.can_pay(game.inventory, {"ether_dust":3, "linen":1, "crystal_shard":1})))
 	card.add_child(_button("LEARN BOOK", _learn.bind(book_id), count == 0 or known or not game.near_station("skill_forge")))
 	card.add_child(_button("RECYCLE DUPLICATE → 2 ETHER DUST", _recycle_book.bind(book_id), count == 0 or not known or not game.near_station("skill_forge")))
 	var sockets := _panel(details, Color("2a3b43"))
@@ -351,6 +363,14 @@ func _render_skills() -> void:
 
 func _select_skill(id: String) -> void:
 	selected_skill = id
+	refresh()
+
+func _craft_book(id: String) -> void:
+	game.craft_skill_book(id)
+	refresh()
+
+func _install_gem(uid: String) -> void:
+	game.apply_prismatic_gem(uid)
 	refresh()
 
 func _learn(book: String) -> void:
