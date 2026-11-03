@@ -88,7 +88,7 @@ func _ready() -> void:
 	quick_menu.name = "QuickMenu"
 	quick_menu.add_theme_stylebox_override("panel", _style(Color("1a3236"), 12, GOLD, 2))
 	root.add_child(quick_menu)
-	_anchors(quick_menu, 0.410, 0.198, 0.720, 0.790)
+	_anchors(quick_menu, 0.405, 0.165, 0.725, 0.855)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 7)
 	quick_menu.add_child(layout)
@@ -103,7 +103,7 @@ func _ready() -> void:
 	actions.add_theme_constant_override("v_separation", 7)
 	actions.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(actions)
-	for action_name in ["BAG", "CRAFTING", "GEAR", "SKILLS", "SALVAGE", "HEAL"]:
+	for action_name in ["BAG", "CRAFTING", "GEAR", "SKILLS", "SALVAGE", "HEAL", "CO-OP"]:
 		var button := Button.new()
 		button.text = action_name
 		button.custom_minimum_size = Vector2(116, 54)
@@ -230,7 +230,7 @@ func _reset_joystick() -> void:
 func _input(event: InputEvent) -> void:
 	if game == null:
 		return
-	var modal_open: bool = quick_menu_open or (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or (game.hero != null and game.hero.interaction_locked)
+	var modal_open: bool = quick_menu_open or (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or (game.hero != null and game.hero.interaction_locked)
 	if modal_open:
 		_reset_joystick()
 		return
@@ -292,6 +292,9 @@ func _quick_action(id: String) -> void:
 		"SKILLS": game.show_progression("skills")
 		"SALVAGE": game.show_progression("salvage")
 		"HEAL": game.use_meal()
+		"CO-OP":
+			if game.coop != null:
+				game.coop.ui.open()
 
 func _toggle_diagnostics() -> void:
 	if input_diagnostic != null:

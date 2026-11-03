@@ -38,6 +38,28 @@ jobs:
         run: |
           set -o pipefail
           timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/progression.gd 2>&1 | tee progression.log
+      - name: LAN party registry and private dungeon preview regression
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_parties.gd 2>&1 | tee coop.log
+      - name: Two-process ENet loopback host/client check
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --host > host.log 2>&1 &
+          host_pid=$!
+          sleep 2
+          if ! timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --client > client.log 2>&1; then
+            cat host.log client.log
+            kill "$host_pid" || true
+            exit 1
+          fi
+          if ! wait "$host_pid"; then
+            cat host.log client.log
+            exit 1
+          fi
+          cat host.log client.log
+          grep -q "LAN PAIR RESULT: host 0 failed assertion(s)" host.log
+          grep -q "LAN PAIR RESULT: client 0 failed assertion(s)" client.log
       - name: Dungeon spawn, entry and reward integration checks
         run: |
           set -o pipefail
