@@ -1,0 +1,132 @@
+# Outpost original 3D mesh art palette (MIT, Five Star Interactive)
+newmtl bark
+Kd 0.394 0.271 0.184
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl bark_light
+Kd 0.549 0.384 0.231
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl leaf_dark
+Kd 0.192 0.361 0.263
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl leaf
+Kd 0.278 0.486 0.322
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl leaf_light
+Kd 0.427 0.588 0.384
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl rock
+Kd 0.400 0.490 0.522
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl rock_light
+Kd 0.671 0.706 0.678
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl ore
+Kd 0.549 0.718 0.765
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl cloth
+Kd 0.212 0.357 0.408
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl cloth_dark
+Kd 0.153 0.239 0.275
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl cloth_light
+Kd 0.408 0.541 0.565
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl leather
+Kd 0.518 0.373 0.271
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl leather_dark
+Kd 0.318 0.235 0.188
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl skin
+Kd 0.871 0.706 0.557
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl skin_shadow
+Kd 0.725 0.510 0.384
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl steel
+Kd 0.737 0.808 0.816
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl steel_dark
+Kd 0.447 0.545 0.569
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl gold
+Kd 0.831 0.682 0.388
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl cloak
+Kd 0.294 0.522 0.420
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl cloak_dark
+Kd 0.188 0.349 0.267
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl eyes
+Kd 0.149 0.200 0.184
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2
+
+newmtl hide
+Kd 0.549 0.349 0.271
+Ks 0.02 0.02 0.02
+Ns 2
+illum 2

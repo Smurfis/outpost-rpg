@@ -6,6 +6,8 @@ var hits_left: int = 3
 var cooldown: float = 0.0
 var recovery: float = 18.0
 var initial_scale: Vector3 = Vector3.ONE
+var target_label: Label3D
+var target_ring: MeshInstance3D
 
 func setup(resource_type: String) -> void:
 	kind = resource_type
@@ -34,7 +36,48 @@ func setup(resource_type: String) -> void:
 	hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
+	_setup_target_marker()
 	add_to_group("resources")
+
+func _model(id: String, size_factor: Vector3) -> void:
+	var model := MeshInstance3D.new()
+	model.name = "HarvestableModel"
+	model.mesh = load("res://assets/models/" + id + ".obj") as Mesh
+	model.scale = size_factor
+	add_child(model)
+
+func _setup_target_marker() -> void:
+	target_label = Label3D.new()
+	target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+	target_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	target_label.font_size = 43
+	target_label.pixel_size = 0.006
+	target_label.position = Vector3(0, 1.85, 0)
+	target_label.modulate = Color("fff0c4")
+	target_label.visible = false
+	add_child(target_label)
+	var halo_mesh := TorusMesh.new()
+	halo_mesh.inner_radius = 1.11
+	halo_mesh.outer_radius = 1.22
+	halo_mesh.rings = 9
+	halo_mesh.ring_segments = 28
+	target_ring = MeshInstance3D.new()
+	target_ring.mesh = halo_mesh
+	target_ring.position = Vector3(0, 0.05, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color("cdb270")
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	target_ring.material_override = mat
+	target_ring.visible = false
+	add_child(target_ring)
+
+func set_targeted(selected: bool) -> void:
+	if target_label != null:
+		target_label.visible = selected and active
+		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+	if target_ring != null:
+		target_ring.visible = selected and active
 
 func _material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -73,13 +116,11 @@ func _block(size: Vector3, at: Vector3, color: Color) -> void:
 	_part(m, at, Vector3.ONE, color)
 
 func _pine() -> void:
-	_spike(0.33, 0.20, 2.8, Vector3(0, 1.4, 0), Color("70492e"))
-	for i in range(4):
-		_spike(1.75 - float(i) * 0.31, 0.06, 1.85, Vector3(0, 2.0 + float(i) * 0.75, 0), Color("29583f") if i % 2 == 0 else Color("48744a"))
-	_spike(0.43, 0.35, 0.12, Vector3(0, 0.11, 0), Color("60472c"))
+	# Original OBJ, with a twisted trunk and layered low-poly foliage.
+	_model("oak_tree", Vector3(0.83, 0.83, 0.83))
 
 func _rock() -> void:
-	_ore(Color("758992"), Color("a7aba4"))
+	_model("rock_deposit", Vector3.ONE)
 
 func _ore(base: Color, vein: Color) -> void:
 	var points := [Vector3(-0.48, 0.52, 0.10), Vector3(0.42, 0.62, 0.26), Vector3(0.10, 0.39, -0.49)]
@@ -141,6 +182,8 @@ func harvest() -> String:
 	if not active:
 		return ""
 	hits_left -= 1
+	if target_label != null:
+		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
 	var bump := create_tween()
 	bump.tween_property(self, "scale", initial_scale * 1.07, 0.07)
 	bump.tween_property(self, "scale", initial_scale, 0.10)

@@ -1,59 +1,54 @@
-# Outpost — Mobile Sandbox RPG
+# Outpost — Android Sandbox RPG
 
-**Five Star Interactive · Godot 4.7.2 · v0.4.0-dev**
+**Five Star Interactive · Godot 4.7.2 · v0.5.0-dev**
 
-Original isometric 3D fantasy sandbox RPG, developed for Android. **Source code and Godot project**, not an Android APK or multiplayer server.
+An original isometric 3D RPG with gathering, hand-crafted equipment, four production stations and mobile controls. This repository contains the playable **Godot source project**, not an APK or MMO server.
 
-## What's playable?
-- An explorable forest outpost with mobile joystick and contextual action buttons
-- **10 resources:** wood, stone, fiber, berries, iron, coal, clay, herbs, mushrooms, reeds
-- **4 3D production stations:** workbench, forge, loom and campfire
-- **13 recipes**, including tools, armour, food, refined materials and weapons
-- **Interactive crafting:** pick a recipe, tap each material slot to load it, start crafting, perform hammer/forge/weave/stir actions while the station animates, then see the finished item revealed
-- Equipment improves gathering yield, character speed, damage or defence
-- Wild boars, hides, coins, health and experience; automatic local saves
-- Original scalable vector icons and procedurally built low-poly meshes (not yet polished asset-pack quality)
+## What's new in v0.5?
+- **10 original low-poly 3D OBJ mesh assets**, with shared material palette: a modular adventurer, modelled weapons/shield/cloak, oak trees, faceted boulders and supply crates. This replaces the previous block-based character and basic tree/stone resource appearance.
+- **Animated character rig:** separate arm/leg pivots create a walking gait, combat strikes and gathering swings.
+- **Interactive equipment page:** BAG → GEAR. Own an item, then equip, swap or unequip it. A rotating 3D adventurer preview shows the current loadout.
+- **Actual equipped bonuses:** main hand determines 8/16/24 damage, equipped axe/pickaxe/satchel doubles its matching gathering yields, shield reduces damage and cloak improves speed.
+- **Better gathering feedback:** nearby resource markers show type and remaining hits; striking a node plays a tool-swing animation and floating resource pickup text. The empty-area spam fix remains.
+- **More distinctive scenery:** original oak trees and supplies, organic triangular pathways and stone props around the same outpost.
 
-## How to craft
-1. Walk up to any station identified by its floating label: **WOODWORK**, **FORGE**, **LOOM**, or **CAMPFIRE**.
-2. Tap **CRAFT** (you can browse anywhere; crafting itself requires proximity to the correct station).
-3. Select the station tab and choose an item from the left recipe list.
-4. Tap the required ingredient slots on the right to load each material.
-5. Press **BEGIN CRAFTING**, then tap **HAMMER / STRIKE / WEAVE / STIR** the indicated number of times as the progress bar fills.
-6. The item appears in the completion screen and your BAG when it is finished.
+## Existing systems retained
+- **10 gatherable types:** wood, stone, fiber, berries, iron, coal, clay, herbs, mushrooms and reeds.
+- **4 stations** (workbench, forge, loom, campfire), **13 recipes** and hands-on production.
+- Select a recipe, load ingredients, then do hammer/forge/weave/stir actions while the progress bar advances; collect the result.
+- Boars, XP, materials, health, healing food, local saves.
 
-**Example production chain:** gather iron + coal → smelt iron ingot at Forge → craft an Iron Blade with two ingots and wood.
+## Phone-only installation
+1. Download the latest source ZIP: https://github.com/Smurfis/outpost-rpg/archive/refs/heads/main.zip
+2. **Extract into a fresh folder** (the source is NOT a compiled app). Open your installed Godot **4.7.2 Android editor**.
+3. Project Manager → Import → choose `project.godot` in the new folder.
+4. Allow all OBJ models and SVG sprites to import; press Play with the phone in landscape mode.
+5. Left joystick: move. GATHER: hit nearby highlighted resource. ATTACK: nearby boar. CRAFT: stations. BAG: inventory; GEAR: equipment selection from within the same menu.
 
-Materials are spent only on completion. If the app closes or you stop mid-craft, materials remain in your inventory.
+**Crafting example:** collect iron and coal → use Forge to make iron ingots → forge an iron blade → open BAG → GEAR to swap between the spear and iron blade.
 
-## Android phone-only install
-1. Install the standard Godot 4.7.2 Android editor (or use your existing installation).
-2. Download repository source: https://github.com/Smurfis/outpost-rpg/archive/refs/heads/main.zip
-3. Extract into a **fresh folder**; select `project.godot` via Godot Project Manager → Import.
-4. After asset imports, press Play in landscape.
-5. Left virtual joystick moves; GATHER, ATTACK, CRAFT, BAG and HEAL buttons perform actions.
-6. You can also use WASD, E gather, F attack, C craft, B bag, H eat meal.
+Existing local saves: `user://outpost_progress_v02.json`. v2-v4 inventories are migrated to v5 equipment records when opened in the same project save location. Extracting to a new folder may create a different Godot user:// location, depending on platform/app project identity. Back up saves before deleting old project folders.
 
-The save file remains at `user://outpost_progress_v02.json` and old v0.2/v0.3 inventory and progression can be loaded. Fresh extracted projects may use a separate save location.
-
-## Source overview
+## Code and art layout
 ```text
 project.godot
 scenes/main.tscn
-scripts/game.gd           World, inventory, recipe processing, saves
-scripts/menu.gd           Touch crafting screen, ingredient slots and work animation
-scripts/station.gd        Four visible 3D stations with activity effects
-scripts/resource_node.gd  Ten distinct gathering nodes
-scripts/player.gd         Character, equipment and controls
-scripts/enemy.gd          Wild boar enemy
-scripts/hud.gd            Mobile HUD and joystick
-data/recipes.json         Costs, station, production time, strokes, category
-data/resources.json       Resource descriptions and tools
-assets/icons/*.svg        Original item icons
-tests/smoke.gd            Automated gameplay regression checks
+scripts/game.gd                World, equipment, crafting, save migration
+scripts/player.gd              Modular 3D avatar, walk/attack/gather animations
+scripts/resource_node.gd       Harvestable nodes, target indicators
+scripts/menu.gd                Inventory, equipment, 3D preview, crafting
+scripts/station.gd             Workbench, forge, loom, campfire
+scripts/enemy.gd               Boar AI
+scripts/hud.gd                 Mobile HUD, health bar and controls
+assets/models/*.obj            Original low-poly models (10)
+assets/models/outpost.mtl      Original material palette
+assets/icons/*.svg             Item and action UI sprites
+data/recipes.json              Recipes, costs and station definitions
+data/resources.json            Resource definitions
+tests/smoke.gd                 Godot 4.7.2 automated regression checks
 ```
 
-## Validation
-GitHub Actions runs the official Godot 4.7.2 Linux editor headlessly to import sprites, start the game, and run a scripted gameplay regression suite. This is **not** the same as playing on Android, so graphical usability and FPS still require your device test.
+## Verification and limitations
+GitHub Actions tests sprite and model import, headless launch and scripted gameplay. Tests cannot prove the actual Android rendering quality, touch ergonomics or FPS. The modular meshes are **original low-poly models**, not imported AAA game art or a bone-rigged character. Multiplayer, music and larger biomes are not yet implemented.
 
-License: MIT (original source + icons).
+Original source and art licensed under MIT.

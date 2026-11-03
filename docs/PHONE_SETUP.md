@@ -1,4 +1,4 @@
-# Phone-only development — Outpost
+# Phone-only development — Outpost v0.5.0
 
 ## Required
 - Android phone with OpenGL 3 or newer; enough free storage for the Godot Android editor.
@@ -11,10 +11,10 @@
 2. Open Files, extract to e.g. Documents/outpost-rpg-main.
 3. Open Godot → Import → navigate to outpost-rpg-main/project.godot.
 4. Ensure access to files is granted; reopen the project if file permissions were denied.
-5. Wait until the bottom status indicates file imports have finished (SVG assets).
+5. Wait until the bottom status indicates file imports have finished (SVG sprites and OBJ models).
 6. Press Play (triangle icon) in the editor. Set landscape orientation.
 7. You should begin at the outpost; move with the left joystick. GATHER and ATTACK are disabled unless a valid target is close.
-8. Tap CRAFT to browse recipes, stand near the workbench to make items, and use BAG to inspect inventory or eat a meal.
+8. Tap CRAFT to browse recipes, stand near the workbench to make items, and use BAG → GEAR to equip weapons, shield, cloak and gathering tools.
 9. The source passed Godot 4.7.2 headless gameplay tests on GitHub, but touchscreen usability must be checked on your phone.
 
 ## Expected game loop
