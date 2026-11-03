@@ -25,6 +25,15 @@ func _test_game() -> void:
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.7, "Hero remains at starting outpost")
 	check(game.recipes.size() == 13, "13 recipes load from JSON")
 	check(game.stations.size() == 4, "Four interactive 3D stations exist")
+	check(str(game.equipment.get("weapon", "")) == "training_blade", "Starting equipment defaults to the training blade")
+	check(game.hero.visual.get_child_count() >= 7, "Modular player 3D model assembled")
+	var mesh_assets: Array = ["oak_tree", "rock_deposit", "supply_crate"]
+	var loaded_count: int = 0
+	for asset in mesh_assets:
+		var model: Mesh = load("res://assets/models/" + str(asset) + ".obj") as Mesh
+		if model != null:
+			loaded_count += 1
+	check(loaded_count == 3, "Original 3D OBJ environment models imported")
 	var types: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		types[node.kind] = true
@@ -48,6 +57,9 @@ func _test_game() -> void:
 		game.gather()
 		check(int(game.inventory.get("wood", 0)) == before + 1, "Gathering awards wood")
 		check(target.hits_left == 2, "Harvesting reduces node durability")
+		check(game.hero.gather_phase > 0.0, "Harvesting triggers player tool-swing animation")
+		target.set_targeted(true)
+		check(target.target_ring.visible and target.target_label.visible, "Gatherable shows range highlight and hit-count label")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)
 	game.inventory["wood"] = 7
 	game.inventory["stone"] = 5
@@ -72,7 +84,12 @@ func _test_game() -> void:
 	check(game.crafting.is_empty(), "Manual workshop actions finish craft")
 	check(int(game.inventory.get("spear", 0)) == 1, "Completed spear enters inventory")
 	check(int(game.inventory.get("wood", 0)) == 4 and int(game.inventory.get("stone", 0)) == 3, "Ingredients deducted once on completion")
-	check(game.spear_crafted, "Spear equips on completion")
+	check(game.spear_crafted, "Spear crafted flag retained")
+	check(game.is_equipped("spear"), "Crafted spear auto-equips in main hand")
+	check(game.equip_item("spear"), "Owned weapon can be unequipped")
+	check(str(game.equipment.get("weapon", "")) == "training_blade", "Unequipping restores training blade")
+	check(game.equip_item("spear"), "Owned weapon can be equipped again")
+	check(game.is_equipped("spear"), "Weapon slot now reflects equipped spear")
 	check(not game.can_craft("spear"), "Unique gear cannot be duplicated")
 	game.menu.close_page()
 	check(game.begin_craft("axe"), "Can start another recipe")
@@ -81,6 +98,14 @@ func _test_game() -> void:
 	check(int(game.inventory.get("wood", 0)) == 4, "Cancellation never consumes ingredients")
 	game.show_inventory()
 	check(game.menu.visible and game.menu.current_page == "bag", "Inventory tab opens")
+	game.show_equipment()
+	check(game.menu.visible and game.menu.current_page == "equipment", "Equipment screen opens")
+	check(game.menu.preview_rig != null and game.menu.preview_rig.get_child_count() > 0, "3D character preview exists")
+	game.inventory["shield"] = 1
+	check(game.equip_item("shield"), "Owned shield can be equipped")
+	check(game.is_equipped("shield"), "Defence gear occupies offhand slot")
+	game.equip_item("shield")
+	check(not game.is_equipped("shield"), "Shield can be removed without losing the item")
 	game.menu.close_page()
 	game.inventory["meal"] = 1
 	game.hero.health = 20.0
@@ -106,6 +131,10 @@ func _test_game() -> void:
 		game.craft_work_cooldown = 0.0
 		game.work_craft()
 	check(int(game.inventory.get("iron_blade", 0)) == 1, "Forged blade awarded")
+	check(game.is_equipped("iron_blade"), "Forged blade automatically equips as the current weapon")
+	game.equip_item("spear")
+	check(game.is_equipped("spear"), "Can switch between owned weapons")
+	game.equip_item("iron_blade")
 	var boar = get_first_node_in_group("enemies")
 	check(boar != null, "Boar enemy exists")
 	if boar != null:
