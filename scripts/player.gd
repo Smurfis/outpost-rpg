@@ -1,23 +1,35 @@
 extends CharacterBody3D
-## Camera-relative isometric movement, primitive adventurer with visible equipment.
+## Outpost v0.5: modular original OBJ adventurer with animated limbs and equipment.
+const MODEL_ROOT: String = "res://assets/models/"
+
 var game
 var hud
 var camera: Camera3D
-var health := 100.0
-var elapsed := 0.0
-var last_hit := -100.0
+var health: float = 100.0
+var elapsed: float = 0.0
+var last_hit: float = -100.0
+
 var visual: Node3D
-var blade: MeshInstance3D
-var shield_visual: MeshInstance3D
-var cloak_visual: MeshInstance3D
-var strike_phase: float = 0.0
+var left_arm: Node3D
+var right_arm: Node3D
+var left_leg: Node3D
+var right_leg: Node3D
+var shield_mesh: MeshInstance3D
+var cloak_pivot: Node3D
+var sword_mesh: MeshInstance3D
+var combat_phase: float = 0.0
+var gather_phase: float = 0.0
 var walking_phase: float = 0.0
+var walk_amount: float = 0.0
+var last_gather: String = ""
 
 func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	game = game_ref
 	hud = hud_ref
 	camera = camera_ref
 	name = "Adventurer"
+	collision_layer = 1
+	collision_mask = 1
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.38
 	capsule.height = 1.75
@@ -26,102 +38,124 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	collision.position.y = 0.88
 	add_child(collision)
 	visual = Node3D.new()
+	visual.name = "VisualRig"
 	add_child(visual)
-	_sphere(Vector3(0, 1.06, 0), Vector3(0.75, 1.2, 0.52), Color("405d71"))
-	_sphere(Vector3(0, 1.72, 0), Vector3(0.50, 0.52, 0.5), Color("e7b487"))
-	_sphere(Vector3(0, 1.95, 0), Vector3(0.55, 0.18, 0.55), Color("50534b"))
-	_box(Vector3(0.68, 0.18, 0.36), Vector3(0, 1.0, -0.34), Color("a66a45"))
-	for x in [-0.47, 0.47]:
-		_box(Vector3(0.22, 0.77, 0.22), Vector3(x, 1.09, 0), Color("bf986a"))
-	for x in [-0.20, 0.20]:
-		_box(Vector3(0.23, 0.60, 0.26), Vector3(x, 0.36, 0), Color("42484c"))
-	_box(Vector3(0.85, 1.1, 0.12), Vector3(0, 1.15, 0.30), Color("933d34"))
-	_box(Vector3(0.56, 0.20, 0.48), Vector3(0, 1.54, 0), Color("d7c5a3"))
-	_box(Vector3(0.87, 0.19, 0.62), Vector3(0, 0.82, 0), Color("624638"))
-	_sphere(Vector3(-0.5, 1.45, 0), Vector3(0.45, 0.36, 0.55), Color("7c8684"))
-	_sphere(Vector3(0.5, 1.45, 0), Vector3(0.45, 0.36, 0.55), Color("7c8684"))
-	_box(Vector3(0.55, 0.12, 0.50), Vector3(-0.21, 0.12, -0.1), Color("4a342c"))
-	_box(Vector3(0.55, 0.12, 0.50), Vector3(0.21, 0.12, -0.1), Color("4a342c"))
-	shield_visual = _box(Vector3(0.22, 0.80, 0.58), Vector3(-0.72, 1.15, -0.12), Color("ab8452"))
-	shield_visual.visible = false
-	cloak_visual = _box(Vector3(0.95, 1.22, 0.10), Vector3(0, 1.02, 0.42), Color("4b8068"))
-	cloak_visual.visible = false
-	blade = _box(Vector3(0.10, 0.90, 0.12), Vector3(0.62, 1.04, -0.22), Color("b9d2d2"))
-	_box(Vector3(0.34, 0.11, 0.12), Vector3(0.62, 0.65, -0.22), Color("d1ad5c"))
+	_model("adventurer_torso", visual, Vector3.ZERO)
+	_model("adventurer_head", visual, Vector3(0, 1.89, -0.035))
+	left_arm = _pivot("LeftArm", Vector3(-0.54, 1.51, 0.02))
+	right_arm = _pivot("RightArm", Vector3(0.54, 1.51, 0.02))
+	left_leg = _pivot("LeftLeg", Vector3(-0.205, 0.78, 0.0))
+	right_leg = _pivot("RightLeg", Vector3(0.205, 0.78, 0.0))
+	_model("adventurer_arm", left_arm, Vector3.ZERO)
+	_model("adventurer_arm", right_arm, Vector3.ZERO)
+	_model("adventurer_leg", left_leg, Vector3.ZERO)
+	_model("adventurer_leg", right_leg, Vector3.ZERO)
+	sword_mesh = _model("steel_sword", right_arm, Vector3(0.01, -0.76, -0.03))
+	shield_mesh = _model("kite_shield", left_arm, Vector3(-0.07, -0.46, -0.29))
+	shield_mesh.visible = false
+	cloak_pivot = _pivot("Cloak", Vector3(0, 1.50, 0.27))
+	_model("cloth_cloak", cloak_pivot, Vector3.ZERO)
+	cloak_pivot.visible = false
+	set_weapon("training_blade")
 
-func _mat(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 1.0
-	return m
+func _pivot(id: String, location: Vector3) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = id
+	pivot.position = location
+	visual.add_child(pivot)
+	return pivot
 
-func _sphere(pos: Vector3, scale: Vector3, c: Color) -> void:
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 1.0
-	mesh.radial_segments = 10
-	mesh.rings = 5
-	var n := MeshInstance3D.new()
-	n.mesh = mesh
-	n.position = pos
-	n.scale = scale
-	n.material_override = _mat(c)
-	visual.add_child(n)
+func _model(id: String, parent: Node3D, position_at: Vector3) -> MeshInstance3D:
+	var model := MeshInstance3D.new()
+	model.name = id
+	model.mesh = load(MODEL_ROOT + id + ".obj") as Mesh
+	model.position = position_at
+	parent.add_child(model)
+	return model
 
-func _box(size: Vector3, pos: Vector3, c: Color) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	var n := MeshInstance3D.new()
-	n.mesh = mesh
-	n.position = pos
-	n.material_override = _mat(c)
-	visual.add_child(n)
-	return n
+func _material(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.metallic = 0.16
+	mat.roughness = 0.72
+	return mat
+
+func set_weapon(id: String) -> void:
+	if sword_mesh == null:
+		return
+	if id == "iron_blade":
+		sword_mesh.scale = Vector3(1.13, 1.23, 1.13)
+		sword_mesh.material_override = _material(Color("b7d7e2"))
+	elif id == "spear":
+		sword_mesh.scale = Vector3(0.83, 1.35, 0.83)
+		sword_mesh.material_override = _material(Color("d2b782"))
+	else:
+		sword_mesh.scale = Vector3(0.82, 0.72, 0.82)
+		sword_mesh.material_override = _material(Color("b2b6a9"))
 
 func set_spear(equipped: bool) -> void:
-	if blade != null:
-		blade.scale.y = 1.75 if equipped else 1.0
-		blade.material_override = _mat(Color("e6d4a3") if equipped else Color("b9d2d2"))
+	set_weapon("spear" if equipped else "training_blade")
 
 func set_shield(equipped: bool) -> void:
-	if shield_visual != null:
-		shield_visual.visible = equipped
+	if shield_mesh != null:
+		shield_mesh.visible = equipped
 
 func set_cloak(equipped: bool) -> void:
-	if cloak_visual != null:
-		cloak_visual.visible = equipped
+	if cloak_pivot != null:
+		cloak_pivot.visible = equipped
 
 func swing() -> void:
-	strike_phase = 1.0
+	combat_phase = 1.0
+
+func gather_swing(kind: String) -> void:
+	last_gather = kind
+	gather_phase = 1.0
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
+	var modal_open: bool = game.menu != null and game.menu.visible
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
-	if game.menu != null and game.menu.visible:
+	if modal_open:
 		control = Vector2.ZERO
-	if (game.menu == null or not game.menu.visible) and hud != null and hud.move_vector.length() > 0.12:
+	elif hud != null and hud.move_vector.length() > 0.12:
 		control = hud.move_vector
-	var forward := -camera.global_transform.basis.z
+	var forward: Vector3 = -camera.global_transform.basis.z
 	forward.y = 0.0
 	forward = forward.normalized()
-	var right := camera.global_transform.basis.x
+	var right: Vector3 = camera.global_transform.basis.x
 	right.y = 0.0
 	right = right.normalized()
 	var direction: Vector3 = (right * control.x - forward * control.y).normalized()
-	var speed: float = 6.0 if int(game.inventory.get("cloak", 0)) > 0 else 5.2
+	var speed: float = 6.0 if int(game.inventory.get("cloak", 0)) > 0 else 5.1
+	if gather_phase > 0.0:
+		speed *= 0.42
 	velocity.x = direction.x * speed
 	velocity.z = direction.z * speed
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
 	move_and_slide()
+	walk_amount = move_toward(walk_amount, direction.length(), delta * 8.0)
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
-		walking_phase += delta * 11.0
-		visual.position.y = absf(sin(walking_phase)) * 0.065
+		walking_phase += delta * 10.6
+	visual.position.y = absf(sin(walking_phase)) * 0.06 * walk_amount
+	var step: float = sin(walking_phase) * 0.58 * walk_amount
+	left_leg.rotation.x = step
+	right_leg.rotation.x = -step
+	left_arm.rotation.x = -step * 0.55
+	right_arm.rotation.x = step * 0.55
+	combat_phase = maxf(0.0, combat_phase - delta * 2.8)
+	gather_phase = maxf(0.0, gather_phase - delta * 2.3)
+	if combat_phase > 0.0:
+		right_arm.rotation.x = -1.75 * sin(combat_phase * PI)
+		right_arm.rotation.z = -0.31 * sin(combat_phase * PI)
+	elif gather_phase > 0.0:
+		# Tool swings are animated even before a real tool is owned.
+		right_arm.rotation.x = -1.95 * sin(gather_phase * PI)
+		left_arm.rotation.x = -0.42 * sin(gather_phase * PI)
+		visual.rotation.z = 0.065 * sin(gather_phase * PI)
 	else:
-		visual.position.y = lerpf(visual.position.y, 0.0, minf(delta * 9.0, 1.0))
-	strike_phase = maxf(0.0, strike_phase - delta * 3.4)
-	if blade != null:
-		blade.rotation.x = sin(strike_phase * PI) * -1.7
+		visual.rotation.z = lerpf(visual.rotation.z, 0.0, minf(1.0, delta * 12.0))
+	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
 	if elapsed - last_hit > 6.0:
 		health = minf(100.0, health + delta * 2.0)
 
