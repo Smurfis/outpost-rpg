@@ -30,5 +30,7 @@ jobs:
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
 
+      - name: Seeded dungeon and equipment progression regressions
+        run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/progression.gd
       - name: Dungeon spawn, entry and reward integration checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeons.gd
