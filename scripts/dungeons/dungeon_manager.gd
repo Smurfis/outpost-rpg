@@ -284,6 +284,7 @@ func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 	if instance != active_instance or game == null:
 		return
 	var pocket: Dictionary = game.inventory
+	var reward_tier: int = int(active_info.get("quality", 0))
 	var gold: int = maxi(0, int(reward.get("coins", 0)))
 	var xp: int = maxi(0, int(reward.get("xp", 0)))
 	var item_id: String = str(reward.get("item", ""))
@@ -296,7 +297,7 @@ func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 	game._refresh_menu()
 	_exit_current(true, false)
 	if game.hud != null:
-		game.hud.toast("%s chest: +%d coins  +%d XP  +%d %s" % [RARITY.quality_name(int(active_info.get("quality", 0))), gold, xp, count, item_id.replace("_", " ")])
+		game.hud.toast("%s chest: +%d coins  +%d XP  +%d %s" % [RARITY.quality_name(reward_tier), gold, xp, count, item_id.replace("_", " ")])
 
 func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if active_instance == null:
