@@ -59,5 +59,47 @@
     "display": "River reeds",
     "rarity": "Common",
     "harvest": "Hands"
+  },
+  {
+    "id": "copper",
+    "display": "Copper vein",
+    "rarity": "Uncommon",
+    "harvest": "Pickaxe",
+    "tier": 1
+  },
+  {
+    "id": "tin",
+    "display": "Tin deposit",
+    "rarity": "Uncommon",
+    "harvest": "Pickaxe",
+    "tier": 1
+  },
+  {
+    "id": "silver_ore",
+    "display": "Silver vein",
+    "rarity": "Rare",
+    "harvest": "Pickaxe",
+    "tier": 3
+  },
+  {
+    "id": "gold_ore",
+    "display": "Gold vein",
+    "rarity": "Epic",
+    "harvest": "Pickaxe",
+    "tier": 4
+  },
+  {
+    "id": "quartz",
+    "display": "Quartz cluster",
+    "rarity": "Epic",
+    "harvest": "Pickaxe",
+    "tier": 4
+  },
+  {
+    "id": "mithril_ore",
+    "display": "Mithril lode",
+    "rarity": "Epic",
+    "harvest": "Pickaxe",
+    "tier": 5
   }
 ]

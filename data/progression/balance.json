@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "critical_multiplier": 1.5,
+  "base_stats": {
+    "damage": 8,
+    "attack_speed": 1,
+    "crit": 0.05,
+    "ability_power": 0
+  },
+  "limits": {
+    "attack_speed": 3.5,
+    "crit": 0.75,
+    "damage_mitigation": 0.7
+  },
+  "gear": {
+    "level_damage": 0.58,
+    "level_ability_power": 0.39,
+    "level_attack_speed": 0.006,
+    "level_crit": 0.002,
+    "level_armour_mitigation": 0.006,
+    "gear_level_cap": 50,
+    "socket_count_by_rarity": [
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        3
+      ]
+    ],
+    "socket_colors": [
+      "red",
+      "yellow",
+      "blue"
+    ],
+    "socket_color_weights": [
+      38,
+      30,
+      32
+    ],
+    "legendary_prismatic_chance": 0.35,
+    "legendary_prismatic_min_level": 15
+  },
+  "salvage_rates": [
+    0.5,
+    0.55,
+    0.6,
+    0.65,
+    0.7
+  ],
+  "dungeons": {
+    "floor_ranges": [
+      [
+        1,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        4,
+        5
+      ]
+    ],
+    "room_ranges": [
+      [
+        4,
+        6
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        7,
+        9
+      ],
+      [
+        8,
+        10
+      ]
+    ],
+    "final_chest_floor_multiplier": 1.3,
+    "floor_enemy_health_multiplier": 1.2,
+    "floor_enemy_damage_multiplier": 1.12,
+    "patterns": [
+      "linear",
+      "branching",
+      "circular",
+      "hub",
+      "labyrinth"
+    ]
+  }
+}

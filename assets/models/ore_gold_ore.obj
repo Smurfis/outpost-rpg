@@ -1,0 +1,403 @@
+# Outpost original mobile-optimised faceted ore deposit
+mtllib ore_lodes.mtl
+o ore_gold_ore
+v -0.45221 0.94560 0.00000
+v 0.47264 0.96708 0.00000
+v -0.49466 -0.05024 0.00000
+v 0.51509 -0.07173 0.00000
+v 0.00000 0.12487 0.73025
+v 0.00000 0.82099 0.74265
+v 0.00000 0.11846 -0.74381
+v 0.00000 0.81670 -0.73358
+v 0.83933 0.47000 -0.44092
+v 0.80739 0.47000 0.42415
+v -0.77186 0.47000 -0.40548
+v -0.73788 0.47000 0.38763
+v -0.71124 0.59101 0.24000
+v -0.24990 0.58957 0.24000
+v -0.71347 0.00619 0.24000
+v -0.23915 -0.00311 0.24000
+v -0.48000 0.10463 0.60128
+v -0.48000 0.50454 0.61823
+v -0.48000 0.08650 -0.15481
+v -0.48000 0.52097 -0.16861
+v -0.01017 0.30000 -0.01811
+v -0.00688 0.30000 0.49992
+v -0.94909 0.30000 -0.01770
+v -0.93832 0.30000 0.49178
+v 0.28847 0.59738 -0.18000
+v 0.82380 0.61227 -0.18000
+v 0.26435 -0.06664 -0.18000
+v 0.84535 -0.07841 -0.18000
+v 0.55000 0.05388 0.28169
+v 0.55000 0.50740 0.28430
+v 0.55000 0.05484 -0.63972
+v 0.55000 0.49972 -0.62863
+v 1.00711 0.28000 -0.44738
+v 0.98747 0.28000 0.07589
+v 0.13206 0.28000 -0.42446
+v 0.14865 0.28000 0.05476
+v 0.73736 0.50000 0.26855
+v 0.58506 1.05904 0.20772
+v 0.51460 0.50000 0.40897
+v 0.52539 1.05904 0.24533
+v 0.31221 0.50000 0.24051
+v 0.47118 1.05904 0.20021
+v 0.40988 0.50000 -0.00403
+v 0.49734 1.05904 0.13470
+v 0.67264 0.50000 0.01330
+v 0.56772 1.05904 0.13934
+v 0.63506 0.83000 0.20772
+v 0.57934 1.19904 0.18546
+v 0.55708 0.83000 0.24118
+v 0.57934 1.19904 0.18546
+v 0.52362 0.83000 0.16321
+v 0.57934 1.19904 0.18546
+v 0.60159 0.83000 0.12974
+v 0.57934 1.19904 0.18546
+v -0.62373 0.50000 0.44800
+v -0.49490 1.37870 0.34652
+v -0.65579 0.50000 0.22631
+v -0.50349 1.37870 0.28714
+v -0.47982 0.50000 0.08770
+v -0.45635 1.37870 0.25001
+v -0.27180 0.50000 0.17079
+v -0.40064 1.37870 0.27227
+v -0.23975 0.50000 0.39248
+v -0.39205 1.37870 0.33165
+v -0.41571 0.50000 0.53109
+v -0.43918 1.37870 0.36878
+v -0.44490 0.83000 0.34652
+v -0.39777 1.51870 0.30939
+v -0.43490 0.83000 0.26226
+v -0.39777 1.51870 0.30939
+v -0.35064 0.83000 0.27227
+v -0.39777 1.51870 0.30939
+v -0.36064 0.83000 0.35653
+v -0.39777 1.51870 0.30939
+v -0.11363 0.50000 -0.71655
+v -0.09016 1.43157 -0.55424
+v 0.11937 0.50000 -0.59385
+v -0.02775 1.43157 -0.52137
+v 0.07467 0.50000 -0.33434
+v -0.03972 1.43157 -0.45186
+v -0.18595 0.50000 -0.29666
+v -0.10953 1.43157 -0.44177
+v -0.30232 0.50000 -0.53287
+v -0.14070 1.43157 -0.50504
+v -0.04016 0.83000 -0.55424
+v -0.03157 1.57157 -0.49485
+v 0.02781 0.83000 -0.50344
+v -0.03157 1.57157 -0.49485
+v -0.02298 0.83000 -0.43547
+v -0.03157 1.57157 -0.49485
+v -0.09095 0.83000 -0.48627
+v -0.03157 1.57157 -0.49485
+v 0.29807 0.76000 -0.06487
+v -0.00012 1.49000 -0.09780
+v 0.10861 0.76000 0.19302
+v -0.01196 1.49000 -0.08169
+v -0.20946 0.76000 0.15789
+v -0.03184 1.49000 -0.08388
+v -0.33807 0.76000 -0.13513
+v -0.03988 1.49000 -0.10220
+v -0.14861 0.76000 -0.39302
+v -0.02804 1.49000 -0.11831
+v 0.16946 0.76000 -0.35789
+v -0.00816 1.49000 -0.11612
+usemtl gold_ore_highlight
+f 1 12 6
+usemtl gold_ore_rock
+f 1 6 2
+usemtl gold_ore_rock
+f 1 2 8
+usemtl gold_ore_rock
+f 1 8 11
+usemtl gold_ore_rock
+f 1 11 12
+usemtl gold_ore_highlight
+f 2 6 10
+usemtl gold_ore_rock
+f 6 12 5
+usemtl gold_ore_rock
+f 12 11 3
+usemtl gold_ore_rock
+f 11 8 7
+usemtl gold_ore_rock
+f 8 2 9
+usemtl gold_ore_highlight
+f 4 10 5
+usemtl gold_ore_rock
+f 4 5 3
+usemtl gold_ore_rock
+f 4 3 7
+usemtl gold_ore_rock
+f 4 7 9
+usemtl gold_ore_rock
+f 4 9 10
+usemtl gold_ore_highlight
+f 5 10 6
+usemtl gold_ore_rock
+f 3 5 12
+usemtl gold_ore_rock
+f 7 3 11
+usemtl gold_ore_rock
+f 9 7 8
+usemtl gold_ore_rock
+f 10 9 2
+usemtl gold_ore_rock
+f 13 24 18
+usemtl gold_ore_rock
+f 13 18 14
+usemtl gold_ore_rock
+f 13 14 20
+usemtl gold_ore_rock
+f 13 20 23
+usemtl gold_ore_rock
+f 13 23 24
+usemtl gold_ore_rock
+f 14 18 22
+usemtl gold_ore_rock
+f 18 24 17
+usemtl gold_ore_rock
+f 24 23 15
+usemtl gold_ore_rock
+f 23 20 19
+usemtl gold_ore_rock
+f 20 14 21
+usemtl gold_ore_rock
+f 16 22 17
+usemtl gold_ore_rock
+f 16 17 15
+usemtl gold_ore_rock
+f 16 15 19
+usemtl gold_ore_rock
+f 16 19 21
+usemtl gold_ore_rock
+f 16 21 22
+usemtl gold_ore_rock
+f 17 22 18
+usemtl gold_ore_rock
+f 15 17 24
+usemtl gold_ore_rock
+f 19 15 23
+usemtl gold_ore_rock
+f 21 19 20
+usemtl gold_ore_rock
+f 22 21 14
+usemtl gold_ore_rock
+f 25 36 30
+usemtl gold_ore_rock
+f 25 30 26
+usemtl gold_ore_rock
+f 25 26 32
+usemtl gold_ore_rock
+f 25 32 35
+usemtl gold_ore_rock
+f 25 35 36
+usemtl gold_ore_rock
+f 26 30 34
+usemtl gold_ore_rock
+f 30 36 29
+usemtl gold_ore_rock
+f 36 35 27
+usemtl gold_ore_rock
+f 35 32 31
+usemtl gold_ore_rock
+f 32 26 33
+usemtl gold_ore_rock
+f 28 34 29
+usemtl gold_ore_rock
+f 28 29 27
+usemtl gold_ore_rock
+f 28 27 31
+usemtl gold_ore_rock
+f 28 31 33
+usemtl gold_ore_rock
+f 28 33 34
+usemtl gold_ore_rock
+f 29 34 30
+usemtl gold_ore_rock
+f 27 29 36
+usemtl gold_ore_rock
+f 31 27 35
+usemtl gold_ore_rock
+f 33 31 32
+usemtl gold_ore_rock
+f 34 33 26
+usemtl gold_ore_crystal
+f 37 38 40
+usemtl gold_ore_crystal
+f 37 40 39
+usemtl gold_ore_crystal
+f 39 40 42
+usemtl gold_ore_crystal
+f 39 42 41
+usemtl gold_ore_crystal
+f 41 42 44
+usemtl gold_ore_crystal
+f 41 44 43
+usemtl gold_ore_crystal
+f 43 44 46
+usemtl gold_ore_crystal
+f 43 46 45
+usemtl gold_ore_crystal
+f 45 46 38
+usemtl gold_ore_crystal
+f 45 38 37
+usemtl gold_ore_crystal
+f 38 40 42
+usemtl gold_ore_crystal
+f 38 42 44
+usemtl gold_ore_crystal
+f 38 44 46
+usemtl gold_ore_highlight
+f 47 48 50
+usemtl gold_ore_highlight
+f 47 50 49
+usemtl gold_ore_highlight
+f 49 50 52
+usemtl gold_ore_highlight
+f 49 52 51
+usemtl gold_ore_highlight
+f 51 52 54
+usemtl gold_ore_highlight
+f 51 54 53
+usemtl gold_ore_highlight
+f 53 54 48
+usemtl gold_ore_highlight
+f 53 48 47
+usemtl gold_ore_highlight
+f 48 50 52
+usemtl gold_ore_highlight
+f 48 52 54
+usemtl gold_ore_crystal
+f 55 56 58
+usemtl gold_ore_crystal
+f 55 58 57
+usemtl gold_ore_crystal
+f 57 58 60
+usemtl gold_ore_crystal
+f 57 60 59
+usemtl gold_ore_crystal
+f 59 60 62
+usemtl gold_ore_crystal
+f 59 62 61
+usemtl gold_ore_crystal
+f 61 62 64
+usemtl gold_ore_crystal
+f 61 64 63
+usemtl gold_ore_crystal
+f 63 64 66
+usemtl gold_ore_crystal
+f 63 66 65
+usemtl gold_ore_crystal
+f 65 66 56
+usemtl gold_ore_crystal
+f 65 56 55
+usemtl gold_ore_crystal
+f 56 58 60
+usemtl gold_ore_crystal
+f 56 60 62
+usemtl gold_ore_crystal
+f 56 62 64
+usemtl gold_ore_crystal
+f 56 64 66
+usemtl gold_ore_highlight
+f 67 68 70
+usemtl gold_ore_highlight
+f 67 70 69
+usemtl gold_ore_highlight
+f 69 70 72
+usemtl gold_ore_highlight
+f 69 72 71
+usemtl gold_ore_highlight
+f 71 72 74
+usemtl gold_ore_highlight
+f 71 74 73
+usemtl gold_ore_highlight
+f 73 74 68
+usemtl gold_ore_highlight
+f 73 68 67
+usemtl gold_ore_highlight
+f 68 70 72
+usemtl gold_ore_highlight
+f 68 72 74
+usemtl gold_ore_crystal
+f 75 76 78
+usemtl gold_ore_crystal
+f 75 78 77
+usemtl gold_ore_crystal
+f 77 78 80
+usemtl gold_ore_crystal
+f 77 80 79
+usemtl gold_ore_crystal
+f 79 80 82
+usemtl gold_ore_crystal
+f 79 82 81
+usemtl gold_ore_crystal
+f 81 82 84
+usemtl gold_ore_crystal
+f 81 84 83
+usemtl gold_ore_crystal
+f 83 84 76
+usemtl gold_ore_crystal
+f 83 76 75
+usemtl gold_ore_crystal
+f 76 78 80
+usemtl gold_ore_crystal
+f 76 80 82
+usemtl gold_ore_crystal
+f 76 82 84
+usemtl gold_ore_highlight
+f 85 86 88
+usemtl gold_ore_highlight
+f 85 88 87
+usemtl gold_ore_highlight
+f 87 88 90
+usemtl gold_ore_highlight
+f 87 90 89
+usemtl gold_ore_highlight
+f 89 90 92
+usemtl gold_ore_highlight
+f 89 92 91
+usemtl gold_ore_highlight
+f 91 92 86
+usemtl gold_ore_highlight
+f 91 86 85
+usemtl gold_ore_highlight
+f 86 88 90
+usemtl gold_ore_highlight
+f 86 90 92
+usemtl gold_ore_crystal
+f 93 94 96
+usemtl gold_ore_crystal
+f 93 96 95
+usemtl gold_ore_crystal
+f 95 96 98
+usemtl gold_ore_crystal
+f 95 98 97
+usemtl gold_ore_crystal
+f 97 98 100
+usemtl gold_ore_crystal
+f 97 100 99
+usemtl gold_ore_crystal
+f 99 100 102
+usemtl gold_ore_crystal
+f 99 102 101
+usemtl gold_ore_crystal
+f 101 102 104
+usemtl gold_ore_crystal
+f 101 104 103
+usemtl gold_ore_crystal
+f 103 104 94
+usemtl gold_ore_crystal
+f 103 94 93
+usemtl gold_ore_crystal
+f 94 96 98
+usemtl gold_ore_crystal
+f 94 98 100
+usemtl gold_ore_crystal
+f 94 100 102
+usemtl gold_ore_crystal
+f 94 102 104

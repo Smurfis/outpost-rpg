@@ -6,19 +6,33 @@ const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
+const GEAR = preload("res://scripts/progression/gear_service.gd")
+const SKILLS = preload("res://scripts/progression/skill_service.gd")
+const SALVAGE = preload("res://scripts/progression/salvage_service.gd")
+const PROGRESSION_UI = preload("res://scripts/progression/progression_ui.gd")
+const FRONTIER = preload("res://scripts/world/frontier.gd")
 const SAVE = "user://outpost_progress_v02.json"
+@export var save_path: String = SAVE
 
 var hero
 var hud
 var camera: Camera3D
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
+var crafted_gear: Array = []
+var gear_loadout: Dictionary = {"weapon": "", "head": "", "body": "", "feet": ""}
+var learned_skills: Dictionary = {}
+var gear_serial: int = 0
+var skill_cooldowns: Dictionary = {}
+var skill_buffs: Dictionary = {}
+var progression_ui
+var frontier
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
 var stations: Dictionary = {}
-var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8)}
+var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "skill_forge": Vector3(1.0, 0.0, -10.0), "salvage": Vector3(-9.0, 0.0, 8.5)}
 var experience: int = 0
 var kills: int = 0
 var spear_crafted: bool = false
@@ -33,6 +47,7 @@ func _ready() -> void:
 	_load_recipes()
 	_lighting()
 	_world()
+	_frontier()
 	_stations()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -53,21 +68,26 @@ func _ready() -> void:
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
+	progression_ui = PROGRESSION_UI.new()
+	progression_ui.setup(self)
+	add_child(progression_ui)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "skills": [KEY_K], "ability": [KEY_Q]}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
 		for code in binds[action]:
 			var event := InputEventKey.new()
-			event.physical_keycode = int(code)
+			event.physical_keycode = code as Key
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if hero != null and hero.interaction_locked:
+		return
 	if event.is_action_pressed("outpost_gather"):
 		gather()
 	elif event.is_action_pressed("outpost_attack"):
@@ -78,9 +98,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		show_inventory()
 	elif event.is_action_pressed("outpost_heal"):
 		use_meal()
+	elif event.is_action_pressed("outpost_skills"):
+		show_progression("skills")
+	elif event.is_action_pressed("outpost_ability"):
+		cast_skill()
 
 func _process(delta: float) -> void:
 	_update_crafting(delta)
+	for key in skill_cooldowns.keys():
+		skill_cooldowns[key] = maxf(0.0, float(skill_cooldowns[key]) - delta)
+	for key in skill_buffs.keys():
+		skill_buffs[key] = maxf(0.0, float(skill_buffs[key]) - delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
 	world_time += delta
@@ -214,11 +242,13 @@ func _world() -> void:
 		stones.height = 0.045
 		stones.radial_segments = 6
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
-	# Invisible boundary
-	_wall(Vector3(-23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(0, 1.5, -23), Vector3(46, 3, 0.5))
-	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
+	# The frontier module supplies the distant world boundaries.
+	# No interior invisible wall blocks travel into the surrounding sectors.
+
+func _frontier() -> void:
+	frontier = FRONTIER.new()
+	add_child(frontier)
+	frontier.populate(self)
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
 	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
@@ -384,13 +414,22 @@ func gather() -> void:
 	var amount: int = 1
 	if item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
 		amount = 2
-	elif item in ["stone", "iron", "coal"] and str(equipment.get("tool_mining", "")) == "pickaxe":
-		amount = 2
+	elif item in ["stone", "iron", "coal", "copper", "tin", "silver_ore", "gold_ore", "quartz", "mithril_ore"]:
+		var mining_tool: String = str(equipment.get("tool_mining", ""))
+		var grade: int = int(NODE.ore_definition(item).get("tier", 1))
+		if mining_tool == "mithril_pickaxe":
+			amount = 3
+		elif mining_tool == "steel_pickaxe":
+			amount = 3 if grade <= 3 else 2
+		elif mining_tool == "bronze_pickaxe" or mining_tool == "iron_pickaxe":
+			amount = 2 if grade <= 3 else 1
+		elif mining_tool == "pickaxe":
+			amount = 2 if grade <= 2 else 1
 	elif item in ["fiber", "reeds"] and str(equipment.get("tool_forage", "")) == "satchel":
 		amount = 2
 	inventory[item] = int(inventory.get(item, 0)) + amount
 	experience += 2 * amount
-	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
+	hud.toast("+%d %s  •  +%d XP" % [amount, item.replace("_", " ").capitalize(), 2 * amount])
 	_save()
 	_refresh_menu()
 
@@ -420,7 +459,19 @@ func _load_recipes() -> void:
 		recipes = parsed
 
 func craft() -> void:
-	show_crafting()
+	var local_station: String = closest_station()
+	if local_station == "skill_forge":
+		show_progression("skills")
+	elif local_station == "salvage":
+		show_progression("salvage")
+	else:
+		show_crafting()
+
+func show_progression(page: String = "gear") -> void:
+	if menu != null:
+		menu.close_page()
+	if progression_ui != null:
+		progression_ui.open(page)
 
 func show_crafting() -> void:
 	if menu != null:
@@ -437,6 +488,8 @@ func show_equipment() -> void:
 func _refresh_menu() -> void:
 	if menu != null:
 		menu.refresh()
+	if progression_ui != null:
+		progression_ui.refresh()
 
 func _recipe_by_id(id: String) -> Dictionary:
 	for entry in recipes:
@@ -453,7 +506,7 @@ func equipment_slot(item_id: String) -> String:
 		return "back"
 	if item_id == "axe":
 		return "tool_wood"
-	if item_id == "pickaxe":
+	if item_id in ["pickaxe", "bronze_pickaxe", "iron_pickaxe", "steel_pickaxe", "mithril_pickaxe"]:
 		return "tool_mining"
 	if item_id == "satchel":
 		return "tool_forage"
@@ -486,7 +539,7 @@ func _apply_equipment() -> void:
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "bronze_pickaxe", "iron_pickaxe", "steel_pickaxe", "mithril_pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)
@@ -612,19 +665,211 @@ func consume(item_id: String, heal: float) -> void:
 func use_meal() -> void:
 	consume("meal", 40.0)
 
+func gear_stats() -> Dictionary:
+	var stats: Dictionary = GEAR.aggregate(crafted_gear, gear_loadout)
+	var weapon: String = str(equipment.get("weapon", "training_blade"))
+	# Backwards-compatible legacy equipment still affects physical damage.
+	if weapon == "spear" and str(gear_loadout.get("weapon", "")) == "":
+		stats["damage"] = float(stats["damage"]) + 8.0
+	elif weapon == "iron_blade" and str(gear_loadout.get("weapon", "")) == "":
+		stats["damage"] = float(stats["damage"]) + 16.0
+	if float(skill_buffs.get("focus", 0.0)) > 0.0:
+		stats["crit"] = minf(0.75, float(stats["crit"]) + 0.18)
+	return stats
+
+func equip_crafted(uid: String) -> bool:
+	for item in crafted_gear:
+		if item is Dictionary and str(item.get("uid", "")) == uid:
+			var slot: String = str(item.get("slot", ""))
+			if not gear_loadout.has(slot):
+				return false
+			gear_loadout[slot] = "" if str(gear_loadout[slot]) == uid else uid
+			_save()
+			_refresh_menu()
+			return true
+	return false
+
+func craft_gear(template_id: String, level: int, rarity: int) -> bool:
+	var definition: Dictionary = GEAR.template(template_id)
+	if definition.is_empty() or not crafting.is_empty():
+		return false
+	if not near_station(str(definition.get("station", "forge"))):
+		return false
+	var costs: Dictionary = GEAR.recipe_cost(template_id, level, rarity)
+	if not GEAR.can_pay(inventory, costs):
+		return false
+	# Commit materials atomically and roll sockets exactly once.
+	for key in costs:
+		inventory[str(key)] = int(inventory.get(str(key), 0)) - int(costs[key])
+	gear_serial += 1
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var crafting_seed: int = int(rng.randi_range(1, 2147483646))
+	var item: Dictionary = GEAR.roll(template_id, level, rarity, crafting_seed, gear_serial, costs)
+	crafted_gear.append(item)
+	experience += maxi(1, level)
+	_save()
+	hud.toast("Crafted %s (level %d / %s)" % [str(item.get("name", template_id)), level, GEAR.rarity_name(rarity)])
+	_refresh_menu()
+	return true
+
+func skill_learn(book_id: String) -> bool:
+	if not near_station("skill_forge"):
+		return false
+	if not SKILLS.learn(learned_skills, inventory, book_id):
+		return false
+	_save()
+	_refresh_menu()
+	return true
+
+func recycle_book(book_id: String) -> bool:
+	if not near_station("skill_forge") or not SKILLS.recycle_duplicate(learned_skills, inventory, book_id):
+		return false
+	_save()
+	_refresh_menu()
+	return true
+
+func socket_skill(uid: String, index: int, skill_id: String) -> bool:
+	if not near_station("skill_forge") or not SKILLS.assign(crafted_gear, learned_skills, uid, index, skill_id):
+		return false
+	_save()
+	_refresh_menu()
+	return true
+
+func craft_skill_book(skill_id: String) -> bool:
+	if not near_station("skill_forge"):
+		return false
+	var definition: Dictionary = SKILLS.definition(skill_id)
+	if definition.is_empty():
+		return false
+	var costs: Dictionary = {"ether_dust": 3, "linen": 1, "crystal_shard": 1}
+	if not GEAR.can_pay(inventory, costs):
+		return false
+	for item in costs:
+		inventory[str(item)] = int(inventory.get(str(item), 0)) - int(costs[item])
+	var book: String = str(definition.get("book", ""))
+	inventory[book] = int(inventory.get(book, 0)) + 1
+	_save()
+	_refresh_menu()
+	return true
+
+func apply_prismatic_gem(uid: String) -> bool:
+	if not near_station("skill_forge") or int(inventory.get("prismatic_gem", 0)) < 1:
+		return false
+	for item in crafted_gear:
+		if not (item is Dictionary) or str(item.get("uid", "")) != uid:
+			continue
+		if int(item.get("rarity", 0)) != 4 or int(item.get("item_level", 0)) < 15:
+			return false
+		var sockets: Array = item.get("sockets", [])
+		for socket in sockets:
+			if str(socket.get("color", "")) == "prismatic":
+				return false
+		sockets.append({"color": "prismatic", "skill": ""})
+		item["sockets"] = sockets
+		inventory["prismatic_gem"] = int(inventory["prismatic_gem"]) - 1
+		_save()
+		_refresh_menu()
+		return true
+	return false
+
+func toggle_gear_flag(uid: String, flag: String) -> bool:
+	if flag not in ["locked", "favourite"]:
+		return false
+	for item in crafted_gear:
+		if item is Dictionary and str(item.get("uid", "")) == uid:
+			item[flag] = not bool(item.get(flag, false))
+			_save()
+			_refresh_menu()
+			return true
+	return false
+
+func salvage_gear(uid: String) -> Dictionary:
+	if not near_station("salvage"):
+		return {}
+	var preview: Dictionary = {}
+	for item in crafted_gear:
+		if item is Dictionary and str(item.get("uid", "")) == uid and not SALVAGE.protected(item, gear_loadout):
+			preview = SALVAGE.refund(item)
+	if preview.is_empty():
+		return {}
+	var result: Dictionary = SALVAGE.salvage_one(crafted_gear, inventory, gear_loadout, uid)
+	if not result.is_empty():
+		_save()
+		_refresh_menu()
+	return result
+
+func salvage_bulk(uids: Array) -> Dictionary:
+	if not near_station("salvage"):
+		return {}
+	var result: Dictionary = SALVAGE.salvage_bulk(crafted_gear, inventory, gear_loadout, uids)
+	if not result.is_empty():
+		_save()
+		_refresh_menu()
+	return result
+
+func cast_skill(id: String = "") -> bool:
+	if progression_ui != null and progression_ui.visible:
+		return false
+	if menu != null and menu.visible:
+		return false
+	var active: Array = SKILLS.active_skills(crafted_gear, gear_loadout, learned_skills)
+	var selected: Dictionary = {}
+	for skill in active:
+		if id == "" or str(skill.get("id", "")) == id:
+			selected = skill
+			break
+	if selected.is_empty():
+		return false
+	var skill_id: String = str(selected["id"])
+	if float(skill_cooldowns.get(skill_id, 0.0)) > 0.0:
+		return false
+	var stats: Dictionary = gear_stats()
+	var power: float = float(stats.get("ability_power", 0.0))
+	var damage: float = float(stats.get("damage", 8.0))
+	var value: float = float(selected.get("value", 1.0))
+	var type: String = str(selected.get("type", ""))
+	if type == "heal":
+		if hero.health >= 100.0:
+			return false
+		var healing: float = 14.0 + power * value
+		if skill_id == "healing_pulse":
+			healing = 20.0 + power * value
+		hero.health = minf(100.0, hero.health + healing)
+		hud.toast("%s +%d HP" % [str(selected["name"]), int(roundf(healing))])
+	elif type in ["physical", "magic"]:
+		var victim = _nearest_enemy()
+		if victim == null:
+			return false
+		var amount: float = damage * value if type == "physical" else 6.0 + power * value
+		victim.receive_damage(amount)
+		hero.swing()
+		hud.toast("%s dealt %d damage" % [str(selected["name"]), int(roundf(amount))])
+	elif type in ["speed", "crit"]:
+		skill_buffs[skill_id] = 4.0 if type == "speed" else 5.0
+	else:
+		return false
+	skill_cooldowns[skill_id] = float(selected.get("cooldown", 10.0))
+	return true
+
 func attack() -> void:
-	if attack_delay > 0.0 or menu != null and menu.visible:
+	if attack_delay > 0.0 or (menu != null and menu.visible) or (progression_ui != null and progression_ui.visible):
 		return
 	var target = _nearest_enemy()
 	if target == null:
 		return # No popup spam when outside combat range.
-	attack_delay = 0.55
+	var stats: Dictionary = gear_stats()
+	attack_delay = 1.0 / maxf(0.5, float(stats.get("attack_speed", 1.0)))
 	hero.swing()
-	var weapon: String = str(equipment.get("weapon", "training_blade"))
-	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
+	var damage: float = float(stats.get("damage", 8.0))
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if rng.randf() < float(stats.get("crit", 0.05)):
+		damage *= float(GEAR.config().get("critical_multiplier", 1.5))
 	target.receive_damage(damage)
 	if target.alive:
-		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
+		var enemy_name: String = "guardian" if target.is_in_group("dungeon_guardians") else "boar"
+		hud.toast("%d damage  •  %s %d HP" % [int(damage), enemy_name, int(ceilf(target.hp))])
 
 func on_enemy_killed() -> void:
 	kills += 1
@@ -636,25 +881,25 @@ func on_enemy_killed() -> void:
 	_refresh_menu()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
-	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
+	var data: Dictionary = {"version": 6, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "crafted_gear": crafted_gear, "gear_loadout": gear_loadout, "learned_skills": learned_skills, "gear_serial": gear_serial}
+	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
 
 func _load() -> void:
-	if not FileAccess.file_exists(SAVE):
+	if not FileAccess.file_exists(save_path):
 		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not (data is Dictionary):
 		return
 	var version: int = int(data.get("version", 0))
-	if version not in [2, 3, 4, 5]:
+	if version not in [2, 3, 4, 5, 6]:
 		return
 	var stored: Variant = data.get("inventory", {})
 	if stored is Dictionary:
-		for key in inventory:
-			inventory[key] = maxi(0, int(stored.get(key, 0)))
+		for key in stored:
+			inventory[str(key)] = maxi(0, int(stored[key]))
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
@@ -672,7 +917,24 @@ func _load() -> void:
 			if int(inventory.get(item, 0)) > 0:
 				equipment[equipment_slot(item)] = item
 	_apply_equipment()
-
+	if version >= 6:
+		var saved_items: Variant = data.get("crafted_gear", [])
+		if saved_items is Array:
+			crafted_gear = saved_items.duplicate(true)
+		var saved_loadout: Variant = data.get("gear_loadout", {})
+		if saved_loadout is Dictionary:
+			for slot in gear_loadout:
+				var equipped_uid: String = str(saved_loadout.get(slot, ""))
+				var found: bool = equipped_uid == ""
+				for item in crafted_gear:
+					if item is Dictionary and str(item.get("uid", "")) == equipped_uid and str(item.get("slot", "")) == slot:
+						found = true
+				if found:
+					gear_loadout[slot] = equipped_uid
+		var saved_skills: Variant = data.get("learned_skills", {})
+		if saved_skills is Dictionary:
+			learned_skills = saved_skills.duplicate()
+		gear_serial = maxi(0, int(data.get("gear_serial", 0)))
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:

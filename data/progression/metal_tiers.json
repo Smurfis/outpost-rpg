@@ -1,0 +1,73 @@
+[
+  {
+    "tier": 1,
+    "name": "Apprentice Bronze",
+    "min_level": 1,
+    "max_level": 9,
+    "refined": "bronze_ingot",
+    "ore_sources": [
+      "copper",
+      "tin"
+    ],
+    "cloth": "linen",
+    "catalyst": "",
+    "refining_station": "forge"
+  },
+  {
+    "tier": 2,
+    "name": "Journeyman Iron",
+    "min_level": 10,
+    "max_level": 19,
+    "refined": "iron_ingot",
+    "ore_sources": [
+      "iron",
+      "coal"
+    ],
+    "cloth": "linen",
+    "catalyst": "",
+    "refining_station": "forge"
+  },
+  {
+    "tier": 3,
+    "name": "Expert Steel",
+    "min_level": 20,
+    "max_level": 29,
+    "refined": "steel_ingot",
+    "ore_sources": [
+      "iron",
+      "coal",
+      "quartz"
+    ],
+    "cloth": "reinforced_linen",
+    "catalyst": "quartz",
+    "refining_station": "forge"
+  },
+  {
+    "tier": 4,
+    "name": "Master Silver",
+    "min_level": 30,
+    "max_level": 39,
+    "refined": "silver_ingot",
+    "ore_sources": [
+      "silver_ore",
+      "gold_ore"
+    ],
+    "cloth": "reinforced_linen",
+    "catalyst": "ether_dust",
+    "refining_station": "forge"
+  },
+  {
+    "tier": 5,
+    "name": "Grandmaster Mithril",
+    "min_level": 40,
+    "max_level": 50,
+    "refined": "mithril_ingot",
+    "ore_sources": [
+      "mithril_ore",
+      "ancient_ore"
+    ],
+    "cloth": "aetherweave",
+    "catalyst": "gem_fragment",
+    "refining_station": "forge"
+  }
+]

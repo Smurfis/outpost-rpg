@@ -1,0 +1,539 @@
+# Outpost original mobile-optimised faceted ore deposit
+mtllib ore_lodes.mtl
+o ore_mithril_ore
+v -0.54096 1.03894 0.00000
+v 0.53385 1.03146 0.00000
+v -0.51946 -0.07633 0.00000
+v 0.49988 -0.05574 0.00000
+v 0.00000 0.15933 0.65734
+v 0.00000 0.76695 0.62832
+v 0.00000 0.18423 -0.60465
+v 0.00000 0.74873 -0.58976
+v 0.68920 0.47000 -0.36206
+v 0.69811 0.47000 0.36674
+v -0.71927 0.47000 -0.37785
+v -0.74962 0.47000 0.39380
+v -0.76170 0.65451 0.24000
+v -0.20859 0.64156 0.24000
+v -0.73964 -0.02674 0.24000
+v -0.23191 -0.01221 0.24000
+v -0.48000 0.11455 0.58293
+v -0.48000 0.48051 0.57380
+v -0.48000 0.12114 -0.09074
+v -0.48000 0.48072 -0.09419
+v -0.09339 0.30000 0.02761
+v -0.07753 0.30000 0.46110
+v -0.90126 0.30000 0.00857
+v -0.92024 0.30000 0.48185
+v 0.30346 0.57918 -0.18000
+v 0.79030 0.57162 -0.18000
+v 0.31150 -0.00943 -0.18000
+v 0.79140 -0.01294 -0.18000
+v 0.55000 0.09358 0.20064
+v 0.55000 0.47422 0.21656
+v 0.55000 0.07669 -0.59513
+v 0.55000 0.49238 -0.61364
+v 1.02486 0.28000 -0.45776
+v 1.03623 0.28000 0.10441
+v 0.05937 0.28000 -0.46698
+v 0.06256 0.28000 0.10512
+v 0.72622 0.50000 0.26410
+v 0.58506 1.76454 0.20772
+v 0.51539 0.50000 0.39700
+v 0.52539 1.76454 0.24533
+v 0.32384 0.50000 0.23756
+v 0.47118 1.76454 0.20021
+v 0.41628 0.50000 0.00612
+v 0.49734 1.76454 0.13470
+v 0.66496 0.50000 0.02252
+v 0.56772 1.76454 0.13934
+v 0.63506 0.83000 0.20772
+v 0.57934 1.90454 0.18546
+v 0.55708 0.83000 0.24118
+v 0.57934 1.90454 0.18546
+v 0.52362 0.83000 0.16321
+v 0.57934 1.90454 0.18546
+v 0.60159 0.83000 0.12974
+v 0.57934 1.90454 0.18546
+v -0.05145 0.50000 0.71046
+v -0.04145 1.74868 0.55879
+v -0.22768 0.50000 0.59261
+v -0.09132 1.74868 0.52543
+v -0.21373 0.50000 0.38107
+v -0.08738 1.74868 0.46556
+v -0.02355 0.50000 0.28738
+v -0.03355 1.74868 0.43905
+v 0.15267 0.50000 0.40523
+v 0.01632 1.74868 0.47240
+v 0.13872 0.50000 0.61677
+v 0.01237 1.74868 0.53227
+v 0.00855 0.83000 0.55879
+v 0.01250 1.88868 0.49892
+v -0.04737 0.83000 0.49497
+v 0.01250 1.88868 0.49892
+v 0.01645 0.83000 0.43905
+v 0.01250 1.88868 0.49892
+v 0.07237 0.83000 0.50286
+v 0.01250 1.88868 0.49892
+v -0.75801 0.50000 0.17499
+v -0.61068 1.41699 0.13763
+v -0.66557 0.50000 -0.05645
+v -0.58451 1.41699 0.07213
+v -0.41689 0.50000 -0.04005
+v -0.51413 1.41699 0.07677
+v -0.35564 0.50000 0.20152
+v -0.49680 1.41699 0.14514
+v -0.56646 0.50000 0.33443
+v -0.55646 1.41699 0.18276
+v -0.56068 0.83000 0.13763
+v -0.50252 1.55699 0.12289
+v -0.51726 0.83000 0.06473
+v -0.50252 1.55699 0.12289
+v -0.44436 0.83000 0.10814
+v -0.50252 1.55699 0.12289
+v -0.48777 0.83000 0.18105
+v -0.50252 1.55699 0.12289
+v -0.41703 0.50000 -0.60231
+v -0.33597 1.58357 -0.47372
+v -0.20519 0.50000 -0.61055
+v -0.27601 1.58357 -0.47606
+v -0.09213 0.50000 -0.43121
+v -0.24402 1.58357 -0.42530
+v -0.19092 0.50000 -0.24363
+v -0.27197 1.58357 -0.37221
+v -0.40276 0.50000 -0.23539
+v -0.33193 1.58357 -0.36988
+v -0.51581 0.50000 -0.41473
+v -0.36393 1.58357 -0.42064
+v -0.28597 0.83000 -0.47372
+v -0.25397 1.72357 -0.42297
+v -0.20322 0.83000 -0.45497
+v -0.25397 1.72357 -0.42297
+v -0.22197 0.83000 -0.37221
+v -0.25397 1.72357 -0.42297
+v -0.30473 0.83000 -0.39097
+v -0.25397 1.72357 -0.42297
+v 0.50028 0.50000 -0.54724
+v 0.40304 1.83957 -0.43041
+v 0.56153 0.50000 -0.30566
+v 0.42037 1.83957 -0.36204
+v 0.35070 0.50000 -0.17276
+v 0.36070 1.83957 -0.32443
+v 0.15915 0.50000 -0.33219
+v 0.30649 1.83957 -0.36955
+v 0.25160 0.50000 -0.56363
+v 0.33265 1.83957 -0.43505
+v 0.45304 0.83000 -0.43041
+v 0.41465 1.97957 -0.38430
+v 0.46077 0.83000 -0.34591
+v 0.41465 1.97957 -0.38430
+v 0.37627 0.83000 -0.33818
+v 0.41465 1.97957 -0.38430
+v 0.36854 0.83000 -0.42268
+v 0.41465 1.97957 -0.38430
+v 0.29807 0.76000 -0.06487
+v -0.00012 1.49000 -0.09780
+v 0.10861 0.76000 0.19302
+v -0.01196 1.49000 -0.08169
+v -0.20946 0.76000 0.15789
+v -0.03184 1.49000 -0.08388
+v -0.33807 0.76000 -0.13513
+v -0.03988 1.49000 -0.10220
+v -0.14861 0.76000 -0.39302
+v -0.02804 1.49000 -0.11831
+v 0.16946 0.76000 -0.35789
+v -0.00816 1.49000 -0.11612
+usemtl mithril_ore_highlight
+f 1 12 6
+usemtl mithril_ore_rock
+f 1 6 2
+usemtl mithril_ore_rock
+f 1 2 8
+usemtl mithril_ore_rock
+f 1 8 11
+usemtl mithril_ore_rock
+f 1 11 12
+usemtl mithril_ore_highlight
+f 2 6 10
+usemtl mithril_ore_rock
+f 6 12 5
+usemtl mithril_ore_rock
+f 12 11 3
+usemtl mithril_ore_rock
+f 11 8 7
+usemtl mithril_ore_rock
+f 8 2 9
+usemtl mithril_ore_highlight
+f 4 10 5
+usemtl mithril_ore_rock
+f 4 5 3
+usemtl mithril_ore_rock
+f 4 3 7
+usemtl mithril_ore_rock
+f 4 7 9
+usemtl mithril_ore_rock
+f 4 9 10
+usemtl mithril_ore_highlight
+f 5 10 6
+usemtl mithril_ore_rock
+f 3 5 12
+usemtl mithril_ore_rock
+f 7 3 11
+usemtl mithril_ore_rock
+f 9 7 8
+usemtl mithril_ore_rock
+f 10 9 2
+usemtl mithril_ore_rock
+f 13 24 18
+usemtl mithril_ore_rock
+f 13 18 14
+usemtl mithril_ore_rock
+f 13 14 20
+usemtl mithril_ore_rock
+f 13 20 23
+usemtl mithril_ore_rock
+f 13 23 24
+usemtl mithril_ore_rock
+f 14 18 22
+usemtl mithril_ore_rock
+f 18 24 17
+usemtl mithril_ore_rock
+f 24 23 15
+usemtl mithril_ore_rock
+f 23 20 19
+usemtl mithril_ore_rock
+f 20 14 21
+usemtl mithril_ore_rock
+f 16 22 17
+usemtl mithril_ore_rock
+f 16 17 15
+usemtl mithril_ore_rock
+f 16 15 19
+usemtl mithril_ore_rock
+f 16 19 21
+usemtl mithril_ore_rock
+f 16 21 22
+usemtl mithril_ore_rock
+f 17 22 18
+usemtl mithril_ore_rock
+f 15 17 24
+usemtl mithril_ore_rock
+f 19 15 23
+usemtl mithril_ore_rock
+f 21 19 20
+usemtl mithril_ore_rock
+f 22 21 14
+usemtl mithril_ore_rock
+f 25 36 30
+usemtl mithril_ore_rock
+f 25 30 26
+usemtl mithril_ore_rock
+f 25 26 32
+usemtl mithril_ore_rock
+f 25 32 35
+usemtl mithril_ore_rock
+f 25 35 36
+usemtl mithril_ore_rock
+f 26 30 34
+usemtl mithril_ore_rock
+f 30 36 29
+usemtl mithril_ore_rock
+f 36 35 27
+usemtl mithril_ore_rock
+f 35 32 31
+usemtl mithril_ore_rock
+f 32 26 33
+usemtl mithril_ore_rock
+f 28 34 29
+usemtl mithril_ore_rock
+f 28 29 27
+usemtl mithril_ore_rock
+f 28 27 31
+usemtl mithril_ore_rock
+f 28 31 33
+usemtl mithril_ore_rock
+f 28 33 34
+usemtl mithril_ore_rock
+f 29 34 30
+usemtl mithril_ore_rock
+f 27 29 36
+usemtl mithril_ore_rock
+f 31 27 35
+usemtl mithril_ore_rock
+f 33 31 32
+usemtl mithril_ore_rock
+f 34 33 26
+usemtl mithril_ore_crystal
+f 37 38 40
+usemtl mithril_ore_crystal
+f 37 40 39
+usemtl mithril_ore_crystal
+f 39 40 42
+usemtl mithril_ore_crystal
+f 39 42 41
+usemtl mithril_ore_crystal
+f 41 42 44
+usemtl mithril_ore_crystal
+f 41 44 43
+usemtl mithril_ore_crystal
+f 43 44 46
+usemtl mithril_ore_crystal
+f 43 46 45
+usemtl mithril_ore_crystal
+f 45 46 38
+usemtl mithril_ore_crystal
+f 45 38 37
+usemtl mithril_ore_crystal
+f 38 40 42
+usemtl mithril_ore_crystal
+f 38 42 44
+usemtl mithril_ore_crystal
+f 38 44 46
+usemtl mithril_ore_highlight
+f 47 48 50
+usemtl mithril_ore_highlight
+f 47 50 49
+usemtl mithril_ore_highlight
+f 49 50 52
+usemtl mithril_ore_highlight
+f 49 52 51
+usemtl mithril_ore_highlight
+f 51 52 54
+usemtl mithril_ore_highlight
+f 51 54 53
+usemtl mithril_ore_highlight
+f 53 54 48
+usemtl mithril_ore_highlight
+f 53 48 47
+usemtl mithril_ore_highlight
+f 48 50 52
+usemtl mithril_ore_highlight
+f 48 52 54
+usemtl mithril_ore_crystal
+f 55 56 58
+usemtl mithril_ore_crystal
+f 55 58 57
+usemtl mithril_ore_crystal
+f 57 58 60
+usemtl mithril_ore_crystal
+f 57 60 59
+usemtl mithril_ore_crystal
+f 59 60 62
+usemtl mithril_ore_crystal
+f 59 62 61
+usemtl mithril_ore_crystal
+f 61 62 64
+usemtl mithril_ore_crystal
+f 61 64 63
+usemtl mithril_ore_crystal
+f 63 64 66
+usemtl mithril_ore_crystal
+f 63 66 65
+usemtl mithril_ore_crystal
+f 65 66 56
+usemtl mithril_ore_crystal
+f 65 56 55
+usemtl mithril_ore_crystal
+f 56 58 60
+usemtl mithril_ore_crystal
+f 56 60 62
+usemtl mithril_ore_crystal
+f 56 62 64
+usemtl mithril_ore_crystal
+f 56 64 66
+usemtl mithril_ore_highlight
+f 67 68 70
+usemtl mithril_ore_highlight
+f 67 70 69
+usemtl mithril_ore_highlight
+f 69 70 72
+usemtl mithril_ore_highlight
+f 69 72 71
+usemtl mithril_ore_highlight
+f 71 72 74
+usemtl mithril_ore_highlight
+f 71 74 73
+usemtl mithril_ore_highlight
+f 73 74 68
+usemtl mithril_ore_highlight
+f 73 68 67
+usemtl mithril_ore_highlight
+f 68 70 72
+usemtl mithril_ore_highlight
+f 68 72 74
+usemtl mithril_ore_crystal
+f 75 76 78
+usemtl mithril_ore_crystal
+f 75 78 77
+usemtl mithril_ore_crystal
+f 77 78 80
+usemtl mithril_ore_crystal
+f 77 80 79
+usemtl mithril_ore_crystal
+f 79 80 82
+usemtl mithril_ore_crystal
+f 79 82 81
+usemtl mithril_ore_crystal
+f 81 82 84
+usemtl mithril_ore_crystal
+f 81 84 83
+usemtl mithril_ore_crystal
+f 83 84 76
+usemtl mithril_ore_crystal
+f 83 76 75
+usemtl mithril_ore_crystal
+f 76 78 80
+usemtl mithril_ore_crystal
+f 76 80 82
+usemtl mithril_ore_crystal
+f 76 82 84
+usemtl mithril_ore_highlight
+f 85 86 88
+usemtl mithril_ore_highlight
+f 85 88 87
+usemtl mithril_ore_highlight
+f 87 88 90
+usemtl mithril_ore_highlight
+f 87 90 89
+usemtl mithril_ore_highlight
+f 89 90 92
+usemtl mithril_ore_highlight
+f 89 92 91
+usemtl mithril_ore_highlight
+f 91 92 86
+usemtl mithril_ore_highlight
+f 91 86 85
+usemtl mithril_ore_highlight
+f 86 88 90
+usemtl mithril_ore_highlight
+f 86 90 92
+usemtl mithril_ore_crystal
+f 93 94 96
+usemtl mithril_ore_crystal
+f 93 96 95
+usemtl mithril_ore_crystal
+f 95 96 98
+usemtl mithril_ore_crystal
+f 95 98 97
+usemtl mithril_ore_crystal
+f 97 98 100
+usemtl mithril_ore_crystal
+f 97 100 99
+usemtl mithril_ore_crystal
+f 99 100 102
+usemtl mithril_ore_crystal
+f 99 102 101
+usemtl mithril_ore_crystal
+f 101 102 104
+usemtl mithril_ore_crystal
+f 101 104 103
+usemtl mithril_ore_crystal
+f 103 104 94
+usemtl mithril_ore_crystal
+f 103 94 93
+usemtl mithril_ore_crystal
+f 94 96 98
+usemtl mithril_ore_crystal
+f 94 98 100
+usemtl mithril_ore_crystal
+f 94 100 102
+usemtl mithril_ore_crystal
+f 94 102 104
+usemtl mithril_ore_highlight
+f 105 106 108
+usemtl mithril_ore_highlight
+f 105 108 107
+usemtl mithril_ore_highlight
+f 107 108 110
+usemtl mithril_ore_highlight
+f 107 110 109
+usemtl mithril_ore_highlight
+f 109 110 112
+usemtl mithril_ore_highlight
+f 109 112 111
+usemtl mithril_ore_highlight
+f 111 112 106
+usemtl mithril_ore_highlight
+f 111 106 105
+usemtl mithril_ore_highlight
+f 106 108 110
+usemtl mithril_ore_highlight
+f 106 110 112
+usemtl mithril_ore_crystal
+f 113 114 116
+usemtl mithril_ore_crystal
+f 113 116 115
+usemtl mithril_ore_crystal
+f 115 116 118
+usemtl mithril_ore_crystal
+f 115 118 117
+usemtl mithril_ore_crystal
+f 117 118 120
+usemtl mithril_ore_crystal
+f 117 120 119
+usemtl mithril_ore_crystal
+f 119 120 122
+usemtl mithril_ore_crystal
+f 119 122 121
+usemtl mithril_ore_crystal
+f 121 122 114
+usemtl mithril_ore_crystal
+f 121 114 113
+usemtl mithril_ore_crystal
+f 114 116 118
+usemtl mithril_ore_crystal
+f 114 118 120
+usemtl mithril_ore_crystal
+f 114 120 122
+usemtl mithril_ore_highlight
+f 123 124 126
+usemtl mithril_ore_highlight
+f 123 126 125
+usemtl mithril_ore_highlight
+f 125 126 128
+usemtl mithril_ore_highlight
+f 125 128 127
+usemtl mithril_ore_highlight
+f 127 128 130
+usemtl mithril_ore_highlight
+f 127 130 129
+usemtl mithril_ore_highlight
+f 129 130 124
+usemtl mithril_ore_highlight
+f 129 124 123
+usemtl mithril_ore_highlight
+f 124 126 128
+usemtl mithril_ore_highlight
+f 124 128 130
+usemtl mithril_ore_crystal
+f 131 132 134
+usemtl mithril_ore_crystal
+f 131 134 133
+usemtl mithril_ore_crystal
+f 133 134 136
+usemtl mithril_ore_crystal
+f 133 136 135
+usemtl mithril_ore_crystal
+f 135 136 138
+usemtl mithril_ore_crystal
+f 135 138 137
+usemtl mithril_ore_crystal
+f 137 138 140
+usemtl mithril_ore_crystal
+f 137 140 139
+usemtl mithril_ore_crystal
+f 139 140 142
+usemtl mithril_ore_crystal
+f 139 142 141
+usemtl mithril_ore_crystal
+f 141 142 132
+usemtl mithril_ore_crystal
+f 141 132 131
+usemtl mithril_ore_crystal
+f 132 134 136
+usemtl mithril_ore_crystal
+f 132 136 138
+usemtl mithril_ore_crystal
+f 132 138 140
+usemtl mithril_ore_crystal
+f 132 140 142

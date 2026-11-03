@@ -193,5 +193,202 @@
       "mushrooms": 2,
       "berries": 2
     }
+  },
+  {
+    "id": "bronze_ingot",
+    "name": "Smelt Bronze Ingot",
+    "result": "bronze_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 2.2,
+    "strokes": 3,
+    "category": "Materials",
+    "tier": 1,
+    "desc": "Apprentice metal: copper and tin alloy.",
+    "ingredients": {
+      "copper": 2,
+      "tin": 2,
+      "coal": 1
+    }
+  },
+  {
+    "id": "steel_ingot",
+    "name": "Smelt Steel Ingot",
+    "result": "steel_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3,
+    "strokes": 4,
+    "category": "Materials",
+    "tier": 3,
+    "desc": "Expert metal: refine existing iron with more carbon.",
+    "ingredients": {
+      "iron_ingot": 2,
+      "coal": 2
+    }
+  },
+  {
+    "id": "silver_ingot",
+    "name": "Refine Silver Ingot",
+    "result": "silver_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.4,
+    "strokes": 5,
+    "category": "Materials",
+    "tier": 4,
+    "desc": "Master metal for level 30–39 gear.",
+    "ingredients": {
+      "silver_ore": 3,
+      "coal": 1
+    }
+  },
+  {
+    "id": "gold_ingot",
+    "name": "Refine Gold Ingot",
+    "result": "gold_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.4,
+    "strokes": 5,
+    "category": "Materials",
+    "tier": 4,
+    "desc": "Precious metal for quality catalysts and high-end crafting.",
+    "ingredients": {
+      "gold_ore": 3,
+      "coal": 1
+    }
+  },
+  {
+    "id": "mithril_ingot",
+    "name": "Refine Mithril Ingot",
+    "result": "mithril_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 4.3,
+    "strokes": 6,
+    "category": "Materials",
+    "tier": 5,
+    "desc": "Grandmaster metal enriched with ancient ore.",
+    "ingredients": {
+      "mithril_ore": 3,
+      "ancient_ore": 1,
+      "coal": 2
+    }
+  },
+  {
+    "id": "reinforced_linen",
+    "name": "Weave Reinforced Linen",
+    "result": "reinforced_linen",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 3,
+    "strokes": 4,
+    "category": "Materials",
+    "tier": 3,
+    "desc": "Expert fabric woven with quartz threads.",
+    "ingredients": {
+      "linen": 2,
+      "quartz": 1,
+      "hide": 1
+    }
+  },
+  {
+    "id": "aetherweave",
+    "name": "Weave Aetherweave",
+    "result": "aetherweave",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 4,
+    "strokes": 5,
+    "category": "Materials",
+    "tier": 5,
+    "desc": "Grandmaster fabric infused with rare magical dust.",
+    "ingredients": {
+      "reinforced_linen": 2,
+      "ether_dust": 2,
+      "crystal_shard": 1
+    }
+  },
+  {
+    "id": "crystal_shard",
+    "name": "Cut Quartz Crystals",
+    "result": "crystal_shard",
+    "amount": 2,
+    "station": "forge",
+    "seconds": 2.4,
+    "strokes": 3,
+    "category": "Materials",
+    "tier": 4,
+    "desc": "Cut two spell crystals from harvested quartz.",
+    "ingredients": {
+      "quartz": 3
+    }
+  },
+  {
+    "id": "bronze_pickaxe",
+    "name": "Bronze Mining Pickaxe",
+    "result": "bronze_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.2,
+    "strokes": 4,
+    "category": "Tools",
+    "tier": 1,
+    "desc": "Harvests copper, tin and iron efficiently.",
+    "ingredients": {
+      "bronze_ingot": 2,
+      "wood": 3
+    }
+  },
+  {
+    "id": "iron_pickaxe",
+    "name": "Iron Mining Pickaxe",
+    "result": "iron_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.6,
+    "strokes": 5,
+    "category": "Tools",
+    "tier": 2,
+    "desc": "Handles iron, coal and deeper metal deposits.",
+    "ingredients": {
+      "iron_ingot": 2,
+      "wood": 3
+    }
+  },
+  {
+    "id": "steel_pickaxe",
+    "name": "Steel Mining Pickaxe",
+    "result": "steel_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 4,
+    "strokes": 5,
+    "category": "Tools",
+    "tier": 3,
+    "desc": "Harvests up to three lower-tier ores in one strike.",
+    "ingredients": {
+      "steel_ingot": 2,
+      "wood": 3,
+      "quartz": 1
+    }
+  },
+  {
+    "id": "mithril_pickaxe",
+    "name": "Mithril Mining Pickaxe",
+    "result": "mithril_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 5,
+    "strokes": 6,
+    "category": "Tools",
+    "tier": 5,
+    "desc": "Elite mining tool: every vein yields three ore.",
+    "ingredients": {
+      "mithril_ingot": 2,
+      "wood": 2,
+      "ancient_ore": 1
+    }
   }
 ]

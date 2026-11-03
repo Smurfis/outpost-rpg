@@ -23,8 +23,8 @@ func _test_game() -> void:
 	await process_frame
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.7, "Hero remains at starting outpost")
-	check(game.recipes.size() == 13, "13 recipes load from JSON")
-	check(game.stations.size() == 4, "Four interactive 3D stations exist")
+	check(game.recipes.size() >= 25, "Refining and advanced tool recipes load from JSON")
+	check(game.stations.size() == 6, "Six interactive 3D stations exist")
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Starting equipment defaults to the training blade")
 	check(game.hero.visual.get_child_count() >= 7, "Modular player 3D model assembled")
 	var mesh_assets: Array = ["oak_tree", "rock_deposit", "supply_crate"]
@@ -37,7 +37,7 @@ func _test_game() -> void:
 	var types: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		types[node.kind] = true
-	check(types.size() == 10, "Ten visually distinct resource types spawn")
+	check(types.size() >= 16, "Starter and frontier resource types spawn")
 	for item in ["iron", "coal", "clay", "herbs", "mushrooms", "reeds"]:
 		check(types.has(item), "%s resource spawns" % item)
 	game.hero.global_position = Vector3(0, 0.35, 0)
@@ -160,7 +160,7 @@ func _test_game() -> void:
 		game.menu.close_page()
 		game.attack_delay = 0.0
 		game.attack()
-		check(is_equal_approx(boar.hp, 8.0), "Iron blade upgrades combat to 24 damage")
+		check(is_equal_approx(boar.hp, 8.0) or boar.hp <= 0.0, "Iron blade deals 24 base damage (critical hits may defeat boar)")
 		boar.receive_damage(50.0)
 		check(int(game.inventory.get("hide", 0)) > 0, "Boar awards hides")
 	game.queue_free()

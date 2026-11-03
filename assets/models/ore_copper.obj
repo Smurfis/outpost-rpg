@@ -1,0 +1,475 @@
+# Outpost original mobile-optimised faceted ore deposit
+mtllib ore_lodes.mtl
+o ore_copper
+v -0.48367 0.97869 0.00000
+v 0.46205 0.95595 0.00000
+v -0.44357 0.00349 0.00000
+v 0.43090 0.01682 0.00000
+v 0.00000 0.19318 0.58573
+v 0.00000 0.74901 0.59036
+v 0.00000 0.18367 -0.60585
+v 0.00000 0.76772 -0.62995
+v 0.77548 0.47000 -0.40738
+v 0.81088 0.47000 0.42598
+v -0.84218 0.47000 -0.44242
+v -0.86483 0.47000 0.45432
+v -0.74118 0.62869 0.24000
+v -0.23049 0.61400 0.24000
+v -0.71953 -0.00144 0.24000
+v -0.24732 0.00717 0.24000
+v -0.48000 0.12113 0.57077
+v -0.48000 0.48029 0.57338
+v -0.48000 0.11498 -0.10213
+v -0.48000 0.49237 -0.11574
+v -0.06124 0.30000 0.00995
+v -0.04212 0.30000 0.48055
+v -0.93478 0.30000 -0.00984
+v -0.94701 0.30000 0.49656
+v 0.31153 0.56939 -0.18000
+v 0.79077 0.57218 -0.18000
+v 0.30257 -0.02026 -0.18000
+v 0.80748 -0.03246 -0.18000
+v 0.55000 0.07789 0.23267
+v 0.55000 0.49126 0.25135
+v 0.55000 0.06077 -0.62762
+v 0.55000 0.50487 -0.63913
+v 1.04049 0.28000 -0.46690
+v 1.03827 0.28000 0.10560
+v 0.07119 0.28000 -0.46007
+v 0.08654 0.28000 0.09109
+v 0.71507 0.50000 0.25964
+v 0.58506 1.27000 0.20772
+v 0.51618 0.50000 0.38503
+v 0.52539 1.27000 0.24533
+v 0.33547 0.50000 0.23462
+v 0.47118 1.27000 0.20021
+v 0.42268 0.50000 0.01627
+v 0.49734 1.27000 0.13470
+v 0.65729 0.50000 0.03174
+v 0.56772 1.27000 0.13934
+v 0.63506 0.83000 0.20772
+v 0.57934 1.41000 0.18546
+v 0.55708 0.83000 0.24118
+v 0.57934 1.41000 0.18546
+v 0.52362 0.83000 0.16321
+v 0.57934 1.41000 0.18546
+v 0.60159 0.83000 0.12974
+v 0.57934 1.41000 0.18546
+v -0.28561 0.50000 0.65007
+v -0.23368 1.48425 0.52005
+v -0.40937 0.50000 0.49295
+v -0.27081 1.48425 0.47292
+v -0.33518 0.50000 0.30722
+v -0.24855 1.48425 0.41720
+v -0.13724 0.50000 0.27860
+v -0.18917 1.48425 0.40861
+v -0.01348 0.50000 0.43571
+v -0.15204 1.48425 0.45575
+v -0.08767 0.50000 0.62144
+v -0.17430 1.48425 0.51147
+v -0.18368 0.83000 0.52005
+v -0.16142 1.62425 0.46433
+v -0.21714 0.83000 0.44208
+v -0.16142 1.62425 0.46433
+v -0.13917 0.83000 0.40861
+v -0.16142 1.62425 0.46433
+v -0.10570 0.83000 0.48659
+v -0.16142 1.62425 0.46433
+v -0.71507 0.50000 -0.25964
+v -0.58506 1.17265 -0.20772
+v -0.51618 0.50000 -0.38503
+v -0.52539 1.17265 -0.24533
+v -0.33547 0.50000 -0.23462
+v -0.47118 1.17265 -0.20021
+v -0.42268 0.50000 -0.01627
+v -0.49734 1.17265 -0.13470
+v -0.65729 0.50000 -0.03174
+v -0.56772 1.17265 -0.13934
+v -0.53506 0.83000 -0.20772
+v -0.47934 1.31265 -0.18546
+v -0.45708 0.83000 -0.24118
+v -0.47934 1.31265 -0.18546
+v -0.42362 0.83000 -0.16321
+v -0.47934 1.31265 -0.18546
+v -0.50159 0.83000 -0.12974
+v -0.47934 1.31265 -0.18546
+v 0.28561 0.50000 -0.65007
+v 0.23368 1.09999 -0.52005
+v 0.40937 0.50000 -0.49295
+v 0.27081 1.09999 -0.47292
+v 0.33518 0.50000 -0.30722
+v 0.24855 1.09999 -0.41720
+v 0.13724 0.50000 -0.27860
+v 0.18917 1.09999 -0.40861
+v 0.01348 0.50000 -0.43571
+v 0.15204 1.09999 -0.45575
+v 0.08767 0.50000 -0.62144
+v 0.17430 1.09999 -0.51147
+v 0.28368 0.83000 -0.52005
+v 0.26142 1.23999 -0.46433
+v 0.31714 0.83000 -0.44208
+v 0.26142 1.23999 -0.46433
+v 0.23917 0.83000 -0.40861
+v 0.26142 1.23999 -0.46433
+v 0.20570 0.83000 -0.48659
+v 0.26142 1.23999 -0.46433
+v 0.29807 0.76000 -0.06487
+v -0.00012 1.49000 -0.09780
+v 0.10861 0.76000 0.19302
+v -0.01196 1.49000 -0.08169
+v -0.20946 0.76000 0.15789
+v -0.03184 1.49000 -0.08388
+v -0.33807 0.76000 -0.13513
+v -0.03988 1.49000 -0.10220
+v -0.14861 0.76000 -0.39302
+v -0.02804 1.49000 -0.11831
+v 0.16946 0.76000 -0.35789
+v -0.00816 1.49000 -0.11612
+usemtl copper_highlight
+f 1 12 6
+usemtl copper_rock
+f 1 6 2
+usemtl copper_rock
+f 1 2 8
+usemtl copper_rock
+f 1 8 11
+usemtl copper_rock
+f 1 11 12
+usemtl copper_highlight
+f 2 6 10
+usemtl copper_rock
+f 6 12 5
+usemtl copper_rock
+f 12 11 3
+usemtl copper_rock
+f 11 8 7
+usemtl copper_rock
+f 8 2 9
+usemtl copper_highlight
+f 4 10 5
+usemtl copper_rock
+f 4 5 3
+usemtl copper_rock
+f 4 3 7
+usemtl copper_rock
+f 4 7 9
+usemtl copper_rock
+f 4 9 10
+usemtl copper_highlight
+f 5 10 6
+usemtl copper_rock
+f 3 5 12
+usemtl copper_rock
+f 7 3 11
+usemtl copper_rock
+f 9 7 8
+usemtl copper_rock
+f 10 9 2
+usemtl copper_rock
+f 13 24 18
+usemtl copper_rock
+f 13 18 14
+usemtl copper_rock
+f 13 14 20
+usemtl copper_rock
+f 13 20 23
+usemtl copper_rock
+f 13 23 24
+usemtl copper_rock
+f 14 18 22
+usemtl copper_rock
+f 18 24 17
+usemtl copper_rock
+f 24 23 15
+usemtl copper_rock
+f 23 20 19
+usemtl copper_rock
+f 20 14 21
+usemtl copper_rock
+f 16 22 17
+usemtl copper_rock
+f 16 17 15
+usemtl copper_rock
+f 16 15 19
+usemtl copper_rock
+f 16 19 21
+usemtl copper_rock
+f 16 21 22
+usemtl copper_rock
+f 17 22 18
+usemtl copper_rock
+f 15 17 24
+usemtl copper_rock
+f 19 15 23
+usemtl copper_rock
+f 21 19 20
+usemtl copper_rock
+f 22 21 14
+usemtl copper_rock
+f 25 36 30
+usemtl copper_rock
+f 25 30 26
+usemtl copper_rock
+f 25 26 32
+usemtl copper_rock
+f 25 32 35
+usemtl copper_rock
+f 25 35 36
+usemtl copper_rock
+f 26 30 34
+usemtl copper_rock
+f 30 36 29
+usemtl copper_rock
+f 36 35 27
+usemtl copper_rock
+f 35 32 31
+usemtl copper_rock
+f 32 26 33
+usemtl copper_rock
+f 28 34 29
+usemtl copper_rock
+f 28 29 27
+usemtl copper_rock
+f 28 27 31
+usemtl copper_rock
+f 28 31 33
+usemtl copper_rock
+f 28 33 34
+usemtl copper_rock
+f 29 34 30
+usemtl copper_rock
+f 27 29 36
+usemtl copper_rock
+f 31 27 35
+usemtl copper_rock
+f 33 31 32
+usemtl copper_rock
+f 34 33 26
+usemtl copper_crystal
+f 37 38 40
+usemtl copper_crystal
+f 37 40 39
+usemtl copper_crystal
+f 39 40 42
+usemtl copper_crystal
+f 39 42 41
+usemtl copper_crystal
+f 41 42 44
+usemtl copper_crystal
+f 41 44 43
+usemtl copper_crystal
+f 43 44 46
+usemtl copper_crystal
+f 43 46 45
+usemtl copper_crystal
+f 45 46 38
+usemtl copper_crystal
+f 45 38 37
+usemtl copper_crystal
+f 38 40 42
+usemtl copper_crystal
+f 38 42 44
+usemtl copper_crystal
+f 38 44 46
+usemtl copper_highlight
+f 47 48 50
+usemtl copper_highlight
+f 47 50 49
+usemtl copper_highlight
+f 49 50 52
+usemtl copper_highlight
+f 49 52 51
+usemtl copper_highlight
+f 51 52 54
+usemtl copper_highlight
+f 51 54 53
+usemtl copper_highlight
+f 53 54 48
+usemtl copper_highlight
+f 53 48 47
+usemtl copper_highlight
+f 48 50 52
+usemtl copper_highlight
+f 48 52 54
+usemtl copper_crystal
+f 55 56 58
+usemtl copper_crystal
+f 55 58 57
+usemtl copper_crystal
+f 57 58 60
+usemtl copper_crystal
+f 57 60 59
+usemtl copper_crystal
+f 59 60 62
+usemtl copper_crystal
+f 59 62 61
+usemtl copper_crystal
+f 61 62 64
+usemtl copper_crystal
+f 61 64 63
+usemtl copper_crystal
+f 63 64 66
+usemtl copper_crystal
+f 63 66 65
+usemtl copper_crystal
+f 65 66 56
+usemtl copper_crystal
+f 65 56 55
+usemtl copper_crystal
+f 56 58 60
+usemtl copper_crystal
+f 56 60 62
+usemtl copper_crystal
+f 56 62 64
+usemtl copper_crystal
+f 56 64 66
+usemtl copper_highlight
+f 67 68 70
+usemtl copper_highlight
+f 67 70 69
+usemtl copper_highlight
+f 69 70 72
+usemtl copper_highlight
+f 69 72 71
+usemtl copper_highlight
+f 71 72 74
+usemtl copper_highlight
+f 71 74 73
+usemtl copper_highlight
+f 73 74 68
+usemtl copper_highlight
+f 73 68 67
+usemtl copper_highlight
+f 68 70 72
+usemtl copper_highlight
+f 68 72 74
+usemtl copper_crystal
+f 75 76 78
+usemtl copper_crystal
+f 75 78 77
+usemtl copper_crystal
+f 77 78 80
+usemtl copper_crystal
+f 77 80 79
+usemtl copper_crystal
+f 79 80 82
+usemtl copper_crystal
+f 79 82 81
+usemtl copper_crystal
+f 81 82 84
+usemtl copper_crystal
+f 81 84 83
+usemtl copper_crystal
+f 83 84 76
+usemtl copper_crystal
+f 83 76 75
+usemtl copper_crystal
+f 76 78 80
+usemtl copper_crystal
+f 76 80 82
+usemtl copper_crystal
+f 76 82 84
+usemtl copper_highlight
+f 85 86 88
+usemtl copper_highlight
+f 85 88 87
+usemtl copper_highlight
+f 87 88 90
+usemtl copper_highlight
+f 87 90 89
+usemtl copper_highlight
+f 89 90 92
+usemtl copper_highlight
+f 89 92 91
+usemtl copper_highlight
+f 91 92 86
+usemtl copper_highlight
+f 91 86 85
+usemtl copper_highlight
+f 86 88 90
+usemtl copper_highlight
+f 86 90 92
+usemtl copper_crystal
+f 93 94 96
+usemtl copper_crystal
+f 93 96 95
+usemtl copper_crystal
+f 95 96 98
+usemtl copper_crystal
+f 95 98 97
+usemtl copper_crystal
+f 97 98 100
+usemtl copper_crystal
+f 97 100 99
+usemtl copper_crystal
+f 99 100 102
+usemtl copper_crystal
+f 99 102 101
+usemtl copper_crystal
+f 101 102 104
+usemtl copper_crystal
+f 101 104 103
+usemtl copper_crystal
+f 103 104 94
+usemtl copper_crystal
+f 103 94 93
+usemtl copper_crystal
+f 94 96 98
+usemtl copper_crystal
+f 94 98 100
+usemtl copper_crystal
+f 94 100 102
+usemtl copper_crystal
+f 94 102 104
+usemtl copper_highlight
+f 105 106 108
+usemtl copper_highlight
+f 105 108 107
+usemtl copper_highlight
+f 107 108 110
+usemtl copper_highlight
+f 107 110 109
+usemtl copper_highlight
+f 109 110 112
+usemtl copper_highlight
+f 109 112 111
+usemtl copper_highlight
+f 111 112 106
+usemtl copper_highlight
+f 111 106 105
+usemtl copper_highlight
+f 106 108 110
+usemtl copper_highlight
+f 106 110 112
+usemtl copper_crystal
+f 113 114 116
+usemtl copper_crystal
+f 113 116 115
+usemtl copper_crystal
+f 115 116 118
+usemtl copper_crystal
+f 115 118 117
+usemtl copper_crystal
+f 117 118 120
+usemtl copper_crystal
+f 117 120 119
+usemtl copper_crystal
+f 119 120 122
+usemtl copper_crystal
+f 119 122 121
+usemtl copper_crystal
+f 121 122 124
+usemtl copper_crystal
+f 121 124 123
+usemtl copper_crystal
+f 123 124 114
+usemtl copper_crystal
+f 123 114 113
+usemtl copper_crystal
+f 114 116 118
+usemtl copper_crystal
+f 114 118 120
+usemtl copper_crystal
+f 114 120 122
+usemtl copper_crystal
+f 114 122 124

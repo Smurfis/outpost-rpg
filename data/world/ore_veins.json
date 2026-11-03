@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "seed": 387441,
+  "cell_size": 46,
+  "prototype_extent_cells": 1,
+  "ore_deposits_per_frontier_cell": 7,
+  "ores": [
+    {
+      "id": "copper",
+      "name": "Copper vein",
+      "tier": 1,
+      "weight": 24,
+      "base": "#6a7071",
+      "crystal": "#ca895f",
+      "hits": 3,
+      "recovery": 24
+    },
+    {
+      "id": "tin",
+      "name": "Tin deposit",
+      "tier": 1,
+      "weight": 22,
+      "base": "#7a8489",
+      "crystal": "#c2ced0",
+      "hits": 3,
+      "recovery": 24
+    },
+    {
+      "id": "iron",
+      "name": "Iron vein",
+      "tier": 2,
+      "weight": 24,
+      "base": "#556f7e",
+      "crystal": "#85a9bd",
+      "hits": 3,
+      "recovery": 28
+    },
+    {
+      "id": "coal",
+      "name": "Coal seam",
+      "tier": 2,
+      "weight": 16,
+      "base": "#35383e",
+      "crystal": "#676875",
+      "hits": 3,
+      "recovery": 28
+    },
+    {
+      "id": "silver_ore",
+      "name": "Silver vein",
+      "tier": 3,
+      "weight": 8,
+      "base": "#677b8a",
+      "crystal": "#d6dce3",
+      "hits": 4,
+      "recovery": 42
+    },
+    {
+      "id": "gold_ore",
+      "name": "Gold vein",
+      "tier": 4,
+      "weight": 5,
+      "base": "#615c4c",
+      "crystal": "#e4b865",
+      "hits": 4,
+      "recovery": 55
+    },
+    {
+      "id": "quartz",
+      "name": "Quartz cluster",
+      "tier": 4,
+      "weight": 6,
+      "base": "#5b7480",
+      "crystal": "#8fe3d9",
+      "hits": 3,
+      "recovery": 48
+    },
+    {
+      "id": "mithril_ore",
+      "name": "Mithril lode",
+      "tier": 5,
+      "weight": 2,
+      "base": "#435a6c",
+      "crystal": "#b59cdd",
+      "hits": 5,
+      "recovery": 75
+    }
+  ],
+  "hotspot_cells": {
+    "-1,-1": "mithril_ore",
+    "1,-1": "gold_ore",
+    "-1,1": "silver_ore",
+    "1,1": "quartz"
+  },
+  "notes": "Prototype 3x3 seamless frontier with deterministic ore placements. Does not decide between a future Albion-zone topology and streamed continuous world."
+}

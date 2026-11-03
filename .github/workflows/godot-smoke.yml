@@ -26,6 +26,19 @@ jobs:
             echo "Runtime script errors detected"
             exit 1
           fi
+      - name: Virtual joystick and real movement physics regression
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/movement.gd 2>&1 | tee movement.log
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
+
+      - name: Seeded dungeon and equipment progression regressions
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/progression.gd 2>&1 | tee progression.log
+      - name: Dungeon spawn, entry and reward integration checks
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeons.gd 2>&1 | tee dungeon.log

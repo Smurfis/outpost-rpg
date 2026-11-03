@@ -22,6 +22,16 @@ var gather_phase: float = 0.0
 var walking_phase: float = 0.0
 var walk_amount: float = 0.0
 var last_gather: String = ""
+var interaction_target: Vector3 = Vector3.ZERO
+var interaction_moving: bool = false
+var interaction_locked: bool = false
+
+func move_to_interaction(target: Vector3) -> void:
+	interaction_target = target
+	interaction_moving = true
+
+func stop_interaction_move() -> void:
+	interaction_moving = false
 
 func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	game = game_ref
@@ -113,7 +123,7 @@ func gather_swing(kind: String) -> void:
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
-	var modal_open: bool = game.menu != null and game.menu.visible
+	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or (hud != null and hud.quick_menu_open) or interaction_locked
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
 		control = Vector2.ZERO
@@ -126,7 +136,20 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var direction: Vector3 = (right * control.x - forward * control.y).normalized()
+	if interaction_moving and not modal_open:
+		if control.length() > 0.15:
+			stop_interaction_move()
+		else:
+			var delta_to_goal: Vector3 = interaction_target - global_position
+			delta_to_goal.y = 0.0
+			if delta_to_goal.length() <= 2.4:
+				stop_interaction_move()
+				direction = Vector3.ZERO
+			else:
+				direction = delta_to_goal.normalized()
 	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
+	if float(game.skill_buffs.get("quickstep", 0.0)) > 0.0:
+		speed *= 1.40
 	if gather_phase > 0.0:
 		speed *= 0.42
 	velocity.x = direction.x * speed
@@ -161,6 +184,7 @@ func _physics_process(delta: float) -> void:
 
 func take_hit(amount: float) -> void:
 	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
+	protection *= 1.0 - float(game.gear_stats().get("mitigation", 0.0))
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection

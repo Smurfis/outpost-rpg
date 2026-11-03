@@ -1,40 +1,55 @@
 extends Node3D
-## Outpost v0.4: ten distinct harvestables, each with faceted silhouette.
+## Outpost v0.6: model-backed deterministic ore deposits with tiered recovery.
+const ORE_PATH = "res://data/world/ore_veins.json"
+static var ore_cache: Dictionary = {}
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
+var maximum_hits: int = 3
 var cooldown: float = 0.0
 var recovery: float = 18.0
 var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
+static func ore_definition(resource_type: String) -> Dictionary:
+	if ore_cache.is_empty():
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(ORE_PATH))
+		if parsed is Dictionary:
+			for entry in parsed.get("ores", []):
+				if entry is Dictionary:
+					ore_cache[str(entry.get("id", ""))] = entry
+	return ore_cache.get(resource_type, {})
+
 func setup(resource_type: String) -> void:
 	kind = resource_type
-	name = kind.capitalize() + "Node"
-	match kind:
-		"wood":
-			_pine()
-		"stone":
-			_rock()
-		"fiber":
-			_bush(false)
-		"berries":
-			_bush(true)
-		"iron":
-			_ore(Color("738fa4"), Color("9fc8d9"))
-		"coal":
-			_ore(Color("303b44"), Color("63737e"))
-		"clay":
-			_clay()
-		"herbs":
-			_herbs()
-		"mushrooms":
-			_mushrooms()
-		"reeds":
-			_reeds()
-	hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
-	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
+	name = kind.replace("_", " ").capitalize() + " Node"
+	var ore: Dictionary = ore_definition(kind)
+	if not ore.is_empty():
+		_model("ore_" + kind, Vector3.ONE)
+		maximum_hits = maxi(2, int(ore.get("hits", 3)))
+		recovery = maxf(5.0, float(ore.get("recovery", 28.0)))
+	else:
+		match kind:
+			"wood":
+				_pine()
+			"stone":
+				_rock()
+			"fiber":
+				_bush(false)
+			"berries":
+				_bush(true)
+			"clay":
+				_clay()
+			"herbs":
+				_herbs()
+			"mushrooms":
+				_mushrooms()
+			"reeds":
+				_reeds()
+		maximum_hits = 3 if kind in ["wood", "stone", "clay"] else 2
+		recovery = 28.0 if kind == "herbs" else 18.0
+	hits_left = maximum_hits
 	initial_scale = scale
 	_setup_target_marker()
 	add_to_group("resources")
@@ -48,7 +63,7 @@ func _model(id: String, size_factor: Vector3) -> void:
 
 func _setup_target_marker() -> void:
 	target_label = Label3D.new()
-	target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+	target_label.text = kind.replace("_", " ").capitalize() + " • " + str(hits_left) + " hits"
 	target_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	target_label.font_size = 43
 	target_label.pixel_size = 0.006
@@ -75,7 +90,7 @@ func _setup_target_marker() -> void:
 func set_targeted(selected: bool) -> void:
 	if target_label != null:
 		target_label.visible = selected and active
-		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+		target_label.text = kind.replace("_", " ").capitalize() + " • " + str(hits_left) + " hits"
 	if target_ring != null:
 		target_ring.visible = selected and active
 
@@ -174,7 +189,7 @@ func _process(delta: float) -> void:
 		cooldown -= delta
 		if cooldown <= 0.0:
 			active = true
-			hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+			hits_left = maximum_hits
 			visible = true
 			scale = initial_scale
 
@@ -183,7 +198,7 @@ func harvest() -> String:
 		return ""
 	hits_left -= 1
 	if target_label != null:
-		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+		target_label.text = kind.replace("_", " ").capitalize() + " • " + str(hits_left) + " hits"
 	var bump := create_tween()
 	bump.tween_property(self, "scale", initial_scale * 1.07, 0.07)
 	bump.tween_property(self, "scale", initial_scale, 0.10)
