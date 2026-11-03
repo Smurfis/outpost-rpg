@@ -4,7 +4,11 @@
     "name": "Forest Spear",
     "result": "spear",
     "amount": 1,
-    "desc": "Deal 16 damage instead of 8. Your first weapon upgrade.",
+    "station": "workbench",
+    "seconds": 2,
+    "strokes": 3,
+    "category": "Weapons",
+    "desc": "Basic reach weapon: 16 damage.",
     "ingredients": {
       "wood": 3,
       "stone": 2
@@ -15,7 +19,11 @@
     "name": "Woodcutter Axe",
     "result": "axe",
     "amount": 1,
-    "desc": "Collect 2 wood instead of 1 per successful gather.",
+    "station": "workbench",
+    "seconds": 1.7,
+    "strokes": 3,
+    "category": "Tools",
+    "desc": "Gather 2 wood from each swing.",
     "ingredients": {
       "wood": 4,
       "stone": 2
@@ -26,7 +34,11 @@
     "name": "Stone Pickaxe",
     "result": "pickaxe",
     "amount": 1,
-    "desc": "Collect 2 stone instead of 1 per successful gather.",
+    "station": "workbench",
+    "seconds": 1.7,
+    "strokes": 3,
+    "category": "Tools",
+    "desc": "Gather 2 stone, iron or coal per swing.",
     "ingredients": {
       "wood": 3,
       "stone": 4
@@ -37,7 +49,11 @@
     "name": "Leather Shield",
     "result": "shield",
     "amount": 1,
-    "desc": "Reduce incoming boar damage by 40%.",
+    "station": "workbench",
+    "seconds": 2.4,
+    "strokes": 4,
+    "category": "Armour",
+    "desc": "Reduces damage from wild boars.",
     "ingredients": {
       "wood": 3,
       "hide": 2
@@ -48,7 +64,11 @@
     "name": "Forager Satchel",
     "result": "satchel",
     "amount": 1,
-    "desc": "Gather 2 fiber instead of 1.",
+    "station": "loom",
+    "seconds": 2,
+    "strokes": 3,
+    "category": "Tools",
+    "desc": "Gather 2 fiber or reeds per use.",
     "ingredients": {
       "fiber": 5,
       "hide": 1
@@ -59,10 +79,119 @@
     "name": "Camp Meal",
     "result": "meal",
     "amount": 1,
-    "desc": "Consumable: restore 40 health (use BAG or HEAL).",
+    "station": "campfire",
+    "seconds": 1.8,
+    "strokes": 3,
+    "category": "Food",
+    "desc": "Heals 40 HP when consumed.",
     "ingredients": {
       "berries": 3,
       "fiber": 1
+    }
+  },
+  {
+    "id": "iron_ingot",
+    "name": "Smelt Iron Ingot",
+    "result": "iron_ingot",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 2.8,
+    "strokes": 4,
+    "category": "Materials",
+    "desc": "Refined metal used in advanced weapons.",
+    "ingredients": {
+      "iron": 3,
+      "coal": 1
+    }
+  },
+  {
+    "id": "iron_blade",
+    "name": "Iron Blade",
+    "result": "iron_blade",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.4,
+    "strokes": 5,
+    "category": "Weapons",
+    "desc": "Upgrade to 24 melee damage.",
+    "ingredients": {
+      "iron_ingot": 2,
+      "wood": 2
+    }
+  },
+  {
+    "id": "bricks",
+    "name": "Fire Clay Bricks",
+    "result": "bricks",
+    "amount": 2,
+    "station": "forge",
+    "seconds": 2.4,
+    "strokes": 4,
+    "category": "Materials",
+    "desc": "Fire two bricks from gathered clay.",
+    "ingredients": {
+      "clay": 3,
+      "coal": 1
+    }
+  },
+  {
+    "id": "linen",
+    "name": "Weave Linen Roll",
+    "result": "linen",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 2.5,
+    "strokes": 4,
+    "category": "Materials",
+    "desc": "Refined cloth for clothing.",
+    "ingredients": {
+      "fiber": 3,
+      "reeds": 2
+    }
+  },
+  {
+    "id": "cloak",
+    "name": "Wanderer's Cloak",
+    "result": "cloak",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 2.7,
+    "strokes": 4,
+    "category": "Armour",
+    "desc": "A visible cloak and small speed bonus.",
+    "ingredients": {
+      "linen": 2,
+      "hide": 2
+    }
+  },
+  {
+    "id": "tonic",
+    "name": "Herbal Tonic",
+    "result": "tonic",
+    "amount": 1,
+    "station": "campfire",
+    "seconds": 2.2,
+    "strokes": 3,
+    "category": "Food",
+    "desc": "Restores 65 health.",
+    "ingredients": {
+      "herbs": 2,
+      "berries": 1
+    }
+  },
+  {
+    "id": "stew",
+    "name": "Mushroom Stew",
+    "result": "stew",
+    "amount": 1,
+    "station": "campfire",
+    "seconds": 2.5,
+    "strokes": 3,
+    "category": "Food",
+    "desc": "Restores 75 health.",
+    "ingredients": {
+      "mushrooms": 2,
+      "berries": 2
     }
   }
 ]
