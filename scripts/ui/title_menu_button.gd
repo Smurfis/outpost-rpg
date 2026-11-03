@@ -1,0 +1,60 @@
+@tool
+extends Button
+## Outpost's re-usable textured, touch-friendly title menu button.
+## Every icon and plank asset is an independent transparent SVG.
+@export_enum("play", "continue", "settings", "quit") var button_kind: String = "play"
+@export var button_caption: String = ""
+
+const ASSET_BASE := "res://assets/ui/title/"
+const CAPTIONS := {"play": "Play", "continue": "Continue", "settings": "Settings", "quit": "Quit"}
+
+func _ready() -> void:
+	custom_minimum_size = Vector2(430, 76)
+	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	focus_mode = Control.FOCUS_ALL
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_apply_appearance()
+
+func _apply_appearance() -> void:
+	var kind: String = button_kind if CAPTIONS.has(button_kind) else "play"
+	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
+	var picture: Texture2D = load(ASSET_BASE + "icons/" + kind + ".svg") as Texture2D
+	if picture != null:
+		icon = picture
+	icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_theme_font_size_override("font_size", 32)
+	add_theme_constant_override("h_separation", 22)
+	add_theme_color_override("font_color", Color("fff1cd") if kind != "quit" else Color("482b24"))
+	add_theme_color_override("font_hover_color", Color("ffffff") if kind != "quit" else Color("482b24"))
+	add_theme_color_override("font_pressed_color", Color("ffefb9"))
+	add_theme_color_override("font_disabled_color", Color("b3a79d"))
+	add_theme_color_override("font_outline_color", Color("3b2021"))
+	add_theme_constant_override("outline_size", 3)
+	var image: Texture2D = load(ASSET_BASE + "buttons/" + kind + ".svg") as Texture2D
+	if image == null:
+		return
+	_set_plaque("normal", image, Color.WHITE)
+	_set_plaque("hover", image, Color("fff5cd"))
+	_set_plaque("pressed", image, Color("ceb59b"))
+	_set_plaque("disabled", image, Color(0.6, 0.6, 0.6, 0.85))
+	var focus_style := StyleBoxFlat.new()
+	focus_style.bg_color = Color.TRANSPARENT
+	focus_style.border_color = Color("ffdf7a")
+	focus_style.set_border_width_all(2)
+	focus_style.set_corner_radius_all(16)
+	add_theme_stylebox_override("focus", focus_style)
+
+func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
+	var style := StyleBoxTexture.new()
+	style.texture = picture
+	style.texture_margin_left = 25.0
+	style.texture_margin_right = 25.0
+	style.texture_margin_top = 20.0
+	style.texture_margin_bottom = 20.0
+	style.content_margin_left = 85.0
+	style.content_margin_right = 45.0
+	style.content_margin_top = 7.0
+	style.content_margin_bottom = 7.0
+	style.modulate_color = tint
+	add_theme_stylebox_override(state, style)
