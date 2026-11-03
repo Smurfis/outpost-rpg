@@ -45,6 +45,12 @@ jobs:
             echo "Voxel visual smoke errors detected"
             exit 1
           fi
+      - name: Verify imported PNG textures and complete crafting UI journey
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/pixel_ui_integration.gd 2>&1 | tee pixel-ui.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PIXEL UI:' pixel-ui.log; then exit 1; fi
+          grep -q "PIXEL UI RESULT: 0 failure(s)." pixel-ui.log
       - name: Verify Five Star splash, title logo and menu
         run: |
           set -o pipefail
