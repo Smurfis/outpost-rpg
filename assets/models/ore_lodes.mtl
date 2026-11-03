@@ -1,0 +1,169 @@
+# Outpost original faceted ore clusters. MIT licence.
+
+newmtl copper_rock
+Kd 0.4157 0.4392 0.4431
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl copper_crystal
+Kd 0.7922 0.5373 0.3725
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl copper_highlight
+Kd 0.7922 0.5373 0.3725
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl tin_rock
+Kd 0.4784 0.5176 0.5373
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl tin_crystal
+Kd 0.7608 0.8078 0.8157
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl tin_highlight
+Kd 0.7608 0.8078 0.8157
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl iron_rock
+Kd 0.3333 0.4353 0.4941
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl iron_crystal
+Kd 0.5216 0.6627 0.7412
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl iron_highlight
+Kd 0.5216 0.6627 0.7412
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl coal_rock
+Kd 0.2078 0.2196 0.2431
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl coal_crystal
+Kd 0.4039 0.4078 0.4588
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl coal_highlight
+Kd 0.4039 0.4078 0.4588
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl silver_ore_rock
+Kd 0.4039 0.4824 0.5412
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl silver_ore_crystal
+Kd 0.8392 0.8627 0.8902
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl silver_ore_highlight
+Kd 0.8392 0.8627 0.8902
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl gold_ore_rock
+Kd 0.3804 0.3608 0.2980
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl gold_ore_crystal
+Kd 0.8941 0.7216 0.3961
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl gold_ore_highlight
+Kd 0.8941 0.7216 0.3961
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl quartz_rock
+Kd 0.3569 0.4549 0.5020
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl quartz_crystal
+Kd 0.5608 0.8902 0.8510
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl quartz_highlight
+Kd 0.5608 0.8902 0.8510
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl mithril_ore_rock
+Kd 0.2627 0.3529 0.4235
+Ka 0.08 0.08 0.08
+Ks 0.02 0.02 0.02
+Ns 8
+illum 2
+
+newmtl mithril_ore_crystal
+Kd 0.7098 0.6118 0.8667
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2
+
+newmtl mithril_ore_highlight
+Kd 0.7098 0.6118 0.8667
+Ka 0.08 0.08 0.08
+Ks 0.18 0.18 0.18
+Ns 40
+illum 2

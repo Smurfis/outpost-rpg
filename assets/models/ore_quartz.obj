@@ -1,0 +1,611 @@
+# Outpost original mobile-optimised faceted ore deposit
+mtllib ore_lodes.mtl
+o ore_quartz
+v -0.45264 0.94605 0.00000
+v 0.43665 0.92923 0.00000
+v -0.42747 0.02042 0.00000
+v 0.42645 0.02149 0.00000
+v 0.00000 0.18808 0.59652
+v 0.00000 0.76136 0.61649
+v 0.00000 0.16586 -0.64353
+v 0.00000 0.78840 -0.67371
+v 0.82666 0.47000 -0.43427
+v 0.85433 0.47000 0.44880
+v -0.87159 0.47000 -0.45787
+v -0.87595 0.47000 0.46016
+v -0.73246 0.61771 0.24000
+v -0.23812 0.60440 0.24000
+v -0.71410 0.00539 0.24000
+v -0.24975 0.01023 0.24000
+v -0.48000 0.12042 0.57208
+v -0.48000 0.48349 0.57931
+v -0.48000 0.10974 -0.11182
+v -0.48000 0.49889 -0.12778
+v -0.04701 0.30000 0.00213
+v -0.02927 0.30000 0.48761
+v -0.94438 0.30000 -0.01511
+v -0.95198 0.30000 0.49929
+v 0.31028 0.57091 -0.18000
+v 0.79531 0.57769 -0.18000
+v 0.29539 -0.02897 -0.18000
+v 0.81626 -0.04311 -0.18000
+v 0.55000 0.07107 0.24660
+v 0.55000 0.49733 0.26375
+v 0.55000 0.05633 -0.63670
+v 0.55000 0.50704 -0.64356
+v 1.03958 0.28000 -0.46637
+v 1.03192 0.28000 0.10189
+v 0.08208 0.28000 -0.45370
+v 0.10038 0.28000 0.08299
+v 0.71507 0.50000 0.25964
+v 0.58506 1.75853 0.20772
+v 0.51618 0.50000 0.38503
+v 0.52539 1.75853 0.24533
+v 0.33547 0.50000 0.23462
+v 0.47118 1.75853 0.20021
+v 0.42268 0.50000 0.01627
+v 0.49734 1.75853 0.13470
+v 0.65729 0.50000 0.03174
+v 0.56772 1.75853 0.13934
+v 0.63506 0.83000 0.20772
+v 0.57934 1.89853 0.18546
+v 0.55708 0.83000 0.24118
+v 0.57934 1.89853 0.18546
+v 0.52362 0.83000 0.16321
+v 0.57934 1.89853 0.18546
+v 0.60159 0.83000 0.12974
+v 0.57934 1.89853 0.18546
+v 0.11019 0.50000 0.69280
+v 0.09016 2.03968 0.55424
+v -0.07554 0.50000 0.61861
+v 0.03444 2.03968 0.53198
+v -0.10416 0.50000 0.42067
+v 0.02585 2.03968 0.47260
+v 0.05295 0.50000 0.29691
+v 0.07298 2.03968 0.43547
+v 0.23868 0.50000 0.37110
+v 0.12870 2.03968 0.45773
+v 0.26730 0.50000 0.56904
+v 0.13729 2.03968 0.51711
+v 0.14016 0.83000 0.55424
+v 0.13157 2.17968 0.49485
+v 0.07219 0.83000 0.50344
+v 0.13157 2.17968 0.49485
+v 0.12298 0.83000 0.43547
+v 0.13157 2.17968 0.49485
+v 0.19095 0.83000 0.48627
+v 0.13157 2.17968 0.49485
+v -0.60488 0.50000 0.43315
+v -0.49490 1.78165 0.34652
+v -0.61402 0.50000 0.19821
+v -0.49764 1.78165 0.27604
+v -0.39341 0.50000 0.11692
+v -0.43146 1.78165 0.25165
+v -0.24792 0.50000 0.30162
+v -0.38781 1.78165 0.30706
+v -0.37862 0.50000 0.49706
+v -0.42702 1.78165 0.36569
+v -0.44490 0.83000 0.34652
+v -0.39777 1.92165 0.30939
+v -0.43490 0.83000 0.26226
+v -0.39777 1.92165 0.30939
+v -0.35064 0.83000 0.27227
+v -0.39777 1.92165 0.30939
+v -0.36064 0.83000 0.35653
+v -0.39777 1.92165 0.30939
+v -0.71507 0.50000 -0.25964
+v -0.58506 1.61775 -0.20772
+v -0.55796 0.50000 -0.38340
+v -0.53793 1.61775 -0.24484
+v -0.37223 0.50000 -0.30922
+v -0.48221 1.61775 -0.22259
+v -0.34361 0.50000 -0.11128
+v -0.47362 1.61775 -0.16321
+v -0.50072 0.50000 0.01248
+v -0.52075 1.61775 -0.12608
+v -0.68645 0.50000 -0.06170
+v -0.57647 1.61775 -0.14833
+v -0.53506 0.83000 -0.20772
+v -0.47934 1.75775 -0.18546
+v -0.45708 0.83000 -0.24118
+v -0.47934 1.75775 -0.18546
+v -0.42362 0.83000 -0.16321
+v -0.47934 1.75775 -0.18546
+v -0.50159 0.83000 -0.12974
+v -0.47934 1.75775 -0.18546
+v -0.11019 0.50000 -0.69280
+v -0.09016 1.95026 -0.55424
+v 0.09784 0.50000 -0.58324
+v -0.02775 1.95026 -0.52137
+v 0.05793 0.50000 -0.35154
+v -0.03972 1.95026 -0.45186
+v -0.17476 0.50000 -0.31789
+v -0.10953 1.95026 -0.44177
+v -0.27867 0.50000 -0.52880
+v -0.14070 1.95026 -0.50504
+v -0.04016 0.83000 -0.55424
+v -0.03157 2.09026 -0.49485
+v 0.02781 0.83000 -0.50344
+v -0.03157 2.09026 -0.49485
+v -0.02298 0.83000 -0.43547
+v -0.03157 2.09026 -0.49485
+v -0.09095 0.83000 -0.48627
+v -0.03157 2.09026 -0.49485
+v 0.60488 0.50000 -0.43315
+v 0.49490 1.96306 -0.34652
+v 0.63350 0.50000 -0.23521
+v 0.50349 1.96306 -0.28714
+v 0.47639 0.50000 -0.11145
+v 0.45635 1.96306 -0.25001
+v 0.29066 0.50000 -0.18564
+v 0.40064 1.96306 -0.27227
+v 0.26204 0.50000 -0.38358
+v 0.39205 1.96306 -0.33165
+v 0.41915 0.50000 -0.50733
+v 0.43918 1.96306 -0.36878
+v 0.54490 0.83000 -0.34652
+v 0.49777 2.10306 -0.30939
+v 0.53490 0.83000 -0.26226
+v 0.49777 2.10306 -0.30939
+v 0.45064 0.83000 -0.27227
+v 0.49777 2.10306 -0.30939
+v 0.46064 0.83000 -0.35653
+v 0.49777 2.10306 -0.30939
+v 0.29807 0.76000 -0.06487
+v -0.00012 1.49000 -0.09780
+v 0.10861 0.76000 0.19302
+v -0.01196 1.49000 -0.08169
+v -0.20946 0.76000 0.15789
+v -0.03184 1.49000 -0.08388
+v -0.33807 0.76000 -0.13513
+v -0.03988 1.49000 -0.10220
+v -0.14861 0.76000 -0.39302
+v -0.02804 1.49000 -0.11831
+v 0.16946 0.76000 -0.35789
+v -0.00816 1.49000 -0.11612
+usemtl quartz_highlight
+f 1 12 6
+usemtl quartz_rock
+f 1 6 2
+usemtl quartz_rock
+f 1 2 8
+usemtl quartz_rock
+f 1 8 11
+usemtl quartz_rock
+f 1 11 12
+usemtl quartz_highlight
+f 2 6 10
+usemtl quartz_rock
+f 6 12 5
+usemtl quartz_rock
+f 12 11 3
+usemtl quartz_rock
+f 11 8 7
+usemtl quartz_rock
+f 8 2 9
+usemtl quartz_highlight
+f 4 10 5
+usemtl quartz_rock
+f 4 5 3
+usemtl quartz_rock
+f 4 3 7
+usemtl quartz_rock
+f 4 7 9
+usemtl quartz_rock
+f 4 9 10
+usemtl quartz_highlight
+f 5 10 6
+usemtl quartz_rock
+f 3 5 12
+usemtl quartz_rock
+f 7 3 11
+usemtl quartz_rock
+f 9 7 8
+usemtl quartz_rock
+f 10 9 2
+usemtl quartz_rock
+f 13 24 18
+usemtl quartz_rock
+f 13 18 14
+usemtl quartz_rock
+f 13 14 20
+usemtl quartz_rock
+f 13 20 23
+usemtl quartz_rock
+f 13 23 24
+usemtl quartz_rock
+f 14 18 22
+usemtl quartz_rock
+f 18 24 17
+usemtl quartz_rock
+f 24 23 15
+usemtl quartz_rock
+f 23 20 19
+usemtl quartz_rock
+f 20 14 21
+usemtl quartz_rock
+f 16 22 17
+usemtl quartz_rock
+f 16 17 15
+usemtl quartz_rock
+f 16 15 19
+usemtl quartz_rock
+f 16 19 21
+usemtl quartz_rock
+f 16 21 22
+usemtl quartz_rock
+f 17 22 18
+usemtl quartz_rock
+f 15 17 24
+usemtl quartz_rock
+f 19 15 23
+usemtl quartz_rock
+f 21 19 20
+usemtl quartz_rock
+f 22 21 14
+usemtl quartz_rock
+f 25 36 30
+usemtl quartz_rock
+f 25 30 26
+usemtl quartz_rock
+f 25 26 32
+usemtl quartz_rock
+f 25 32 35
+usemtl quartz_rock
+f 25 35 36
+usemtl quartz_rock
+f 26 30 34
+usemtl quartz_rock
+f 30 36 29
+usemtl quartz_rock
+f 36 35 27
+usemtl quartz_rock
+f 35 32 31
+usemtl quartz_rock
+f 32 26 33
+usemtl quartz_rock
+f 28 34 29
+usemtl quartz_rock
+f 28 29 27
+usemtl quartz_rock
+f 28 27 31
+usemtl quartz_rock
+f 28 31 33
+usemtl quartz_rock
+f 28 33 34
+usemtl quartz_rock
+f 29 34 30
+usemtl quartz_rock
+f 27 29 36
+usemtl quartz_rock
+f 31 27 35
+usemtl quartz_rock
+f 33 31 32
+usemtl quartz_rock
+f 34 33 26
+usemtl quartz_crystal
+f 37 38 40
+usemtl quartz_crystal
+f 37 40 39
+usemtl quartz_crystal
+f 39 40 42
+usemtl quartz_crystal
+f 39 42 41
+usemtl quartz_crystal
+f 41 42 44
+usemtl quartz_crystal
+f 41 44 43
+usemtl quartz_crystal
+f 43 44 46
+usemtl quartz_crystal
+f 43 46 45
+usemtl quartz_crystal
+f 45 46 38
+usemtl quartz_crystal
+f 45 38 37
+usemtl quartz_crystal
+f 38 40 42
+usemtl quartz_crystal
+f 38 42 44
+usemtl quartz_crystal
+f 38 44 46
+usemtl quartz_highlight
+f 47 48 50
+usemtl quartz_highlight
+f 47 50 49
+usemtl quartz_highlight
+f 49 50 52
+usemtl quartz_highlight
+f 49 52 51
+usemtl quartz_highlight
+f 51 52 54
+usemtl quartz_highlight
+f 51 54 53
+usemtl quartz_highlight
+f 53 54 48
+usemtl quartz_highlight
+f 53 48 47
+usemtl quartz_highlight
+f 48 50 52
+usemtl quartz_highlight
+f 48 52 54
+usemtl quartz_crystal
+f 55 56 58
+usemtl quartz_crystal
+f 55 58 57
+usemtl quartz_crystal
+f 57 58 60
+usemtl quartz_crystal
+f 57 60 59
+usemtl quartz_crystal
+f 59 60 62
+usemtl quartz_crystal
+f 59 62 61
+usemtl quartz_crystal
+f 61 62 64
+usemtl quartz_crystal
+f 61 64 63
+usemtl quartz_crystal
+f 63 64 66
+usemtl quartz_crystal
+f 63 66 65
+usemtl quartz_crystal
+f 65 66 56
+usemtl quartz_crystal
+f 65 56 55
+usemtl quartz_crystal
+f 56 58 60
+usemtl quartz_crystal
+f 56 60 62
+usemtl quartz_crystal
+f 56 62 64
+usemtl quartz_crystal
+f 56 64 66
+usemtl quartz_highlight
+f 67 68 70
+usemtl quartz_highlight
+f 67 70 69
+usemtl quartz_highlight
+f 69 70 72
+usemtl quartz_highlight
+f 69 72 71
+usemtl quartz_highlight
+f 71 72 74
+usemtl quartz_highlight
+f 71 74 73
+usemtl quartz_highlight
+f 73 74 68
+usemtl quartz_highlight
+f 73 68 67
+usemtl quartz_highlight
+f 68 70 72
+usemtl quartz_highlight
+f 68 72 74
+usemtl quartz_crystal
+f 75 76 78
+usemtl quartz_crystal
+f 75 78 77
+usemtl quartz_crystal
+f 77 78 80
+usemtl quartz_crystal
+f 77 80 79
+usemtl quartz_crystal
+f 79 80 82
+usemtl quartz_crystal
+f 79 82 81
+usemtl quartz_crystal
+f 81 82 84
+usemtl quartz_crystal
+f 81 84 83
+usemtl quartz_crystal
+f 83 84 76
+usemtl quartz_crystal
+f 83 76 75
+usemtl quartz_crystal
+f 76 78 80
+usemtl quartz_crystal
+f 76 80 82
+usemtl quartz_crystal
+f 76 82 84
+usemtl quartz_highlight
+f 85 86 88
+usemtl quartz_highlight
+f 85 88 87
+usemtl quartz_highlight
+f 87 88 90
+usemtl quartz_highlight
+f 87 90 89
+usemtl quartz_highlight
+f 89 90 92
+usemtl quartz_highlight
+f 89 92 91
+usemtl quartz_highlight
+f 91 92 86
+usemtl quartz_highlight
+f 91 86 85
+usemtl quartz_highlight
+f 86 88 90
+usemtl quartz_highlight
+f 86 90 92
+usemtl quartz_crystal
+f 93 94 96
+usemtl quartz_crystal
+f 93 96 95
+usemtl quartz_crystal
+f 95 96 98
+usemtl quartz_crystal
+f 95 98 97
+usemtl quartz_crystal
+f 97 98 100
+usemtl quartz_crystal
+f 97 100 99
+usemtl quartz_crystal
+f 99 100 102
+usemtl quartz_crystal
+f 99 102 101
+usemtl quartz_crystal
+f 101 102 104
+usemtl quartz_crystal
+f 101 104 103
+usemtl quartz_crystal
+f 103 104 94
+usemtl quartz_crystal
+f 103 94 93
+usemtl quartz_crystal
+f 94 96 98
+usemtl quartz_crystal
+f 94 98 100
+usemtl quartz_crystal
+f 94 100 102
+usemtl quartz_crystal
+f 94 102 104
+usemtl quartz_highlight
+f 105 106 108
+usemtl quartz_highlight
+f 105 108 107
+usemtl quartz_highlight
+f 107 108 110
+usemtl quartz_highlight
+f 107 110 109
+usemtl quartz_highlight
+f 109 110 112
+usemtl quartz_highlight
+f 109 112 111
+usemtl quartz_highlight
+f 111 112 106
+usemtl quartz_highlight
+f 111 106 105
+usemtl quartz_highlight
+f 106 108 110
+usemtl quartz_highlight
+f 106 110 112
+usemtl quartz_crystal
+f 113 114 116
+usemtl quartz_crystal
+f 113 116 115
+usemtl quartz_crystal
+f 115 116 118
+usemtl quartz_crystal
+f 115 118 117
+usemtl quartz_crystal
+f 117 118 120
+usemtl quartz_crystal
+f 117 120 119
+usemtl quartz_crystal
+f 119 120 122
+usemtl quartz_crystal
+f 119 122 121
+usemtl quartz_crystal
+f 121 122 114
+usemtl quartz_crystal
+f 121 114 113
+usemtl quartz_crystal
+f 114 116 118
+usemtl quartz_crystal
+f 114 118 120
+usemtl quartz_crystal
+f 114 120 122
+usemtl quartz_highlight
+f 123 124 126
+usemtl quartz_highlight
+f 123 126 125
+usemtl quartz_highlight
+f 125 126 128
+usemtl quartz_highlight
+f 125 128 127
+usemtl quartz_highlight
+f 127 128 130
+usemtl quartz_highlight
+f 127 130 129
+usemtl quartz_highlight
+f 129 130 124
+usemtl quartz_highlight
+f 129 124 123
+usemtl quartz_highlight
+f 124 126 128
+usemtl quartz_highlight
+f 124 128 130
+usemtl quartz_crystal
+f 131 132 134
+usemtl quartz_crystal
+f 131 134 133
+usemtl quartz_crystal
+f 133 134 136
+usemtl quartz_crystal
+f 133 136 135
+usemtl quartz_crystal
+f 135 136 138
+usemtl quartz_crystal
+f 135 138 137
+usemtl quartz_crystal
+f 137 138 140
+usemtl quartz_crystal
+f 137 140 139
+usemtl quartz_crystal
+f 139 140 142
+usemtl quartz_crystal
+f 139 142 141
+usemtl quartz_crystal
+f 141 142 132
+usemtl quartz_crystal
+f 141 132 131
+usemtl quartz_crystal
+f 132 134 136
+usemtl quartz_crystal
+f 132 136 138
+usemtl quartz_crystal
+f 132 138 140
+usemtl quartz_crystal
+f 132 140 142
+usemtl quartz_highlight
+f 143 144 146
+usemtl quartz_highlight
+f 143 146 145
+usemtl quartz_highlight
+f 145 146 148
+usemtl quartz_highlight
+f 145 148 147
+usemtl quartz_highlight
+f 147 148 150
+usemtl quartz_highlight
+f 147 150 149
+usemtl quartz_highlight
+f 149 150 144
+usemtl quartz_highlight
+f 149 144 143
+usemtl quartz_highlight
+f 144 146 148
+usemtl quartz_highlight
+f 144 148 150
+usemtl quartz_crystal
+f 151 152 154
+usemtl quartz_crystal
+f 151 154 153
+usemtl quartz_crystal
+f 153 154 156
+usemtl quartz_crystal
+f 153 156 155
+usemtl quartz_crystal
+f 155 156 158
+usemtl quartz_crystal
+f 155 158 157
+usemtl quartz_crystal
+f 157 158 160
+usemtl quartz_crystal
+f 157 160 159
+usemtl quartz_crystal
+f 159 160 162
+usemtl quartz_crystal
+f 159 162 161
+usemtl quartz_crystal
+f 161 162 152
+usemtl quartz_crystal
+f 161 152 151
+usemtl quartz_crystal
+f 152 154 156
+usemtl quartz_crystal
+f 152 156 158
+usemtl quartz_crystal
+f 152 158 160
+usemtl quartz_crystal
+f 152 160 162

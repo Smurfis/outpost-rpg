@@ -1,0 +1,475 @@
+# Outpost original mobile-optimised faceted ore deposit
+mtllib ore_lodes.mtl
+o ore_iron
+v -0.43991 0.93266 0.00000
+v 0.45721 0.95086 0.00000
+v -0.47836 -0.03310 0.00000
+v 0.50027 -0.05615 0.00000
+v 0.00000 0.13214 0.71487
+v 0.00000 0.81713 0.73450
+v 0.00000 0.11834 -0.74407
+v 0.00000 0.82078 -0.74221
+v 0.85786 0.47000 -0.45066
+v 0.83161 0.47000 0.43687
+v -0.79826 0.47000 -0.41935
+v -0.76263 0.47000 0.40063
+v -0.76958 0.66443 0.24000
+v -0.18762 0.66795 0.24000
+v -0.77065 -0.06578 0.24000
+v -0.19535 -0.05823 0.24000
+v -0.48000 0.08592 0.63588
+v -0.48000 0.50518 0.61942
+v -0.48000 0.10401 -0.12241
+v -0.48000 0.48783 -0.10733
+v -0.10161 0.30000 0.03213
+v -0.10755 0.30000 0.44461
+v -0.85379 0.30000 0.03466
+v -0.86220 0.30000 0.44997
+v 0.26554 0.62520 -0.18000
+v 0.82249 0.61067 -0.18000
+v 0.28972 -0.03585 -0.18000
+v 0.79960 -0.02290 -0.18000
+v 0.55000 0.09849 0.19060
+v 0.55000 0.45895 0.18538
+v 0.55000 0.10010 -0.54732
+v 0.55000 0.46422 -0.55615
+v 0.96269 0.28000 -0.42139
+v 0.98164 0.28000 0.07248
+v 0.09844 0.28000 -0.44413
+v 0.08046 0.28000 0.09465
+v 0.73736 0.50000 0.26855
+v 0.58506 1.47005 0.20772
+v 0.51460 0.50000 0.40897
+v 0.52539 1.47005 0.24533
+v 0.31221 0.50000 0.24051
+v 0.47118 1.47005 0.20021
+v 0.40988 0.50000 -0.00403
+v 0.49734 1.47005 0.13470
+v 0.67264 0.50000 0.01330
+v 0.56772 1.47005 0.13934
+v 0.63506 0.83000 0.20772
+v 0.57934 1.61005 0.18546
+v 0.55708 0.83000 0.24118
+v 0.57934 1.61005 0.18546
+v 0.52362 0.83000 0.16321
+v 0.57934 1.61005 0.18546
+v 0.60159 0.83000 0.12974
+v 0.57934 1.61005 0.18546
+v -0.29451 0.50000 0.67235
+v -0.23368 1.13539 0.52005
+v -0.43312 0.50000 0.49639
+v -0.27081 1.13539 0.47292
+v -0.35003 0.50000 0.28837
+v -0.24855 1.13539 0.41720
+v -0.12834 0.50000 0.25631
+v -0.18917 1.13539 0.40861
+v 0.01027 0.50000 0.43228
+v -0.15204 1.13539 0.45575
+v -0.07282 0.50000 0.64030
+v -0.17430 1.13539 0.51147
+v -0.18368 0.83000 0.52005
+v -0.16142 1.27539 0.46433
+v -0.21714 0.83000 0.44208
+v -0.16142 1.27539 0.46433
+v -0.13917 0.83000 0.40861
+v -0.16142 1.27539 0.46433
+v -0.10570 0.83000 0.48659
+v -0.16142 1.27539 0.46433
+v -0.73736 0.50000 -0.26855
+v -0.58506 1.13112 -0.20772
+v -0.51460 0.50000 -0.40897
+v -0.52539 1.13112 -0.24533
+v -0.31221 0.50000 -0.24051
+v -0.47118 1.13112 -0.20021
+v -0.40988 0.50000 0.00403
+v -0.49734 1.13112 -0.13470
+v -0.67264 0.50000 -0.01330
+v -0.56772 1.13112 -0.13934
+v -0.53506 0.83000 -0.20772
+v -0.47934 1.27112 -0.18546
+v -0.45708 0.83000 -0.24118
+v -0.47934 1.27112 -0.18546
+v -0.42362 0.83000 -0.16321
+v -0.47934 1.27112 -0.18546
+v -0.50159 0.83000 -0.12974
+v -0.47934 1.27112 -0.18546
+v 0.29451 0.50000 -0.67235
+v 0.23368 1.46772 -0.52005
+v 0.43312 0.50000 -0.49639
+v 0.27081 1.46772 -0.47292
+v 0.35003 0.50000 -0.28837
+v 0.24855 1.46772 -0.41720
+v 0.12834 0.50000 -0.25631
+v 0.18917 1.46772 -0.40861
+v -0.01027 0.50000 -0.43228
+v 0.15204 1.46772 -0.45575
+v 0.07282 0.50000 -0.64030
+v 0.17430 1.46772 -0.51147
+v 0.28368 0.83000 -0.52005
+v 0.26142 1.60772 -0.46433
+v 0.31714 0.83000 -0.44208
+v 0.26142 1.60772 -0.46433
+v 0.23917 0.83000 -0.40861
+v 0.26142 1.60772 -0.46433
+v 0.20570 0.83000 -0.48659
+v 0.26142 1.60772 -0.46433
+v 0.29807 0.76000 -0.06487
+v -0.00012 1.49000 -0.09780
+v 0.10861 0.76000 0.19302
+v -0.01196 1.49000 -0.08169
+v -0.20946 0.76000 0.15789
+v -0.03184 1.49000 -0.08388
+v -0.33807 0.76000 -0.13513
+v -0.03988 1.49000 -0.10220
+v -0.14861 0.76000 -0.39302
+v -0.02804 1.49000 -0.11831
+v 0.16946 0.76000 -0.35789
+v -0.00816 1.49000 -0.11612
+usemtl iron_highlight
+f 1 12 6
+usemtl iron_rock
+f 1 6 2
+usemtl iron_rock
+f 1 2 8
+usemtl iron_rock
+f 1 8 11
+usemtl iron_rock
+f 1 11 12
+usemtl iron_highlight
+f 2 6 10
+usemtl iron_rock
+f 6 12 5
+usemtl iron_rock
+f 12 11 3
+usemtl iron_rock
+f 11 8 7
+usemtl iron_rock
+f 8 2 9
+usemtl iron_highlight
+f 4 10 5
+usemtl iron_rock
+f 4 5 3
+usemtl iron_rock
+f 4 3 7
+usemtl iron_rock
+f 4 7 9
+usemtl iron_rock
+f 4 9 10
+usemtl iron_highlight
+f 5 10 6
+usemtl iron_rock
+f 3 5 12
+usemtl iron_rock
+f 7 3 11
+usemtl iron_rock
+f 9 7 8
+usemtl iron_rock
+f 10 9 2
+usemtl iron_rock
+f 13 24 18
+usemtl iron_rock
+f 13 18 14
+usemtl iron_rock
+f 13 14 20
+usemtl iron_rock
+f 13 20 23
+usemtl iron_rock
+f 13 23 24
+usemtl iron_rock
+f 14 18 22
+usemtl iron_rock
+f 18 24 17
+usemtl iron_rock
+f 24 23 15
+usemtl iron_rock
+f 23 20 19
+usemtl iron_rock
+f 20 14 21
+usemtl iron_rock
+f 16 22 17
+usemtl iron_rock
+f 16 17 15
+usemtl iron_rock
+f 16 15 19
+usemtl iron_rock
+f 16 19 21
+usemtl iron_rock
+f 16 21 22
+usemtl iron_rock
+f 17 22 18
+usemtl iron_rock
+f 15 17 24
+usemtl iron_rock
+f 19 15 23
+usemtl iron_rock
+f 21 19 20
+usemtl iron_rock
+f 22 21 14
+usemtl iron_rock
+f 25 36 30
+usemtl iron_rock
+f 25 30 26
+usemtl iron_rock
+f 25 26 32
+usemtl iron_rock
+f 25 32 35
+usemtl iron_rock
+f 25 35 36
+usemtl iron_rock
+f 26 30 34
+usemtl iron_rock
+f 30 36 29
+usemtl iron_rock
+f 36 35 27
+usemtl iron_rock
+f 35 32 31
+usemtl iron_rock
+f 32 26 33
+usemtl iron_rock
+f 28 34 29
+usemtl iron_rock
+f 28 29 27
+usemtl iron_rock
+f 28 27 31
+usemtl iron_rock
+f 28 31 33
+usemtl iron_rock
+f 28 33 34
+usemtl iron_rock
+f 29 34 30
+usemtl iron_rock
+f 27 29 36
+usemtl iron_rock
+f 31 27 35
+usemtl iron_rock
+f 33 31 32
+usemtl iron_rock
+f 34 33 26
+usemtl iron_crystal
+f 37 38 40
+usemtl iron_crystal
+f 37 40 39
+usemtl iron_crystal
+f 39 40 42
+usemtl iron_crystal
+f 39 42 41
+usemtl iron_crystal
+f 41 42 44
+usemtl iron_crystal
+f 41 44 43
+usemtl iron_crystal
+f 43 44 46
+usemtl iron_crystal
+f 43 46 45
+usemtl iron_crystal
+f 45 46 38
+usemtl iron_crystal
+f 45 38 37
+usemtl iron_crystal
+f 38 40 42
+usemtl iron_crystal
+f 38 42 44
+usemtl iron_crystal
+f 38 44 46
+usemtl iron_highlight
+f 47 48 50
+usemtl iron_highlight
+f 47 50 49
+usemtl iron_highlight
+f 49 50 52
+usemtl iron_highlight
+f 49 52 51
+usemtl iron_highlight
+f 51 52 54
+usemtl iron_highlight
+f 51 54 53
+usemtl iron_highlight
+f 53 54 48
+usemtl iron_highlight
+f 53 48 47
+usemtl iron_highlight
+f 48 50 52
+usemtl iron_highlight
+f 48 52 54
+usemtl iron_crystal
+f 55 56 58
+usemtl iron_crystal
+f 55 58 57
+usemtl iron_crystal
+f 57 58 60
+usemtl iron_crystal
+f 57 60 59
+usemtl iron_crystal
+f 59 60 62
+usemtl iron_crystal
+f 59 62 61
+usemtl iron_crystal
+f 61 62 64
+usemtl iron_crystal
+f 61 64 63
+usemtl iron_crystal
+f 63 64 66
+usemtl iron_crystal
+f 63 66 65
+usemtl iron_crystal
+f 65 66 56
+usemtl iron_crystal
+f 65 56 55
+usemtl iron_crystal
+f 56 58 60
+usemtl iron_crystal
+f 56 60 62
+usemtl iron_crystal
+f 56 62 64
+usemtl iron_crystal
+f 56 64 66
+usemtl iron_highlight
+f 67 68 70
+usemtl iron_highlight
+f 67 70 69
+usemtl iron_highlight
+f 69 70 72
+usemtl iron_highlight
+f 69 72 71
+usemtl iron_highlight
+f 71 72 74
+usemtl iron_highlight
+f 71 74 73
+usemtl iron_highlight
+f 73 74 68
+usemtl iron_highlight
+f 73 68 67
+usemtl iron_highlight
+f 68 70 72
+usemtl iron_highlight
+f 68 72 74
+usemtl iron_crystal
+f 75 76 78
+usemtl iron_crystal
+f 75 78 77
+usemtl iron_crystal
+f 77 78 80
+usemtl iron_crystal
+f 77 80 79
+usemtl iron_crystal
+f 79 80 82
+usemtl iron_crystal
+f 79 82 81
+usemtl iron_crystal
+f 81 82 84
+usemtl iron_crystal
+f 81 84 83
+usemtl iron_crystal
+f 83 84 76
+usemtl iron_crystal
+f 83 76 75
+usemtl iron_crystal
+f 76 78 80
+usemtl iron_crystal
+f 76 80 82
+usemtl iron_crystal
+f 76 82 84
+usemtl iron_highlight
+f 85 86 88
+usemtl iron_highlight
+f 85 88 87
+usemtl iron_highlight
+f 87 88 90
+usemtl iron_highlight
+f 87 90 89
+usemtl iron_highlight
+f 89 90 92
+usemtl iron_highlight
+f 89 92 91
+usemtl iron_highlight
+f 91 92 86
+usemtl iron_highlight
+f 91 86 85
+usemtl iron_highlight
+f 86 88 90
+usemtl iron_highlight
+f 86 90 92
+usemtl iron_crystal
+f 93 94 96
+usemtl iron_crystal
+f 93 96 95
+usemtl iron_crystal
+f 95 96 98
+usemtl iron_crystal
+f 95 98 97
+usemtl iron_crystal
+f 97 98 100
+usemtl iron_crystal
+f 97 100 99
+usemtl iron_crystal
+f 99 100 102
+usemtl iron_crystal
+f 99 102 101
+usemtl iron_crystal
+f 101 102 104
+usemtl iron_crystal
+f 101 104 103
+usemtl iron_crystal
+f 103 104 94
+usemtl iron_crystal
+f 103 94 93
+usemtl iron_crystal
+f 94 96 98
+usemtl iron_crystal
+f 94 98 100
+usemtl iron_crystal
+f 94 100 102
+usemtl iron_crystal
+f 94 102 104
+usemtl iron_highlight
+f 105 106 108
+usemtl iron_highlight
+f 105 108 107
+usemtl iron_highlight
+f 107 108 110
+usemtl iron_highlight
+f 107 110 109
+usemtl iron_highlight
+f 109 110 112
+usemtl iron_highlight
+f 109 112 111
+usemtl iron_highlight
+f 111 112 106
+usemtl iron_highlight
+f 111 106 105
+usemtl iron_highlight
+f 106 108 110
+usemtl iron_highlight
+f 106 110 112
+usemtl iron_crystal
+f 113 114 116
+usemtl iron_crystal
+f 113 116 115
+usemtl iron_crystal
+f 115 116 118
+usemtl iron_crystal
+f 115 118 117
+usemtl iron_crystal
+f 117 118 120
+usemtl iron_crystal
+f 117 120 119
+usemtl iron_crystal
+f 119 120 122
+usemtl iron_crystal
+f 119 122 121
+usemtl iron_crystal
+f 121 122 124
+usemtl iron_crystal
+f 121 124 123
+usemtl iron_crystal
+f 123 124 114
+usemtl iron_crystal
+f 123 114 113
+usemtl iron_crystal
+f 114 116 118
+usemtl iron_crystal
+f 114 118 120
+usemtl iron_crystal
+f 114 120 122
+usemtl iron_crystal
+f 114 122 124
