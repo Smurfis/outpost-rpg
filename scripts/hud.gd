@@ -189,7 +189,7 @@ func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 62.0).limit_length(1.0)
 
 func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, spear: bool, objective: String, helper: String) -> void:
-	status.text = "OUTPOST   /   HP %d/100\nXP %d   KILLS %d   •   %s" % [int(ceilf(hp)), xp, kills, "SPEAR" if spear else "BLADE"]
+	status.text = "OUTPOST   /   HP %d/100\nXP %d   KILLS %d   •   %s" % [int(ceilf(hp)), xp, kills, "IRON BLADE" if int(inventory.get("iron_blade", 0)) > 0 else "SPEAR" if spear else "BLADE"]
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
 	quest.text = objective
