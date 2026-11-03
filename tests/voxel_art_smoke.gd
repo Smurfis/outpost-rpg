@@ -44,6 +44,13 @@ func _run() -> void:
 	_check(box_count >= 4, "Four supply crates use the voxel skin")
 	_check(game.get_node_or_null("Terrain") != null, "Original collision floor retained")
 	_check(game.get("hero") != null and game.get("menu") != null, "Gameplay/HUD still initialize")
+	var body: MeshInstance3D = game.hero.visual.get_node_or_null("adventurer_torso") as MeshInstance3D
+	_check(body != null and body.material_override == atlas, "Modular adventurer uses the shared pixel atlas")
+	var pixel_station_blocks: int = 0
+	for child in game.stations["workbench"].get_children():
+		if child is MeshInstance3D and child.material_override == atlas:
+			pixel_station_blocks += 1
+	_check(pixel_station_blocks > 0, "Crafting stations use matching pixel textures")
 	_check(game.get("recipes").size() == 13, "All existing crafting recipes retained")
 	var kinds: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
