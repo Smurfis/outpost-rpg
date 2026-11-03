@@ -91,6 +91,12 @@ func _process(delta: float) -> void:
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
 	var resource = _nearest_resource()
+	if resource != last_hit_node:
+		if is_instance_valid(last_hit_node):
+			last_hit_node.set_targeted(false)
+		if resource != null:
+			resource.set_targeted(true)
+		last_hit_node = resource
 	var enemy = _nearest_enemy()
 	var hint: String = "Explore: iron, coal, clay, herbs, reeds, mushrooms and more."
 	if resource != null:
