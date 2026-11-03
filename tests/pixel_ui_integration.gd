@@ -47,9 +47,13 @@ func _run() -> void:
 	if game_scene == null:
 		quit(1)
 		return
+	# Previous regression tests persist a saved spear in user://. Force a fresh
+	# run using the title menu's existing one-shot flag; never delete real saves.
+	root.set_meta("outpost_new_adventure", true)
 	var game = game_scene.instantiate()
 	root.add_child(game)
 	await process_frame
+	verify(int(game.inventory.get("spear", 0)) == 0, "Fresh test character starts without crafted unique gear")
 	verify(game.hud != null and game.menu != null, "HUD and crafting interface both initialise")
 	verify(game.hud.root.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Game HUD samples PNG pixels without smoothing")
 	verify(game.menu.shell.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Craft UI samples panels without smoothing")
