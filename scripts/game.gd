@@ -6,6 +6,9 @@ const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
+const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
+const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+@export var voxel_art_enabled: bool = true
 const SAVE = "user://outpost_progress_v02.json"
 
 var hero
@@ -147,12 +150,28 @@ func _lighting() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("f0e3c6")
 	env.ambient_light_energy = 0.85
+	if voxel_art_enabled:
+		# Warm lavender sunrise with a peach horizon; cheap, mobile-friendly sky.
+		env.background_mode = Environment.BG_SKY
+		var sky := Sky.new()
+		var dawn := ProceduralSkyMaterial.new()
+		dawn.sky_top_color = Color("5d81b7")
+		dawn.sky_horizon_color = Color("efb49b")
+		dawn.ground_bottom_color = Color("66677f")
+		dawn.ground_horizon_color = Color("d9b8a6")
+		sky.sky_material = dawn
+		env.sky = sky
+		env.ambient_light_color = Color("fff0d1")
+		env.ambient_light_energy = 0.9
 	w.environment = env
 	add_child(w)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-53, -30, 0)
 	sun.light_energy = 1.25
-	sun.shadow_enabled = false
+	if voxel_art_enabled:
+		sun.light_color = Color("ffe0a9")
+		sun.light_energy = 1.45
+	sun.shadow_enabled = false # Preserve Android budget on first visual pass.
 	add_child(sun)
 
 func _world() -> void:
@@ -165,11 +184,15 @@ func _world() -> void:
 	collider.shape = shape
 	floor_body.add_child(collider)
 	add_child(floor_body)
-	block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
-	# Winding, triangulated paths replace the former perfectly rectangular slabs.
-	_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
-	_terrain_path(Vector3(0, 0, -21), Vector3(-1, 0, 21), 1.45, Color("ac956f"))
-	_terrain_path(Vector3(-1, 0, -4), Vector3(6, 0, 4), 2.95, Color("b09b75"))
+	if voxel_art_enabled:
+		var landscape = VOXEL_BIOME.new()
+		add_child(landscape)
+		landscape.build()
+	else:
+		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
+		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
+		_terrain_path(Vector3(0, 0, -21), Vector3(-1, 0, 21), 1.45, Color("ac956f"))
+		_terrain_path(Vector3(-1, 0, -4), Vector3(6, 0, 4), 2.95, Color("b09b75"))
 	# Distinct 3D mesh assets for the skyline and outpost supplies.
 	for position_at in [Vector3(-18, 0, -6), Vector3(17, 0, -4), Vector3(-11, 0, 16), Vector3(15, 0, 18), Vector3(-19, 0, 13)]:
 		_mesh_asset("oak_tree", position_at, 0.82, position_at.x * 0.18)
@@ -177,12 +200,17 @@ func _world() -> void:
 		_mesh_asset("rock_deposit", position_at, 0.79, position_at.z * 0.22)
 	for position_at in [Vector3(1.7, 0, 1.8), Vector3(2.7, 0, 2.1), Vector3(7.2, 0, 5.2), Vector3(-9.5, 0, -0.9)]:
 		_mesh_asset("supply_crate", position_at, 0.9, position_at.x * 0.34)
-	var tent := CylinderMesh.new()
-	tent.top_radius = 0.0
-	tent.bottom_radius = 2.1
-	tent.height = 2.9
-	part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
-	block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
+	if voxel_art_enabled:
+		var shelter: MeshInstance3D = VOXEL_PROPS.tent()
+		shelter.position = Vector3(-6.1, 0.0, 2.8)
+		add_child(shelter)
+	else:
+		var tent := CylinderMesh.new()
+		tent.top_radius = 0.0
+		tent.bottom_radius = 2.1
+		tent.height = 2.9
+		part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
+		block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
 	# Decorative shrubs and wildflowers (deterministic for stable map)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 512309
@@ -191,13 +219,20 @@ func _world() -> void:
 		var z := rng.randf_range(-21.0, 21.0)
 		if absf(x) < 5.3 and absf(z) < 5.3:
 			continue
-		var mesh := SphereMesh.new()
-		mesh.radial_segments = 7
-		mesh.rings = 3
-		mesh.radius = rng.randf_range(0.15, 0.38)
-		mesh.height = 0.40
-		var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
-		tuft.scale = Vector3(1.4, 0.53, 1.0)
+		if voxel_art_enabled:
+			if i % 2 == 0:
+				var shrub: MeshInstance3D = VOXEL_PROPS.bush(i % 13 == 0)
+				shrub.position = Vector3(x, 0, z)
+				shrub.scale = Vector3.ONE * rng.randf_range(0.18, 0.40)
+				add_child(shrub)
+		else:
+			var mesh := SphereMesh.new()
+			mesh.radial_segments = 7
+			mesh.rings = 3
+			mesh.radius = rng.randf_range(0.15, 0.38)
+			mesh.height = 0.40
+			var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
+			tuft.scale = Vector3(1.4, 0.53, 1.0)
 	# Details: timber palisade sections, supply crates, stumps and path stones
 	for i in range(12):
 		var px: float = -10.0 + float(i) * 1.75
@@ -221,6 +256,21 @@ func _world() -> void:
 	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
+	if voxel_art_enabled:
+		var prop: MeshInstance3D
+		match id:
+			"oak_tree":
+				prop = VOXEL_PROPS.tree()
+			"rock_deposit":
+				prop = VOXEL_PROPS.rock()
+			"supply_crate":
+				prop = VOXEL_PROPS.crate()
+		if prop != null:
+			prop.position = where
+			prop.scale = Vector3.ONE * size_factor
+			prop.rotation.y = angle
+			add_child(prop)
+			return
 	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
 	if mesh == null:
 		push_warning("Unable to import 3D model: " + id)
