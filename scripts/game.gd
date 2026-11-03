@@ -68,6 +68,8 @@ func _register_keys() -> void:
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if hero != null and hero.interaction_locked:
+		return
 	if event.is_action_pressed("outpost_gather"):
 		gather()
 	elif event.is_action_pressed("outpost_attack"):
