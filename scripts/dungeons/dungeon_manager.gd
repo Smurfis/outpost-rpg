@@ -11,6 +11,7 @@ const MINIMAP = preload("res://scripts/dungeons/dungeon_minimap.gd")
 const INTERACTION_RADIUS: float = 3.25
 
 @export var demo_chunk_fallback: bool = true
+@export var tap_to_approach: bool = false # Keep original joystick as default; click-to-move is optional.
 
 var game
 var hero: CharacterBody3D
@@ -119,6 +120,10 @@ func _register_demo_chunks() -> void:
 func _physics_process(_delta: float) -> void:
 	if hero == null or not is_instance_valid(hero):
 		return
+	# An interrupted portal dialog must never leave the character locked.
+	# Only a visible confirmation dialog may own the interaction lock.
+	if not dimmer.visible and hero.interaction_locked:
+		hero.interaction_locked = false
 	if dimmer.visible:
 		return
 	if active_instance != null:
@@ -218,10 +223,16 @@ func _on_portal_selected(portal: Area3D) -> void:
 	if dist <= INTERACTION_RADIUS:
 		_prompt_to_enter(portal)
 	else:
-		approaching_portal = portal
-		hero.move_to_interaction(portal.global_position)
-		if game.hud != null:
-			game.hud.toast("Approaching %s dungeon..." % RARITY.quality_name(int(portal.get("quality"))))
+		if tap_to_approach:
+			approaching_portal = portal
+			hero.move_to_interaction(portal.global_position)
+			if game.hud != null:
+				game.hud.toast("Approaching %s dungeon..." % RARITY.quality_name(int(portal.get("quality"))))
+		else:
+			approaching_portal = null
+			hero.stop_interaction_move()
+			if game.hud != null:
+				game.hud.toast("Move closer to this dungeon entrance to inspect it.")
 
 func _on_action_pressed() -> void:
 	if active_instance != null:
@@ -237,6 +248,8 @@ func _prompt_to_enter(portal: Area3D) -> void:
 		return
 	if active_instance != null or completed_ids.has(str(portal.get("entrance_id"))):
 		return
+	approaching_portal = null
+	hero.stop_interaction_move()
 	chosen_portal = portal
 	var tier: int = int(portal.get("quality"))
 	var accent: Color = RARITY.color(tier)
@@ -254,12 +267,18 @@ func _prompt_to_enter(portal: Area3D) -> void:
 	action_button.visible = false
 	hero.stop_interaction_move()
 	hero.interaction_locked = true
+	if game.hud != null:
+		game.hud._reset_joystick()
 
 func _cancel_dialog() -> void:
 	dimmer.visible = false
 	chosen_portal = null
+	approaching_portal = null
 	if hero != null:
+		hero.stop_interaction_move()
 		hero.interaction_locked = false
+	if game != null and game.hud != null:
+		game.hud._reset_joystick()
 
 func _enter_confirmed() -> void:
 	if chosen_portal == null or not is_instance_valid(chosen_portal):
@@ -307,9 +326,11 @@ func _on_chest_selected(instance: Node3D) -> void:
 		return
 	if _flat_distance(hero.global_position, active_instance.chest_world_position()) <= INTERACTION_RADIUS:
 		_claim_chest()
-	else:
+	elif tap_to_approach:
 		approaching_chest = true
 		hero.move_to_interaction(active_instance.chest_world_position())
+	elif game.hud != null:
+		game.hud.toast("Walk to the dungeon exit before opening it.")
 
 func _claim_chest() -> void:
 	if active_instance == null or not is_instance_valid(active_instance):
@@ -326,9 +347,11 @@ func _on_stairs_selected(instance: Node3D) -> void:
 		return
 	if _flat_distance(hero.global_position, active_instance.chest_world_position()) <= INTERACTION_RADIUS:
 		_claim_chest()
-	elif active_instance.can_advance_floor():
+	elif active_instance.can_advance_floor() and tap_to_approach:
 		approaching_chest = true
 		hero.move_to_interaction(active_instance.chest_world_position())
+	elif game.hud != null:
+		game.hud.toast("Walk to the stairs to advance.")
 
 func _on_floor_changed(instance: Node3D, floor: int, floors: int) -> void:
 	if instance != active_instance:
@@ -397,6 +420,8 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 		_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
 	hero.interaction_locked = false
+	if game != null and game.hud != null:
+		game.hud._reset_joystick()
 	if not due_to_death:
 		hero.global_position = return_position
 	hero.velocity = Vector3.ZERO

@@ -70,6 +70,26 @@ func _run() -> void:
 	check(game.hero.global_position.distance_to(where) > 0.25, "Player moves after gear screen closes")
 	release.index = 12
 	game.hud._input(release)
+	# A dungeon portal may lock movement only while confirmation is visible.
+	var manager = game.get_node("Dungeons")
+	manager.register_chunk("movement_test", Rect2(Vector2(3,-5), Vector2(12,10)), 0, [Vector3(8,0,0)], true)
+	var portal = manager.entrances["movement_test:0"]
+	game.hero.global_position = Vector3(0,0.35,0)
+	manager._on_portal_selected(portal)
+	check(not game.hero.interaction_moving and not game.hero.interaction_locked, "Distant portal tap does not steal joystick")
+	game.hero.global_position = Vector3(7,0.35,0)
+	manager._on_portal_selected(portal)
+	check(manager.dimmer.visible and game.hero.interaction_locked, "Nearby portal locks only while confirmation visible")
+	manager._cancel_dialog()
+	check(not game.hero.interaction_locked and not manager.dimmer.visible, "Cancel portal restores movement")
+	game.hud._reset_joystick()
+	touch.index = 17
+	game.hud._input(touch)
+	where = game.hero.global_position
+	await frames(20)
+	check(game.hero.global_position.distance_to(where) > 0.2, "Hero moves after portal cancellation")
+	release.index = 17
+	game.hud._input(release)
 	game.queue_free()
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))

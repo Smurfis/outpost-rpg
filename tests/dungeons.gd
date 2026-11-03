@@ -64,7 +64,12 @@ func _run() -> void:
 	var id: String = str(portal.entrance_id)
 	game.hero.global_position = portal.global_position + Vector3(6.0, 0.35, 0)
 	manager._on_portal_selected(portal)
-	check(game.hero.interaction_moving, "Tap-from-range auto-approach remains available")
+	check(not game.hero.interaction_moving and not game.hero.interaction_locked, "Distant portal tap never hijacks default joystick movement")
+	manager.tap_to_approach = true
+	manager._on_portal_selected(portal)
+	check(game.hero.interaction_moving, "Optional tap-to-approach mode remains available")
+	manager.tap_to_approach = false
+	game.hero.stop_interaction_move()
 	game.hero.global_position = portal.global_position + Vector3(1.0, 0.35, 0)
 	manager._update_overworld_action()
 	check(manager.dimmer.visible, "Entry confirmation shown")
