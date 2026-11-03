@@ -314,7 +314,7 @@ func _on_chest_selected(instance: Node3D) -> void:
 func _claim_chest() -> void:
 	if active_instance == null or not is_instance_valid(active_instance):
 		return
-	if not active_instance.can_claim_chest():
+	if not active_instance.can_claim_chest() and not active_instance.can_advance_floor():
 		return
 	if active_instance.current_floor < active_instance.floor_count:
 		active_instance.advance_floor()
