@@ -13,8 +13,9 @@ func check(condition: bool, label: String) -> void:
 		push_error("FAIL: " + label)
 
 func _run() -> void:
-	var file_path: String = ProjectSettings.globalize_path("user://outpost_dungeon_clear_v1.json")
-	if FileAccess.file_exists("user://outpost_dungeon_clear_v1.json"):
+	var test_save: String = "user://outpost_dungeon_test_only.json"
+	var file_path: String = ProjectSettings.globalize_path(test_save)
+	if FileAccess.file_exists(test_save):
 		DirAccess.remove_absolute(file_path)
 	var source: PackedScene = load("res://scenes/main.tscn")
 	check(source != null, "Outpost with dungeon manager loads")
@@ -22,6 +23,9 @@ func _run() -> void:
 		quit(1)
 		return
 	var game = source.instantiate()
+	var initial_manager = game.get_node_or_null("Dungeons")
+	if initial_manager != null:
+		initial_manager.save_path = test_save
 	root.add_child(game)
 	await process_frame
 	await process_frame
@@ -77,7 +81,7 @@ func _run() -> void:
 	check(manager.completed_ids.has(cleared_id), "Completed entrance ID recorded")
 	check(not manager.entrances.has(cleared_id), "Completed entrance disappears from world")
 	check(int(game.inventory.get("coins", 0)) > gold_before, "Final chest awards persistent currency")
-	check(FileAccess.file_exists("user://outpost_dungeon_clear_v1.json"), "Clears saved separately from Outpost inventory")
+	check(FileAccess.file_exists(test_save), "Clears saved separately from Outpost inventory")
 	manager.unregister_chunk("preview_rare")
 	manager.register_chunk("preview_rare", Rect2(Vector2(-21, 11), Vector2(14, 14)), 2, [Vector3(-18, 0, 18)], true)
 	check(not manager.entrances.has(cleared_id), "Cleared entrance never respawns after chunk reload")
