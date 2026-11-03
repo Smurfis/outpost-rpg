@@ -5,6 +5,8 @@ const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const PORTAL = preload("res://scripts/dungeons/dungeon_portal.gd")
 const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
+const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
+const MINIMAP = preload("res://scripts/dungeons/dungeon_minimap.gd")
 @export var save_path: String = "user://outpost_dungeon_clear_v1.json"
 const INTERACTION_RADIUS: float = 3.25
 
@@ -15,6 +17,9 @@ var hero: CharacterBody3D
 var chunks: Dictionary = {}
 var entrances: Dictionary = {}
 var completed_ids: Dictionary = {}
+var floor_checkpoints: Dictionary = {}
+var active_bonus_id: int = -1
+var minimap: Control
 var active_instance
 var active_info: Dictionary = {}
 var return_position: Vector3 = Vector3.ZERO
@@ -122,7 +127,7 @@ func _physics_process(_delta: float) -> void:
 			return
 		# Existing Outpost death handling returns the character to (0,0,0).
 		# If that happens mid-dungeon, release the instance cleanly.
-		if hero.global_position.distance_to(active_instance.global_position) > 125.0:
+		if hero.global_position.distance_to(active_instance.global_position) > 350.0:
 			_exit_current(false, true)
 			return
 		_update_dungeon_action()
@@ -166,8 +171,14 @@ func _update_dungeon_action() -> void:
 	progress_label.visible = true
 	var remaining: int = int(active_instance.guards_remaining)
 	var title: String = RARITY.quality_name(int(active_info.get("quality", 0))).to_upper()
-	progress_label.text = "%s DUNGEON  •  %d GUARDIAN(S) REMAIN" % [title, remaining]
+	var current: int = int(active_instance.current_floor)
+	var total: int = int(active_instance.floor_count)
+	progress_label.text = "%s  •  FLOOR %d/%d  •  %s  •  %d GUARD(S)" % [title, current, total, str(active_instance.layout.get("pattern", "")).to_upper(), remaining]
 	progress_label.add_theme_color_override("font_color", RARITY.color(int(active_info.get("quality", 0))))
+	if minimap != null and minimap.instance != active_instance:
+		minimap.setup(active_instance)
+	if minimap != null:
+		minimap.visible = true
 	var distance: float = _flat_distance(hero.global_position, active_instance.chest_world_position())
 	if approaching_chest:
 		if distance <= INTERACTION_RADIUS:
@@ -176,12 +187,24 @@ func _update_dungeon_action() -> void:
 			_claim_chest()
 		elif not hero.interaction_moving:
 			approaching_chest = false
-	action_button.visible = distance <= INTERACTION_RADIUS
-	if action_button.visible:
-		action_button.text = "OPEN FINAL CHEST" if active_instance.can_claim_chest() else "CHEST LOCKED"
-		action_button.disabled = not active_instance.can_claim_chest()
-	else:
+	var nearby_bonus: int = active_instance.nearest_bonus(hero.global_position, INTERACTION_RADIUS)
+	action_button.visible = distance <= INTERACTION_RADIUS or nearby_bonus >= 0
+	if nearby_bonus >= 0 and distance > INTERACTION_RADIUS:
+		active_bonus_id = nearby_bonus
+		action_button.text = "OPEN BONUS CACHE"
 		action_button.disabled = false
+	elif distance <= INTERACTION_RADIUS:
+		active_bonus_id = -1
+		if active_instance.current_floor < active_instance.floor_count:
+			action_button.text = "STAIRS  •  NEXT FLOOR" if active_instance.can_advance_floor() else "STAIRS LOCKED"
+			action_button.disabled = not active_instance.can_advance_floor()
+		else:
+			action_button.text = "OPEN FINAL CHEST" if active_instance.can_claim_chest() else "FINAL CHEST LOCKED"
+			action_button.disabled = not active_instance.can_claim_chest()
+	else:
+		active_bonus_id = -1
+		action_button.disabled = false
+
 
 func _flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
@@ -202,7 +225,10 @@ func _on_portal_selected(portal: Area3D) -> void:
 
 func _on_action_pressed() -> void:
 	if active_instance != null:
-		_claim_chest()
+		if active_bonus_id >= 0:
+			_claim_bonus(active_bonus_id)
+		else:
+			_claim_chest()
 	elif nearest_portal != null and is_instance_valid(nearest_portal):
 		_prompt_to_enter(nearest_portal)
 
@@ -216,7 +242,13 @@ func _prompt_to_enter(portal: Area3D) -> void:
 	var accent: Color = RARITY.color(tier)
 	dialog_title.text = "%s  •  %s" % [RARITY.quality_name(tier).to_upper(), str(portal.get("dungeon_title"))]
 	dialog_title.add_theme_color_override("font_color", accent)
-	dialog_message.text = "Defeat %d guardian(s) and reach the final treasure chest.\nEnter this instanced dungeon?" % RARITY.guard_count(tier)
+	var profile: Dictionary = LAYOUT.profile(str(portal.get("entrance_id")), tier)
+	var floors: int = int(profile.get("floors", 1))
+	var info: Dictionary = LAYOUT.settings()
+	var room_ranges: Array = info.get("room_ranges", [])
+	var room_range: Array = room_ranges[tier]
+	var multiplier: float = pow(float(profile.get("reward_multiplier", 1.3)), floors - 1)
+	dialog_message.text = "%d floor(s) • %d–%d rooms/floor\nFinal treasure multiplier: x%.2f\nDefeat guardians, advance through stairs, claim final reward.\nCompleted portals vanish; abandoned ones remain." % [floors, int(room_range[0]), int(room_range[1]), multiplier]
 	confirm_button.add_theme_stylebox_override("normal", THEME.style(THEME.SURFACE, accent))
 	dimmer.visible = true
 	action_button.visible = false
@@ -250,10 +282,16 @@ func _enter_confirmed() -> void:
 	add_child(dungeon)
 	# A new isolated cell, out of reach of the current overworld geometry.
 	dungeon.position = Vector3(1800.0 + float(run_number % 30) * 65.0, 0.0, 1800.0)
-	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero)
+	var checkpoint: int = int(floor_checkpoints.get(str(active_info["id"]), 1))
+	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint)
 	dungeon.chest_selected.connect(_on_chest_selected)
+	dungeon.stairs_selected.connect(_on_stairs_selected)
+	dungeon.bonus_selected.connect(_on_bonus_selected)
+	dungeon.floor_changed.connect(_on_floor_changed)
 	dungeon.completed.connect(_on_dungeon_completed)
 	active_instance = dungeon
+	if minimap != null:
+		minimap.setup(dungeon)
 	hero.global_position = dungeon.hero_spawn_point()
 	hero.velocity = Vector3.ZERO
 	action_button.visible = false
@@ -263,9 +301,9 @@ func _enter_confirmed() -> void:
 func _on_chest_selected(instance: Node3D) -> void:
 	if instance != active_instance or hero == null or dimmer.visible:
 		return
-	if not active_instance.can_claim_chest():
+	if not active_instance.can_claim_chest() and not active_instance.can_advance_floor():
 		if game.hud != null:
-			game.hud.toast("%d guardian(s) remain before the chest unlocks." % int(active_instance.guards_remaining))
+			game.hud.toast("%d guardian(s) remain before the exit unlocks." % int(active_instance.guards_remaining))
 		return
 	if _flat_distance(hero.global_position, active_instance.chest_world_position()) <= INTERACTION_RADIUS:
 		_claim_chest()
@@ -278,26 +316,75 @@ func _claim_chest() -> void:
 		return
 	if not active_instance.can_claim_chest():
 		return
-	active_instance.claim_chest()
+	if active_instance.current_floor < active_instance.floor_count:
+		active_instance.advance_floor()
+	else:
+		active_instance.claim_chest()
+
+func _on_stairs_selected(instance: Node3D) -> void:
+	if instance != active_instance or hero == null:
+		return
+	if _flat_distance(hero.global_position, active_instance.chest_world_position()) <= INTERACTION_RADIUS:
+		_claim_chest()
+	elif active_instance.can_advance_floor():
+		approaching_chest = true
+		hero.move_to_interaction(active_instance.chest_world_position())
+
+func _on_floor_changed(instance: Node3D, floor: int, floors: int) -> void:
+	if instance != active_instance:
+		return
+	floor_checkpoints[str(active_info.get("id", ""))] = floor
+	_save_clears()
+	if minimap != null:
+		minimap.setup(instance)
+	if game.hud != null:
+		game.hud.toast("Floor %d/%d — enemies grow stronger, rewards improve." % [floor, floors])
+
+func _on_bonus_selected(instance: Node3D, id: int) -> void:
+	if instance != active_instance or hero == null:
+		return
+	_claim_bonus(id)
+
+func _claim_bonus(id: int) -> void:
+	if active_instance == null or not is_instance_valid(active_instance):
+		return
+	var reward: Dictionary = active_instance.claim_bonus(id)
+	if reward.is_empty():
+		return
+	_apply_reward(reward)
+	if game.hud != null:
+		game.hud.toast("Bonus cache: +%d coins and crafting supplies" % int(reward.get("coins", 0)))
 
 func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 	if instance != active_instance or game == null:
 		return
-	var pocket: Dictionary = game.inventory
-	var reward_tier: int = int(active_info.get("quality", 0))
-	var gold: int = maxi(0, int(reward.get("coins", 0)))
-	var xp: int = maxi(0, int(reward.get("xp", 0)))
-	var item_id: String = str(reward.get("item", ""))
-	var count: int = maxi(0, int(reward.get("amount", 0)))
-	pocket["coins"] = int(pocket.get("coins", 0)) + gold
-	if pocket.has(item_id):
-		pocket[item_id] = int(pocket.get(item_id, 0)) + count
-	game.experience += xp
-	game._save()
-	game._refresh_menu()
+	var tier: int = int(active_info.get("quality", 0))
+	_apply_reward(reward)
 	_exit_current(true, false)
 	if game.hud != null:
-		game.hud.toast("%s chest: +%d coins  +%d XP  +%d %s" % [RARITY.quality_name(reward_tier), gold, xp, count, item_id.replace("_", " ")])
+		game.hud.toast("%s cleared! +%d coins • %d XP • new crafting loot" % [RARITY.quality_name(tier), int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+
+func _apply_reward(reward: Dictionary) -> void:
+	if game == null:
+		return
+	var pocket: Dictionary = game.inventory
+	pocket["coins"] = int(pocket.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	game.experience += maxi(0, int(reward.get("xp", 0)))
+	var materials: Dictionary = reward.get("materials", {})
+	for item_id in materials:
+		var key: String = str(item_id)
+		pocket[key] = int(pocket.get(key, 0)) + maxi(0, int(materials[item_id]))
+	for book in reward.get("books", []):
+		var id: String = str(book)
+		if id != "":
+			pocket[id] = int(pocket.get(id, 0)) + 1
+	# Retain compatibility if an older reward object is supplied by an extension.
+	var legacy: String = str(reward.get("item", ""))
+	if legacy != "":
+		pocket[legacy] = int(pocket.get(legacy, 0)) + maxi(0, int(reward.get("amount", 0)))
+	game._save()
+	game._refresh_menu()
+
 
 func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if active_instance == null:
@@ -305,6 +392,7 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	var cleared_id: String = str(active_info.get("id", ""))
 	if succeeded:
 		completed_ids[cleared_id] = true
+		floor_checkpoints.erase(cleared_id)
 		_save_clears()
 		_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
@@ -319,8 +407,11 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	approaching_chest = false
 	leave_button.visible = false
 	progress_label.visible = false
+	if minimap != null:
+		minimap.setup(null)
 	action_button.visible = false
 	action_button.disabled = false
+	active_bonus_id = -1
 	if due_to_death and game.hud != null:
 		game.hud.toast("Dungeon attempt failed; entrance remains available.")
 	active_info = {}
@@ -353,6 +444,9 @@ func _load_clears() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not (parsed is Dictionary):
 		return
+	var saved_progress: Variant = parsed.get("checkpoints", {})
+	if saved_progress is Dictionary:
+		floor_checkpoints = saved_progress.duplicate()
 	var saved: Variant = parsed.get("completed", [])
 	if saved is Array:
 		for entry in saved:
@@ -361,7 +455,7 @@ func _load_clears() -> void:
 func _save_clears() -> void:
 	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"version": 1, "completed": completed_ids.keys()}))
+		file.store_string(JSON.stringify({"version": 2, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints}))
 		file.close()
 
 func _build_interface() -> void:
@@ -389,6 +483,11 @@ func _build_interface() -> void:
 	screen.add_child(progress_label)
 	_layout(progress_label, 0.240, 0.195, 0.625, 0.26)
 	progress_label.visible = false
+	minimap = MINIMAP.new()
+	minimap.tooltip_text = "Dungeon map: pale rooms, green bonus caches, gold stairs, orange boss"
+	screen.add_child(minimap)
+	_layout(minimap, 0.812, 0.415, 0.966, 0.704)
+	minimap.visible = false
 
 	dimmer = ColorRect.new()
 	dimmer.color = Color(0.01, 0.02, 0.04, 0.77)
