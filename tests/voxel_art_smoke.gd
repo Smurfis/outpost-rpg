@@ -36,9 +36,9 @@ func _run() -> void:
 	var tree_count: int = 0
 	var box_count: int = 0
 	for child in game.get_children():
-		if child is MeshInstance3D and child.name == "VoxelTree":
+		if child is MeshInstance3D and str(child.name).begins_with("VoxelTree"):
 			tree_count += 1
-		if child is MeshInstance3D and child.name == "VoxelCrate":
+		if child is MeshInstance3D and str(child.name).begins_with("VoxelCrate"):
 			box_count += 1
 	_check(tree_count >= 5, "Five decorative trees use the voxel skin")
 	_check(box_count >= 4, "Four supply crates use the voxel skin")
