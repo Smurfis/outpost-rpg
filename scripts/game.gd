@@ -789,7 +789,7 @@ func salvage_gear(uid: String) -> Dictionary:
 		return {}
 	var preview: Dictionary = {}
 	for item in crafted_gear:
-		if item is Dictionary and str(item.get("uid", "")) == equipped_uid and not SALVAGE.protected(item, gear_loadout):
+		if item is Dictionary and str(item.get("uid", "")) == uid and not SALVAGE.protected(item, gear_loadout):
 			preview = SALVAGE.refund(item)
 	if preview.is_empty():
 		return {}
@@ -927,7 +927,7 @@ func _load() -> void:
 				var equipped_uid: String = str(saved_loadout.get(slot, ""))
 				var found: bool = equipped_uid == ""
 				for item in crafted_gear:
-					if item is Dictionary and str(item.get("uid", "")) == uid and str(item.get("slot", "")) == slot:
+					if item is Dictionary and str(item.get("uid", "")) == equipped_uid and str(item.get("slot", "")) == slot:
 						found = true
 				if found:
 					gear_loadout[slot] = equipped_uid
