@@ -11,6 +11,7 @@ These are integration instructions, not a merge command or an assertion that pro
 
 | File | Implementation | Conflict sensitivity |
 | --- | --- | --- |
+| `assets/voxel/outpost_atlas_16px.png` (new, **real PNG**) | Checked-in source pixel texture atlas; used directly at runtime by `voxel_palette.gd` | **Required**: retain binary file when cherry-picking; do not only copy scripts |
 | `scripts/voxel/voxel_palette.gd` (new) | Generates one **64×64** atlas: sixteen **16×16** pattern tiles; shares a nearest-filtered `StandardMaterial3D` | Preserve cell UVs, palette indices, nearest sampling |
 | `scripts/voxel/voxel_biome.gd` (new) | 8×8-cell batch-mesh ground chunks with path tiles, small flowers and decorative stepped cliffs outside gameplay walls | Visual-only, not editable heightmap |
 | `scripts/voxel/voxel_props.gd` (new) | Blocky trees, ores/rocks, bushes, crates and stepped tent | Harvest/drop logic unchanged |
@@ -22,6 +23,8 @@ These are integration instructions, not a merge command or an assertion that pro
 | `tests/voxel_art_smoke.gd` (new) | Verifies atlas, textured props/character/stations, resource count and legacy-mode switch | Keep after merge |
 | `.github/workflows/godot-smoke.yml` | Adds voxel regression check after existing gameplay checks | Preserve all agents' CI additions |
 | `docs/voxel-art-direction.md` and `docs/agent-handoff-android-voxel-and-loot.md` | Art scope and future feature design | Documentation |
+
+**Asset manifest:** [`assets/voxel/README.md`](assets/voxel/README.md) lists the binary atlas and all procedurally built geometry. **No separate asset ZIP is needed for Feature B.** The PNG is part of this Git branch; title-screen art in PR #7 and future UI art are separate.
 
 The new art is chosen when objects are created. Changing `voxel_art_enabled` while playing does **not** automatically regenerate the scene; reload to compare visual modes.
 
@@ -50,7 +53,7 @@ If another agent has updated `main`, rebase/merge current main into the temporar
 
 **The voxel look here comes from deliberately low-resolution art and point filtering, not just blocky shapes.**
 
-- Current `voxel_palette.gd` constructs original 16px tiles in a 64px atlas and sets `BaseMaterial3D.TEXTURE_FILTER_NEAREST`. Keep the tiles/UV half-pixel inset coherent; check edges at glancing angles for seams.
+- Current `voxel_palette.gd` **loads the checked-in 64×64 PNG atlas first**, falls back to generating the same 16px tiles only if the asset is missing, and sets `BaseMaterial3D.TEXTURE_FILTER_NEAREST`. Keep the tiles/UV half-pixel inset coherent; check edges at glancing angles for seams.
 - For any later hand-authored atlas or texture file: import losslessly, select nearest filtering on the relevant canvas/material, choose a consistent texel density, and avoid bilinear/trilinear blur. Review mipmaps separately on mobile instead of assuming they are always wrong.
 - Old OBJ equipment/weapon meshes **do not automatically acquire pixel textures**; several have no UVs. UV-unwrap/rebuild them in a later asset pass. Don't pretend a project render flag makes all legacy assets pixel-art.
 - Keep the existing 2D UI crisp and readable at Android resolution. If experimenting with a low-resolution/pixelated 3D viewport, render UI separately at native resolution rather than pixelating text and touch targets.
@@ -68,7 +71,7 @@ In a Godot 4.7.2 environment (binary may be called `godot` or `Godot_v4.7.2-stab
     godot --headless --path . -s res://tests/voxel_art_smoke.gd
     # Once PR #7 is integrated, also run its title/logo smoke tests.
 
-- [ ] Godot import, launch and both regression suites pass after conflict resolution.
+- [ ] Check `assets/voxel/outpost_atlas_16px.png` exists in the merged tree; Godot import, launch and both regression suites pass after conflict resolution.
 - [ ] 1280×720 landscape mobile layout remains readable; touch controls work.
 - [ ] Atlas stays sharp without stretched patterns, cracks, z-fighting or blurry UV edges.
 - [ ] Hero movement, world collision, combat, harvest highlights, cooldown/respawn, crafting stations and equipment still work.
