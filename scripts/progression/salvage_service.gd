@@ -16,11 +16,9 @@ static func refund(item: Dictionary) -> Dictionary:
 		var count: int = int(floor(float(original) * rate))
 		if count > 0:
 			output[str(key)] = count
-	if int(item.get("item_level", 1)) >= 15:
-		output["ether_dust"] = 1
-	if rarity >= 3 and int(item.get("item_level", 1)) >= 20:
-		output["gem_fragment"] = int(output.get("gem_fragment", 0)) + 1
-	# Prismatic gems are intentionally NEVER recovered intact.
+	# No free essence is minted. Rare catalysts are refunded only when they
+	# were part of the original paid crafting bill (and only at the same rate).
+	# Otherwise repeated crafting/salvaging could generate magical materials.
 	return output
 
 static func protected(item: Dictionary, loadout: Dictionary) -> bool:
