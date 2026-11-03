@@ -11,6 +11,9 @@ var next_run: int = 1
 func create_party(leader_id: int) -> int:
 	if leader_id <= 0:
 		return -1
+	var previous_party: int = party_of(leader_id)
+	if previous_party != 0 and not active_run(previous_party).is_empty():
+		return -1
 	leave_party(leader_id)
 	var party_id: int = next_party
 	next_party += 1
@@ -50,6 +53,12 @@ func leave_party(peer_id: int) -> bool:
 	var members: Array = party.get("members", [])
 	members.erase(peer_id)
 	memberships.erase(peer_id)
+	var current_run: Dictionary = party.get("run", {})
+	if not current_run.is_empty():
+		var run_members: Array = current_run.get("members", [])
+		run_members.erase(peer_id)
+		current_run["members"] = run_members
+		party["run"] = current_run
 	if members.is_empty():
 		parties.erase(party_id)
 	else:

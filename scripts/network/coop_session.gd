@@ -209,7 +209,11 @@ func _introduce(requested_name: String) -> void:
 	var name_value: String = _safe_name(requested_name)
 	players[sender] = {"name": name_value, "position": Vector3(0, 0.35, 0), "yaw": 0.0}
 	if registry.party_of(sender) == 0:
-		registry.join_party(sender, 1)
+		var lobby_party: int = registry.party_of(1)
+		if lobby_party != 0 and not registry.join_party(sender, lobby_party):
+			_make_party(sender)
+		elif lobby_party == 0:
+			_make_party(sender)
 	_broadcast_snapshot()
 
 func _make_party(peer_id: int) -> void:
