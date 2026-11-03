@@ -1,5 +1,5 @@
 extends Node3D
-## Four distinct harvestables with faceted, deliberately readable mobile silhouettes.
+## Outpost v0.4: ten distinct harvestables, each with faceted silhouette.
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
@@ -10,94 +10,130 @@ var initial_scale: Vector3 = Vector3.ONE
 func setup(resource_type: String) -> void:
 	kind = resource_type
 	name = kind.capitalize() + "Node"
-	if kind == "wood":
-		_pine()
-	elif kind == "stone":
-		_rock()
-	elif kind == "fiber":
-		_bush(false)
-	else:
-		_bush(true)
-	hits_left = 3 if kind in ["wood", "stone"] else 2
+	match kind:
+		"wood":
+			_pine()
+		"stone":
+			_rock()
+		"fiber":
+			_bush(false)
+		"berries":
+			_bush(true)
+		"iron":
+			_ore(Color("738fa4"), Color("9fc8d9"))
+		"coal":
+			_ore(Color("303b44"), Color("63737e"))
+		"clay":
+			_clay()
+		"herbs":
+			_herbs()
+		"mushrooms":
+			_mushrooms()
+		"reeds":
+			_reeds()
+	hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
 	add_to_group("resources")
 
 func _material(color: Color) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.92
-	return material
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.roughness = 0.88
+	return m
 
 func _part(mesh: Mesh, at: Vector3, stretch: Vector3, tint: Color) -> MeshInstance3D:
-	var instance := MeshInstance3D.new()
-	instance.mesh = mesh
-	instance.position = at
-	instance.scale = stretch
-	instance.material_override = _material(tint)
-	add_child(instance)
-	return instance
+	var n := MeshInstance3D.new()
+	n.mesh = mesh
+	n.position = at
+	n.scale = stretch
+	n.material_override = _material(tint)
+	add_child(n)
+	return n
 
-func _spike(bottom: float, top: float, height: float, at: Vector3, color: Color, segments: int = 7) -> void:
+func _spike(bottom: float, top: float, height: float, at: Vector3, color: Color, segments: int = 7) -> MeshInstance3D:
 	var mesh := CylinderMesh.new()
 	mesh.bottom_radius = bottom
 	mesh.top_radius = top
 	mesh.height = height
 	mesh.radial_segments = segments
-	_part(mesh, at, Vector3.ONE, color)
+	return _part(mesh, at, Vector3.ONE, color)
+
+func _orb(at: Vector3, stretch: Vector3, tint: Color) -> MeshInstance3D:
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = 7
+	mesh.rings = 3
+	return _part(mesh, at, stretch, tint)
+
+func _block(size: Vector3, at: Vector3, color: Color) -> void:
+	var m := BoxMesh.new()
+	m.size = size
+	_part(m, at, Vector3.ONE, color)
 
 func _pine() -> void:
-	_spike(0.34, 0.20, 2.8, Vector3(0, 1.4, 0), Color("765035"))
+	_spike(0.33, 0.20, 2.8, Vector3(0, 1.4, 0), Color("70492e"))
 	for i in range(4):
-		var width: float = 1.75 - float(i) * 0.31
-		var high: float = 2.0 + float(i) * 0.75
-		_spike(width, 0.08, 1.85, Vector3(0, high, 0), Color("24553e") if i % 2 == 0 else Color("3e7450"))
-	# Bark bands and trunk-base reading at isometric distance
-	_spike(0.46, 0.38, 0.16, Vector3(0, 0.13, 0), Color("55402e"))
-	_spike(0.25, 0.25, 0.08, Vector3(0, 0.95, 0), Color("9d6941"))
+		_spike(1.75 - float(i) * 0.31, 0.06, 1.85, Vector3(0, 2.0 + float(i) * 0.75, 0), Color("29583f") if i % 2 == 0 else Color("48744a"))
+	_spike(0.43, 0.35, 0.12, Vector3(0, 0.11, 0), Color("60472c"))
 
 func _rock() -> void:
-	var shades := [Color("748991"), Color("a6aaa2"), Color("526e77"), Color("909b9b")]
-	var coords := [Vector3(-0.55, 0.60, 0.12), Vector3(0.45, 0.65, 0.32), Vector3(0.0, 0.54, -0.48), Vector3(0.65, 0.36, -0.40)]
-	for i in range(4):
-		var mesh := SphereMesh.new()
-		mesh.radius = 0.79
-		mesh.height = 1.58
-		mesh.radial_segments = 7
-		mesh.rings = 3
-		var n := _part(mesh, coords[i], Vector3(0.95, 0.82 - float(i) * 0.08, 0.95), shades[i])
-		n.rotation.y = float(i) * 0.51
-	# Exposed ore-colored crystal accents
-	_spike(0.25, 0.04, 0.8, Vector3(0.14, 1.0, -0.20), Color("91bed0"), 5)
-	_spike(0.17, 0.0, 0.5, Vector3(-0.48, 0.92, -0.2), Color("d0d0bb"), 5)
+	_ore(Color("758992"), Color("a7aba4"))
+
+func _ore(base: Color, vein: Color) -> void:
+	var points := [Vector3(-0.48, 0.52, 0.10), Vector3(0.42, 0.62, 0.26), Vector3(0.10, 0.39, -0.49)]
+	for i in range(3):
+		var p := _orb(points[i], Vector3(1.4, 1.25, 1.30), base.lightened(float(i) * 0.12))
+		p.rotation.y = float(i) * 0.47
+	for i in range(3):
+		var c := _spike(0.24, 0.03, 0.76 + 0.16 * float(i), Vector3(-0.37 + 0.38 * float(i), 0.92, -0.32), vein, 5)
+		c.rotation.z = 0.10 * float(i - 1)
 
 func _bush(berries: bool) -> void:
-	var leaf_color := Color("557c49") if berries else Color("5e9b70")
-	var leaf_highlight := Color("80a65c") if berries else Color("7dbca0")
-	for pos in [Vector3(-0.5, 0.52, 0.12), Vector3(0.25, 0.71, -0.08), Vector3(0.57, 0.45, 0.15), Vector3(-0.20, 0.6, 0.50)]:
-		var crown := SphereMesh.new()
-		crown.radius = 0.65
-		crown.height = 1.30
-		crown.radial_segments = 7
-		crown.rings = 3
-		_part(crown, pos, Vector3(1, 0.78, 0.85), leaf_color if pos.x < 0.0 else leaf_highlight)
+	for p in [Vector3(-0.38, 0.50, 0.22), Vector3(0.25, 0.63, 0), Vector3(0.60, 0.36, -0.14)]:
+		_orb(p, Vector3(1.50, 1.0, 1.42), Color("49714d") if berries else Color("75a47a"))
 	if berries:
-		for p in [Vector3(-0.6, 0.86, -0.35), Vector3(0.30, 1.05, -0.45), Vector3(0.55, 0.7, -0.48)]:
-			var berry := SphereMesh.new()
-			berry.radius = 0.15
-			berry.height = 0.30
-			berry.radial_segments = 7
-			berry.rings = 3
-			_part(berry, p, Vector3.ONE, Color("c4515e"))
+		for p in [Vector3(-0.48, 0.89, -0.48), Vector3(0.42, 0.90, -0.54), Vector3(0.64, 0.57, 0.34)]:
+			_orb(p, Vector3(0.28, 0.30, 0.28), Color("c24d5f"))
 	else:
-		for x in [-0.52, 0.0, 0.45]:
-			_spike(0.09, 0.0, 1.3, Vector3(x, 0.83, 0.2), Color("d0c884"), 4)
+		for x in [-0.45, 0.1, 0.54]:
+			_spike(0.07, 0.0, 1.25, Vector3(x, 0.87, 0.15), Color("dec686"), 4)
+
+func _clay() -> void:
+	for p in [Vector3(-0.45, 0.40, 0.0), Vector3(0.4, 0.36, 0.25), Vector3(-0.05, 0.51, -0.34)]:
+		_orb(p, Vector3(1.55, 0.84, 1.20), Color("bd7658") if p.x < 0.0 else Color("9a564b"))
+	_orb(Vector3(0.18, 0.72, 0.24), Vector3(0.80, 0.30, 0.5), Color("d79f77"))
+
+func _herbs() -> void:
+	for x in [-0.48, 0.0, 0.40]:
+		_spike(0.055, 0.025, 1.05, Vector3(x, 0.52, 0), Color("96ab6c"), 5)
+		_orb(Vector3(x - 0.18, 0.77, 0), Vector3(0.6, 0.23, 0.32), Color("76b393"))
+		_orb(Vector3(x + 0.16, 0.52, 0.16), Vector3(0.55, 0.24, 0.28), Color("a2c69a"))
+		_orb(Vector3(x, 1.11, 0), Vector3(0.26, 0.28, 0.26), Color("d5c5a0"))
+
+func _mushrooms() -> void:
+	for p in [Vector3(-0.55, 0, 0.0), Vector3(0.15, 0, 0.2), Vector3(0.65, 0, -0.3)]:
+		var scale_by: float = 1.1 if p.x < 0.0 else 0.80
+		_spike(0.12, 0.10, 0.65 * scale_by, p + Vector3(0, 0.33 * scale_by, 0), Color("dfd3b3"), 6)
+		_spike(0.59 * scale_by, 0.06, 0.42 * scale_by, p + Vector3(0, 0.75 * scale_by, 0), Color("a9544b"), 7)
+		_orb(p + Vector3(0, 0.83 * scale_by, 0), Vector3(0.22, 0.12, 0.22), Color("d3a387"))
+
+func _reeds() -> void:
+	for i in range(8):
+		var x: float = -0.70 + 0.19 * float(i)
+		var z: float = 0.27 if i % 2 == 0 else -0.24
+		var height: float = 1.3 + 0.18 * float(i % 4)
+		_spike(0.055, 0.027, height, Vector3(x, height * 0.5, z), Color("a9ad6a"), 5)
+		_spike(0.12, 0.09, 0.33, Vector3(x, height - 0.09, z), Color("a78851"), 5)
+		_orb(Vector3(x + 0.16, height * 0.60, z), Vector3(0.46, 0.14, 0.20), Color("74a88a"))
 
 func _process(delta: float) -> void:
 	if not active:
 		cooldown -= delta
 		if cooldown <= 0.0:
 			active = true
-			hits_left = 3 if kind in ["wood", "stone"] else 2
+			hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
 			visible = true
 			scale = initial_scale
 
@@ -106,11 +142,10 @@ func harvest() -> String:
 		return ""
 	hits_left -= 1
 	var bump := create_tween()
-	bump.tween_property(self, "scale", initial_scale * 1.08, 0.08)
-	bump.tween_property(self, "scale", initial_scale, 0.11)
+	bump.tween_property(self, "scale", initial_scale * 1.07, 0.07)
+	bump.tween_property(self, "scale", initial_scale, 0.10)
 	if hits_left <= 0:
 		active = false
 		visible = false
 		cooldown = recovery
 	return kind
-
