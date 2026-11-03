@@ -11,6 +11,7 @@ const SKILLS = preload("res://scripts/progression/skill_service.gd")
 const SALVAGE = preload("res://scripts/progression/salvage_service.gd")
 const PROGRESSION_UI = preload("res://scripts/progression/progression_ui.gd")
 const FRONTIER = preload("res://scripts/world/frontier.gd")
+const COOP = preload("res://scripts/network/coop_session.gd")
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE
 
@@ -26,6 +27,7 @@ var skill_cooldowns: Dictionary = {}
 var skill_buffs: Dictionary = {}
 var progression_ui
 var frontier
+var coop: Node3D
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var recipes: Array = []
@@ -71,6 +73,8 @@ func _ready() -> void:
 	progression_ui = PROGRESSION_UI.new()
 	progression_ui.setup(self)
 	add_child(progression_ui)
+	coop = COOP.new()
+	add_child(coop)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
