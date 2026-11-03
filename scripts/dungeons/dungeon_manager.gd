@@ -5,6 +5,7 @@ const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const PORTAL = preload("res://scripts/dungeons/dungeon_portal.gd")
 const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
+const PIXEL_SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
 const MINIMAP = preload("res://scripts/dungeons/dungeon_minimap.gd")
 @export var save_path: String = "user://outpost_dungeon_clear_v1.json"
@@ -489,16 +490,19 @@ func _build_interface() -> void:
 	add_child(interface_layer)
 	var screen := Control.new()
 	screen.name = "DungeonUI"
+	screen.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	interface_layer.add_child(screen)
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	action_button = THEME.button("ENTER DUNGEON", "door_front", RARITY.color(RARITY.RARE))
+	PIXEL_SKIN.apply_button(action_button, "wood")
 	screen.add_child(action_button)
 	_layout(action_button, 0.655, 0.155, 0.960, 0.260)
 	action_button.visible = false
 	action_button.pressed.connect(_on_action_pressed)
 	leave_button = THEME.button("LEAVE", "arrow_back", Color("b07b70"))
+	PIXEL_SKIN.apply_button(leave_button, "red")
 	screen.add_child(leave_button)
 	_layout(leave_button, 0.815, 0.280, 0.964, 0.380)
 	leave_button.visible = false
@@ -521,7 +525,7 @@ func _build_interface() -> void:
 	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dimmer.visible = false
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", THEME.style(THEME.BACKDROP, THEME.ACCENT, 15))
+	panel.add_theme_stylebox_override("panel", PIXEL_SKIN.box("frame"))
 	dimmer.add_child(panel)
 	_layout(panel, 0.235, 0.23, 0.765, 0.79)
 	var stack := VBoxContainer.new()
@@ -538,9 +542,11 @@ func _build_interface() -> void:
 	actions.add_theme_constant_override("separation", 24)
 	stack.add_child(actions)
 	confirm_button = THEME.button("YES • ENTER", "check_circle", RARITY.color(RARITY.RARE))
+	PIXEL_SKIN.apply_button(confirm_button, "green")
 	actions.add_child(confirm_button)
 	confirm_button.pressed.connect(_enter_confirmed)
 	var decline := THEME.button("CANCEL", "cancel", Color("b9a29b"))
+	PIXEL_SKIN.apply_button(decline, "wood")
 	actions.add_child(decline)
 	decline.pressed.connect(_cancel_dialog)
 
