@@ -130,7 +130,7 @@ static func apply_button(button: Button, kind: String = "wood") -> void:
 		button.add_theme_stylebox_override("hover", box("parchment_light"))
 		var pressed: StyleBox = box("parchment")
 		if pressed is StyleBoxTexture:
-			pressed.modulate_color = Color(0.86, 0.82, 0.73)
+			(pressed as StyleBoxTexture).modulate_color = Color(0.86, 0.82, 0.73)
 		button.add_theme_stylebox_override("pressed", pressed)
 		button.add_theme_stylebox_override("disabled", _button_texture("wood", "disabled"))
 	else:

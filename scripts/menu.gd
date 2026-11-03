@@ -35,6 +35,7 @@ func _ready() -> void:
 	layer = 8
 	shell = Control.new()
 	shell.name = "CraftingInterface"
+	shell.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	shell.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(shell)
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -60,25 +61,25 @@ func _ready() -> void:
 	header.add_child(title)
 	var bag := Button.new()
 	bag.text = "BAG"
-	bag.custom_minimum_size = Vector2(66, 40)
+	bag.custom_minimum_size = Vector2(66, 48)
 	SKIN.apply_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
-	gear.custom_minimum_size = Vector2(67, 40)
+	gear.custom_minimum_size = Vector2(67, 48)
 	SKIN.apply_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
-	craft.custom_minimum_size = Vector2(74, 40)
+	craft.custom_minimum_size = Vector2(74, 48)
 	SKIN.apply_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
 	header.add_child(craft)
 	var close := Button.new()
 	close.text = "X"
-	close.custom_minimum_size = Vector2(44, 40)
+	close.custom_minimum_size = Vector2(48, 48)
 	SKIN.apply_button(close, "red")
 	close.pressed.connect(close_page)
 	header.add_child(close)
@@ -145,6 +146,7 @@ func _icon(id: String, size: float = 58.0) -> TextureRect:
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return image
 
 func _clear(parent: Node) -> void:
