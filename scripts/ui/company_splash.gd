@@ -15,11 +15,18 @@ func _ready() -> void:
 		_go_next()
 
 func _unhandled_input(event: InputEvent) -> void:
-	var tap := event is InputEventScreenTouch and event.pressed
-	var click := event is InputEventMouseButton and event.pressed
-	var key := event is InputEventKey and event.pressed and not event.echo
-	if tap or click or key:
-		_go_next()
+	if event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed:
+			_go_next()
+	elif event is InputEventMouseButton:
+		var mouse: InputEventMouseButton = event
+		if mouse.pressed:
+			_go_next()
+	elif event is InputEventKey:
+		var key_event: InputEventKey = event
+		if key_event.pressed and not key_event.echo:
+			_go_next()
 
 func _go_next() -> void:
 	if _transition_started or not is_inside_tree():
