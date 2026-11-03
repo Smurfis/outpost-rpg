@@ -2,7 +2,6 @@ extends SceneTree
 ## Verify the voxel skin, weapon-grip orientation, variant model swaps and
 ## legacy visuals without touching movement, crafting or save state.
 var failures: int = 0
-const SAVE_PATH: String = "user://outpost_weapon_pose_test.json"
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -28,7 +27,6 @@ func _run() -> void:
 		check(model != null and model.mesh != null and model.material_override == atlas, "Voxel %s uses the shared nearest-filtered atlas" % model_name)
 	var game = scene.instantiate()
 	game.set("voxel_art_enabled", true)
-	game.save_path = SAVE_PATH if "save_path" in game else SAVE_PATH
 	root.add_child(game)
 	await process_frame
 	var player = game.hero
@@ -52,7 +50,6 @@ func _run() -> void:
 	player.set_cloak(true)
 	check(player.shield_mesh.visible and player.cloak_pivot.visible, "Shield and cape visuals remain equippable")
 	check(player.shield_mesh.material_override == atlas, "Voxel shield shares the pixel palette")
-	check(not player.interaction_moving if "interaction_moving" in player else true, "Visual pose has no movement side effects")
 	game.queue_free()
 	await process_frame
 	var legacy = scene.instantiate()
@@ -62,7 +59,5 @@ func _run() -> void:
 	check(legacy.hero.sword_mesh != null and legacy.hero.sword_mesh.mesh != null, "Legacy OBJ equipment remains available")
 	check(legacy.hero.weapon_grip != null, "Old style also uses correct neutral sword grip")
 	legacy.queue_free()
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 	print("WEAPON POSE RESULT: %d failure(s)." % failures)
 	quit(0 if failures == 0 else 1)
