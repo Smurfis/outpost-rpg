@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#394b9d"/><stop offset=".35" stop-color="#ae68a8"/><stop offset=".62" stop-color="#ffba76"/><stop offset="1" stop-color="#e2c4a5"/></linearGradient>
+<linearGradient id="river" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d8b5bd"/><stop offset="1" stop-color="#6fb6da"/></linearGradient>
+<linearGradient id="cave" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#272441"/><stop offset="1" stop-color="#60418e"/></linearGradient>
+</defs>
+<rect width="1280" height="720" fill="url(#sky)"/>
+<g fill="#f7a2b9" opacity=".55"><path d="M0 110 Q100 40 210 90 T430 95 Q530 20 660 85 T910 80 Q1010 30 1120 100 L1280 50 L1280 210 L0 230Z"/></g>
+<circle cx="385" cy="298" r="75" fill="#ffdf9b"/>
+<path d="M0 370 L120 260 L214 331 L377 244 L474 352 L602 252 L706 353 L846 270 L1000 368 L1140 237 L1280 333 L1280 720 L0 720 Z" fill="#856f9c"/>
+<path d="M0 432 L170 332 L306 389 L500 310 L663 432 L855 337 L992 408 L1130 303 L1280 365 L1280 720 L0 720Z" fill="#5b688b"/>
+<path d="M0 490 L127 420 L255 458 L340 411 L465 490 L600 408 L754 480 L891 412 L1050 472 L1191 383 L1280 442 L1280 720 L0 720Z" fill="#3b6883"/>
+<path d="M735 414 L960 444 L887 530 L1031 600 L854 720 L631 720 L796 610 L692 544Z" fill="url(#river)"/>
+<g fill="#355b61"><path d="M0 515 L78 350 L174 533Z"/><path d="M50 521 L136 303 L215 527Z"/><path d="M180 519 L262 372 L334 535Z"/><path d="M928 538 L1018 316 L1095 537Z"/></g>
+<g fill="#548158"><path d="M0 591 L93 486 L208 588Z"/><path d="M90 608 L227 474 L350 600Z"/><path d="M901 617 L1065 423 L1217 604Z"/></g>
+<path d="M0 720 L0 556 L235 530 L436 646 L634 606 L791 720 Z" fill="#66904f"/>
+<path d="M850 720 L1009 587 L1280 540 L1280 720Z" fill="#63854b"/>
+<!-- watchtower -->
+<path d="M162 365 L214 365 L214 518 L162 518 Z" fill="#4a333d"/>
+<path d="M142 368 L234 368 L218 349 L157 349 Z" fill="#51313d"/>
+<path d="M155 360 L224 360 L214 306 L161 306Z" fill="#a8774d" stroke="#3c303b" stroke-width="8"/>
+<path d="M172 333 L206 333 L206 356 L172 356Z" fill="#ffdf85"/>
+<path d="M159 360 L150 500 M214 360 L225 500 M156 430 L223 458 M219 430 L156 461" fill="none" stroke="#3b2a36" stroke-width="9"/>
+<!-- waterfall cliffs -->
+<path d="M1010 342 L1094 308 L1280 313 L1280 570 L1108 580 L1054 447Z" fill="#707c83"/>
+<path d="M1045 356 L1105 347 L1095 490 L1030 519 Z" fill="#a3ddec"/>
+<path d="M1032 512 L1108 487 L1150 580 L1021 590 Z" fill="#c0e8ec"/>
+<!-- dungeon cliff -->
+<path d="M1129 539 Q1186 391 1278 455 L1280 677 L1103 663Z" fill="#6e7278" stroke="#44475c" stroke-width="10"/>
+<path d="M1176 637 L1176 546 A57 57 0 0 1 1278 546 L1278 638Z" fill="url(#cave)" stroke="#3b353c" stroke-width="14"/>
+<path d="M1209 601 L1237 541 L1259 594 L1237 618Z" fill="#ae65ff" stroke="#efc5ff" stroke-width="4"/>
+<g fill="#233d40"><path d="M0 607 L45 462 L90 607Z"/><path d="M67 615 L114 424 L169 622Z"/><path d="M294 657 L350 466 L419 655Z"/><path d="M924 651 L965 505 L1028 659Z"/></g>
+</svg>

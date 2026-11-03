@@ -52,7 +52,12 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
-	_load()
+	# Title Play starts a fresh run; Continue reads the previous save.
+	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
+	if get_tree().root.has_meta("outpost_new_adventure"):
+		get_tree().root.remove_meta("outpost_new_adventure")
+	if not fresh_start:
+		_load()
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
