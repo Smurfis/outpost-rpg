@@ -8,6 +8,8 @@
 - The 46×46 gameplay ground is rendered with **8×8-cell chunked meshes** and winding path tiles, replacing the previously flat green slab only visually. The original collision ground and wall boundaries remain.
 - Stepped grass/dirt/stone hills are generated **outside existing collision bounds** for depth without changing gameplay heights or blocking resources.
 - Modular voxel-inspired **oak trees, stone/ore deposits, berry bushes, crates and stepped tent** (`scripts/voxel/voxel_props.gd`).
+- Chunky, expressive **pixel-textured adventurer torso, face, arms and legs**, while keeping the existing animation pivots, shield, cloak and weapon attachment logic (`scripts/voxel/voxel_character.gd`).
+- **Workbench, forge, loom and campfire** now use pixel-textured construction blocks in voxel mode while retaining their interactive effects and crafting scripts.
 - A warm sky and late-afternoon key light using inexpensive ambient light with shadows disabled for this first Android-first pass.
 - Original interactions, resource types, harvesting cooldowns, equipment, crafting stations and game saves remain in place.
 - `@export var voxel_art_enabled: bool = true` in `scripts/game.gd` can be unchecked in the scene inspector to restore the original terrain and decorative models. The default on this feature branch is ON, but `main` is unchanged.
@@ -24,7 +26,7 @@ Each terrain chunk produces an `ArrayMesh` with a single shared atlas material, 
 
 ## Known limitations and proposed next art pass
 
-- Trees/rocks/camp tent are deliberately simple and procedural; the character mesh, forge, loom, campfire, and most plants still use the prototype models.
+- Trees, rocks, tent, avatar and stations are deliberately simple procedural first-pass shapes. Weapons, shields, some props and foliage still use the prototype models; the character will need a dedicated higher-quality pixel-art skin and armour silhouette pass.
 - First pass uses one shared atlas and a small number of authored tile patterns; it is not yet final artistic-quality 3D pixel art. A proper palette/art pass would add ivy, grass clumps, tile variation, atlas-authored timber, forge details, crystal light and a consistent character skin.
 - No destruction, raising terrain, world editor, smooth LOD transitions, multiplayer replication, block collisions, or endless streaming yet.
 - The standalone title-screen feature is on another **draft PR**, not included here. Avoid merging either branch into the other until both are reviewed.
