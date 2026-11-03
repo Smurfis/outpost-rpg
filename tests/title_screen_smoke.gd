@@ -21,13 +21,15 @@ func _run() -> void:
 			push_error("Missing title node: " + name)
 			quit(1)
 			return
-	if not instance._has_valid_save():
+	if not FileAccess.file_exists("user://outpost_progress_v02.json"):
 		var continue_button: Button = instance.get_node("Artboard/ContinueButton") as Button
 		if not continue_button.disabled:
 			push_error("Continue must be disabled with no save")
 			quit(1)
 			return
-	if not instance.TIPS.has("Tip: Keep the campfire burning — Chloe and Iyla need a safe outpost after dark."):
+	var constants: Dictionary = instance.get_script().get_script_constant_map()
+	var hints: Array = Array(constants.get("TIPS", []))
+	if not hints.has("Tip: Keep the campfire burning — Chloe and Iyla need a safe outpost after dark."):
 		push_error("Missing approved personal adventure tip")
 		quit(1)
 		return
