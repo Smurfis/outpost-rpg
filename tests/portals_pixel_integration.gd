@@ -21,7 +21,7 @@ func _run() -> void:
 	if scene == null:
 		quit(1)
 		return
-	get_tree().root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_new_adventure", true)
 	var game = scene.instantiate()
 	var manager = game.get_node("Dungeons")
 	manager.save_path = TEST_CLEAR_PATH
