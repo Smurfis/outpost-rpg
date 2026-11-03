@@ -1,4 +1,5 @@
 extends CanvasLayer
+const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
@@ -11,6 +12,7 @@ var details: VBoxContainer
 var left_scroll: ScrollContainer
 var right_scroll: ScrollContainer
 var current_page: String = "craft"
+var craft_step: String = "browse"
 var selected_station: String = "workbench"
 var selected_id: String = ""
 var loaded: Dictionary = {}
@@ -33,50 +35,55 @@ func _ready() -> void:
 	layer = 8
 	shell = Control.new()
 	shell.name = "CraftingInterface"
+	shell.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	shell.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(shell)
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shade := ColorRect.new()
-	shade.color = Color(0.01, 0.02, 0.03, 0.78)
+	shade.color = Color(0.02, 0.01, 0.01, 0.43)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
-	frame.anchor_left = 0.075
-	frame.anchor_right = 0.925
-	frame.anchor_top = 0.045
-	frame.anchor_bottom = 0.965
-	frame.add_theme_stylebox_override("panel", _style(Color("172c30"), Color("baa278"), 13))
+	frame.anchor_left = 0.185
+	frame.anchor_right = 0.815
+	frame.anchor_top = 0.105
+	frame.anchor_bottom = 0.89
+	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
 	shell.add_child(frame)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 8)
+	page.add_theme_constant_override("separation", 6)
 	frame.add_child(page)
 	var header := HBoxContainer.new()
 	page.add_child(header)
-	title = _label("OUTPOST | CRAFTING", 26, Color("f5e2b8"))
+	title = _label("OUTPOST  ◆  CRAFTING", 22, Color("f6dba4"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var bag := Button.new()
 	bag.text = "BAG"
-	bag.custom_minimum_size = Vector2(80, 46)
+	bag.custom_minimum_size = Vector2(66, 48)
+	SKIN.apply_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
-	gear.custom_minimum_size = Vector2(86, 46)
+	gear.custom_minimum_size = Vector2(67, 48)
+	SKIN.apply_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
-	craft.custom_minimum_size = Vector2(88, 46)
+	craft.custom_minimum_size = Vector2(74, 48)
+	SKIN.apply_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
 	header.add_child(craft)
 	var close := Button.new()
 	close.text = "X"
-	close.custom_minimum_size = Vector2(58, 46)
+	close.custom_minimum_size = Vector2(48, 48)
+	SKIN.apply_button(close, "red")
 	close.pressed.connect(close_page)
 	header.add_child(close)
-	subtitle = _label("", 15, Color("b8cec5"))
+	subtitle = _label("", 14, Color("e7d0a5"))
 	page.add_child(subtitle)
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
@@ -84,11 +91,15 @@ func _ready() -> void:
 	var panes := HBoxContainer.new()
 	panes.add_theme_constant_override("separation", 12)
 	panes.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	page.add_child(panes)
+	var surface := PanelContainer.new()
+	surface.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	surface.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	page.add_child(surface)
+	surface.add_child(panes)
 	left_scroll = ScrollContainer.new()
-	left_scroll.custom_minimum_size = Vector2(260, 0)
+	left_scroll.custom_minimum_size = Vector2(210, 0)
 	left_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_scroll.size_flags_stretch_ratio = 0.72
+	left_scroll.size_flags_stretch_ratio = 0.79
 	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(left_scroll)
 	recipes_list = VBoxContainer.new()
@@ -96,9 +107,9 @@ func _ready() -> void:
 	recipes_list.add_theme_constant_override("separation", 7)
 	left_scroll.add_child(recipes_list)
 	right_scroll = ScrollContainer.new()
-	right_scroll.custom_minimum_size = Vector2(315, 0)
+	right_scroll.custom_minimum_size = Vector2(300, 0)
 	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_scroll.size_flags_stretch_ratio = 1.28
+	right_scroll.size_flags_stretch_ratio = 1.21
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(right_scroll)
 	details = VBoxContainer.new()
@@ -135,6 +146,7 @@ func _icon(id: String, size: float = 58.0) -> TextureRect:
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return image
 
 func _clear(parent: Node) -> void:
@@ -144,7 +156,7 @@ func _clear(parent: Node) -> void:
 
 func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	var container := PanelContainer.new()
-	container.add_theme_stylebox_override("panel", _style(color))
+	container.add_theme_stylebox_override("panel", SKIN.box("inset"))
 	target.add_child(container)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
@@ -157,6 +169,7 @@ func _switch_bag() -> void:
 
 func _switch_craft() -> void:
 	current_page = "craft"
+	craft_step = "browse"
 	refresh()
 
 func _switch_equipment() -> void:
@@ -168,6 +181,8 @@ func open(page: String) -> void:
 		close_page()
 		return
 	current_page = page
+	if page == "craft" and game.crafting.is_empty():
+		craft_step = "browse"
 	visible = true
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
@@ -177,6 +192,7 @@ func open(page: String) -> void:
 			selected_station = station
 		if selected_id == "":
 			selected_id = _first_recipe(selected_station)
+	craft_step = "browse"
 	refresh()
 
 func close_page() -> void:
@@ -192,6 +208,7 @@ func _station_change(station: String) -> void:
 	if not game.crafting.is_empty():
 		return
 	selected_station = station
+	craft_step = "browse"
 	selected_id = _first_recipe(station)
 	loaded.clear()
 	completed_id = ""
@@ -201,6 +218,7 @@ func _recipe_change(id: String) -> void:
 	if not game.crafting.is_empty():
 		return
 	selected_id = id
+	craft_step = "browse"
 	loaded.clear()
 	completed_id = ""
 	refresh()
@@ -364,15 +382,15 @@ func _use_food(id: String) -> void:
 	game.consume(id, amount)
 
 func _render_craft() -> void:
-	title.text = "OUTPOST | HANDCRAFTING"
+	title.text = "OUTPOST  ◆  HANDCRAFTING"
 	var nearby: String = game.closest_station()
-	subtitle.text = "Nearby: %s     |     Pick a recipe, load materials and work the station." % (nearby.capitalize() if nearby != "" else "None — explore recipes; move to station to craft")
+	subtitle.text = "Station: %s   •   Select > Prepare > Craft" % (nearby.capitalize() if nearby != "" else "None (browse anywhere)")
 	for station_id in ["workbench", "forge", "loom", "campfire"]:
 		var tab := Button.new()
 		tab.text = str(station_names[station_id])
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tab.disabled = not game.crafting.is_empty() and selected_station != station_id
-		tab.modulate = Color("f2dcaa") if selected_station == station_id else Color("9aaead")
+		SKIN.apply_button(tab, "wood_selected" if selected_station == station_id else "wood")
 		tab.pressed.connect(_station_change.bind(station_id))
 		station_tabs.add_child(tab)
 	for recipe in game.recipes:
@@ -387,9 +405,10 @@ func _render_craft() -> void:
 		choose.text = str(recipe.get("name", id))
 		choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		choose.custom_minimum_size = Vector2(0, 55)
+		SKIN.apply_button(choose, "parchment_light" if selected_id == id else "wood")
 		choose.disabled = not game.crafting.is_empty()
 		if selected_id == id:
-			choose.modulate = Color("f8d9a0")
+			choose.add_theme_color_override("font_color", SKIN.INK)
 		choose.pressed.connect(_recipe_change.bind(id))
 		row.add_child(choose)
 	if not game.crafting.is_empty():
@@ -399,15 +418,66 @@ func _render_craft() -> void:
 	else:
 		if selected_id == "" or game._recipe_by_id(selected_id).is_empty() or str(game._recipe_by_id(selected_id).get("station", "")) != selected_station:
 			selected_id = _first_recipe(selected_station)
-		_render_recipe()
+		if craft_step == "prepare":
+			_render_prepare()
+		else:
+			_render_recipe()
+
+func _begin_prepare() -> void:
+	craft_step = "prepare"
+	loaded.clear()
+	refresh()
+
+func _back_to_browse() -> void:
+	craft_step = "browse"
+	loaded.clear()
+	refresh()
 
 func _render_recipe() -> void:
+	var recipe: Dictionary = game._recipe_by_id(selected_id)
+	if recipe.is_empty():
+		details.add_child(_label("Choose a recipe to see its requirements.", 20, Color("f5deb0")))
+		return
+	var product_id: String = str(recipe.get("result", ""))
+	var intro := _column_panel(details, Color("5f3b29"))
+	var head := HBoxContainer.new()
+	intro.add_child(head)
+	head.add_child(_icon(product_id, 78))
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(info)
+	info.add_child(_label(str(recipe.get("name", "")), 23, Color("ffe2a6")))
+	info.add_child(_label(str(recipe.get("category", "Equipment")).to_upper() + "  •  TIER 1", 15, Color("eabf77")))
+	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("f3dfbb")))
+	details.add_child(_label("REQUIRED MATERIALS", 17, Color("ffe2a6")))
+	var ingredients: Dictionary = recipe.get("ingredients", {})
+	for key in ingredients:
+		var id: String = str(key)
+		var need: int = int(ingredients[key])
+		var own: int = int(game.inventory.get(id, 0))
+		var row := HBoxContainer.new()
+		details.add_child(row)
+		row.add_child(_icon(id, 38))
+		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("c8e6b1") if own >= need else Color("ffe0b2")))
+	var next := Button.new()
+	next.text = "NEXT  ◆  PREPARE ITEM"
+	next.custom_minimum_size = Vector2(0, 56)
+	SKIN.apply_button(next, "green")
+	next.disabled = game.owns_unique(product_id)
+	next.pressed.connect(_begin_prepare)
+	details.add_child(next)
+	if game.owns_unique(product_id):
+		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
+	elif not game.near_station(selected_station):
+		details.add_child(_label("You can browse anywhere. Craft beside the matching station.", 14, Color("ffe2a6")))
+
+func _render_prepare() -> void:
 	var recipe: Dictionary = game._recipe_by_id(selected_id)
 	if recipe.is_empty():
 		details.add_child(_label("Choose a recipe from the list.", 21))
 		return
 	var product_id: String = str(recipe.get("result", ""))
-	var intro := _column_panel(details, Color("2b403e"))
+	var intro := _column_panel(details, Color("5f3b29"))
 	var head := HBoxContainer.new()
 	intro.add_child(head)
 	head.add_child(_icon(product_id, 87))
@@ -417,7 +487,7 @@ func _render_recipe() -> void:
 	info.add_child(_label(str(recipe.get("name", "")), 24, Color("f0d9aa")))
 	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("bdd0c8")))
 	info.add_child(_label("Output x%d     •     %s" % [int(recipe.get("amount", 1)), str(station_names[selected_station])], 17))
-	details.add_child(_label("1. LOAD MATERIALS", 18, Color("e5d5a4")))
+	details.add_child(_label("STEP 2  ◆  LOAD MATERIALS", 18, Color("ffe2a6")))
 	var ingredients: Dictionary = recipe.get("ingredients", {})
 	for key in ingredients:
 		var id: String = str(key)
@@ -426,10 +496,11 @@ func _render_recipe() -> void:
 		var loaded_now: bool = bool(loaded.get(id, false))
 		var available: bool = owned >= needed
 		var slot := Button.new()
-		slot.custom_minimum_size = Vector2(0, 65)
+		slot.custom_minimum_size = Vector2(0, 56)
+		SKIN.apply_button(slot, "parchment_light")
 		slot.disabled = not available or game.owns_unique(product_id)
 		slot.text = ("LOADED   " if loaded_now else "TAP TO LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
-		slot.modulate = Color("b0e9b9") if loaded_now else Color("edc8a3") if available else Color("ab7673")
+		slot.modulate = Color("b7e4b6") if loaded_now else Color.WHITE if available else Color("dba9a3")
 		slot.pressed.connect(_toggle_ingredient.bind(id))
 		var row := HBoxContainer.new()
 		details.add_child(row)
@@ -442,11 +513,18 @@ func _render_recipe() -> void:
 			loaded_count += 1
 	details.add_child(_label("Material slots: %d / %d" % [loaded_count, ingredients.size()], 16, Color("d7d8c6")))
 	var begin := Button.new()
-	begin.text = "2. BEGIN CRAFTING"
-	begin.custom_minimum_size = Vector2(0, 60)
+	begin.text = "BEGIN CRAFTING  ◆  WORK STATION"
+	begin.custom_minimum_size = Vector2(0, 54)
+	SKIN.apply_button(begin, "green")
 	begin.disabled = loaded_count < ingredients.size() or not game.can_craft(selected_id)
 	begin.pressed.connect(_start_craft)
 	details.add_child(begin)
+	var back := Button.new()
+	back.text = "BACK TO RECIPES"
+	back.custom_minimum_size = Vector2(0, 42)
+	SKIN.apply_button(back, "wood")
+	back.pressed.connect(_back_to_browse)
+	details.add_child(back)
 	if not game.near_station(selected_station):
 		details.add_child(_label("Move beside the %s to start." % selected_station.capitalize(), 17, Color("f0bf8a")))
 	elif game.owns_unique(product_id):
@@ -492,7 +570,8 @@ func _render_work() -> void:
 	stage.add_child(work_label)
 	action_button = Button.new()
 	action_button.text = str(action_names.get(str(active.get("station", "")), "WORK")) + " • TAP"
-	action_button.custom_minimum_size = Vector2(0, 78)
+	action_button.custom_minimum_size = Vector2(0, 62)
+	SKIN.apply_button(action_button, "green")
 	action_button.pressed.connect(_do_work)
 	stage.add_child(action_button)
 	stage.add_child(_label("Watch the station as you work. Closing this panel does not cancel the job.", 15, Color("b4bfb8")))
@@ -530,6 +609,7 @@ func on_craft_completed(result_id: String) -> void:
 	completed_id = result_id
 	loaded.clear()
 	current_page = "craft"
+	craft_step = "browse"
 	selected_id = ""
 	if visible:
 		refresh()
@@ -541,7 +621,8 @@ func _render_result() -> void:
 	result.add_child(_label(completed_id.replace("_", " ").capitalize() + " added to your inventory!", 21, Color("c3e9b7")))
 	var again := Button.new()
 	again.text = "CHOOSE ANOTHER RECIPE"
-	again.custom_minimum_size = Vector2(0, 60)
+	again.custom_minimum_size = Vector2(0, 52)
+	SKIN.apply_button(again, "green")
 	again.pressed.connect(_clear_result)
 	result.add_child(again)
 
