@@ -60,6 +60,18 @@ func _test_game() -> void:
 		check(game.hero.gather_phase > 0.0, "Harvesting triggers player tool-swing animation")
 		target.set_targeted(true)
 		check(target.target_ring.visible and target.target_label.visible, "Gatherable shows range highlight and hit-count label")
+		game.inventory["axe"] = 1
+		check(game.equip_item("axe"), "Woodcutter axe can be equipped")
+		check(game.is_equipped("axe"), "Axe appears in the woodcutting equipment slot")
+		var wood_before_axe: int = int(game.inventory.get("wood", 0))
+		game.gather_delay = 0.0
+		game.gather()
+		check(int(game.inventory.get("wood", 0)) == wood_before_axe + 2, "Equipped axe doubles wood harvest")
+		check(game.equip_item("axe"), "Equipped axe can be removed")
+		game.gather_delay = 0.0
+		var wood_without_axe: int = int(game.inventory.get("wood", 0))
+		game.gather()
+		check(int(game.inventory.get("wood", 0)) == wood_without_axe + 1, "Unequipped axe restores regular harvest")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)
 	game.inventory["wood"] = 7
 	game.inventory["stone"] = 5
@@ -106,6 +118,11 @@ func _test_game() -> void:
 	check(game.is_equipped("shield"), "Defence gear occupies offhand slot")
 	game.equip_item("shield")
 	check(not game.is_equipped("shield"), "Shield can be removed without losing the item")
+	game.inventory["cloak"] = 1
+	check(game.equip_item("cloak"), "Cloak can be equipped")
+	check(game.hero.cloak_pivot.visible, "Equipped cloak becomes visible on the 3D character")
+	check(game.equip_item("cloak"), "Cloak can be removed")
+	check(not game.hero.cloak_pivot.visible, "Unequipped cloak disappears from the 3D character")
 	game.menu.close_page()
 	game.inventory["meal"] = 1
 	game.hero.health = 20.0
