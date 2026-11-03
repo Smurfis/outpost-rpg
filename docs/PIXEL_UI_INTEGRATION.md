@@ -26,11 +26,17 @@ Replace the generic dark fullscreen UI with the Outpost title-screen's visual la
 
 **Unchanged:** `scripts/game.gd`, `scripts/player.gd`, `data/recipes.json`, world, stations, inventory schema, saves and `project.godot`. The menus call existing `game.begin_craft()`, `game.work_craft()`, `game.equip_item()`, `game.consume()`, etc.
 
-## Optional separate art pack (not yet fully integrated in repository)
+## Transparent PNG art pack — now committed to this branch
 
-`Outpost_Pixel_UI_Assets_v1.zip` was generated as a standalone asset deliverable. It contains transparent 128×128 PNG frames, item-card surfaces, toast panels, 192×64 button states and 128×128 RGBA icons; the corresponding five SVG icons are already committed under `assets/ui/icons/`. **Do not assume the PNG frames have been committed or wired into Godot yet.** Unpack to the root of the project and use `NinePatchRect`/`StyleBoxTexture` if adding the richer graphics.
+The complete original asset pack is now stored **as individual files in GitHub**, not as a separate required ZIP:
 
-Proposed 9-slice margins: 16 px on 128×128 frames; 18 px horizontal / 12 px vertical on 192×64 buttons. Use nearest-neighbour filtering. Keep icon dimensions uniform and maintain text readability on mobile.
+- `assets/ui/frames/*.png` — 5 transparent 128×128 cards, parchment and wood panels;
+- `assets/ui/buttons/*.png` — 4 transparent 192×64 textured button states;
+- `assets/ui/icons/*.png` — 5 transparent 128×128 action icon PNGs;
+- `assets/ui/icons/*.svg` — 5 original vector equivalents already used by the HUD;
+- `assets/ui/ASSET_GUIDE.md` — sizes, palette, and stretch-margin recommendations.
+
+**No user download or manual ZIP transfer is required.** GitHub agents can access the files from this PR. The files are **committed, not yet automatically wired to every menu control**: `outpost_skin.gd` currently uses procedural `StyleBoxFlat`. If adding the textured artwork, use `NinePatchRect` / `StyleBoxTexture` with 16 px margins on 128×128 frames and 18 px horizontal / 12 px vertical margins on 192×64 buttons; enable nearest-neighbour filtering and verify Android scaling.
 
 ## How to integrate safely
 
@@ -45,7 +51,7 @@ Proposed 9-slice margins: 16 px on 128×128 frames; 18 px horizontal / 12 px ver
 
 ## Current implementation boundaries and known follow-up work
 
-- The shared theme is procedural `StyleBoxFlat`, **not yet the fully textured parchment/wood PNG NinePatch treatment**. It can be swapped with exported frames after Android screenshot review.
+- The shared theme is procedural `StyleBoxFlat`. The committed PNG NinePatch frames are optional art, **not yet the fully wired textured theme**. Connect and review on an Android device before claiming full polish.
 - The compact crafting flow **currently keeps a two-column recipe browser and a prepare step**; a one-card-at-a-time popup, quantity selectors, sortable recipe categories, persistent equipment tooltips, and other polish are follow-ups rather than completed guarantees.
 - The XP meter currently displays `xp % 100` as a visual placeholder; integrate with a real level curve before claiming it depicts level progress.
 - Existing `assets/icons/*.svg` item icons remain in inventory and recipes. New art replaces **five HUD action** icons only.
@@ -59,7 +65,7 @@ Proposed 9-slice margins: 16 px on 128×128 frames; 18 px horizontal / 12 px ver
 - [ ] Manual Android landscape UI review completed.
 - [ ] Crafting + inventory + equipment regression passed.
 - [ ] No conflict with title-screen, voxel atmosphere, dungeon or co-op work.
-- [ ] Optional PNG sprite assets incorporated, or consciously deferred.
+- [ ] Committed PNG sprite assets wired into the UI, or consciously deferred.
 - [ ] `main` remains unchanged until the reviewed PR is explicitly merged.
 
 ## Review message
