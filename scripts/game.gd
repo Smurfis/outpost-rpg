@@ -266,6 +266,8 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 			"supply_crate":
 				prop = VOXEL_PROPS.crate()
 		if prop != null:
+			# Stable unique names avoid Godot's auto-generated sibling names.
+			prop.name = "%s_%d_%d" % [str(prop.name), roundi(where.x * 10.0), roundi(where.z * 10.0)]
 			prop.position = where
 			prop.scale = Vector3.ONE * size_factor
 			prop.rotation.y = angle
