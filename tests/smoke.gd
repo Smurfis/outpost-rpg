@@ -104,7 +104,8 @@ func _test_game() -> void:
 	check(game.is_equipped("spear"), "Weapon slot now reflects equipped spear")
 	check(not game.can_craft("spear"), "Unique gear cannot be duplicated")
 	game.menu.close_page()
-	check(game.begin_craft("axe"), "Can start another recipe")
+	game.inventory["stone"] = 6
+	check(game.begin_craft("pickaxe"), "Can start another recipe after axe is already owned")
 	game.cancel_craft()
 	check(game.crafting.is_empty(), "Work can be cancelled")
 	check(int(game.inventory.get("wood", 0)) == 4, "Cancellation never consumes ingredients")
