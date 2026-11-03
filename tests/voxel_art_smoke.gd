@@ -13,6 +13,11 @@ func _check(value: bool, message: String) -> void:
 		push_error("FAIL: " + message)
 
 func _run() -> void:
+	var art_path: String = "res://assets/voxel/outpost_atlas_16px.png"
+	_check(ResourceLoader.exists(art_path), "Shipped pixel art atlas PNG exists in feature branch")
+	if ResourceLoader.exists(art_path):
+		var artwork: Texture2D = load(art_path) as Texture2D
+		_check(artwork != null and artwork.get_size() == Vector2(64, 64), "Shipped atlas loads as a 64x64 PNG")
 	var palette_script = load("res://scripts/voxel/voxel_palette.gd")
 	var atlas: StandardMaterial3D = palette_script.get_material()
 	_check(atlas != null and atlas.albedo_texture != null, "Procedural pixel atlas is created")
