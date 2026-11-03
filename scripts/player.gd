@@ -24,6 +24,9 @@ var gather_phase: float = 0.0
 var walking_phase: float = 0.0
 var walk_amount: float = 0.0
 var last_gather: String = ""
+@export var auto_step_enabled: bool = true
+@export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
+const STEP_LANDING_TOLERANCE: float = 0.06
 # Dungeon portal interaction state: manually operated by default.
 var interaction_target: Vector3 = Vector3.ZERO
 var interaction_moving: bool = false
@@ -40,6 +43,8 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	game = game_ref
 	hud = hud_ref
 	camera = camera_ref
+	# Descend a one-voxel terrace without bouncing or requiring a jump press.
+	floor_snap_length = 1.15 if bool(game.get("voxel_art_enabled")) else 0.1
 	name = "Adventurer"
 	collision_layer = 1
 	collision_mask = 1
@@ -181,8 +186,11 @@ func _physics_process(delta: float) -> void:
 		speed *= 0.42
 	velocity.x = direction.x * speed
 	velocity.z = direction.z * speed
-	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
+	var grounded_before_motion: bool = is_on_floor()
+	velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
+	if auto_step_enabled and not modal_open and grounded_before_motion and is_on_wall() and direction.length_squared() > 0.02:
+		_try_auto_step(direction * speed * delta)
 	walk_amount = move_toward(walk_amount, direction.length(), delta * 8.0)
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
@@ -212,6 +220,43 @@ func _physics_process(delta: float) -> void:
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
 	if elapsed - last_hit > 6.0:
 		health = minf(100.0, health + delta * 2.0)
+
+func _try_auto_step(horizontal_motion: Vector3) -> bool:
+	# The Fields biome needs one-block ledge climbing, NOT a wall-climb exploit.
+	# Do not step during an active dungeon run or while airborne.
+	var manager: Node = game.get_node_or_null("Dungeons") if game != null else null
+	if manager != null and manager.get("active_instance") != null:
+		return false
+	if horizontal_motion.length_squared() < 0.0001 or not bool(game.get("voxel_art_enabled")):
+		return false
+	var up: Vector3 = Vector3.UP * (max_auto_step_height + STEP_LANDING_TOLERANCE)
+	var original: Transform3D = global_transform
+	if test_move(original, up):
+		return false # Low ceiling or other obstacle directly above the player.
+	var raised: Transform3D = original.translated(up)
+	if test_move(raised, horizontal_motion):
+		return false # The elevated path is blocked by a full-height wall.
+	var candidate: Vector3 = original.origin + horizontal_motion
+	var start: Vector3 = candidate + Vector3.UP * (max_auto_step_height + 0.28)
+	var end: Vector3 = candidate - Vector3.UP * 0.25
+	var query := PhysicsRayQueryParameters3D.create(start, end, collision_mask, [get_rid()])
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return false
+	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
+	if normal.dot(Vector3.UP) < 0.75:
+		return false
+	var rise: float = float((hit["position"] as Vector3).y - original.origin.y)
+	if rise <= 0.045 or rise > max_auto_step_height:
+		return false
+	# Revalidate horizontally at the final elevation before moving the body.
+	var landing: Transform3D = original.translated(Vector3.UP * (rise + STEP_LANDING_TOLERANCE))
+	if test_move(landing, horizontal_motion):
+		return false
+	global_position = candidate + Vector3.UP * (rise + STEP_LANDING_TOLERANCE)
+	velocity.y = 0.0
+	apply_floor_snap()
+	return true
 
 func take_hit(amount: float) -> void:
 	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0

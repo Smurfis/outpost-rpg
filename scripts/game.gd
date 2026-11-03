@@ -9,6 +9,7 @@ const STATION = preload("res://scripts/station.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 @export var voxel_art_enabled: bool = true
+@export var fields_biome_enabled: bool = true # Optional 96x96 Fields, original 46x46 camp preserved.
 const SAVE = "user://outpost_progress_v02.json"
 
 var hero
@@ -192,7 +193,7 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
-		landscape.build()
+		landscape.build(fields_biome_enabled)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
@@ -254,11 +255,14 @@ func _world() -> void:
 		stones.height = 0.045
 		stones.radial_segments = 6
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
-	# Invisible boundary
-	_wall(Vector3(-23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(0, 1.5, -23), Vector3(46, 3, 0.5))
-	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
+	# Make the Fields truly walkable. Keep the original small camp collision
+	# underneath its centre; outside it the chunk trimeshes own collision.
+	var half_extent: float = 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
+	var span: float = half_extent * 2.0
+	_wall(Vector3(-half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
+	_wall(Vector3(half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
+	_wall(Vector3(0, 2.0, -half_extent), Vector3(span, 6.0, 0.5))
+	_wall(Vector3(0, 2.0, half_extent), Vector3(span, 6.0, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
 	if voxel_art_enabled:
@@ -391,6 +395,24 @@ func _resources() -> void:
 			add_child(node)
 			node.position = pos
 			node.setup(str(item_id))
+
+	# The wider Fields has a few harvestable nodes beyond the original camp.
+	# Do not move the starting resources or alter recipe/save data.
+	if voxel_art_enabled and fields_biome_enabled:
+		var landscape = get_node_or_null("VoxelAtmosphere")
+		if landscape != null:
+			var field_sites: Dictionary = {
+				"wood": [Vector2(-34, -32), Vector2(32, -37), Vector2(-35, 29), Vector2(39, 24)],
+				"stone": [Vector2(35, 34), Vector2(-38, 34), Vector2(-34, -38)],
+				"berries": [Vector2(35, -31), Vector2(-37, 27)],
+				"fiber": [Vector2(32, 27), Vector2(-32, -31)]
+			}
+			for kind in field_sites:
+				for site in field_sites[kind]:
+					var field_node = NODE.new()
+					add_child(field_node)
+					field_node.position = Vector3(site.x, landscape.surface_y_at(site.x, site.y) + 0.055, site.y)
+					field_node.setup(str(kind))
 
 func _enemies() -> void:
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
