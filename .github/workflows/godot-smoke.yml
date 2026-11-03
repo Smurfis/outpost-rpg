@@ -29,6 +29,14 @@ jobs:
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
+      - name: Verify voxel weapons, neutral sword pose and legacy equipment
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/voxel_weapon_pose.gd 2>&1 | tee voxel-weapon.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WEAPON:' voxel-weapon.log; then
+            echo "Voxel equipment smoke errors detected"
+            exit 1
+          fi
       - name: Verify experimental voxel art and legacy world mode
         run: |
           set -o pipefail
