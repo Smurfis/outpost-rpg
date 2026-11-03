@@ -1,84 +1,147 @@
 extends RefCounted
-## Shared, resolution-independent Outpost UI skin.
-## Uses built-in StyleBoxFlat so the UI imports on Android without font plugins.
+## Outpost's original pixel-fantasy UI textures; one visual language shared
+## with the title screen. Nine-slice protects panel corners at phone sizes.
+## Safe fallbacks keep the game usable if an asset import temporarily fails.
+
 const INK := Color("#342416")
 const CREAM := Color("#f9e9c2")
 const GOLD := Color("#e3b75d")
 
-static func box(kind: String = "parchment") -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+const FRAME_ROOT: String = "res://assets/ui/frames/"
+const BUTTON_ROOT: String = "res://assets/ui/buttons/"
+
+static func _texture(path: String) -> Texture2D:
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+static func _nine(path: String, horizontal_margin: float, vertical_margin: float, content_padding: float = 9.0) -> StyleBoxTexture:
+	var art: Texture2D = _texture(path)
+	if art == null:
+		return null
+	var style := StyleBoxTexture.new()
+	style.texture = art
+	style.texture_margin_left = horizontal_margin
+	style.texture_margin_right = horizontal_margin
+	style.texture_margin_top = vertical_margin
+	style.texture_margin_bottom = vertical_margin
+	style.set_content_margin_all(content_padding)
+	return style
+
+static func flat(kind: String = "parchment") -> StyleBoxFlat:
+	# Explicitly keep a flat alternative for round joysticks and health bars,
+	# which cannot use nine-sliced rectangular panel artwork.
+	var style := StyleBoxFlat.new()
 	var bg := Color("#e8ce97")
-	var rim := Color("#80502b")
-	var shadow := Color("#21130e")
-	var border_width := 3
-	var corners := 4
+	var border := Color("#80502b")
+	var border_width: int = 3
 	match kind:
 		"frame":
 			bg = Color("#503122")
-			rim = Color("#d7a45b")
+			border = Color("#d7a45b")
 			border_width = 4
-			corners = 8
 		"parchment":
 			bg = Color("#e8d0a2")
-			rim = Color("#aa7642")
+			border = Color("#aa7642")
 		"parchment_light":
 			bg = Color("#fae8bd")
-			rim = Color("#bd8a4c")
-		"inset":
+			border = Color("#bd8a4c")
+		"inset", "item":
 			bg = Color("#63402d")
-			rim = Color("#a87945")
-		"wood":
-			bg = Color("#79502d")
-			rim = Color("#cc9449")
+			border = Color("#a87945")
+		"wood", "hud":
+			bg = Color("#38271d")
+			border = Color("#cc9449")
 		"wood_selected":
 			bg = Color("#af783a")
-			rim = Color("#f7d47d")
+			border = Color("#f7d47d")
 		"green":
 			bg = Color("#42663a")
-			rim = Color("#d9b75d")
+			border = Color("#d9b75d")
 		"red":
 			bg = Color("#773a31")
-			rim = Color("#dfab65")
-		"hud":
-			bg = Color("#291d1b", 0.90)
-			rim = Color("#c39a59")
-			border_width = 2
-			corners = 7
+			border = Color("#dfab65")
 		"toast":
-			bg = Color("#f0d9a5", 0.97)
-			rim = Color("#b37b3c")
-			border_width = 3
+			bg = Color("#f0d9a5")
+			border = Color("#b37b3c")
 		"transparent":
-			bg = Color("#000000", 0.0)
-			rim = Color("#000000", 0.0)
+			bg = Color(0.0, 0.0, 0.0, 0.0)
+			border = Color(0.0, 0.0, 0.0, 0.0)
 			border_width = 0
-	s.bg_color = bg
-	s.border_color = rim
-	s.set_border_width_all(border_width)
-	s.set_corner_radius_all(corners)
-	s.set_content_margin_all(8)
-	s.shadow_color = shadow.darkened(0.15)
-	s.shadow_size = 3 if kind != "hud" else 1
-	s.anti_aliasing = false
-	return s
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(7.0)
+	style.anti_aliasing = false
+	return style
+
+static func box(kind: String = "parchment") -> StyleBox:
+	if kind == "transparent":
+		return flat(kind)
+	var file: String = "parchment_panel.png"
+	match kind:
+		"frame", "wood", "hud":
+			file = "dark_wood_panel.png"
+		"parchment", "parchment_light":
+			file = "parchment_panel.png"
+		"wood_selected":
+			file = "transparent_wood_frame.png"
+		"inset", "item":
+			file = "item_card.png"
+		"toast":
+			file = "toast_card.png"
+		"green":
+			return _button_texture("green", "normal")
+		"red":
+			return _button_texture("red", "normal")
+	var style: StyleBoxTexture = _nine(FRAME_ROOT + file, 16.0, 16.0, 9.0)
+	if style == null:
+		return flat(kind)
+	return style
+
+static func _button_texture(kind: String, state: String) -> StyleBox:
+	var name: String = "wood_normal.png"
+	if kind == "red":
+		name = "red_normal.png"
+	elif kind == "green":
+		name = "green_normal.png"
+	elif state == "pressed":
+		name = "wood_pressed.png"
+	var style: StyleBoxTexture = _nine(BUTTON_ROOT + name, 18.0, 12.0, 4.0)
+	if style == null:
+		return flat(kind)
+	if state == "hover":
+		style.modulate_color = Color(1.0, 0.98, 0.83, 1.0)
+	elif state == "pressed" and kind != "wood":
+		style.modulate_color = Color(0.83, 0.81, 0.74, 1.0)
+	elif state == "disabled":
+		style.modulate_color = Color(0.54, 0.52, 0.49, 0.78)
+	return style
 
 static func apply_button(button: Button, kind: String = "wood") -> void:
-	var normal := box(kind)
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = normal.bg_color.lightened(0.12)
-	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color = normal.bg_color.darkened(0.13)
-	var disabled := normal.duplicate() as StyleBoxFlat
-	disabled.bg_color = normal.bg_color.darkened(0.34)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_stylebox_override("focus", box("transparent"))
-	var text_color := INK if kind.begins_with("parchment") else CREAM
+	var textured_kind: String = "wood"
+	if kind == "green":
+		textured_kind = "green"
+	elif kind == "red":
+		textured_kind = "red"
+	if kind.begins_with("parchment"):
+		button.add_theme_stylebox_override("normal", box("parchment"))
+		button.add_theme_stylebox_override("hover", box("parchment_light"))
+		var pressed: StyleBox = box("parchment")
+		if pressed is StyleBoxTexture:
+			pressed.modulate_color = Color(0.86, 0.82, 0.73)
+		button.add_theme_stylebox_override("pressed", pressed)
+		button.add_theme_stylebox_override("disabled", _button_texture("wood", "disabled"))
+	else:
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			button.add_theme_stylebox_override(state, _button_texture(textured_kind, state))
+	button.add_theme_stylebox_override("focus", flat("transparent"))
+	var text_color: Color = INK if kind.begins_with("parchment") else CREAM
 	button.add_theme_color_override("font_color", text_color)
 	button.add_theme_color_override("font_hover_color", text_color)
 	button.add_theme_color_override("font_pressed_color", text_color)
 	button.add_theme_color_override("font_disabled_color", text_color.darkened(0.21))
 	button.add_theme_font_size_override("font_size", 16)
 	button.focus_mode = Control.FOCUS_NONE
+	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
