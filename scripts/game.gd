@@ -1,5 +1,5 @@
 extends Node3D
-## Outpost 0.4: an original single-player, Android-first vertical slice.
+## Outpost 0.5: an original single-player, Android-first vertical slice.
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
@@ -11,6 +11,7 @@ const SAVE = "user://outpost_progress_v02.json"
 var hero
 var hud
 var camera: Camera3D
+var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var recipes: Array = []
@@ -24,6 +25,7 @@ var spear_crafted: bool = false
 var attack_delay: float = 0.0
 var gather_delay: float = 0.0
 var world_time: float = 0.0
+var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
 func _ready() -> void:
@@ -97,7 +99,7 @@ func _process(delta: float) -> void:
 		hint = "Wild boar nearby • use ATTACK"
 	elif closest_station() != "":
 		hint = "%s nearby • open CRAFT to make items" % closest_station().capitalize()
-	hud.render_status(hero.health, inventory, experience, kills, spear_crafted, goal, hint)
+	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
 
@@ -158,9 +160,17 @@ func _world() -> void:
 	floor_body.add_child(collider)
 	add_child(floor_body)
 	block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
-	block(Vector3(4.2, 0.03, 34), Vector3(0, -0.045, 0), Color("927957"))
-	block(Vector3(31, 0.03, 3.4), Vector3(0, -0.04, 0), Color("a58b60"))
-	block(Vector3(10, 0.035, 7), Vector3(-1, -0.035, -1), Color("a18b66"))
+	# Winding, triangulated paths replace the former perfectly rectangular slabs.
+	_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
+	_terrain_path(Vector3(0, 0, -21), Vector3(-1, 0, 21), 1.45, Color("ac956f"))
+	_terrain_path(Vector3(-1, 0, -4), Vector3(6, 0, 4), 2.95, Color("b09b75"))
+	# Distinct 3D mesh assets for the skyline and outpost supplies.
+	for position_at in [Vector3(-18, 0, -6), Vector3(17, 0, -4), Vector3(-11, 0, 16), Vector3(15, 0, 18), Vector3(-19, 0, 13)]:
+		_mesh_asset("oak_tree", position_at, 0.82, position_at.x * 0.18)
+	for position_at in [Vector3(-13.5, 0, -6), Vector3(13, 0, 5), Vector3(-19, 0, 17)]:
+		_mesh_asset("rock_deposit", position_at, 0.79, position_at.z * 0.22)
+	for position_at in [Vector3(1.7, 0, 1.8), Vector3(2.7, 0, 2.1), Vector3(7.2, 0, 5.2), Vector3(-9.5, 0, -0.9)]:
+		_mesh_asset("supply_crate", position_at, 0.9, position_at.x * 0.34)
 	var tent := CylinderMesh.new()
 	tent.top_radius = 0.0
 	tent.bottom_radius = 2.1
@@ -203,6 +213,49 @@ func _world() -> void:
 	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
 	_wall(Vector3(0, 1.5, -23), Vector3(46, 3, 0.5))
 	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
+
+func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
+	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
+	if mesh == null:
+		push_warning("Unable to import 3D model: " + id)
+		return
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.name = id
+	instance.position = where
+	instance.scale = Vector3.ONE * size_factor
+	instance.rotation.y = angle
+	add_child(instance)
+
+func _terrain_path(from: Vector3, to: Vector3, radius: float, shade: Color) -> void:
+	var creator := SurfaceTool.new()
+	creator.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var axis: Vector3 = (to - from).normalized()
+	var across: Vector3 = Vector3(-axis.z, 0.0, axis.x)
+	var material_at := StandardMaterial3D.new()
+	material_at.albedo_color = shade
+	material_at.roughness = 1.0
+	material_at.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var segments: int = 18
+	for i in range(segments):
+		var t0: float = float(i) / float(segments)
+		var t1: float = float(i + 1) / float(segments)
+		var jitter0: float = 0.80 + sin(t0 * 17.0) * 0.15
+		var jitter1: float = 0.80 + sin(t1 * 17.0) * 0.15
+		var center0: Vector3 = from.lerp(to, t0) + across * 0.14 * sin(t0 * 14.0)
+		var center1: Vector3 = from.lerp(to, t1) + across * 0.14 * sin(t1 * 14.0)
+		var a: Vector3 = center0 - across * radius * jitter0 + Vector3(0, 0.018, 0)
+		var b: Vector3 = center0 + across * radius * jitter0 + Vector3(0, 0.018, 0)
+		var c: Vector3 = center1 + across * radius * jitter1 + Vector3(0, 0.018, 0)
+		var d: Vector3 = center1 - across * radius * jitter1 + Vector3(0, 0.018, 0)
+		for vertex in [a, b, c, a, c, d]:
+			creator.set_uv(Vector2(vertex.x * 0.05, vertex.z * 0.05))
+			creator.add_vertex(vertex)
+	creator.generate_normals()
+	var path := MeshInstance3D.new()
+	path.mesh = creator.commit()
+	path.material_override = material_at
+	add_child(path)
 
 func _wall(pos: Vector3, size: Vector3) -> void:
 	var body := StaticBody3D.new()
@@ -317,20 +370,38 @@ func gather() -> void:
 		return # No alerts on empty interaction or held buttons.
 	gather_delay = 0.33
 	var item: String = resource.harvest()
+	if item != "":
+		hero.gather_swing(item)
+		_show_gather_pickup(resource.global_position, item)
 	if item == "":
 		return
 	var amount: int = 1
-	if item == "wood" and int(inventory.get("axe", 0)) > 0:
+	if item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
 		amount = 2
-	elif item in ["stone", "iron", "coal"] and int(inventory.get("pickaxe", 0)) > 0:
+	elif item in ["stone", "iron", "coal"] and str(equipment.get("tool_mining", "")) == "pickaxe":
 		amount = 2
-	elif item in ["fiber", "reeds"] and int(inventory.get("satchel", 0)) > 0:
+	elif item in ["fiber", "reeds"] and str(equipment.get("tool_forage", "")) == "satchel":
 		amount = 2
 	inventory[item] = int(inventory.get(item, 0)) + amount
 	experience += 2 * amount
 	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
 	_save()
 	_refresh_menu()
+
+func _show_gather_pickup(at: Vector3, resource_id: String) -> void:
+	# Floating +resource above a struck gatherable. No persistent heavy particles.
+	var pop := Label3D.new()
+	pop.text = "+" + resource_id.replace("_", " ").capitalize()
+	pop.font_size = 38
+	pop.pixel_size = 0.006
+	pop.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pop.position = at + Vector3(0.0, 2.1, 0.0)
+	pop.modulate = Color("f4dba2")
+	add_child(pop)
+	var tween := create_tween()
+	tween.tween_property(pop, "position:y", pop.position.y + 0.9, 0.70)
+	tween.parallel().tween_property(pop, "modulate:a", 0.0, 0.70)
+	tween.finished.connect(pop.queue_free)
 
 func _load_recipes() -> void:
 	var file: FileAccess = FileAccess.open("res://data/recipes.json", FileAccess.READ)
@@ -353,6 +424,10 @@ func show_inventory() -> void:
 	if menu != null:
 		menu.open("bag")
 
+func show_equipment() -> void:
+	if menu != null:
+		menu.open("equipment")
+
 func _refresh_menu() -> void:
 	if menu != null:
 		menu.refresh()
@@ -362,6 +437,47 @@ func _recipe_by_id(id: String) -> Dictionary:
 		if entry is Dictionary and str(entry.get("id", "")) == id:
 			return entry
 	return {}
+
+func equipment_slot(item_id: String) -> String:
+	if item_id in ["spear", "iron_blade"]:
+		return "weapon"
+	if item_id == "shield":
+		return "offhand"
+	if item_id == "cloak":
+		return "back"
+	if item_id == "axe":
+		return "tool_wood"
+	if item_id == "pickaxe":
+		return "tool_mining"
+	if item_id == "satchel":
+		return "tool_forage"
+	return ""
+
+func is_equipped(item_id: String) -> bool:
+	var slot: String = equipment_slot(item_id)
+	return slot != "" and str(equipment.get(slot, "")) == item_id
+
+func equip_item(item_id: String) -> bool:
+	if int(inventory.get(item_id, 0)) < 1:
+		return false
+	var slot: String = equipment_slot(item_id)
+	if slot == "":
+		return false
+	if is_equipped(item_id):
+		equipment[slot] = "training_blade" if slot == "weapon" else ""
+	else:
+		equipment[slot] = item_id
+	_apply_equipment()
+	_save()
+	_refresh_menu()
+	return true
+
+func _apply_equipment() -> void:
+	if hero == null:
+		return
+	hero.set_weapon(str(equipment.get("weapon", "training_blade")))
+	hero.set_shield(str(equipment.get("offhand", "")) == "shield")
+	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
 	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
@@ -457,13 +573,11 @@ func _try_finish_craft() -> void:
 	inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
 	if result == "spear":
 		spear_crafted = true
-		hero.set_spear(true)
-	if result == "shield":
-		hero.set_shield(true)
-	if result == "iron_blade":
-		hero.set_spear(true)
-	if result == "cloak":
-		hero.set_cloak(true)
+	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
+	var slot: String = equipment_slot(result)
+	if slot != "":
+		equipment[slot] = result
+		_apply_equipment()
 	experience += 8
 	hud.toast("Created %s! +8 XP" % str(recipe.get("name", result)))
 	_save()
@@ -500,7 +614,8 @@ func attack() -> void:
 		return # No popup spam when outside combat range.
 	attack_delay = 0.55
 	hero.swing()
-	var damage: float = 24.0 if int(inventory.get("iron_blade", 0)) > 0 else 16.0 if spear_crafted else 8.0
+	var weapon: String = str(equipment.get("weapon", "training_blade"))
+	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage)
 	if target.alive:
 		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
@@ -515,7 +630,7 @@ func on_enemy_killed() -> void:
 	_refresh_menu()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 4, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
 	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -528,7 +643,7 @@ func _load() -> void:
 	if not (data is Dictionary):
 		return
 	var version: int = int(data.get("version", 0))
-	if version not in [2, 3, 4]:
+	if version not in [2, 3, 4, 5]:
 		return
 	var stored: Variant = data.get("inventory", {})
 	if stored is Dictionary:
@@ -539,9 +654,18 @@ func _load() -> void:
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
 	if spear_crafted:
 		inventory["spear"] = maxi(1, int(inventory.get("spear", 0)))
-	hero.set_spear(spear_crafted or int(inventory.get("iron_blade", 0)) > 0)
-	hero.set_shield(int(inventory.get("shield", 0)) > 0)
-	hero.set_cloak(int(inventory.get("cloak", 0)) > 0)
+	if version >= 5 and data.get("equipment", {}) is Dictionary:
+		var saved_gear: Dictionary = data.get("equipment", {})
+		for slot in equipment:
+			var item: String = str(saved_gear.get(slot, equipment[slot]))
+			if item == "" or item == "training_blade" or int(inventory.get(item, 0)) > 0:
+				equipment[slot] = item
+	else:
+		# Migrate existing v2, v3 and v4 gear: previously auto-equipped.
+		for item in ["spear", "iron_blade", "shield", "cloak", "axe", "pickaxe", "satchel"]:
+			if int(inventory.get(item, 0)) > 0:
+				equipment[equipment_slot(item)] = item
+	_apply_equipment()
 
 
 func _notification(what: int) -> void:
