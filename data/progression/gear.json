@@ -71,5 +71,80 @@
       "hide": 3
     },
     "description": "Light armour that enhances speed and critical chance."
+  },
+  {
+    "id": "warhammer",
+    "name": "Forged Warhammer",
+    "slot": "weapon",
+    "station": "forge",
+    "role": "physical",
+    "base_cost": {
+      "wood": 2,
+      "iron_ingot": 4,
+      "hide": 1
+    },
+    "description": "Heavy physical weapon. Item level determines damage."
+  },
+  {
+    "id": "ritual_wand",
+    "name": "Ritual Wand",
+    "slot": "weapon",
+    "station": "forge",
+    "role": "arcane",
+    "base_cost": {
+      "wood": 2,
+      "iron_ingot": 1,
+      "herbs": 2
+    },
+    "description": "Focus for Ability Power: magical damage and all healing."
+  },
+  {
+    "id": "scout_cap",
+    "name": "Scout Cap",
+    "slot": "head",
+    "station": "loom",
+    "role": "precision",
+    "base_cost": {
+      "linen": 2,
+      "hide": 1
+    },
+    "description": "A precision hood with attack speed and critical chance."
+  },
+  {
+    "id": "sentinel_greaves",
+    "name": "Sentinel Greaves",
+    "slot": "feet",
+    "station": "forge",
+    "role": "defence",
+    "base_cost": {
+      "iron_ingot": 2,
+      "hide": 2
+    },
+    "description": "Protective armour with item-level mitigation."
+  },
+  {
+    "id": "mystic_robe",
+    "name": "Mystic Robe",
+    "slot": "body",
+    "station": "loom",
+    "role": "arcane",
+    "base_cost": {
+      "linen": 3,
+      "hide": 1,
+      "herbs": 1
+    },
+    "description": "Flexible caster attire offering Ability Power."
+  },
+  {
+    "id": "assassin_boots",
+    "name": "Assassin Boots",
+    "slot": "feet",
+    "station": "loom",
+    "role": "precision",
+    "base_cost": {
+      "linen": 2,
+      "hide": 3
+    },
+    "description": "Light footwear for quick and critical strikes."
   }
 ]

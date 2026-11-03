@@ -24,7 +24,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"]
+var item_ids: Array = ["wood","stone","fiber","berries","iron","coal","clay","herbs","mushrooms","reeds","hide","coins","iron_ingot","linen","bricks","meal","tonic","stew","spear","axe","pickaxe","shield","satchel","iron_blade","cloak","copper","tin","silver_ore","gold_ore","quartz","mithril_ore","bronze_ingot","steel_ingot","silver_ingot","gold_ingot","mithril_ingot","reinforced_linen","aetherweave","ancient_ore","ether_dust","legendary_core","gem_fragment","prismatic_gem","crystal_shard","bronze_pickaxe","iron_pickaxe","steel_pickaxe","mithril_pickaxe"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -133,7 +133,9 @@ func _label(value: String, font_size: int = 18, tint: Color = Color.WHITE) -> La
 func _icon(id: String, size: float = 58.0) -> TextureRect:
 	var image := TextureRect.new()
 	var id_safe: String = id
-	if id_safe not in item_ids and id_safe not in ["gather", "attack", "craft", "heart", "flag"]:
+	if id_safe.begins_with("book_"):
+		id_safe = "skills/book"
+	elif id_safe not in item_ids and id_safe not in ["gather", "attack", "craft", "heart", "flag"]:
 		id_safe = "craft"
 	image.texture = load("res://assets/icons/" + id_safe + ".svg") as Texture2D
 	image.custom_minimum_size = Vector2(size, size)
@@ -237,11 +239,12 @@ func _render_bag() -> void:
 	subtitle.text = "Resources, crafted materials, tools and food. Stored on this device."
 	station_tabs.add_child(_label("EQUIPMENT & RESOURCES", 17, Color("f1d3a0")))
 	var owned: int = 0
-	for id in item_ids:
+	for id in game.inventory.keys():
 		var item: String = str(id)
 		var qty: int = int(game.inventory.get(item, 0))
-		if qty > 0:
-			owned += 1
+		if qty <= 0:
+			continue
+		owned += 1
 		var row := _column_panel(recipes_list, Color("233b3e"))
 		var horizontal := HBoxContainer.new()
 		row.add_child(horizontal)
@@ -256,7 +259,7 @@ func _render_bag() -> void:
 	var overview := _column_panel(details, Color("263b3d"))
 	overview.add_child(_label("YOUR ADVENTURER", 24, Color("f1ddb1")))
 	overview.add_child(_icon("shield", 90))
-	overview.add_child(_label("%d / %d item types collected" % [owned, item_ids.size()], 18))
+	overview.add_child(_label("%d / %d item types collected" % [owned, maxi(1, game.inventory.size())], 18))
 	overview.add_child(_label("XP: %d     Boars defeated: %d" % [game.experience, game.kills], 18))
 	overview.add_child(_label("Tools automatically improve harvest yields.\nWeapons automatically upgrade combat.\nFood can restore health.", 17, Color("c4d7c7")))
 	overview.add_child(_label("Tip: Use CRAFT near a station to make new equipment.", 17, Color("e3c58b")))
@@ -393,7 +396,7 @@ func _render_craft() -> void:
 		recipes_list.add_child(row)
 		row.add_child(_icon(result_id, 46))
 		var choose := Button.new()
-		choose.text = str(recipe.get("name", id))
+		choose.text = "%s  %s" % ["T%d" % int(recipe.get("tier", 1)), str(recipe.get("name", id))]
 		choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		choose.custom_minimum_size = Vector2(0, 55)
 		choose.disabled = not game.crafting.is_empty()

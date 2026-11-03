@@ -324,5 +324,71 @@
     "ingredients": {
       "quartz": 3
     }
+  },
+  {
+    "id": "bronze_pickaxe",
+    "name": "Bronze Mining Pickaxe",
+    "result": "bronze_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.2,
+    "strokes": 4,
+    "category": "Tools",
+    "tier": 1,
+    "desc": "Harvests copper, tin and iron efficiently.",
+    "ingredients": {
+      "bronze_ingot": 2,
+      "wood": 3
+    }
+  },
+  {
+    "id": "iron_pickaxe",
+    "name": "Iron Mining Pickaxe",
+    "result": "iron_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.6,
+    "strokes": 5,
+    "category": "Tools",
+    "tier": 2,
+    "desc": "Handles iron, coal and deeper metal deposits.",
+    "ingredients": {
+      "iron_ingot": 2,
+      "wood": 3
+    }
+  },
+  {
+    "id": "steel_pickaxe",
+    "name": "Steel Mining Pickaxe",
+    "result": "steel_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 4,
+    "strokes": 5,
+    "category": "Tools",
+    "tier": 3,
+    "desc": "Harvests up to three lower-tier ores in one strike.",
+    "ingredients": {
+      "steel_ingot": 2,
+      "wood": 3,
+      "quartz": 1
+    }
+  },
+  {
+    "id": "mithril_pickaxe",
+    "name": "Mithril Mining Pickaxe",
+    "result": "mithril_pickaxe",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 5,
+    "strokes": 6,
+    "category": "Tools",
+    "tier": 5,
+    "desc": "Elite mining tool: every vein yields three ore.",
+    "ingredients": {
+      "mithril_ingot": 2,
+      "wood": 2,
+      "ancient_ore": 1
+    }
   }
 ]

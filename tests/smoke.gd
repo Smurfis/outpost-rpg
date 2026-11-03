@@ -23,7 +23,7 @@ func _test_game() -> void:
 	await process_frame
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.7, "Hero remains at starting outpost")
-	check(game.recipes.size() >= 21, "Expanded refining recipes load from JSON")
+	check(game.recipes.size() >= 25, "Refining and advanced tool recipes load from JSON")
 	check(game.stations.size() == 6, "Six interactive 3D stations exist")
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Starting equipment defaults to the training blade")
 	check(game.hero.visual.get_child_count() >= 7, "Modular player 3D model assembled")
@@ -37,7 +37,7 @@ func _test_game() -> void:
 	var types: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		types[node.kind] = true
-	check(types.size() == 10, "Ten visually distinct resource types spawn")
+	check(types.size() >= 16, "Starter and frontier resource types spawn")
 	for item in ["iron", "coal", "clay", "herbs", "mushrooms", "reeds"]:
 		check(types.has(item), "%s resource spawns" % item)
 	game.hero.global_position = Vector3(0, 0.35, 0)
