@@ -72,7 +72,7 @@ func _run() -> void:
 	var instance = manager.active_instance
 	var gold_before: int = int(game.inventory.get("coins", 0))
 	for enemy in get_nodes_in_group("enemies"):
-		if enemy.name == "CryptGuardian" and enemy.dungeon == instance:
+		if enemy.is_in_group("dungeon_guardians") and enemy.get_parent() == instance:
 			enemy.receive_damage(10000.0)
 	check(instance.guards_remaining == 0 and instance.can_claim_chest(), "Guardians unlock final chest")
 	game.hero.global_position = instance.chest_world_position() + Vector3(0, 0.35, 1.5)
