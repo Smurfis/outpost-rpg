@@ -6,6 +6,7 @@ var status: Label
 var quest: Label
 var hint: Label
 var toast_label: Label
+var health_bar: ProgressBar
 var items: Dictionary = {}
 var joystick: Panel
 var knob: Panel
@@ -29,6 +30,17 @@ func _ready() -> void:
 	_panel(0.01, 0.016, 0.45, 0.205, Color(0.045, 0.09, 0.11, 0.86))
 	status = _label("OUTPOST  /  HP 100
 XP 0   KILLS 0", 19, Color("efdfba"), 0.026, 0.023, 0.42, 0.095)
+	health_bar = ProgressBar.new()
+	health_bar.max_value = 100.0
+	health_bar.value = 100.0
+	health_bar.show_percentage = false
+	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hp_back := _style(Color("2c3536"), 5)
+	var hp_front := _style(Color("ba5b4f"), 5)
+	health_bar.add_theme_stylebox_override("background", hp_back)
+	health_bar.add_theme_stylebox_override("fill", hp_front)
+	root.add_child(health_bar)
+	_anchors(health_bar, 0.027, 0.10, 0.431, 0.115)
 	var start_x := 0.026
 	for key in ["wood", "stone", "hide", "coins"]:
 		var icon := TextureRect.new()
@@ -188,8 +200,10 @@ func _input(event: InputEvent) -> void:
 func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 62.0).limit_length(1.0)
 
-func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, spear: bool, objective: String, helper: String) -> void:
-	status.text = "OUTPOST   /   HP %d/100\nXP %d   KILLS %d   •   %s" % [int(ceilf(hp)), xp, kills, "IRON BLADE" if int(inventory.get("iron_blade", 0)) > 0 else "SPEAR" if spear else "BLADE"]
+func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, weapon: String, objective: String, helper: String) -> void:
+	status.text = "OUTPOST   /   HP %d/100\nXP %d   KILLS %d   •   %s" % [int(ceilf(hp)), xp, kills, weapon.replace("_", " ").to_upper()]
+	if health_bar != null:
+		health_bar.value = clampf(hp, 0.0, 100.0)
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
 	quest.text = objective
