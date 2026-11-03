@@ -59,7 +59,7 @@ func _run() -> void:
 	manager._on_portal_selected(portal)
 	check(game.hero.interaction_moving, "Tapping from far away triggers run-to-portal")
 	game.hero.global_position = portal.global_position + Vector3(1, 0.35, 0)
-	await process_frame
+	manager._update_overworld_action()
 	check(manager.dimmer.visible, "Approaching portal opens confirmation dialog")
 	check(game.hero.interaction_locked, "Confirmation temporarily disables walking")
 	manager._cancel_dialog()
