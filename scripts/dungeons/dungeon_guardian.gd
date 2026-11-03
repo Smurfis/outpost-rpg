@@ -38,6 +38,7 @@ func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) ->
 	_piece(Vector3(-0.15, 1.77, -0.27), Vector3(0.12, 0.09, 0.04), RARITY.color(quality))
 	_piece(Vector3(0.15, 1.77, -0.27), Vector3(0.12, 0.09, 0.04), RARITY.color(quality))
 	add_to_group("enemies")
+	add_to_group("dungeon_guardians")
 
 func _piece(at: Vector3, size: Vector3, tint: Color) -> void:
 	var mesh := BoxMesh.new()
