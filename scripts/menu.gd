@@ -20,6 +20,8 @@ var work_counter: Label
 var work_label: Label
 var action_button: Button
 var action_art: TextureRect
+var preview_rig: Node3D
+var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
 var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"]
@@ -59,6 +61,11 @@ func _ready() -> void:
 	bag.custom_minimum_size = Vector2(80, 46)
 	bag.pressed.connect(_switch_bag)
 	header.add_child(bag)
+	var gear := Button.new()
+	gear.text = "GEAR"
+	gear.custom_minimum_size = Vector2(86, 46)
+	gear.pressed.connect(_switch_equipment)
+	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
 	craft.custom_minimum_size = Vector2(88, 46)
@@ -152,6 +159,10 @@ func _switch_craft() -> void:
 	current_page = "craft"
 	refresh()
 
+func _switch_equipment() -> void:
+	current_page = "equipment"
+	refresh()
+
 func open(page: String) -> void:
 	if visible and current_page == page:
 		close_page()
@@ -207,6 +218,8 @@ func refresh() -> void:
 	_clear(details)
 	if current_page == "bag":
 		_render_bag()
+	elif current_page == "equipment":
+		_render_equipment()
 	else:
 		_render_craft()
 
@@ -238,6 +251,109 @@ func _render_bag() -> void:
 	overview.add_child(_label("XP: %d     Boars defeated: %d" % [game.experience, game.kills], 18))
 	overview.add_child(_label("Tools automatically improve harvest yields.\nWeapons automatically upgrade combat.\nFood can restore health.", 17, Color("c4d7c7")))
 	overview.add_child(_label("Tip: Use CRAFT near a station to make new equipment.", 17, Color("e3c58b")))
+	var equip_button := Button.new()
+	equip_button.text = "OPEN EQUIPMENT"
+	equip_button.custom_minimum_size = Vector2(0, 54)
+	equip_button.pressed.connect(_switch_equipment)
+	overview.add_child(equip_button)
+
+func _render_equipment() -> void:
+	title.text = "OUTPOST | EQUIPMENT"
+	subtitle.text = "Equip or unequip your crafted gear. Bonuses only apply while worn."
+	station_tabs.add_child(_label("GEAR SLOTS | TAP OWNED ITEMS TO EQUIP", 16, Color("e7d5a2")))
+	var slot_names: Dictionary = {
+		"weapon": "MAIN HAND",
+		"offhand": "OFF HAND",
+		"back": "CLOAK",
+		"tool_wood": "WOODCUTTING",
+		"tool_mining": "MINING",
+		"tool_forage": "FORAGING"
+	}
+	var possible: Dictionary = {
+		"weapon": ["spear", "iron_blade"],
+		"offhand": ["shield"],
+		"back": ["cloak"],
+		"tool_wood": ["axe"],
+		"tool_mining": ["pickaxe"],
+		"tool_forage": ["satchel"]
+	}
+	for slot in slot_names:
+		var holder := _column_panel(recipes_list, Color("23383c"))
+		holder.add_child(_label(str(slot_names[slot]), 15, Color("dbbd8a")))
+		var active: String = str(game.equipment.get(str(slot), ""))
+		if active == "":
+			active = "EMPTY"
+		elif active == "training_blade":
+			active = "TRAINING BLADE"
+		var row := HBoxContainer.new()
+		holder.add_child(row)
+		var icon_id: String = str(game.equipment.get(str(slot), ""))
+		if icon_id == "" or icon_id == "training_blade":
+			icon_id = "flag"
+		row.add_child(_icon(icon_id, 48))
+		row.add_child(_label(active.replace("_", " ").to_upper(), 19, Color("f2dfb4")))
+		if str(game.equipment.get(str(slot), "")) not in ["", "training_blade"]:
+			var unequip := Button.new()
+			unequip.text = "OFF"
+			unequip.custom_minimum_size = Vector2(60, 44)
+			unequip.pressed.connect(_equip_click.bind(str(game.equipment[slot])))
+			row.add_child(unequip)
+		for item in possible[slot]:
+			var item_id: String = str(item)
+			if int(game.inventory.get(item_id, 0)) <= 0:
+				continue
+			var option := Button.new()
+			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize()
+			option.custom_minimum_size = Vector2(0, 50)
+			option.disabled = game.is_equipped(item_id)
+			option.pressed.connect(_equip_click.bind(item_id))
+			holder.add_child(option)
+	_render_preview()
+
+func _equip_click(id: String) -> void:
+	game.equip_item(id)
+	refresh()
+
+func _render_preview() -> void:
+	var portrait := _column_panel(details, Color("1c3033"))
+	portrait.add_child(_label("YOUR ADVENTURER", 23, Color("f3d8a0")))
+	var container := SubViewportContainer.new()
+	container.stretch = true
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.custom_minimum_size = Vector2(210, 265)
+	portrait.add_child(container)
+	var view := SubViewport.new()
+	view.size = Vector2i(400, 380)
+	view.transparent_bg = true
+	view.own_world_3d = true
+	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	container.add_child(view)
+	var root3d := Node3D.new()
+	view.add_child(root3d)
+	preview_rig = game.hero.visual.duplicate() as Node3D
+	root3d.add_child(preview_rig)
+	preview_rig.position = Vector3.ZERO
+	preview_rig.rotation = Vector3.ZERO
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 3.1
+	camera.position = Vector3(3.8, 2.4, 4.8)
+	root3d.add_child(camera)
+	camera.look_at(Vector3(0.0, 1.06, 0.0))
+	camera.current = true
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-45.0, -35.0, 0.0)
+	light.light_energy = 2.0
+	root3d.add_child(light)
+	var details_text := _column_panel(details, Color("2c4445"))
+	details_text.add_child(_label("EQUIPMENT BONUSES", 20, Color("dfc898")))
+	var weapon: String = str(game.equipment.get("weapon", "training_blade"))
+	var damage: int = 24 if weapon == "iron_blade" else 16 if weapon == "spear" else 8
+	details_text.add_child(_label("Attack: %d  •  %s" % [damage, weapon.replace("_", " ").capitalize()], 17))
+	details_text.add_child(_label("Defense: %s" % ("40% less boar damage" if game.is_equipped("shield") else "Unarmoured"), 17))
+	details_text.add_child(_label("Movement: %s" % ("Fast (+18%)" if game.is_equipped("cloak") else "Normal"), 17))
+	details_text.add_child(_label("Tools: %d active" % [int(game.is_equipped("axe")) + int(game.is_equipped("pickaxe")) + int(game.is_equipped("satchel"))], 17))
+	details_text.add_child(_label("Tip: craft new gear at the four stations, then equip it here.", 16, Color("bcc9be")))
 
 func _use_food(id: String) -> void:
 	var amount: float = 40.0
@@ -391,6 +507,9 @@ func _do_work() -> void:
 	_update_visual()
 
 func _process(_delta: float) -> void:
+	if visible and current_page == "equipment" and is_instance_valid(preview_rig):
+		preview_angle += _delta * 0.32
+		preview_rig.rotation.y = preview_angle
 	if visible and current_page == "craft" and not game.crafting.is_empty() and progress_bar != null:
 		_update_visual()
 
