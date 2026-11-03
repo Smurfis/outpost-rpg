@@ -42,7 +42,7 @@ func _update_layout() -> void:
 	settings.outline_size = maxi(2, roundi(11.0 * minf(stretch.x, stretch.y)))
 	settings.outline_color = Color("33201e")
 	settings.shadow_color = Color("1f1415")
-	settings.shadow_offset = Vector2(3.0, 5.0) * stretch
+	settings.shadow_offset = Vector2i(roundi(3.0 * stretch.x), roundi(5.0 * stretch.y))
 	_wordmark.label_settings = settings
 
 func _draw() -> void:
@@ -94,8 +94,8 @@ func _draw() -> void:
 	# Small compass pennant, distinct from the main wordmark.
 	_polygon([Vector2(359, 420), Vector2(441, 420), Vector2(431, 439), Vector2(400, 430), Vector2(369, 439)], Color("8d3b38"))
 
-func _polygon(points: Array[Vector2], color: Color) -> void:
+func _polygon(points: Array, color: Color) -> void:
 	draw_colored_polygon(PackedVector2Array(points), color)
 
-func _polyline(points: Array[Vector2], color: Color, width: float) -> void:
+func _polyline(points: Array, color: Color, width: float) -> void:
 	draw_polyline(PackedVector2Array(points), color, width, true)
