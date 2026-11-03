@@ -177,28 +177,44 @@ func _position_stick() -> void:
 func _center() -> Vector2:
 	return joystick.position + joystick.size * 0.5
 
+func _reset_joystick() -> void:
+	finger = -1
+	mouse_stick = false
+	move_vector = Vector2.ZERO
+
 func _input(event: InputEvent) -> void:
-	if game != null and ((game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible)):
-		move_vector = Vector2.ZERO
+	var modal_open: bool = game != null and (
+		(game.menu != null and game.menu.visible)
+		or (game.progression_ui != null and game.progression_ui.visible)
+		or (game.hero != null and game.hero.interaction_locked)
+	)
+	if modal_open:
+		# Never retain finger ID when a modal consumes the touch release.
+		_reset_joystick()
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 115:
+		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 150.0:
 			finger = event.index
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
-			finger = -1
-			move_vector = Vector2.ZERO
+			_reset_joystick()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and event.position.distance_to(_center()) < 115:
+	elif not OS.has_feature("mobile") and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		# Android emits synthetic mouse events from touch; never let them
+		# compete with the actual finger pointer.
+		if event.pressed and not mouse_stick and event.position.distance_to(_center()) < 150.0:
 			mouse_stick = true
 			_stick(event.position)
 		elif not event.pressed and mouse_stick:
-			mouse_stick = false
-			move_vector = Vector2.ZERO
-	elif event is InputEventMouseMotion and mouse_stick:
+			_reset_joystick()
+	elif not OS.has_feature("mobile") and event is InputEventMouseMotion and mouse_stick:
 		_stick(event.position)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		_reset_joystick()
+
 
 func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 62.0).limit_length(1.0)
