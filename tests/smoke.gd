@@ -24,7 +24,7 @@ func _test_game() -> void:
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.7, "Hero remains at starting outpost")
 	check(game.recipes.size() == 13, "13 recipes load from JSON")
-	check(game.stations.size() == 4, "Four interactive 3D stations exist")
+	check(game.stations.size() == 6, "Six interactive 3D stations exist")
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Starting equipment defaults to the training blade")
 	check(game.hero.visual.get_child_count() >= 7, "Modular player 3D model assembled")
 	var mesh_assets: Array = ["oak_tree", "rock_deposit", "supply_crate"]

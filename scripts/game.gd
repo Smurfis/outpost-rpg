@@ -11,6 +11,7 @@ const SKILLS = preload("res://scripts/progression/skill_service.gd")
 const SALVAGE = preload("res://scripts/progression/salvage_service.gd")
 const PROGRESSION_UI = preload("res://scripts/progression/progression_ui.gd")
 const SAVE = "user://outpost_progress_v02.json"
+@export var save_path: String = SAVE
 
 var hero
 var hud
@@ -830,15 +831,15 @@ func on_enemy_killed() -> void:
 
 func _save() -> void:
 	var data: Dictionary = {"version": 6, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "crafted_gear": crafted_gear, "gear_loadout": gear_loadout, "learned_skills": learned_skills, "gear_serial": gear_serial}
-	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
+	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
 
 func _load() -> void:
-	if not FileAccess.file_exists(SAVE):
+	if not FileAccess.file_exists(save_path):
 		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not (data is Dictionary):
 		return
 	var version: int = int(data.get("version", 0))

@@ -148,6 +148,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				direction = delta_to_goal.normalized()
 	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
+	if float(game.skill_buffs.get("quickstep", 0.0)) > 0.0:
+		speed *= 1.40
 	if gather_phase > 0.0:
 		speed *= 0.42
 	velocity.x = direction.x * speed
@@ -182,6 +184,7 @@ func _physics_process(delta: float) -> void:
 
 func take_hit(amount: float) -> void:
 	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
+	protection *= 1.0 - float(game.gear_stats().get("mitigation", 0.0))
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection

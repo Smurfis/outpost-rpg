@@ -66,6 +66,11 @@ func _ready() -> void:
 	gear.custom_minimum_size = Vector2(86, 46)
 	gear.pressed.connect(_switch_equipment)
 	header.add_child(gear)
+	var progression := Button.new()
+	progression.text = "SKILLS / GEAR+"
+	progression.custom_minimum_size = Vector2(152, 46)
+	progression.pressed.connect(_open_progression)
+	header.add_child(progression)
 	var craft := Button.new()
 	craft.text = "CRAFT"
 	craft.custom_minimum_size = Vector2(88, 46)
@@ -158,6 +163,10 @@ func _switch_bag() -> void:
 func _switch_craft() -> void:
 	current_page = "craft"
 	refresh()
+
+func _open_progression() -> void:
+	close_page()
+	game.show_progression("skills")
 
 func _switch_equipment() -> void:
 	current_page = "equipment"

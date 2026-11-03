@@ -67,6 +67,7 @@ XP 0   KILLS 0", 19, Color("efdfba"), 0.026, 0.023, 0.42, 0.095)
 	_action("craft", "CRAFT", 0.817, 0.48, 0.986, 0.63, Color("655279"))
 	_action("bag", "BAG", 0.66, 0.48, 0.806, 0.63, Color("455e78"))
 	_action("heal", "HEAL", 0.56, 0.725, 0.669, 0.91, Color("6f6241"))
+	_action("skills", "SKILLS", 0.552, 0.486, 0.648, 0.637, Color("415d74"))
 	joystick = Panel.new()
 	joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	joystick.add_theme_stylebox_override("panel", _style(Color(0.12, 0.19, 0.23, 0.54), 90))
@@ -128,7 +129,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	root.add_child(button)
 	_anchors(button, left, top, right, bottom)
 	var icon := TextureRect.new()
-	icon.texture = load("res://assets/icons/" + ("heart" if key == "heal" else "flag" if key == "bag" else key) + ".svg") as Texture2D
+	icon.texture = load("res://assets/icons/" + ("heart" if key == "heal" else "flag" if key == "bag" else "spear" if key == "skills" else key) + ".svg") as Texture2D
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -156,6 +157,8 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.pressed.connect(_craft)
 	elif key == "bag":
 		button.pressed.connect(_bag)
+	elif key == "skills":
+		button.pressed.connect(_skills)
 	else:
 		button.pressed.connect(_heal)
 
@@ -231,3 +234,5 @@ func _bag() -> void:
 	game.show_inventory()
 func _heal() -> void:
 	game.use_meal()
+func _skills() -> void:
+	game.show_progression("skills")
