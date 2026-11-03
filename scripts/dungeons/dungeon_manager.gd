@@ -5,7 +5,7 @@ const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const PORTAL = preload("res://scripts/dungeons/dungeon_portal.gd")
 const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
-const SAVE_PATH: String = "user://outpost_dungeon_clear_v1.json"
+@export var save_path: String = "user://outpost_dungeon_clear_v1.json"
 const INTERACTION_RADIUS: float = 3.25
 
 @export var demo_chunk_fallback: bool = true
@@ -309,7 +309,8 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 		_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
 	hero.interaction_locked = false
-	hero.global_position = return_position
+	if not due_to_death:
+		hero.global_position = return_position
 	hero.velocity = Vector3.ZERO
 	if is_instance_valid(active_instance):
 		active_instance.queue_free()
@@ -347,9 +348,9 @@ func _remove_entrance(id: String) -> void:
 	entrances.erase(id)
 
 func _load_clears() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path):
 		return
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not (parsed is Dictionary):
 		return
 	var saved: Variant = parsed.get("completed", [])
@@ -358,7 +359,7 @@ func _load_clears() -> void:
 			completed_ids[str(entry)] = true
 
 func _save_clears() -> void:
-	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(JSON.stringify({"version": 1, "completed": completed_ids.keys()}))
 		file.close()
