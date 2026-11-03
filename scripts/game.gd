@@ -68,6 +68,8 @@ func _register_keys() -> void:
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if hero != null and hero.interaction_locked:
+		return
 	if event.is_action_pressed("outpost_gather"):
 		gather()
 	elif event.is_action_pressed("outpost_attack"):
@@ -624,7 +626,8 @@ func attack() -> void:
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage)
 	if target.alive:
-		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
+		var enemy_name: String = "guardian" if target.is_in_group("dungeon_guardians") else "boar"
+		hud.toast("%d damage  •  %s %d HP" % [int(damage), enemy_name, int(ceilf(target.hp))])
 
 func on_enemy_killed() -> void:
 	kills += 1
