@@ -123,7 +123,7 @@ func gather_swing(kind: String) -> void:
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
-	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or interaction_locked
+	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or (hud != null and hud.quick_menu_open) or interaction_locked
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
 		control = Vector2.ZERO

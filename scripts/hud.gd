@@ -1,5 +1,7 @@
 extends CanvasLayer
-## Landscape touchscreen HUD with original scalable SVG item and ability art.
+## Outpost Compact HUD v0.7 — designed for landscape phone screens.
+## Controls reference the v0.2 touch movement contract (global touch + mouse fallback).
+## Only two large action buttons remain; non-combat systems live in one drawer.
 var game
 var root: Control
 var status: Label
@@ -10,180 +12,212 @@ var health_bar: ProgressBar
 var items: Dictionary = {}
 var joystick: Panel
 var knob: Panel
-var move_vector := Vector2.ZERO
-var finger := -1
-var mouse_stick := false
+var move_vector: Vector2 = Vector2.ZERO
+var finger: int = -1
+var mouse_stick: bool = false
 var touches_seen: int = 0
 var mice_seen: int = 0
 var last_input_source: String = "NONE"
 var input_diagnostic: Label
+var quick_menu: PanelContainer
+var quick_menu_open: bool = false
+var menu_button: Button
 var gather_button: Button
 var attack_button: Button
 var craft_button: Button
-var toast_time := 0.0
+var ability_button: Button
+var toast_time: float = 0.0
+var context_available: bool = false
+const INK: Color = Color("10272b")
+const INK_LIGHT: Color = Color("233d41")
+const GOLD: Color = Color("d9bc83")
+const CREAM: Color = Color("eee2c5")
 
 func setup(ref: Node) -> void:
 	game = ref
 
 func _ready() -> void:
+	layer = 5
 	root = Control.new()
-	root.name = "OutpostHUD"
+	root.name = "CompactOutpostHUD"
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_panel(0.01, 0.016, 0.45, 0.205, Color(0.045, 0.09, 0.11, 0.86))
-	status = _label("OUTPOST  /  HP 100
-XP 0   KILLS 0", 19, Color("efdfba"), 0.026, 0.023, 0.42, 0.095)
+	_panel(0.020, 0.022, 0.350, 0.145, Color("14282c"))
+	status = _label("OUTPOST  •  HP 100/100", 18, CREAM, 0.034, 0.030, 0.333, 0.077)
 	health_bar = ProgressBar.new()
 	health_bar.max_value = 100.0
 	health_bar.value = 100.0
 	health_bar.show_percentage = false
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var hp_back := _style(Color("2c3536"), 5)
-	var hp_front := _style(Color("ba5b4f"), 5)
-	health_bar.add_theme_stylebox_override("background", hp_back)
-	health_bar.add_theme_stylebox_override("fill", hp_front)
+	health_bar.add_theme_stylebox_override("background", _style(Color("3a4241"), 8))
+	health_bar.add_theme_stylebox_override("fill", _style(Color("b75d50"), 8))
 	root.add_child(health_bar)
-	_anchors(health_bar, 0.027, 0.10, 0.431, 0.115)
-	var start_x := 0.026
-	for key in ["wood", "stone", "hide", "coins"]:
-		var icon := TextureRect.new()
-		icon.texture = load("res://assets/icons/" + key + ".svg") as Texture2D
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		root.add_child(icon)
-		_anchors(icon, start_x, 0.120, start_x + 0.033, 0.173)
-		var amount := _label("0", 19, Color.WHITE, start_x + 0.034, 0.122, start_x + 0.079, 0.174)
-		items[key] = amount
-		start_x += 0.103
-	_panel(0.56, 0.015, 0.989, 0.116, Color(0.10, 0.14, 0.105, 0.84))
-	quest = _label("Gather 3 wood and 2 stone", 19, Color("e7d7a2"), 0.574, 0.033, 0.970, 0.102)
-	_panel(0.255, 0.865, 0.545, 0.974, Color(0.05, 0.09, 0.12, 0.83))
-	hint = _label("Explore the forest", 18, Color("f9efd1"), 0.266, 0.885, 0.536, 0.958)
+	_anchors(health_bar, 0.036, 0.094, 0.330, 0.116)
+	_panel(0.365, 0.025, 0.778, 0.110, Color("14282c"))
+	quest = _label("Explore the Outpost", 17, GOLD, 0.378, 0.043, 0.762, 0.105)
+	quest.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint = _label("", 15, Color("d4d7ba"), 0.326, 0.894, 0.678, 0.952)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	toast_label = _label("", 22, Color("ffe5a4"), 0.26, 0.21, 0.75, 0.33)
+	toast_label = _label("", 19, CREAM, 0.304, 0.145, 0.725, 0.210)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_action("gather", "GATHER", 0.688, 0.70, 0.816, 0.965, Color("346e57"))
-	_action("attack", "ATTACK", 0.85, 0.69, 0.986, 0.964, Color("893e34"))
-	_action("craft", "CRAFT", 0.817, 0.48, 0.986, 0.63, Color("655279"))
-	_action("bag", "BAG", 0.66, 0.48, 0.806, 0.63, Color("455e78"))
-	_action("heal", "HEAL", 0.56, 0.725, 0.669, 0.91, Color("6f6241"))
-	_action("skills", "SKILLS", 0.552, 0.486, 0.648, 0.637, Color("415d74"))
+	toast_label.visible = false
+
 	joystick = Panel.new()
+	joystick.name = "Move"
 	joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	joystick.add_theme_stylebox_override("panel", _style(Color(0.12, 0.19, 0.23, 0.54), 90))
+	joystick.add_theme_stylebox_override("panel", _style(Color(0.18, 0.29, 0.31, 0.66), 100, GOLD, 2))
 	root.add_child(joystick)
-	joystick.size = Vector2(170, 170)
+	joystick.size = Vector2(182, 182)
 	knob = Panel.new()
 	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	knob.add_theme_stylebox_override("panel", _style(Color(0.84, 0.85, 0.76, 0.90), 90))
+	knob.add_theme_stylebox_override("panel", _style(Color(0.83, 0.85, 0.76, 0.90), 100))
 	joystick.add_child(knob)
-	knob.size = Vector2(67, 67)
-	input_diagnostic = _label("INPUT CHECK: none", 14, Color("bfe6cd"), 0.018, 0.603, 0.375, 0.659)
-	input_diagnostic.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	input_diagnostic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	knob.size = Vector2(66, 66)
+
+	attack_button = _action("attack", "ATTACK", 0.838, 0.738, 0.982, 0.968, Color("a7564b"))
+	gather_button = _action("gather", "GATHER", 0.690, 0.766, 0.819, 0.958, Color("487c61"))
+	craft_button = _action("craft", "CRAFT", 0.690, 0.766, 0.819, 0.958, Color("94714e"))
+	gather_button.visible = false
+	craft_button.visible = false
+	ability_button = _action("ability", "SKILL", 0.862, 0.545, 0.977, 0.710, Color("456a80"))
+	ability_button.visible = false
+	menu_button = _action("menu", "MENU", 0.850, 0.022, 0.981, 0.128, INK_LIGHT)
+
+	quick_menu = PanelContainer.new()
+	quick_menu.name = "QuickMenu"
+	quick_menu.add_theme_stylebox_override("panel", _style(Color("1a3236"), 12, GOLD, 2))
+	root.add_child(quick_menu)
+	_anchors(quick_menu, 0.410, 0.198, 0.720, 0.790)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 7)
+	quick_menu.add_child(layout)
+	var heading := Label.new()
+	heading.text = "OUTPOST  /  JOURNAL"
+	heading.add_theme_font_size_override("font_size", 19)
+	heading.add_theme_color_override("font_color", GOLD)
+	layout.add_child(heading)
+	var actions := GridContainer.new()
+	actions.columns = 2
+	actions.add_theme_constant_override("h_separation", 7)
+	actions.add_theme_constant_override("v_separation", 7)
+	actions.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(actions)
+	for action_name in ["BAG", "CRAFTING", "GEAR", "SKILLS", "SALVAGE", "HEAL"]:
+		var button := Button.new()
+		button.text = action_name
+		button.custom_minimum_size = Vector2(116, 54)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 16)
+		button.add_theme_stylebox_override("normal", _style(INK_LIGHT, 8, Color("52645a"), 1))
+		button.add_theme_stylebox_override("hover", _style(Color("345359"), 8, GOLD, 1))
+		button.add_theme_stylebox_override("pressed", _style(Color("30524f"), 8, GOLD, 1))
+		button.pressed.connect(_quick_action.bind(action_name))
+		actions.add_child(button)
+	var debug := Button.new()
+	debug.text = "INPUT DIAGNOSTICS"
+	debug.custom_minimum_size = Vector2(0, 35)
+	debug.pressed.connect(_toggle_diagnostics)
+	layout.add_child(debug)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.custom_minimum_size = Vector2(0, 40)
+	close.pressed.connect(close_quick_menu)
+	layout.add_child(close)
+	quick_menu.visible = false
+	input_diagnostic = _label("", 14, CREAM, 0.015, 0.58, 0.65, 0.626)
+	input_diagnostic.visible = false
 	_position_stick()
 
-func _anchors(n: Control, left: float, top: float, right: float, bottom: float) -> void:
-	n.anchor_left = left
-	n.anchor_top = top
-	n.anchor_right = right
-	n.anchor_bottom = bottom
-	n.offset_left = 0
-	n.offset_right = 0
-	n.offset_top = 0
-	n.offset_bottom = 0
+func _anchors(control: Control, left: float, top: float, right: float, bottom: float) -> void:
+	control.anchor_left = left
+	control.anchor_top = top
+	control.anchor_right = right
+	control.anchor_bottom = bottom
+	control.offset_left = 0.0
+	control.offset_right = 0.0
+	control.offset_top = 0.0
+	control.offset_bottom = 0.0
 
-func _style(color: Color, radius: int) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = color
-	s.set_corner_radius_all(radius)
-	return s
+func _style(color: Color, radius: int, outline: Color = Color.TRANSPARENT, thickness: int = 0) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_color = outline
+	style.set_border_width_all(thickness)
+	style.set_corner_radius_all(radius)
+	return style
 
 func _panel(left: float, top: float, right: float, bottom: float, color: Color) -> void:
-	var n := Panel.new()
-	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	n.add_theme_stylebox_override("panel", _style(color, 15))
-	root.add_child(n)
-	_anchors(n, left, top, right, bottom)
+	var panel := Panel.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", _style(color, 12))
+	root.add_child(panel)
+	_anchors(panel, left, top, right, bottom)
 
 func _label(value: String, size: int, color: Color, left: float, top: float, right: float, bottom: float) -> Label:
-	var n := Label.new()
-	n.text = value
-	n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	n.add_theme_font_size_override("font_size", size)
-	n.add_theme_color_override("font_color", color)
-	root.add_child(n)
-	_anchors(n, left, top, right, bottom)
-	return n
+	var out := Label.new()
+	out.text = value
+	out.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	out.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	out.add_theme_font_size_override("font_size", size)
+	out.add_theme_color_override("font_color", color)
+	root.add_child(out)
+	_anchors(out, left, top, right, bottom)
+	return out
 
-func _action(key: String, label: String, left: float, top: float, right: float, bottom: float, color: Color) -> void:
+func _action(key: String, caption: String, left: float, top: float, right: float, bottom: float, color: Color) -> Button:
 	var button := Button.new()
+	button.name = key.capitalize() + "Button"
 	button.text = ""
-	if key == "gather":
-		gather_button = button
-	elif key == "attack":
-		attack_button = button
-	elif key == "craft":
-		craft_button = button
-	button.add_theme_stylebox_override("normal", _style(color, 22))
-	button.add_theme_stylebox_override("hover", _style(color.lightened(0.12), 22))
-	button.add_theme_stylebox_override("pressed", _style(color.darkened(0.2), 22))
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_stylebox_override("normal", _style(color, 18, Color("b6aa8a"), 1))
+	button.add_theme_stylebox_override("hover", _style(color.lightened(0.14), 18, GOLD, 2))
+	button.add_theme_stylebox_override("pressed", _style(color.darkened(0.22), 18, GOLD, 2))
+	button.add_theme_stylebox_override("disabled", _style(Color("3c4b4d"), 18))
 	root.add_child(button)
 	_anchors(button, left, top, right, bottom)
-	var icon := TextureRect.new()
-	icon.texture = load("res://assets/icons/" + ("heart" if key == "heal" else "flag" if key == "bag" else "spear" if key == "skills" else key) + ".svg") as Texture2D
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	button.add_child(icon)
-	icon.anchor_left = 0.24
-	icon.anchor_right = 0.76
-	icon.anchor_top = 0.09
-	icon.anchor_bottom = 0.64
-	var title := Label.new()
-	title.text = label
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", Color.WHITE)
-	title.add_theme_font_size_override("font_size", 18)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	button.add_child(title)
-	title.anchor_left = 0
-	title.anchor_right = 1
-	title.anchor_top = 0.68
-	title.anchor_bottom = 1.0
-	if key == "gather":
-		button.pressed.connect(_gather)
-	elif key == "attack":
-		button.pressed.connect(_attack)
-	elif key == "craft":
-		button.pressed.connect(_craft)
-	elif key == "bag":
-		button.pressed.connect(_bag)
-	elif key == "skills":
-		button.pressed.connect(_skills)
-	else:
-		button.pressed.connect(_heal)
+	var artwork := TextureRect.new()
+	var icon_id: String = "flag" if key == "menu" else "spear" if key == "ability" else key
+	artwork.texture = load("res://assets/icons/" + icon_id + ".svg") as Texture2D
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(artwork)
+	_anchors(artwork, 0.22, 0.09, 0.78, 0.66)
+	var label := Label.new()
+	label.text = caption
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 17)
+	label.add_theme_color_override("font_color", CREAM)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(label)
+	_anchors(label, 0, 0.69, 1.0, 0.99)
+	match key:
+		"attack": button.pressed.connect(_attack)
+		"gather": button.pressed.connect(_gather)
+		"craft": button.pressed.connect(_craft)
+		"ability": button.pressed.connect(_ability)
+		"menu": button.pressed.connect(_toggle_menu)
+	return button
 
 func _process(delta: float) -> void:
 	_position_stick()
-	if input_diagnostic != null:
-		var is_locked: bool = game != null and game.hero != null and game.hero.interaction_locked
-		var ui_open: bool = game != null and ((game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible))
-		input_diagnostic.text = "INPUT %s T:%d M:%d  |  STICK %.2f  |  LOCK %s UI %s" % [last_input_source, touches_seen, mice_seen, move_vector.length(), str(is_locked), str(ui_open)]
-	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 53.0
+	if knob != null:
+		knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 56.0
+	if input_diagnostic != null and input_diagnostic.visible:
+		var locked: bool = game != null and game.hero != null and game.hero.interaction_locked
+		var other_menu: bool = game != null and ((game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible))
+		input_diagnostic.text = "INPUT %s | T:%d M:%d | STICK %.2f | LOCK:%s UI:%s" % [last_input_source, touches_seen, mice_seen, move_vector.length(), str(locked), str(other_menu or quick_menu_open)]
 	if toast_time > 0.0:
-		toast_time -= delta
-		if toast_time <= 0:
-			toast_label.text = ""
+		toast_time = maxf(0.0, toast_time - delta)
+		if toast_time == 0.0:
+			toast_label.visible = false
 
 func _position_stick() -> void:
-	var screen := get_viewport().get_visible_rect().size
-	joystick.position = Vector2(35, screen.y - 204)
+	if joystick == null:
+		return
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	joystick.position = Vector2(32, maxf(32.0, screen.y - joystick.size.y - 26.0))
 
 func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
@@ -194,20 +228,18 @@ func _reset_joystick() -> void:
 	move_vector = Vector2.ZERO
 
 func _input(event: InputEvent) -> void:
-	var modal_open: bool = game != null and (
-		(game.menu != null and game.menu.visible)
-		or (game.progression_ui != null and game.progression_ui.visible)
-		or (game.hero != null and game.hero.interaction_locked)
-	)
+	if game == null:
+		return
+	var modal_open: bool = quick_menu_open or (game.menu != null and game.menu.visible) or (game.progression_ui != null and game.progression_ui.visible) or (game.hero != null and game.hero.interaction_locked)
 	if modal_open:
-		# Modals can consume a touch release. Never retain the old finger.
 		_reset_joystick()
 		return
+	# Keep v0.2 global-input movement; both Android touches and mouse
+	# emulation are accepted, without allowing the mouse twin to steal a finger.
 	if event is InputEventScreenTouch:
 		touches_seen += 1
 		last_input_source = "TOUCH"
-		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 150.0:
-			# A real touch takes precedence over its emulated mouse twin.
+		if event.pressed and finger == -1 and event.position.distance_to(_center()) <= 140.0:
 			mouse_stick = false
 			finger = event.index
 			_stick(event.position)
@@ -218,10 +250,8 @@ func _input(event: InputEvent) -> void:
 			last_input_source = "DRAG"
 			_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		# Android editor can deliver emulated mouse events; rejecting them on
-		# mobile caused a dead joystick on devices without direct touch events.
 		mice_seen += 1
-		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 150.0:
+		if event.pressed and finger == -1 and event.position.distance_to(_center()) <= 140.0:
 			mouse_stick = true
 			last_input_source = "MOUSE"
 			_stick(event.position)
@@ -236,40 +266,84 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		_reset_joystick()
 
+func _stick(at: Vector2) -> void:
+	move_vector = ((at - _center()) / 64.0).limit_length(1.0)
 
-func _stick(pos: Vector2) -> void:
-	move_vector = ((pos - _center()) / 62.0).limit_length(1.0)
+func _toggle_menu() -> void:
+	if quick_menu_open:
+		close_quick_menu()
+	else:
+		quick_menu_open = true
+		quick_menu.visible = true
+		_reset_joystick()
 
-func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, weapon: String, objective: String, helper: String) -> void:
-	status.text = "OUTPOST   /   HP %d/100\nXP %d   KILLS %d   •   %s" % [int(ceilf(hp)), xp, kills, weapon.replace("_", " ").to_upper()]
-	if health_bar != null:
-		health_bar.value = clampf(hp, 0.0, 100.0)
+func close_quick_menu() -> void:
+	quick_menu_open = false
+	if quick_menu != null:
+		quick_menu.visible = false
+	_reset_joystick()
+
+func _quick_action(id: String) -> void:
+	close_quick_menu()
+	match id:
+		"BAG": game.show_inventory()
+		"CRAFTING": game.show_crafting()
+		"GEAR": game.show_progression("equipment")
+		"SKILLS": game.show_progression("skills")
+		"SALVAGE": game.show_progression("salvage")
+		"HEAL": game.use_meal()
+
+func _toggle_diagnostics() -> void:
+	if input_diagnostic != null:
+		input_diagnostic.visible = not input_diagnostic.visible
+
+func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, _weapon: String, objective: String, helper: String) -> void:
+	if status == null:
+		return
+	status.text = "OUTPOST  /  HP %d   •   XP %d   •   KILLS %d" % [int(ceilf(hp)), xp, kills]
+	health_bar.value = clampf(hp, 0.0, 100.0)
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
 	quest.text = objective
 	hint.text = helper
 
-func update_context(has_resource: bool, has_enemy: bool, at_bench: bool) -> void:
-	if gather_button != null:
-		gather_button.disabled = not has_resource
-	if attack_button != null:
-		attack_button.disabled = not has_enemy
-	if craft_button != null:
-		craft_button.modulate = Color.WHITE if at_bench else Color(0.65, 0.70, 0.74)
+func update_context(has_resource: bool, has_enemy: bool, at_station: bool) -> void:
+	context_available = has_resource or at_station
+	gather_button.visible = has_resource and not quick_menu_open
+	gather_button.disabled = not has_resource
+	craft_button.visible = not has_resource and at_station and not quick_menu_open
+	craft_button.disabled = not at_station
+	attack_button.disabled = not has_enemy
+	var available_skill: bool = false
+	if game != null and game.progression_ui != null:
+		var active: Array = game.SKILLS.active_skills(game.crafted_gear, game.gear_loadout, game.learned_skills)
+		available_skill = not active.is_empty()
+	ability_button.visible = available_skill and not quick_menu_open
 
 func toast(message: String) -> void:
 	toast_label.text = message
+	toast_label.visible = true
 	toast_time = 3.4
 
 func _gather() -> void:
 	game.gather()
+
 func _attack() -> void:
 	game.attack()
+
 func _craft() -> void:
 	game.craft()
+
+func _ability() -> void:
+	game.cast_skill()
+
 func _bag() -> void:
+	close_quick_menu()
 	game.show_inventory()
+
 func _heal() -> void:
 	game.use_meal()
+
 func _skills() -> void:
+	close_quick_menu()
 	game.show_progression("skills")
