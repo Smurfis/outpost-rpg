@@ -104,7 +104,8 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
-	_add_image("VersionPlaque", "version_badge.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
+	# Only use a textless PNG plaque. The reference art's v0.1.0-dev must not show behind the actual version.
+	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
 	var version := Label.new()
 	version.name = "Version"
 	version.text = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
@@ -115,11 +116,13 @@ func _make_screen() -> void:
 	_label_style(version, 20, Color("fff1d5"), Color("2b1e25"))
 	_canvas.add_child(version)
 
-	_add_image("TipPlaque", "tip_panel.png", "tip_panel.svg", Vector2(247, 671), Vector2(785, 38))
+	_add_image("TipPlaque", "tip_panel.png", "tip_panel.svg", Vector2(247, 656), Vector2(785, 53))
 	_tip_text = Label.new()
 	_tip_text.name = "WorldTip"
-	_tip_text.position = Vector2(269, 678)
-	_tip_text.size = Vector2(744, 24)
+	_tip_text.position = Vector2(280, 662)
+	_tip_text.size = Vector2(720, 41)
+	_tip_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tip_text.clip_text = true
 	_tip_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tip_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_tip_text.text = TIPS[_tip_index]
@@ -217,6 +220,8 @@ func _build_settings() -> void:
 	motion.toggled.connect(func(enabled: bool) -> void:
 		_reduced_motion = enabled
 		_splash.animate_bounce = not enabled
+		if enabled:
+			_splash.scale = Vector2.ONE
 		_write_prefs()
 	)
 	stack.add_child(motion)
