@@ -2,6 +2,7 @@ extends RefCounted
 ## Equipment instances are rolled ONCE on craft, stored as plain saveable dictionaries.
 const DEFINITIONS = "res://data/progression/gear.json"
 const BALANCE = "res://data/progression/balance.json"
+const TIERS = "res://data/progression/metal_tiers.json"
 const SLOTS: Array[String] = ["weapon", "head", "body", "feet"]
 
 static func config() -> Dictionary:
@@ -21,20 +22,49 @@ static func template(id: String) -> Dictionary:
 static func rarity_name(rarity: int) -> String:
 	return ["Common", "Uncommon", "Rare", "Epic", "Legendary"][clampi(rarity, 0, 4)]
 
+static func tier_for_level(item_level: int) -> Dictionary:
+	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(TIERS))
+	if not (value is Array):
+		return {}
+	var level: int = clampi(item_level, 1, 50)
+	for entry in value:
+		if entry is Dictionary and level >= int(entry.get("min_level", 1)) and level <= int(entry.get("max_level", 50)):
+			return entry
+	return {}
+
 static func recipe_cost(id: String, item_level: int, rarity: int) -> Dictionary:
 	var definition: Dictionary = template(id)
 	if definition.is_empty():
 		return {}
-	var multiplier: int = maxi(1, int(ceil(float(clampi(item_level, 1, 50)) / 5.0)))
+	var tier: Dictionary = tier_for_level(item_level)
+	if tier.is_empty():
+		return {}
+	var level: int = clampi(item_level, 1, 50)
+	var lower: int = int(tier.get("min_level", 1))
+	var multiplier: int = 1 + mini(2, int(floor(float(level - lower) / 5.0)))
+	var refined: String = str(tier.get("refined", "iron_ingot"))
+	var fabric: String = str(tier.get("cloth", "linen"))
 	var result: Dictionary = {}
 	var base: Dictionary = definition.get("base_cost", {})
+	# Upgrade the *same* gear template through successive material tiers.
+	# Material substitution is paid once; no transmutes of old inventory are needed.
 	for key in base:
-		result[str(key)] = int(base[key]) * multiplier
+		var material: String = str(key)
+		if material == "iron_ingot":
+			material = refined
+		elif material == "linen":
+			material = fabric
+		result[material] = int(result.get(material, 0)) + int(base[key]) * multiplier
+	if not result.has(refined):
+		result[refined] = 1 + maxi(0, multiplier - 1)
+	var catalyst: String = str(tier.get("catalyst", ""))
+	if catalyst != "":
+		result[catalyst] = int(result.get(catalyst, 0)) + 1
 	var rarity_index: int = clampi(rarity, 0, 4)
-	var extra: Array[String] = ["", "iron", "ancient_ore", "ether_dust", "legendary_core"]
-	var material: String = extra[rarity_index]
-	if material != "":
-		result[material] = int(result.get(material, 0)) + maxi(1, multiplier / 2) * rarity_index
+	var rarity_materials: Array[String] = ["", "copper", "quartz", "ether_dust", "legendary_core"]
+	var rare_key: String = rarity_materials[rarity_index]
+	if rare_key != "":
+		result[rare_key] = int(result.get(rare_key, 0)) + maxi(1, rarity_index - 1)
 	return result
 
 static func can_pay(materials: Dictionary, costs: Dictionary) -> bool:
@@ -79,6 +109,7 @@ static func roll(id: String, item_level: int, rarity: int, seed: int, serial: in
 		"slot": str(definition.get("slot", "")),
 		"rarity": r,
 		"item_level": level,
+		"craft_tier": int(tier_for_level(level).get("tier", 1)),
 		"seed": maxi(1, seed),
 		"sockets": sockets,
 		"spent": spent.duplicate(true),
