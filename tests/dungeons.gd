@@ -75,8 +75,12 @@ func _run() -> void:
 	check(manager.dimmer.visible, "Entry confirmation shown")
 	manager._cancel_dialog()
 	check(not manager.dimmer.visible and not game.hero.interaction_locked, "Cancel releases controls")
+	game.hero.interaction_locked = true
+	manager._physics_process(0.016)
+	check(not game.hero.interaction_locked, "Stale portal lock self-recovers with no visible dialog")
 	manager._on_portal_selected(portal)
 	manager._enter_confirmed()
+	check(not game.hero.interaction_locked, "Entering a dungeon releases portal confirmation lock")
 	var instance = manager.active_instance
 	check(instance != null, "Instanced dungeon created")
 	if instance == null:
@@ -129,6 +133,7 @@ func _run() -> void:
 	manager._enter_confirmed()
 	check(manager.active_instance != null, "Second entrance can be entered")
 	manager._leave_pressed()
+	check(not game.hero.interaction_locked, "Leaving the dungeon restores manual movement")
 	check(manager.active_instance == null, "Leaving unloads active instance")
 	check(manager.entrances.has("preview_uncommon:0"), "Abandoned entrance stays available")
 	check(not manager.completed_ids.has("preview_uncommon:0"), "Abandon does not record completion")
