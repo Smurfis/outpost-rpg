@@ -18,6 +18,7 @@ var right_leg: Node3D
 var shield_mesh: MeshInstance3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
+var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
 var walking_phase: float = 0.0
@@ -51,7 +52,14 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	_model("adventurer_arm", right_arm, Vector3.ZERO)
 	_model("adventurer_leg", left_leg, Vector3.ZERO)
 	_model("adventurer_leg", right_leg, Vector3.ZERO)
-	sword_mesh = _model("steel_sword", right_arm, Vector3(0.01, -0.76, -0.03))
+	# Attach equipment to the wrist instead of letting a blade point vertically
+	# through the adventurer's upper arm. The blade's OBJ/voxel local +Y points
+	# from the hilt to the tip, so rotate it toward the ground and slightly forward.
+	weapon_grip = Node3D.new()
+	weapon_grip.name = "WeaponGrip"
+	weapon_grip.position = Vector3(0.03, -0.60, -0.11)
+	right_arm.add_child(weapon_grip)
+	sword_mesh = _model("steel_sword", weapon_grip, Vector3.ZERO)
 	shield_mesh = _model("kite_shield", left_arm, Vector3(-0.07, -0.46, -0.29))
 	shield_mesh.visible = false
 	cloak_pivot = _pivot("Cloak", Vector3(0, 1.50, 0.27))
@@ -88,14 +96,29 @@ func _material(color: Color) -> StandardMaterial3D:
 func set_weapon(id: String) -> void:
 	if sword_mesh == null:
 		return
-	if id == "iron_blade":
-		sword_mesh.scale = Vector3(1.13, 1.23, 1.13)
+	# The neutral sword hangs diagonally beside the right thigh. The longer
+	# spear points forward, rather than vertically through the right arm.
+	# This is cosmetic: item stats, hitboxes and save IDs are unchanged.
+	if weapon_grip != null:
+		weapon_grip.rotation = Vector3(PI + (0.85 if id == "spear" else 0.64), 0.05, 0.29)
+	var pixel_mode: bool = game != null and bool(game.get("voxel_art_enabled"))
+	if pixel_mode:
+		# The voxel character shares a nearest-filtered atlas with the world.
+		# Never tint the pixel sword with the old smooth OBJ override material.
+		var visual_id: String = "iron_blade" if id == "iron_blade" else "steel_spear" if id == "spear" else "steel_sword"
+		var replacement: MeshInstance3D = VOXEL_CHARACTER.create_part(visual_id)
+		if replacement != null:
+			sword_mesh.mesh = replacement.mesh
+			sword_mesh.material_override = replacement.material_override
+		sword_mesh.scale = Vector3(0.85, 0.84, 0.85) if id == "iron_blade" else Vector3(0.81, 0.78, 0.81) if id == "spear" else Vector3(0.76, 0.76, 0.76)
+	elif id == "iron_blade":
+		sword_mesh.scale = Vector3(0.90, 0.84, 0.90)
 		sword_mesh.material_override = _material(Color("b7d7e2"))
 	elif id == "spear":
-		sword_mesh.scale = Vector3(0.83, 1.35, 0.83)
+		sword_mesh.scale = Vector3(0.78, 0.72, 0.78)
 		sword_mesh.material_override = _material(Color("d2b782"))
 	else:
-		sword_mesh.scale = Vector3(0.82, 0.72, 0.82)
+		sword_mesh.scale = Vector3(0.76, 0.76, 0.76)
 		sword_mesh.material_override = _material(Color("b2b6a9"))
 
 func set_spear(equipped: bool) -> void:
@@ -160,6 +183,10 @@ func _physics_process(delta: float) -> void:
 		visual.rotation.z = 0.065 * sin(gather_phase * PI)
 	else:
 		visual.rotation.z = lerpf(visual.rotation.z, 0.0, minf(1.0, delta * 12.0))
+	# Combat once left the wrist rolled inward permanently until another attack.
+	# Restore the relaxed, slightly outward arm pose after every swing or harvest.
+	if combat_phase <= 0.0:
+		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
 	if elapsed - last_hit > 6.0:
 		health = minf(100.0, health + delta * 2.0)
