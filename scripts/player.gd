@@ -126,7 +126,7 @@ func _physics_process(delta: float) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var direction: Vector3 = (right * control.x - forward * control.y).normalized()
-	var speed: float = 6.0 if int(game.inventory.get("cloak", 0)) > 0 else 5.1
+	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
 	if gather_phase > 0.0:
 		speed *= 0.42
 	velocity.x = direction.x * speed
@@ -160,7 +160,7 @@ func _physics_process(delta: float) -> void:
 		health = minf(100.0, health + delta * 2.0)
 
 func take_hit(amount: float) -> void:
-	var protection: float = 0.6 if int(game.inventory.get("shield", 0)) > 0 else 1.0
+	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection
