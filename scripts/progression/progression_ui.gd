@@ -247,8 +247,8 @@ func _render_equipment() -> void:
 			var rarity_name: String = GEAR.rarity_name(int(item.get("rarity", 0)))
 			var active: bool = str(game.gear_loadout.get(str(item.get("slot", "")), "")) == uid
 			var prefix: String = "● " if active else ""
-			var name: String = "%s%s  Lv.%d\n%s  %s" % [prefix, str(item.get("name", "")), int(item.get("item_level", 1)), rarity_name, str(item.get("slot", ""))]
-			listing.add_child(_button(name, _select_gear.bind(uid), false, Color("eddbab") if uid == selected_uid else Color("d2dfdb")))
+			var gear_caption: String = "%s%s  Lv.%d\n%s  %s" % [prefix, str(item.get("name", "")), int(item.get("item_level", 1)), rarity_name, str(item.get("slot", ""))]
+			listing.add_child(_button(gear_caption, _select_gear.bind(uid), false, Color("eddbab") if uid == selected_uid else Color("d2dfdb")))
 	if selected_uid == "" and not game.crafted_gear.is_empty():
 		selected_uid = str(game.crafted_gear[0].get("uid", ""))
 	var current: Dictionary = _gear(selected_uid)
@@ -260,13 +260,13 @@ func _render_equipment() -> void:
 	section.add_child(_text("Item Level %d  |  %s" % [int(current.get("item_level", 1)), str(current.get("slot", ""))], 17))
 	var stats: Dictionary = GEAR.item_stats(current)
 	section.add_child(_text("Damage +%.1f | Attack Speed +%.2f\nCrit +%.1f%% | Ability Power +%.1f" % [float(stats["damage"]), float(stats["attack_speed"]), float(stats["crit"]) * 100.0, float(stats["ability_power"])], 17))
-	var uid: String = str(current.get("uid", ""))
-	var equipped: bool = str(game.gear_loadout.get(str(current.get("slot", "")), "")) == uid
-	section.add_child(_button("UNEQUIP" if equipped else "EQUIP", _equip.bind(uid)))
-	section.add_child(_button("UNLOCK ITEM" if bool(current.get("locked", false)) else "LOCK ITEM", _toggle_flag.bind(uid,"locked")))
+	var current_uid: String = str(current.get("uid", ""))
+	var equipped: bool = str(game.gear_loadout.get(str(current.get("slot", "")), "")) == current_uid
+	section.add_child(_button("UNEQUIP" if equipped else "EQUIP", _equip.bind(current_uid)))
+	section.add_child(_button("UNLOCK ITEM" if bool(current.get("locked", false)) else "LOCK ITEM", _toggle_flag.bind(current_uid,"locked")))
 	section.add_child(_button("REMOVE FAVOURITE" if bool(current.get("favourite", false)) else "FAVOURITE", _toggle_flag.bind(uid,"favourite")))
 	var equipped_item: Dictionary = GEAR.get_equipped(game.crafted_gear, game.gear_loadout, str(current.get("slot", "")))
-	if not equipped_item.is_empty() and str(equipped_item.get("uid", "")) != uid:
+	if not equipped_item.is_empty() and str(equipped_item.get("uid", "")) != current_uid:
 		var old_stats: Dictionary = GEAR.item_stats(equipped_item)
 		section.add_child(_text("VERSUS EQUIPPED %s  •  DAMAGE %+.1f  SPEED %+.2f  CRIT %+.1f%%  AP %+.1f" % [str(equipped_item.get("name", "")), float(stats["damage"]) - float(old_stats["damage"]), float(stats["attack_speed"]) - float(old_stats["attack_speed"]), (float(stats["crit"]) - float(old_stats["crit"])) * 100.0, float(stats["ability_power"]) - float(old_stats["ability_power"])], 16, Color("c6d8d4")))
 	section.add_child(_text("Sockets (rolled at crafting, never on equip/reload)", 17, Color("d5c7ae")))
@@ -281,7 +281,7 @@ func _render_equipment() -> void:
 		for socket in sockets:
 			if str(socket.get("color", "")) == "prismatic":
 				exists = true
-		section.add_child(_button("INSTALL PRISMATIC GEM  •  OWNED %d" % int(game.inventory.get("prismatic_gem", 0)), _install_gem.bind(uid), exists or int(game.inventory.get("prismatic_gem", 0)) < 1 or not game.near_station("skill_forge"), Color("dcb4f6")))
+		section.add_child(_button("INSTALL PRISMATIC GEM  •  OWNED %d" % int(game.inventory.get("prismatic_gem", 0)), _install_gem.bind(current_uid), exists or int(game.inventory.get("prismatic_gem", 0)) < 1 or not game.near_station("skill_forge"), Color("dcb4f6")))
 	section.add_child(_button("OPEN SKILL LIBRARY / FORGE", _change_page.bind("skills")))
 	_stats()
 

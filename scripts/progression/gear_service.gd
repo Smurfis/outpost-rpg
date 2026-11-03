@@ -75,7 +75,7 @@ static func can_pay(materials: Dictionary, costs: Dictionary) -> bool:
 			return false
 	return true
 
-static func roll(id: String, item_level: int, rarity: int, seed: int, serial: int, spent: Dictionary = {}) -> Dictionary:
+static func roll(id: String, item_level: int, rarity: int, roll_seed: int, serial: int, spent: Dictionary = {}) -> Dictionary:
 	var definition: Dictionary = template(id)
 	if definition.is_empty():
 		return {}
@@ -83,7 +83,7 @@ static func roll(id: String, item_level: int, rarity: int, seed: int, serial: in
 	var r: int = clampi(rarity, 0, 4)
 	var level: int = clampi(item_level, 1, int(balance.get("gear_level_cap", 50)))
 	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, seed)
+	rng.seed = maxi(1, roll_seed)
 	var ranges: Array = balance.get("socket_count_by_rarity", [[1,1],[1,2],[1,2],[2,3],[3,3]])
 	var socket_range: Array = ranges[r]
 	var count: int = rng.randi_range(int(socket_range[0]), int(socket_range[1]))

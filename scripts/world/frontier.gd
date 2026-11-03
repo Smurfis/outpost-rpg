@@ -11,8 +11,8 @@ var cells: Dictionary = {}
 var deposits: Array = []
 var world_root: Node3D
 
-static func _hash_cell(cell: Vector2i, seed: int) -> int:
-	var value: int = 83117 + seed
+static func _hash_cell(cell: Vector2i, world_seed_value: int) -> int:
+	var value: int = 83117 + world_seed_value
 	value = posmod(value * 31 + cell.x * 17239 + cell.y * 98317, 2147483647)
 	return maxi(1, value)
 
@@ -24,14 +24,14 @@ static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
 	var ore_defs: Array = settings.get("ores", [])
 	var ore_count: int = maxi(1, int(settings.get("ore_deposits_per_frontier_cell", 7)))
 	var rng := RandomNumberGenerator.new()
-	rng.seed = _hash_cell(cell, seed)
+	rng.seed = _hash_cell(cell, world_seed_value)
 	var chosen: Array = []
 	var occupancies: Array[Vector2] = []
 	var key: String = "%d,%d" % [cell.x, cell.y]
 	var hotspot: String = str(settings.get("hotspot_cells", {}).get(key, ""))
 	for i in range(ore_count):
-		var name: String = hotspot if i == 0 and hotspot != "" else ""
-		if name == "":
+		var ore_kind: String = hotspot if i == 0 and hotspot != "" else ""
+		if ore_kind == "":
 			var allowed: Array = []
 			var total_weight: int = 0
 			for ore in ore_defs:
@@ -46,10 +46,10 @@ static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
 			for ore in allowed:
 				ticket -= int(ore.get("weight", 0))
 				if ticket <= 0:
-					name = str(ore.get("id", "copper"))
+					ore_kind = str(ore.get("id", "copper"))
 					break
 		if name == "":
-			name = "copper"
+			ore_kind = "copper"
 		var result: Vector2 = Vector2.ZERO
 		var found: bool = false
 		for attempt in range(70):
@@ -71,7 +71,7 @@ static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
 			continue
 		occupancies.append(result)
 		chosen.append({
-			"kind": name,
+			"kind": ore_kind,
 			"cell": cell,
 			"position": Vector3(float(cell.x) * WIDTH + result.x, 0.0, float(cell.y) * WIDTH + result.y),
 			"seed": _hash_cell(cell, seed)

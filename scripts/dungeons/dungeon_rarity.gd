@@ -76,5 +76,5 @@ static func roll_chest(quality: int, random: RandomNumberGenerator) -> Dictionar
 		"coins": random.randi_range(int(row[0]), int(row[1])),
 		"xp": random.randi_range(int(row[2]), int(row[3])),
 		"item": selected,
-		"amount": maxi(1, (tier + 1) / 2)
+		"amount": maxi(1, int(floor(float(tier + 1) / 2.0)))
 	}

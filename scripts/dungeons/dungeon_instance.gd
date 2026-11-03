@@ -182,8 +182,8 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 			if entrance:
 				# Only side posts + overhead lintel. Width 2.0 safely exceeds player diameter.
 				var along: Vector3 = Vector3(0, 0, 1) if delta.x != 0 else Vector3(1, 0, 0)
-				for sign in [-1.0, 1.0]:
-					_solid(Vector3(0.55, 3.2, 1.0) if delta.x != 0 else Vector3(1.0, 3.2, 0.55), location + along * sign * 1.50 + Vector3(0, 1.6, 0))
+				for side_sign in [-1.0, 1.0]:
+					_solid(Vector3(0.55, 3.2, 1.0) if delta.x != 0 else Vector3(1.0, 3.2, 0.55), location + along * side_sign * 1.50 + Vector3(0, 1.6, 0))
 				_solid(Vector3(0.55, 0.5, 4) if delta.x != 0 else Vector3(4, 0.5, 0.55), location + Vector3(0, 2.96, 0))
 			else:
 				_solid(Vector3(0.65, 3.2, 4.0) if delta.x != 0 else Vector3(4.0, 3.2, 0.65), location + Vector3(0, 1.6, 0))

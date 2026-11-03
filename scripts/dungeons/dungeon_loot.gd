@@ -15,14 +15,14 @@ static func chest(entrance_id: String, rarity: int, floor_index: int, floor_coun
 	var rng := RandomNumberGenerator.new()
 	rng.seed = LAYOUT.stable_seed("%s:loot:%d:%d:%s" % [entrance_id, r, floor_index, str(bonus)])
 	var cfg: Dictionary = info()
-	var tier: int = mini(4, r + ((floor_number - 1) / 2))
+	var tier: int = mini(4, r + int(floor(float(floor_number - 1) / 2.0)))
 	var pool: Array = cfg.get("material_tiers", [])[tier]
 	var item_id: String = str(pool[rng.randi_range(0, pool.size() - 1)])
-	var amount: int = maxi(1, r + 1 + floor_number / 2)
+	var amount: int = maxi(1, r + 1 + int(floor(float(floor_number) / 2.0)))
 	var materials: Dictionary = {item_id: amount}
 	if rng.randf() < 0.55:
 		var second: String = str(pool[rng.randi_range(0, pool.size() - 1)])
-		materials[second] = int(materials.get(second, 0)) + maxi(1, amount / 2)
+		materials[second] = int(materials.get(second, 0)) + maxi(1, int(floor(float(amount) / 2.0)))
 	var book_chances: Array = cfg.get("book_chances", [0.1, 0.18, 0.25, 0.35, 0.5])
 	var gems_chances: Array = cfg.get("gem_fragment_chances", [0, 0.04, 0.12, 0.24, 0.39])
 	var rare_gem_chances: Array = cfg.get("full_prismatic_gem_chances", [0, 0, 0, 0.005, 0.03])

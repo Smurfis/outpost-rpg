@@ -40,9 +40,9 @@ static func generate(entrance_id: String, rarity: int, floor_index: int, pattern
 	var rarity_index: int = clampi(rarity, 0, 4)
 	var total_floors: int = int(profile(entrance_id, rarity_index)["floors"])
 	var index: int = clampi(floor_index, 0, total_floors - 1)
-	var seed: int = stable_seed("%s:%d:%d" % [entrance_id, rarity_index, index])
+	var layout_seed: int = stable_seed("%s:%d:%d" % [entrance_id, rarity_index, index])
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
+	rng.seed = layout_seed
 	var patterns: Array = cfg.get("patterns", DEFAULTS["patterns"])
 	var pattern: String = pattern_override if pattern_override in patterns else str(patterns[rng.randi_range(0, patterns.size() - 1)])
 	var count_range: Array = cfg.get("room_ranges", DEFAULTS["room_ranges"])[rarity_index]
@@ -145,7 +145,7 @@ static func generate(entrance_id: String, rarity: int, floor_index: int, pattern
 			"role": "start" if i == 0 else "stairs" if i == exit_id and index < total_floors - 1 else "boss" if i == exit_id else "treasure" if i in bonus else "normal"
 		})
 	return {
-		"seed": seed,
+		"seed": layout_seed,
 		"pattern": pattern,
 		"rarity": rarity_index,
 		"floor": index + 1,

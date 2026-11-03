@@ -19,9 +19,9 @@ static func style(fill: Color, border: Color = Color.TRANSPARENT, radius: int = 
 	box.content_margin_bottom = 10.0
 	return box
 
-static func button(label: String, symbol: String, tint: Color = ACCENT) -> Button:
+static func button(caption: String, symbol: String, tint: Color = ACCENT) -> Button:
 	var result := Button.new()
-	result.text = label
+	result.text = caption
 	result.custom_minimum_size = Vector2(130.0, MIN_TOUCH_HEIGHT)
 	result.add_theme_font_size_override("font_size", 19)
 	result.add_theme_color_override("font_color", INK)

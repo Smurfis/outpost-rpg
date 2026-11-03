@@ -82,7 +82,7 @@ func _register_keys() -> void:
 			InputMap.add_action(key_name)
 		for code in binds[action]:
 			var event := InputEventKey.new()
-			event.physical_keycode = int(code)
+			event.physical_keycode = code as Key
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -704,8 +704,8 @@ func craft_gear(template_id: String, level: int, rarity: int) -> bool:
 	gear_serial += 1
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var seed: int = int(rng.randi_range(1, 2147483646))
-	var item: Dictionary = GEAR.roll(template_id, level, rarity, seed, gear_serial, costs)
+	var crafting_seed: int = int(rng.randi_range(1, 2147483646))
+	var item: Dictionary = GEAR.roll(template_id, level, rarity, crafting_seed, gear_serial, costs)
 	crafted_gear.append(item)
 	experience += maxi(1, level)
 	_save()
@@ -789,7 +789,7 @@ func salvage_gear(uid: String) -> Dictionary:
 		return {}
 	var preview: Dictionary = {}
 	for item in crafted_gear:
-		if item is Dictionary and str(item.get("uid", "")) == uid and not SALVAGE.protected(item, gear_loadout):
+		if item is Dictionary and str(item.get("uid", "")) == equipped_uid and not SALVAGE.protected(item, gear_loadout):
 			preview = SALVAGE.refund(item)
 	if preview.is_empty():
 		return {}
@@ -924,13 +924,13 @@ func _load() -> void:
 		var saved_loadout: Variant = data.get("gear_loadout", {})
 		if saved_loadout is Dictionary:
 			for slot in gear_loadout:
-				var uid: String = str(saved_loadout.get(slot, ""))
-				var found: bool = uid == ""
+				var equipped_uid: String = str(saved_loadout.get(slot, ""))
+				var found: bool = equipped_uid == ""
 				for item in crafted_gear:
 					if item is Dictionary and str(item.get("uid", "")) == uid and str(item.get("slot", "")) == slot:
 						found = true
 				if found:
-					gear_loadout[slot] = uid
+					gear_loadout[slot] = equipped_uid
 		var saved_skills: Variant = data.get("learned_skills", {})
 		if saved_skills is Dictionary:
 			learned_skills = saved_skills.duplicate()

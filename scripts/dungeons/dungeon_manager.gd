@@ -353,15 +353,15 @@ func _on_stairs_selected(instance: Node3D) -> void:
 	elif game.hud != null:
 		game.hud.toast("Walk to the stairs to advance.")
 
-func _on_floor_changed(instance: Node3D, floor: int, floors: int) -> void:
+func _on_floor_changed(instance: Node3D, floor_number: int, floor_count: int) -> void:
 	if instance != active_instance:
 		return
-	floor_checkpoints[str(active_info.get("id", ""))] = floor
+	floor_checkpoints[str(active_info.get("id", ""))] = floor_number
 	_save_clears()
 	if minimap != null:
 		minimap.setup(instance)
 	if game.hud != null:
-		game.hud.toast("Floor %d/%d — enemies grow stronger, rewards improve." % [floor, floors])
+		game.hud.toast("Floor %d/%d — enemies grow stronger, rewards improve." % [floor_number, floor_count])
 
 func _on_bonus_selected(instance: Node3D, id: int) -> void:
 	if instance != active_instance or hero == null:
