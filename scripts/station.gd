@@ -85,6 +85,30 @@ func _build() -> void:
 			for x in [-0.62, 0.62]:
 				_rod(0.07, 0.07, 0.56, Vector3(x, 1.25, 0), Color("555d5a"))
 			_label("CAMPFIRE | [CRAFT]", Color("f2c583"))
+		"skill_forge":
+			# Arcane plinth with three orbiting colour-family gems.
+			_rod(1.20, 1.10, 0.45, Vector3(0, 0.22, 0), Color("455563"))
+			_rod(0.85, 0.65, 1.10, Vector3(0, 0.92, 0), Color("687481"))
+			_rod(0.69, 0.57, 0.16, Vector3(0, 1.51, 0), Color("b5a482"))
+			for i in range(3):
+				var a: float = float(i) * TAU / 3.0
+				var gem := SphereMesh.new()
+				gem.radius = 0.24
+				gem.height = 0.50
+				gem.radial_segments = 6
+				gem.rings = 2
+				var colors := [Color("e16862"), Color("f2d068"), Color("6aa7df")]
+				_part(gem, Vector3(cos(a) * 0.55, 1.83, sin(a) * 0.55), colors[i])
+			effect = _rod(0.30, 0.04, 0.70, Vector3(0, 1.85, 0), Color("aac7ed"))
+			_label("SKILL FORGE | [SKILLS]", Color("bad4f7"))
+		"salvage":
+			_block(Vector3(2.8, 0.38, 2.1), Vector3(0, 0.37, 0), Color("63656b"))
+			for x in [-1.06, 1.06]:
+				_block(Vector3(0.32, 0.68, 1.86), Vector3(x, 0.77, 0), Color("52585c"))
+			_block(Vector3(2.0, 0.30, 1.42), Vector3(0, 0.90, 0), Color("828d92"))
+			_rod(0.35, 0.40, 0.55, Vector3(-0.65, 1.35, 0), Color("8c6651"))
+			effect = _block(Vector3(0.7, 0.12, 0.60), Vector3(0.52, 1.15, 0), Color("ddbc78"))
+			_label("SALVAGE | [DISMANTLE]", Color("d6d1bc"))
 	if effect != null:
 		effect.position.y += 0.01
 
