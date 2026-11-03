@@ -16,7 +16,7 @@ static func _hash_cell(cell: Vector2i, world_seed_value: int) -> int:
 	value = posmod(value * 31 + cell.x * 17239 + cell.y * 98317, 2147483647)
 	return maxi(1, value)
 
-static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
+static func generate_ore_sites(cell: Vector2i, world_seed_value: int = 387441) -> Array:
 	var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(ORE_SETTINGS))
 	if not (value is Dictionary):
 		return []
@@ -48,7 +48,7 @@ static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
 				if ticket <= 0:
 					ore_kind = str(ore.get("id", "copper"))
 					break
-		if name == "":
+		if ore_kind == "":
 			ore_kind = "copper"
 		var result: Vector2 = Vector2.ZERO
 		var found: bool = false
@@ -74,7 +74,7 @@ static func generate_ore_sites(cell: Vector2i, seed: int = 387441) -> Array:
 			"kind": ore_kind,
 			"cell": cell,
 			"position": Vector3(float(cell.x) * WIDTH + result.x, 0.0, float(cell.y) * WIDTH + result.y),
-			"seed": _hash_cell(cell, seed)
+			"seed": _hash_cell(cell, world_seed_value)
 		})
 	return chosen
 

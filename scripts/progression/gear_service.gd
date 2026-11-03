@@ -103,14 +103,14 @@ static func roll(id: String, item_level: int, rarity: int, roll_seed: int, seria
 	if legendary:
 		sockets.append({"color": "prismatic", "skill": ""})
 	return {
-		"uid": "%s-%d-%d" % [id, serial, maxi(1, seed)],
+		"uid": "%s-%d-%d" % [id, serial, maxi(1, roll_seed)],
 		"template": id,
 		"name": str(definition.get("name", id)),
 		"slot": str(definition.get("slot", "")),
 		"rarity": r,
 		"item_level": level,
 		"craft_tier": int(tier_for_level(level).get("tier", 1)),
-		"seed": maxi(1, seed),
+		"seed": maxi(1, roll_seed),
 		"sockets": sockets,
 		"spent": spent.duplicate(true),
 		"locked": false,

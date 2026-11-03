@@ -264,7 +264,7 @@ func _render_equipment() -> void:
 	var equipped: bool = str(game.gear_loadout.get(str(current.get("slot", "")), "")) == current_uid
 	section.add_child(_button("UNEQUIP" if equipped else "EQUIP", _equip.bind(current_uid)))
 	section.add_child(_button("UNLOCK ITEM" if bool(current.get("locked", false)) else "LOCK ITEM", _toggle_flag.bind(current_uid,"locked")))
-	section.add_child(_button("REMOVE FAVOURITE" if bool(current.get("favourite", false)) else "FAVOURITE", _toggle_flag.bind(uid,"favourite")))
+	section.add_child(_button("REMOVE FAVOURITE" if bool(current.get("favourite", false)) else "FAVOURITE", _toggle_flag.bind(current_uid,"favourite")))
 	var equipped_item: Dictionary = GEAR.get_equipped(game.crafted_gear, game.gear_loadout, str(current.get("slot", "")))
 	if not equipped_item.is_empty() and str(equipped_item.get("uid", "")) != current_uid:
 		var old_stats: Dictionary = GEAR.item_stats(equipped_item)
