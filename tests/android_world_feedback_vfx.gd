@@ -59,7 +59,7 @@ func _run() -> void:
 			if child.get_node_or_null("PixelFragments") != null and child.get_node_or_null("DamageNumber") != null:
 				found_number = true
 		print("DEBUG PIXEL BURSTS: ", get_nodes_in_group("outpost_pixel_feedback").size(), " children=", game.get_child_count())
-	check(found_number, "Hits create readable floating damage numbers and pixel sparks")
+		check(found_number, "Hits create readable floating damage numbers and pixel sparks")
 		boar.receive_damage(100.0)
 		check(not boar.alive and not boar.visible, "Defeated boar still follows original respawn rules")
 		var lethal_visual: bool = false
