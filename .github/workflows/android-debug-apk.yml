@@ -2,7 +2,7 @@ name: Export Outpost Android updateable APK
 
 on:
   push:
-    branches: [feature/android-in-app-updates-stable-signing, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
