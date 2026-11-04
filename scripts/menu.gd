@@ -26,7 +26,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"]
+var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -289,7 +289,7 @@ func _render_equipment() -> void:
 	}
 	var possible: Dictionary = {
 		"weapon": ["spear", "iron_blade"],
-		"offhand": ["shield"],
+		"offhand": ["shield", "torch"],
 		"back": ["cloak"],
 		"tool_wood": ["axe"],
 		"tool_mining": ["pickaxe"],
