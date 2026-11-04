@@ -22,11 +22,13 @@ func _run() -> void:
 	check(game.recipes.size() == 14, "Torch recipe extends without removing old crafts")
 	check(str(game._recipe_by_id("torch").get("station", "")) == "workbench", "Torch crafted at existing workbench")
 	check(absf(game.day_phase() - 0.25) < 0.01, "World starts around midday")
+	check(absf(game.sun_light.rotation_degrees.x + 90.0) < 1.0, "Midday sun points down onto terrain")
 	var day_energy: float = game.sun_light.light_energy
 	var day_ambient: float = game.sky_environment.ambient_light_energy
 	game.world_time = game.day_length_seconds * 0.5
 	game._update_day_night()
 	check(game.is_night(), "Clock reaches night")
+	check(game.sun_light.rotation_degrees.x > 80.0, "Night sun travels below horizon")
 	check(game.sun_light.light_energy < day_energy * 0.40, "Night reduces directional illumination")
 	check(game.sky_environment.ambient_light_energy < day_ambient * 0.5, "Ambient night light drops")
 	check(game.sky_material != null, "Pixel sky palette remains controllable")

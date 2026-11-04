@@ -213,7 +213,7 @@ func _update_day_night() -> void:
 	var daylight: float = clampf((sin(phase * TAU) + 0.16) * 1.15, 0.0, 1.0)
 	sun_light.light_energy = lerpf(0.035, 1.45 if voxel_art_enabled else 1.25, daylight)
 	sun_light.light_color = Color("7e9abf").lerp(Color("ffe0a9"), daylight)
-	sun_light.rotation_degrees = Vector3(-90.0 + phase * 360.0, -30.0, 0.0)
+	sun_light.rotation_degrees = Vector3(-180.0 + phase * 360.0, -30.0, 0.0)
 	sky_environment.ambient_light_energy = lerpf(0.19, 0.9 if voxel_art_enabled else 0.85, daylight)
 	sky_environment.ambient_light_color = Color("829bbf").lerp(Color("fff0d1"), daylight)
 	if sky_material != null:
