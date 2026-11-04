@@ -5,6 +5,8 @@ const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
+const STREAM_MAP_HALF: int = 96
+const STREAM_RADIUS: int = 3 # Keep 7x7 neighbour chunks around the active player
 const SAFE_CLEARING_RADIUS: float = 23.0
 const HEIGHT_BLEND_BAND: float = 12.0
 const MAX_ELEVATION: float = 3.0
@@ -14,11 +16,15 @@ var fields_enabled: bool = false
 var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
+var stream_enabled: bool = false
+var _stream_center: Vector2i = Vector2i(99999, 99999)
+var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
 
-func build(enable_fields: bool = false, seed: int = 64012) -> void:
+func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false) -> void:
 	name = "VoxelAtmosphere"
 	fields_enabled = enable_fields
-	map_half = FIELDS_MAP_HALF if fields_enabled else MAP_HALF
+	stream_enabled = enable_fields and enable_streaming
+	map_half = STREAM_MAP_HALF if stream_enabled else FIELDS_MAP_HALF if fields_enabled else MAP_HALF
 	world_seed = seed
 	_noise = FastNoiseLite.new()
 	_noise.seed = world_seed
@@ -27,11 +33,15 @@ func build(enable_fields: bool = false, seed: int = 64012) -> void:
 	_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	_noise.fractal_octaves = 3
 	_noise.fractal_gain = 0.45
-	_make_ground()
+	if stream_enabled:
+		update_streaming_for(Vector3.ZERO)
+	else:
+		_make_ground()
 	_make_cliff_rim()
-	_make_grass_detail()
-	if fields_enabled:
-		_make_fields_scenery()
+	if not stream_enabled:
+		_make_grass_detail()
+		if fields_enabled:
+			_make_fields_scenery()
 
 func surface_y_at(x: float, z: float) -> float:
 	# All landmarks, stations and starter portals remain on the original flat
@@ -48,50 +58,145 @@ func surface_y_at(x: float, z: float) -> float:
 	var field_height: float = (1.1 + (sample + 1.0) * 1.05) * blend
 	return -0.055 + clampf(roundf(field_height), 0.0, MAX_ELEVATION)
 
+func _process(_delta: float) -> void:
+	if not stream_enabled:
+		return
+	var owner: Node = get_parent()
+	if owner == null:
+		return
+	var player = owner.get("hero")
+	if player == null:
+		return
+	var point: Vector3 = player.global_position
+	# Entering a private dungeon teleports far beyond the overworld. Do not
+	# unload the entire Fields map merely because the player entered an instance.
+	if absf(point.x) > float(map_half) or absf(point.z) > float(map_half):
+		return
+	update_streaming_for(point)
+
+func _cell_at(point: Vector3) -> Vector2i:
+	return Vector2i(floori(point.x / float(CHUNK_SIZE)) * CHUNK_SIZE,
+		floori(point.z / float(CHUNK_SIZE)) * CHUNK_SIZE)
+
+func update_streaming_for(point: Vector3) -> void:
+	if not stream_enabled or absf(point.x) >= float(map_half) or absf(point.z) >= float(map_half):
+		return
+	var center: Vector2i = _cell_at(point)
+	if center == _stream_center:
+		return
+	_stream_center = center
+	var required: Dictionary = {}
+	for dx in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+		for dz in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+			var cell: Vector2i = center + Vector2i(dx, dz) * CHUNK_SIZE
+			if cell.x < -map_half or cell.x >= map_half or cell.y < -map_half or cell.y >= map_half:
+				continue
+			required[cell] = true
+			if not _loaded.has(cell):
+				_build_ground_chunk(cell.x, cell.y)
+	for cell in _loaded.keys():
+		if required.has(cell):
+			continue
+		var previous: Array = _loaded[cell]
+		for object in previous:
+			if object != null and is_instance_valid(object):
+				if object is MeshInstance3D:
+					chunk_meshes.erase(object)
+				remove_child(object)
+				object.queue_free()
+		_loaded.erase(cell)
+
+func loaded_chunk_count() -> int:
+	return _loaded.size()
+
+func has_chunk_at(x: float, z: float) -> bool:
+	return _loaded.has(_cell_at(Vector3(x, 0, z)))
+
 func _make_ground() -> void:
 	for chunk_x in range(-map_half, map_half, CHUNK_SIZE):
 		for chunk_z in range(-map_half, map_half, CHUNK_SIZE):
-			var st := SurfaceTool.new()
-			st.begin(Mesh.PRIMITIVE_TRIANGLES)
-			for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
-				for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
-					var x0: float = float(x)
-					var z0: float = float(z)
-					var x1: float = x0 + 1.0
-					var z1: float = z0 + 1.0
-					var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
-					PIXELS.quad(st,
-						Vector3(x0, height, z0), Vector3(x0, height, z1),
-						Vector3(x1, height, z1), Vector3(x1, height, z0),
-						_ground_tile(x, z))
-					# Vertical pixel-textured walls seal every changed height,
-					# including neighbouring tiles stored in DIFFERENT chunks.
-					var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
-					var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
-					var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
-					var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
-					if east < height - 0.01:
-						PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
-					if west < height - 0.01:
-						PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
-					if south < height - 0.01:
-						PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
-					if north < height - 0.01:
-						PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
-			var chunk: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
-			add_child(chunk)
-			chunk_meshes.append(chunk)
-			if fields_enabled:
-				var body := StaticBody3D.new()
-				body.name = "GroundCollision_%d_%d" % [chunk_x, chunk_z]
-				body.collision_layer = 1
-				body.collision_mask = 1
-				var shape := CollisionShape3D.new()
-				var collision_mesh: ConcavePolygonShape3D = chunk.mesh.create_trimesh_shape()
-				collision_mesh.backface_collision = true
-				shape.shape = collision_mesh
-				body.add_child(shape)
-				add_child(body)
+			_build_ground_chunk(chunk_x, chunk_z)
+
+func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
+	var key: Vector2i = Vector2i(chunk_x, chunk_z)
+	if _loaded.has(key):
+		return
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
+		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
+			var x0: float = float(x)
+			var z0: float = float(z)
+			var x1: float = x0 + 1.0
+			var z1: float = z0 + 1.0
+			var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
+			PIXELS.quad(st,
+				Vector3(x0, height, z0), Vector3(x0, height, z1),
+				Vector3(x1, height, z1), Vector3(x1, height, z0),
+				_ground_tile(x, z))
+			# Exposed faces use the same heights even when the neighbour has
+			# not been loaded yet: no seam when a chunk later streams in.
+			var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
+			var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
+			var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
+			var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
+			if east < height - 0.01:
+				PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
+			if west < height - 0.01:
+				PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
+			if south < height - 0.01:
+				PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
+			if north < height - 0.01:
+				PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
+	var mesh: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
+	add_child(mesh)
+	chunk_meshes.append(mesh)
+	var members: Array = [mesh]
+	if fields_enabled:
+		var body := StaticBody3D.new()
+		body.name = "GroundCollision_%d_%d" % [chunk_x, chunk_z]
+		body.collision_layer = 1
+		body.collision_mask = 1
+		var shape := CollisionShape3D.new()
+		var collision_mesh: ConcavePolygonShape3D = mesh.mesh.create_trimesh_shape()
+		collision_mesh.backface_collision = true
+		shape.shape = collision_mesh
+		body.add_child(shape)
+		add_child(body)
+		members.append(body)
+	if stream_enabled:
+		var decor: MeshInstance3D = _chunk_decoration(chunk_x, chunk_z)
+		if decor != null:
+			add_child(decor)
+			members.append(decor)
+	_loaded[key] = members
+
+func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
+	# All grass, low shrubs and occasional trees generated deterministically
+	# per chunk, sharing the atlas, so unloading a cell also removes its props.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
+	var placed: int = 0
+	for i in range(13):
+		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
+		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
+		if absf(x) < 24.0 and absf(z) < 24.0:
+			continue
+		placed += 1
+		var y: float = surface_y_at(x, z)
+		if i == 0 and maxf(absf(x), absf(z)) > 28.0:
+			PIXELS.box(st, Vector3(x, y + 0.73, z), Vector3(0.42, 1.42, 0.46), 8, 8)
+			PIXELS.box(st, Vector3(x, y + 1.68, z), Vector3(1.4, 0.96, 1.44), 9, 10)
+			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(0.92, 0.66, 0.95), 1, 9)
+		elif i % 3 == 0:
+			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10)
+		else:
+			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
+	if placed == 0:
+		return null
+	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
 
 func _ground_tile(x: int, z: int) -> int:
 	var pos := Vector2(float(x) + 0.5, float(z) + 0.5)

@@ -9,7 +9,8 @@ const STATION = preload("res://scripts/station.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 @export var voxel_art_enabled: bool = true
-@export var fields_biome_enabled: bool = true # Optional 96x96 Fields, original 46x46 camp preserved.
+@export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
+@export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
 const SAVE = "user://outpost_progress_v02.json"
 
 var hero
@@ -193,7 +194,7 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
-		landscape.build(fields_biome_enabled)
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
@@ -257,7 +258,7 @@ func _world() -> void:
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
 	# Make the Fields truly walkable. Keep the original small camp collision
 	# underneath its centre; outside it the chunk trimeshes own collision.
-	var half_extent: float = 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
+	var half_extent: float = 96.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
 	var span: float = half_extent * 2.0
 	_wall(Vector3(-half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
 	_wall(Vector3(half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
