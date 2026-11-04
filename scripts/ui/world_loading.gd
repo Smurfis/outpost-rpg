@@ -131,7 +131,9 @@ func _begin_world_generation() -> void:
 		push_error("Outpost loading: failed to instantiate main scene")
 		return
 	_loaded_world.visible = false
+	get_tree().root.set_meta("outpost_defer_world_generation", true)
 	get_tree().root.add_child(_loaded_world)
+	get_tree().root.remove_meta("outpost_defer_world_generation")
 	# The voxel biome was instructed to stream the spawn region gradually;
 	# the main game still owns every gameplay/UI/save system normally.
 	var terrain: Node = _loaded_world.get_node_or_null("VoxelAtmosphere")
