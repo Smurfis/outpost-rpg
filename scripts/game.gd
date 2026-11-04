@@ -213,7 +213,8 @@ func _world() -> void:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
 		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
-		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, true)
+		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
