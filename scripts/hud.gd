@@ -4,6 +4,8 @@ const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 var game
 var root: Control
 var status: Label
+var clock_label: Label
+var torch_button: Button
 var quest: Label
 var hint: Label
 var toast_label: Label
@@ -69,6 +71,15 @@ func _ready() -> void:
 	root.add_child(multiplayer_entry)
 	_anchors(multiplayer_entry, 0.882, 0.035, 0.974, 0.116)
 	multiplayer_entry.pressed.connect(_open_coop)
+	clock_label = _label("DAY 09:07", 15, Color("#e8d8a4"), 0.789, 0.035, 0.876, 0.111)
+	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	torch_button = Button.new()
+	torch_button.name = "TorchQuickSlot"
+	torch_button.text = "TORCH"
+	SKIN.apply_button(torch_button, "wood")
+	root.add_child(torch_button)
+	_anchors(torch_button, 0.683, 0.625, 0.771, 0.727)
+	torch_button.pressed.connect(_toggle_torch)
 	_action("bag", "BAG", 0.761, 0.475, 0.839, 0.612, Color("#6e4a32"))
 	_action("craft", "CRAFT", 0.852, 0.475, 0.937, 0.612, Color("#6e4a32"))
 	_action("heal", "HEAL", 0.693, 0.746, 0.772, 0.893, Color("#476c43"))
@@ -263,6 +274,17 @@ func toast(message: String) -> void:
 	toast_label.text = message
 	toast_panel.visible = true
 	toast_time = 3.4
+
+func set_day_clock(time_text: String, is_dark: bool, torch_on: bool) -> void:
+	if clock_label != null:
+		clock_label.text = ("NIGHT " if is_dark else "DAY ") + time_text
+		clock_label.add_theme_color_override("font_color", Color("bac4ee") if is_dark else Color("#e8d8a4"))
+	if torch_button != null:
+		torch_button.text = "PUT OUT" if torch_on else "TORCH"
+
+func _toggle_torch() -> void:
+	if game != null:
+		game.toggle_torch()
 
 func _open_coop() -> void:
 	if game.coop != null and game.coop.ui != null:
