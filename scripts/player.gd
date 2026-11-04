@@ -16,6 +16,8 @@ var right_arm: Node3D
 var left_leg: Node3D
 var right_leg: Node3D
 var shield_mesh: MeshInstance3D
+var torch_mesh: MeshInstance3D
+var torch_light: OmniLight3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
 var weapon_grip: Node3D
@@ -79,6 +81,7 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	sword_mesh = _model("steel_sword", weapon_grip, Vector3.ZERO)
 	shield_mesh = _model("kite_shield", left_arm, Vector3(-0.07, -0.46, -0.29))
 	shield_mesh.visible = false
+	_build_torch()
 	cloak_pivot = _pivot("Cloak", Vector3(0, 1.50, 0.27))
 	_model("cloth_cloak", cloak_pivot, Vector3.ZERO)
 	cloak_pivot.visible = false
@@ -144,6 +147,48 @@ func set_spear(equipped: bool) -> void:
 func set_shield(equipped: bool) -> void:
 	if shield_mesh != null:
 		shield_mesh.visible = equipped
+
+func _build_torch() -> void:
+	torch_mesh = VOXEL_CHARACTER.create_part("torch")
+	if torch_mesh == null:
+		torch_mesh = MeshInstance3D.new()
+		var stick := BoxMesh.new()
+		stick.size = Vector3(0.20, 0.93, 0.22)
+		torch_mesh.mesh = stick
+		torch_mesh.material_override = _material(Color("90603a"))
+	torch_mesh.name = "OffhandTorch"
+	torch_mesh.position = Vector3(-0.07, -0.45, -0.28)
+	left_arm.add_child(torch_mesh)
+	var ember := MeshInstance3D.new()
+	ember.name = "TorchEmber"
+	var ember_mesh := BoxMesh.new()
+	ember_mesh.size = Vector3(0.36, 0.33, 0.34)
+	ember.mesh = ember_mesh
+	ember.position = Vector3(0, 0.75, 0)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color("ffb85f")
+	material.emission_enabled = true
+	material.emission = Color("ff9f36")
+	material.emission_energy_multiplier = 1.5
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ember.material_override = material
+	torch_mesh.add_child(ember)
+	torch_light = OmniLight3D.new()
+	torch_light.name = "OffhandTorchLight"
+	torch_light.position = Vector3(0, 0.78, 0)
+	torch_light.light_color = Color("ffd095")
+	torch_light.light_energy = 1.8
+	torch_light.omni_range = 8.0
+	torch_light.omni_attenuation = 1.2
+	torch_light.shadow_enabled = false
+	torch_mesh.add_child(torch_light)
+	set_torch(false)
+
+func set_torch(equipped: bool) -> void:
+	if torch_mesh != null:
+		torch_mesh.visible = equipped
+	if torch_light != null:
+		torch_light.visible = equipped
 
 func set_cloak(equipped: bool) -> void:
 	if cloak_pivot != null:

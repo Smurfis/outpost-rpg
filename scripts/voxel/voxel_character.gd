@@ -50,6 +50,10 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 1.44, 0), Vector3(0.30, 0.40, 0.17), 6, 4)
 			PIXELS.box(st, Vector3(0, 1.68, 0), Vector3(0.17, 0.21, 0.14), 4, 6)
 			PIXELS.box(st, Vector3(0, 0.26, 0), Vector3(0.42, 0.12, 0.19), 5, 8)
+		"torch":
+			PIXELS.box(st, Vector3(0, 0.0, 0), Vector3(0.18, 0.85, 0.20), 8, 8)
+			PIXELS.box(st, Vector3(0, 0.43, 0), Vector3(0.30, 0.13, 0.29), 5, 8)
+			PIXELS.box(st, Vector3(0, 0.59, 0), Vector3(0.28, 0.29, 0.26), 13, 14)
 		"kite_shield":
 			# Shield facing -Z, copper rim, leather and steel center boss.
 			PIXELS.box(st, Vector3(0, 0, 0), Vector3(0.81, 0.88, 0.15), 8, 5)
