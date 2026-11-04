@@ -79,7 +79,7 @@ func _cell_at(point: Vector3) -> Vector2i:
 		floori(point.z / float(CHUNK_SIZE)) * CHUNK_SIZE)
 
 func update_streaming_for(point: Vector3) -> void:
-	if not stream_enabled:
+	if not stream_enabled or absf(point.x) >= float(map_half) or absf(point.z) >= float(map_half):
 		return
 	var center: Vector2i = _cell_at(point)
 	if center == _stream_center:
@@ -166,8 +166,9 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		members.append(body)
 	if stream_enabled:
 		var decor: MeshInstance3D = _chunk_decoration(chunk_x, chunk_z)
-		add_child(decor)
-		members.append(decor)
+		if decor != null:
+			add_child(decor)
+			members.append(decor)
 	_loaded[key] = members
 
 func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
@@ -177,11 +178,13 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
+	var placed: int = 0
 	for i in range(13):
 		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
 		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
 		if absf(x) < 24.0 and absf(z) < 24.0:
 			continue
+		placed += 1
 		var y: float = surface_y_at(x, z)
 		if i == 0 and maxf(absf(x), absf(z)) > 28.0:
 			PIXELS.box(st, Vector3(x, y + 0.73, z), Vector3(0.42, 1.42, 0.46), 8, 8)
@@ -191,6 +194,8 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10)
 		else:
 			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
+	if placed == 0:
+		return null
 	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
 
 func _ground_tile(x: int, z: int) -> int:
