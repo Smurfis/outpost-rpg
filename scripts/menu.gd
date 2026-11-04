@@ -488,19 +488,68 @@ func _render_craft() -> void:
 			continue
 		var id: String = str(recipe.get("id", ""))
 		var result_id: String = str(recipe.get("result", ""))
-		var row := HBoxContainer.new()
-		recipes_list.add_child(row)
-		row.add_child(_icon(result_id, 46))
+		var owned_unique: bool = game.owns_unique(result_id)
+		var affordable: bool = true
+		var requirements: Array[String] = []
+		var ingredients: Dictionary = recipe.get("ingredients", {})
+		for ingredient in ingredients:
+			var ingredient_id: String = str(ingredient)
+			var required: int = int(ingredients[ingredient])
+			var current: int = int(game.inventory.get(ingredient_id, 0))
+			requirements.append("%s %d/%d" % [ingredient_id.capitalize(), current, required])
+			if current < required:
+				affordable = false
 		var choose := Button.new()
-		choose.text = str(recipe.get("name", id))
+		choose.name = "Recipe_" + id
+		choose.text = ""
+		choose.custom_minimum_size = Vector2(0, 79)
 		choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		choose.custom_minimum_size = Vector2(0, 55)
-		SKIN.apply_button(choose, "parchment_light" if selected_id == id else "wood")
+		choose.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			choose.add_theme_stylebox_override(state, SKIN.box("parchment_light") if selected_id == id else SKIN.box("item"))
 		choose.disabled = not game.crafting.is_empty()
-		if selected_id == id:
-			choose.add_theme_color_override("font_color", SKIN.INK)
 		choose.pressed.connect(_recipe_change.bind(id))
-		row.add_child(choose)
+		recipes_list.add_child(choose)
+		var art: TextureRect = _icon(result_id, 60)
+		art.custom_minimum_size = Vector2.ZERO
+		art.anchor_left = 0.01
+		art.anchor_right = 0.20
+		art.anchor_top = 0.12
+		art.anchor_bottom = 0.88
+		choose.add_child(art)
+		var foreground: Color = SKIN.INK if selected_id == id else SKIN.CREAM
+		var name_label := Label.new()
+		name_label.text = str(recipe.get("name", id))
+		name_label.add_theme_font_size_override("font_size", 19)
+		name_label.add_theme_color_override("font_color", foreground)
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		name_label.anchor_left = 0.23
+		name_label.anchor_right = 0.90
+		name_label.anchor_top = 0.11
+		name_label.anchor_bottom = 0.48
+		choose.add_child(name_label)
+		var material_label := Label.new()
+		material_label.text = "  •  ".join(requirements)
+		material_label.add_theme_font_size_override("font_size", 15)
+		material_label.add_theme_color_override("font_color", foreground)
+		material_label.clip_text = true
+		material_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		material_label.anchor_left = 0.23
+		material_label.anchor_right = 0.96
+		material_label.anchor_top = 0.52
+		material_label.anchor_bottom = 0.85
+		choose.add_child(material_label)
+		var badge := Label.new()
+		badge.text = "OWNED" if owned_unique else "READY" if affordable else "NEEDS MATERIALS"
+		badge.add_theme_font_size_override("font_size", 13)
+		badge.add_theme_color_override("font_color", Color("#38653d") if affordable and not owned_unique and selected_id == id else Color("#ffe1a2") if affordable else Color("#edb597"))
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		badge.anchor_left = 0.65
+		badge.anchor_right = 0.95
+		badge.anchor_top = 0.10
+		badge.anchor_bottom = 0.42
+		choose.add_child(badge)
 	if not game.crafting.is_empty():
 		_render_work()
 	elif completed_id != "":
