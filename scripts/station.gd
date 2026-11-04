@@ -5,6 +5,8 @@ var station_id: String = "workbench"
 var activity: float = 0.0
 var effect: MeshInstance3D
 var time: float = 0.0
+var station_label: Label3D
+const STATION_LABEL_RADIUS: float = 7.0
 
 func setup(id: String) -> void:
 	station_id = id
@@ -64,13 +66,17 @@ func _rod(bottom: float, top: float, height: float, at: Vector3, tint: Color) ->
 
 func _label(message: String, tint: Color) -> void:
 	var tag := Label3D.new()
+	tag.name = "ProximityStationLabel"
 	tag.text = message
-	tag.font_size = 42
+	tag.font_size = 48
 	tag.pixel_size = 0.006
 	tag.position = Vector3(0, 2.55, 0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.no_depth_test = false # Geometry and the avatar may occlude world text.
 	tag.modulate = tint
+	tag.visible = false
 	add_child(tag)
+	station_label = tag
 
 func _build() -> void:
 	match station_id:
@@ -126,6 +132,10 @@ func stroke() -> void:
 
 func _process(delta: float) -> void:
 	time += delta
+	if station_label != null:
+		var world: Node = get_parent()
+		var adventurer: Node3D = world.get("hero") as Node3D if world != null else null
+		station_label.visible = adventurer != null and Vector2(adventurer.global_position.x - global_position.x, adventurer.global_position.z - global_position.z).length_squared() < STATION_LABEL_RADIUS * STATION_LABEL_RADIUS
 	if effect != null and station_id in ["forge", "campfire"]:
 		effect.scale.x = 1.0 + 0.06 * sin(time * 6.0)
 		effect.scale.z = 1.0 + 0.06 * sin(time * 6.0)

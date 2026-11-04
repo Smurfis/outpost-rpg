@@ -250,7 +250,9 @@ func _physics_process(delta: float) -> void:
 	combat_phase = maxf(0.0, combat_phase - delta * 2.8)
 	gather_phase = maxf(0.0, gather_phase - delta * 2.3)
 	if combat_phase > 0.0:
-		right_arm.rotation.x = -1.75 * sin(combat_phase * PI)
+		# Positive X carries the downward arm toward local -Z (the character's
+		# forward direction). Negative used to throw the blade behind the back.
+		right_arm.rotation.x = 1.75 * sin(combat_phase * PI)
 		right_arm.rotation.z = -0.31 * sin(combat_phase * PI)
 	elif gather_phase > 0.0:
 		# Tool swings are animated even before a real tool is owned.
