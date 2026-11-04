@@ -3,6 +3,8 @@ extends Node3D
 ## level and traversable; seeded Perlin noise forms one-voxel terraces outside.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
+const HARVESTABLE = preload("res://scripts/resource_node.gd")
+const WILD_BOAR = preload("res://scripts/enemy.gd")
 const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
@@ -316,7 +318,49 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		if decor != null:
 			add_child(decor)
 			members.append(decor)
+		var interactables: Node3D = _spawn_chunk_interactables(chunk_x, chunk_z)
+		if interactables != null:
+			members.append(interactables)
 	_loaded[key] = members
+
+func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
+	# Unlike earlier purely decorative distant trees, these are harvestable and
+	# enemies participate in the existing real item, quest and combat systems.
+	# Spawn keys are deterministic: revisiting a streamed chunk gives the same
+	# placements while retaining only local nodes in memory.
+	var owner: Node = get_parent()
+	if owner == null or not owner.has_method("_nearest_resource"):
+		return null
+	var container := Node3D.new()
+	container.name = "ChunkInteractables_%d_%d" % [chunk_x, chunk_z]
+	add_child(container)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = maxi(1, posmod(int(world_seed) * 43 + (chunk_x + 707) * 2257 + (chunk_z + 707) * 4861, 2147483647))
+	var kinds: Array[String] = ["wood", "wood", "wood", "stone", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds"]
+	for i in range(2):
+		var x: float = float(chunk_x) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
+		var z: float = float(chunk_z) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
+		if maxf(absf(x), absf(z)) < 27.0:
+			continue # Preserve the original safe starter resource layout.
+		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+		var harvestable = HARVESTABLE.new()
+		container.add_child(harvestable)
+		harvestable.position = Vector3(x, surface_y_at(x, z) + 0.055, z)
+		harvestable.setup(kind)
+	# Guard against spawning a boar before the game has created its hero
+	# (the direct-scene smoke tests still create the camp synchronously).
+	var hero = owner.get("hero")
+	if hero != null and rng.randf() < 0.19:
+		var ex: float = float(chunk_x) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
+		var ez: float = float(chunk_z) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
+		if maxf(absf(ex), absf(ez)) > 32.0:
+			var boar = WILD_BOAR.new()
+			container.add_child(boar)
+			boar.setup(owner, hero, Vector3(ex, surface_y_at(ex, ez) + 0.08, ez))
+	if container.get_child_count() == 0:
+		container.queue_free()
+		return null
+	return container
 
 func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	# All grass, low shrubs and occasional trees generated deterministically
