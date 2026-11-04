@@ -40,7 +40,10 @@ func _run() -> void:
 		_check(biome.get_node_or_null("GroundCollision_0_0") != null, "Loaded Fields chunks provide real collision")
 		_check(int(biome.get("map_half")) == 96, "Streamed voxel Fields expands to 192x192 studs")
 		_check(is_equal_approx(float(biome.surface_y_at(0, 0)), -0.055), "Starter camp retains original flat elevation")
-		_check(biome.get_node_or_null("SteppedDistanceCliffs") != null, "Background cliffs generated outside playable bounds")
+		# Phone QA removed the artificial block/cliff perimeter in favour of
+		# low-cost distant water. Keep this test aligned to the approved art.
+		_check(biome.get_node_or_null("SteppedDistanceCliffs") == null, "No artificial wall of rock at the edge of streamed terrain")
+		_check(biome.get_node_or_null("DistantWaterHorizon") != null, "Distant horizon uses water rather than oversized rock border")
 	var tree_count: int = 0
 	var box_count: int = 0
 	for child in game.get_children():
