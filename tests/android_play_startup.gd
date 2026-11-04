@@ -29,7 +29,6 @@ func _run() -> void:
 	await process_frame
 	var loader: Node = current_scene
 	check(loader != null and loader.name == "WorldLoading", "Play navigates through the visible loading scene")
-	var progress_node: ProgressBar = loader.get_node_or_null("LoadingArtboard") as ProgressBar
 	var generation: Node = root.get_node_or_null("Outpost")
 	var biome: Node = null
 	if generation != null:
@@ -42,9 +41,7 @@ func _run() -> void:
 	for frame in range(420):
 		await process_frame
 		if current_scene != null and current_scene.name == "WorldLoading":
-			var display: ProgressBar = current_scene.get_node_or_null("LoadingArtboard/WorldGenerationProgress") as ProgressBar
-			# Node may live under the centered panel: find directly by owner tree.
-			var bars: Array = get_nodes_in_group("android_world_loading_bar")
+			var display: ProgressBar = current_scene.get("_progress") as ProgressBar
 			if display != null and display.value > 10.0 and display.value < 100.0:
 				showed_progress = true
 		if current_scene != null and current_scene.name == "Outpost":
