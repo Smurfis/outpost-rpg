@@ -39,6 +39,7 @@ var sky_material: ProceduralSkyMaterial
 var sun_light: DirectionalLight3D
 var dusk_announced: bool = false
 var previous_day_phase: float = 0.25
+var previous_sky_bucket: int = -1
 var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
@@ -216,7 +217,11 @@ func _update_day_night() -> void:
 	sun_light.rotation_degrees = Vector3(-180.0 + phase * 360.0, -30.0, 0.0)
 	sky_environment.ambient_light_energy = lerpf(0.19, 0.9 if voxel_art_enabled else 0.85, daylight)
 	sky_environment.ambient_light_color = Color("829bbf").lerp(Color("fff0d1"), daylight)
-	if sky_material != null:
+	# ProceduralSkyMaterial updates can force a costly sky refresh on mobile.
+	# Recompute the sky only 128 times per in-game day (~4 seconds at 9 min).
+	var sky_bucket: int = floori(phase * 128.0)
+	if sky_material != null and sky_bucket != previous_sky_bucket:
+		previous_sky_bucket = sky_bucket
 		sky_material.sky_top_color = Color("10213e").lerp(Color("5d81b7"), daylight)
 		sky_material.sky_horizon_color = Color("302d4f").lerp(Color("efb49b"), daylight)
 		sky_material.ground_horizon_color = Color("2c3452").lerp(Color("d9b8a6"), daylight)
