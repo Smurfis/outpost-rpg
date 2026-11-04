@@ -2,7 +2,7 @@ name: Export Outpost Android debug APK
 
 on:
   push:
-    branches: [build/android-phase5b-test]
+    branches: [build/android-phase5b-test, fix/android-world-loader-title]
   workflow_dispatch:
 
 permissions:
