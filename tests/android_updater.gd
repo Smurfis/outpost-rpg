@@ -54,6 +54,11 @@ func _run() -> void:
 		check(label != null and label.text.contains("build"), "Settings display installed Android build code")
 		if button != null:
 			check(button.pressed.is_connected(screen._check_or_download_update), "Update button has a working callback")
+		var notice: Button = screen.get("_update_notice") as Button
+		check(notice != null and not notice.visible, "Update banner stays hidden until a newer build is found")
+		screen._on_update_found(newer, 15, "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-android-v15")
+		check(notice != null and notice.visible and notice.text.contains("BUILD 15"), "New release shows visible title-screen update notice")
+		check(button.text == "DOWNLOAD ANDROID UPDATE", "Settings button switches from Check to Download")
 		screen.queue_free()
 		await process_frame
 	print("ANDROID UPDATER RESULT: %d failures" % failures)
