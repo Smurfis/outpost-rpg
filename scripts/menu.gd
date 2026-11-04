@@ -136,9 +136,9 @@ func _label(value: String, font_size: int = 18, tint: Color = Color.WHITE) -> La
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override("font_color", tint)
-	label.add_theme_font_size_override("font_size", maxi(17, font_size))
-	label.add_theme_color_override("font_outline_color", Color("231914"))
-	label.add_theme_constant_override("outline_size", 1)
+	label.add_theme_font_size_override("font_size", maxi(19, font_size))
+	label.add_theme_color_override("font_outline_color", Color("1c1117"))
+	label.add_theme_constant_override("outline_size", 2)
 	return label
 
 func _icon(id: String, size: float = 58.0) -> TextureRect:
