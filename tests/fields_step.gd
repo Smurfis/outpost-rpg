@@ -37,9 +37,9 @@ func _run() -> void:
 	await process_frame
 	var terrain = game.get_node("VoxelAtmosphere")
 	check(game.fields_biome_enabled, "Expanded Fields enabled by default in voxel mode")
-	check(terrain.map_half == 48, "New Fields bounds are 96x96")
-	check(terrain.chunk_meshes.size() == 64, "Fields split into 64 render chunks, 12x12 studs each")
-	check(terrain.get_node_or_null("GroundCollision_-48_-48") != null, "Terrain chunks use real trimesh collision")
+	check(terrain.map_half == 96, "Streaming Fields bounds are 192x192")
+	check(terrain.chunk_meshes.size() <= 49 and terrain.chunk_meshes.size() >= 40, "Nearby 12x12 Fields terrain streams within a 7x7 budget")
+	check(terrain.get_node_or_null("GroundCollision_0_0") != null, "Nearby Fields chunks use real trimesh collision")
 	check(is_equal_approx(terrain.surface_y_at(0, 0), -0.055), "Outpost camp remains level")
 	check(is_equal_approx(terrain.surface_y_at(23, 12), -0.055), "Original starter boundary stays level")
 	var elevations: Dictionary = {}

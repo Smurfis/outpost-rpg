@@ -45,6 +45,12 @@ jobs:
             echo "Voxel visual smoke errors detected"
             exit 1
           fi
+      - name: Verify lazy chunk load, unload and deterministic reconstruction
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/chunk_streaming.gd 2>&1 | tee chunk-stream.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL STREAM:' chunk-stream.log; then exit 1; fi
+          grep -q "CHUNK STREAM RESULT: 0 failures." chunk-stream.log
       - name: Validate expanded Fields, voxel portal monuments and one-block auto-step
         run: |
           set -o pipefail

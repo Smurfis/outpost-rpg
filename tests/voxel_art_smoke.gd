@@ -36,9 +36,9 @@ func _run() -> void:
 	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
 	_check(biome != null, "Voxel terrain layer is present")
 	if biome != null:
-		_check(biome.get_node_or_null("GroundChunk_-48_-48") != null, "Expanded Fields chunks replace flat visual ground")
-		_check(biome.get_node_or_null("GroundCollision_-48_-48") != null, "Fields outer chunks provide real collision")
-		_check(int(biome.get("map_half")) == 48, "Default voxel Fields expands to 96x96 studs")
+		_check(biome.get_node_or_null("GroundChunk_0_0") != null, "Local Fields chunks replace flat visual ground")
+		_check(biome.get_node_or_null("GroundCollision_0_0") != null, "Loaded Fields chunks provide real collision")
+		_check(int(biome.get("map_half")) == 96, "Streamed voxel Fields expands to 192x192 studs")
 		_check(is_equal_approx(float(biome.surface_y_at(0, 0)), -0.055), "Starter camp retains original flat elevation")
 		_check(biome.get_node_or_null("SteppedDistanceCliffs") != null, "Background cliffs generated outside playable bounds")
 	var tree_count: int = 0
