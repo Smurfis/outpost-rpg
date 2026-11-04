@@ -89,8 +89,18 @@ func _run() -> void:
 		check(int(game.inventory.get("coins", 0)) == coins_after, "Duplicate complete-run request cannot farm loot")
 		var receipt: String = str(game.coop_reward_receipts.keys()[0])
 		check(not game.receive_coop_reward(receipt, {"coins": 99999, "xp": 99999}), "Replayed reward receipt cannot pay twice")
+	var saved_receipts: int = game.coop_reward_receipts.size()
+	var saved_coins: int = int(game.inventory.get("coins", 0))
 	game.coop.disconnect_session()
 	game.queue_free()
+	await process_frame
+	var restored = scene.instantiate()
+	restored.save_path = SAVE
+	root.add_child(restored)
+	await process_frame
+	check(restored.coop_reward_receipts.size() == saved_receipts, "Reward receipt survives a full save reload")
+	check(int(restored.inventory.get("coins", 0)) == saved_coins, "Party treasure survives a full save reload")
+	restored.queue_free()
 	await process_frame
 	if FileAccess.file_exists(SAVE):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
