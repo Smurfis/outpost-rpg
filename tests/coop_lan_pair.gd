@@ -57,7 +57,10 @@ func _run() -> void:
 		await frames(24)
 		got_run = game.coop.run_preview != null and int(game.coop.preview_descriptor.get("floor", 0)) == 1
 		check(got_run, "Host creates one dungeon preview for the party")
-		await create_timer(1.5).timeout
+		await create_timer(2.8).timeout
+		var run_id: int = int(game.coop.preview_descriptor.get("id", 0))
+		var authority = game.coop.host_encounters.get(run_id, {}).get("ledger", null)
+		check(authority != null and int(authority.revision) > 0, "Host received and validated real client ATTACK RPC")
 		game.coop.request_end_preview()
 		await frames(30)
 		got_exit = game.coop.run_preview == null
@@ -73,6 +76,25 @@ func _run() -> void:
 			var instance: Node3D = game.coop.run_preview
 			check(instance != null and instance.get_child_count() > 0, "Client's generated dungeon has geometry")
 			check(game.hero.global_position.distance_to(instance.hero_spawn_point()) < 2.0, "Client teleports inside private preview")
+			var guardian = null
+			for candidate in get_nodes_in_group("dungeon_guardians"):
+				if instance.is_ancestor_of(candidate):
+					guardian = candidate
+					break
+			if guardian != null:
+				var original_hp: float = float(guardian.hp)
+				game.hero.global_position = guardian.global_position + Vector3(0.0, 0.0, 1.0)
+				await create_timer(0.75).timeout # Allow peer-position packet to reach host.
+				game.attack() # Goes over the real ENet RPC, not a direct local health edit.
+				var synchronized_hit: bool = false
+				for i in range(24):
+					await create_timer(0.05).timeout
+					if float(guardian.hp) < original_hp:
+						synchronized_hit = true
+						break
+				check(synchronized_hit, "Client ATTACK is confirmed by replicated host guardian HP")
+			else:
+				check(false, "Client sees a targetable seeded guardian")
 			for i in range(420):
 				await process_frame
 				if game.coop.run_preview == null:
