@@ -22,6 +22,7 @@ var join_party_button: Button
 var preview_button: Button
 var next_button: Button
 var end_button: Button
+var revive_button: Button
 
 func setup(ref: Node3D) -> void:
 	session = ref
