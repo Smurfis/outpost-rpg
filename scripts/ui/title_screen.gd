@@ -3,6 +3,7 @@ extends Control
 ## The PNG artwork is optional until final art sign-off; transparent SVG placeholders render without it.
 const DESIGN := Vector2(1280.0, 720.0)
 const MAIN_GAME := "res://scenes/main.tscn"
+const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
@@ -182,7 +183,7 @@ func _begin_continue() -> void:
 
 func _launch_game(new_adventure: bool) -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
-	get_tree().change_scene_to_file(MAIN_GAME)
+	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
 	if _show_tips:
