@@ -38,3 +38,6 @@ jobs:
           fi
 
 
+
+      - name: Check shipped illustrated title assets
+        run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_art_assets.gd

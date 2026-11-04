@@ -5,6 +5,7 @@ extends Control
 ## the lightweight painted fallback automatically. No game-scene dependency.
 
 const LOGO_PATH := "res://assets/ui/title/outpost_logo.png"
+const VECTOR_PATH := "res://assets/ui/title/outpost_logo_vector.svg"
 const DESIGN_SIZE := Vector2(800.0, 440.0)
 
 var _logo_texture: Texture2D
@@ -14,7 +15,11 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if ResourceLoader.exists(LOGO_PATH):
 		_logo_texture = load(LOGO_PATH) as Texture2D
-	if _logo_texture == null:
+	# A committed transparent vector logo always ships in the APK. It intentionally
+	# contains NO baked-in text, so the editable Label remains on top.
+	if _logo_texture == null and ResourceLoader.exists(VECTOR_PATH):
+		_logo_texture = load(VECTOR_PATH) as Texture2D
+	if not ResourceLoader.exists(LOGO_PATH):
 		_wordmark = Label.new()
 		_wordmark.name = "FallbackWordmark"
 		_wordmark.text = "Outpost"

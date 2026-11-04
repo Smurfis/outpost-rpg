@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="440" viewBox="0 0 800 440">
+<defs>
+<linearGradient id="tent" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffe2a5"/><stop offset=".5" stop-color="#daa062"/><stop offset="1" stop-color="#9a5b46"/></linearGradient>
+<linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c58b51"/><stop offset=".4" stop-color="#a46338"/><stop offset="1" stop-color="#653a2e"/></linearGradient>
+<linearGradient id="stone" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a5a1a1"/><stop offset="1" stop-color="#4d4b59"/></linearGradient>
+<radialGradient id="flare"><stop stop-color="#ffef98" stop-opacity=".9"/><stop offset=".6" stop-color="#ffba42" stop-opacity=".25"/><stop offset="1" stop-color="#ff9d42" stop-opacity="0"/></radialGradient>
+</defs>
+<!-- Independent transparent logo embellishment. Live Outpost text renders on top in Godot. -->
+<ellipse cx="411" cy="350" rx="365" ry="70" fill="#20243a" opacity=".32"/>
+<path d="M91 300 L145 268 L665 268 L723 301 L685 424 L151 424Z" fill="url(#stone)" stroke="#313041" stroke-width="15" stroke-linejoin="round"/>
+<path d="M80 312 L715 312 L746 335 L720 404 L78 404 L53 355Z" fill="#42302e" stroke="#211d2a" stroke-width="16" stroke-linejoin="round"/>
+<path d="M91 327 L703 327 L723 343 L708 389 L93 389 L74 350Z" fill="url(#wood)" stroke="#e0aa6d" stroke-width="8" stroke-linejoin="round"/>
+<path d="M115 342 L686 342 M115 380 L687 380" stroke="#6a392e" stroke-width="5" opacity=".67"/>
+<path d="M111 321 Q151 283 196 286 L617 284 Q676 284 697 319" fill="#52743b" stroke="#335338" stroke-width="17"/>
+<path d="M140 303 Q167 265 196 297 M553 300 Q579 266 624 302" fill="#88a84e" stroke="#31523a" stroke-width="9"/>
+<!-- Main canvas lodge tent framed by crossed hardwood poles -->
+<path d="M210 288 L393 55 L595 291Z" fill="#51383c" stroke="#30262e" stroke-width="17" stroke-linejoin="round"/>
+<path d="M226 285 L391 77 L560 285Z" fill="url(#tent)" stroke="#aa7652" stroke-width="8" stroke-linejoin="round"/>
+<path d="M392 77 L561 286 L471 288L411 167Z" fill="#ac6650" opacity=".92"/>
+<path d="M331 287 L396 139 L474 286Z" fill="#5a352f" stroke="#543333" stroke-width="7"/>
+<path d="M395 144 L420 284 L340 284Z" fill="#825044" opacity=".63"/>
+<path d="M396 86 L396 287" stroke="#7d513b" stroke-width="8"/>
+<path d="M372 51 L424 19 M371 20 L426 54" stroke="#69402e" stroke-width="17" stroke-linecap="round"/>
+<path d="M375 47 L416 45" stroke="#ddb278" stroke-width="9"/>
+<!-- Red pennant -->
+<path d="M432 40 L523 51 L490 87 L431 74Z" fill="#b64443" stroke="#52313a" stroke-width="7" stroke-linejoin="round"/>
+<path d="M442 53 L493 60" stroke="#f3b78f" stroke-width="5"/>
+<!-- Small warm lantern hanging at entrance -->
+<circle cx="388" cy="205" r="60" fill="url(#flare)"/>
+<path d="M387 91 V149 M366 153 L407 153 L402 211 L371 211Z" fill="#513c35" stroke="#413138" stroke-width="7"/>
+<path d="M379 162 H397 V199 H379Z" fill="#ffe3a0"/>
+<path d="M388 163 V198" stroke="#d09c55" stroke-width="4"/>
+<!-- Leaves and lichen hold the letters visually -->
+<g fill="#6f973f" stroke="#385b39" stroke-width="5">
+<path d="M121 317 Q91 273 62 312 Q74 347 120 317Z"/>
+<path d="M181 406 Q145 432 122 395 Q156 370 181 406Z"/>
+<path d="M642 407 Q694 438 712 394 Q674 369 642 407Z"/>
+<path d="M687 326 Q718 271 749 316 Q737 349 687 326Z"/>
+</g>
+<g fill="#ffbf70" stroke="#994d37" stroke-width="5">
+<path d="M171 282 L184 251 L201 279 L187 295Z"/>
+<path d="M603 294 L616 261 L633 289 L619 309Z"/>
+</g>
+<!-- Stone crest and lower banner -->
+<path d="M356 398 L438 398 L428 428 L398 416 L371 428Z" fill="#953d40" stroke="#402a33" stroke-width="8"/>
+<path d="M389 405 L404 405 L399 418Z" fill="#f9d08a"/>
+</svg>
