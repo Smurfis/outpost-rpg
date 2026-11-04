@@ -524,7 +524,7 @@ func _render_craft() -> void:
 		name_label.add_theme_color_override("font_color", foreground)
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		name_label.anchor_left = 0.23
-		name_label.anchor_right = 0.90
+		name_label.anchor_right = 0.70
 		name_label.anchor_top = 0.11
 		name_label.anchor_bottom = 0.48
 		choose.add_child(name_label)
@@ -545,7 +545,7 @@ func _render_craft() -> void:
 		badge.add_theme_color_override("font_color", Color("#38653d") if affordable and not owned_unique and selected_id == id else Color("#ffe1a2") if affordable else Color("#edb597"))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		badge.anchor_left = 0.65
+		badge.anchor_left = 0.72
 		badge.anchor_right = 0.95
 		badge.anchor_top = 0.10
 		badge.anchor_bottom = 0.42
