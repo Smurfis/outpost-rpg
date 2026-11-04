@@ -98,7 +98,7 @@ func _ready() -> void:
 	party_row.add_child(party_code)
 	join_party_button = _button("JOIN PARTY #", _join_party)
 	party_row.add_child(join_party_button)
-	var tip := _label("Only the party leader can start or end a dungeon preview. Four players maximum per party.", 15, Color("9fb6b1"))
+	var tip := _label("Only the party leader advances cleared floors or claims the final chest. Four players maximum.", 15, Color("9fb6b1"))
 	online_actions.add_child(tip)
 	run_actions = VBoxContainer.new()
 	run_actions.add_theme_constant_override("separation", 6)
@@ -122,7 +122,7 @@ func _ready() -> void:
 	floor_row.add_child(next_button)
 	end_button = _button("LEAVE PREVIEW", _end_preview)
 	floor_row.add_child(end_button)
-	var note := _label("EARLY CO-OP PREVIEW: friends can connect and see one another, form separate parties, and explore matching seeded dungeon floors. Enemies are frozen: no synchronized combat, loot, PvP or Noray relay yet. Your solo saves are untouched.", 15, Color("bdc9c2"))
+	var note := _label("EARLY CO-OP: guardian health, strikes, floor unlocks and final loot are host controlled. Guardians currently stay in place; enemy AI, player damage, PvP, remote torch lighting and online relay are not synchronized. Test on two Android devices.", 15, Color("bdc9c2"))
 	contents.add_child(note)
 	visible = false
 	session.session_changed.connect(_refresh)
@@ -196,7 +196,8 @@ func _refresh() -> void:
 	create_button.disabled = not connected or not run.is_empty()
 	join_party_button.disabled = not connected or not run.is_empty()
 	preview_button.disabled = not session.is_party_leader() or not run.is_empty()
-	next_button.disabled = not session.is_party_leader() or run.is_empty() or int(run.get("floor", 1)) >= int(run.get("floors", 1))
+	next_button.text = "CLAIM FINAL TREASURE" if not run.is_empty() and int(run.get("floor", 1)) >= int(run.get("floors", 1)) else "NEXT FLOOR"
+	next_button.disabled = not session.is_party_leader() or run.is_empty() or not session.can_advance_preview()
 	end_button.disabled = not session.is_party_leader() or run.is_empty()
 
 func _host() -> void:
@@ -222,7 +223,11 @@ func _preview() -> void:
 	close_page()
 
 func _next_floor() -> void:
-	session.request_next_floor()
+	var run: Dictionary = session.my_party().get("run", {})
+	if not run.is_empty() and int(run.get("floor", 1)) >= int(run.get("floors", 1)):
+		session.request_complete_run()
+	else:
+		session.request_next_floor()
 	close_page()
 
 func _end_preview() -> void:
