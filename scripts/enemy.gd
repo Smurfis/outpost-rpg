@@ -1,6 +1,7 @@
 extends CharacterBody3D
 ## Simple boar with pursuit, melee range damage and respawn.
 const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd")
+const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var hero
 var game
 var hp := 32.0
@@ -102,7 +103,9 @@ func _physics_process(delta: float) -> void:
 func receive_damage(amount: float) -> void:
 	if not alive:
 		return
+	var dealt: float = minf(hp, maxf(0.0, amount))
 	hp -= amount
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		visible = false
