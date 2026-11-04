@@ -72,7 +72,8 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$OUTPOST_KEY_PASSWORD" >> "$GITHUB_ENV"
           # Monotonic over subsequent runs of this workflow, and higher
           # than the last disposable-key preview's versionCode 11.
-          echo "OUTPOST_BUILD_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          OUTPOST_BUILD_CODE="$((1000 + GITHUB_RUN_NUMBER))"
+          echo "OUTPOST_BUILD_CODE=$OUTPOST_BUILD_CODE" >> "$GITHUB_ENV"
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
 
