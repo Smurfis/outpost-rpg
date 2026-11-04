@@ -55,23 +55,24 @@ func _run() -> void:
 		boar.receive_damage(6.0)
 		check(is_equal_approx(boar.hp, before - 6.0), "Damage math preserved")
 		var found_number: bool = false
-		for child in game.get_children():
-			if child.name == "PixelBurst" and child.get_node_or_null("DamageNumber") != null:
+		for child in get_nodes_in_group("outpost_pixel_feedback"):
+			if child.get_node_or_null("PixelFragments") != null and child.get_node_or_null("DamageNumber") != null:
 				found_number = true
-		check(found_number, "Hits create readable floating damage numbers and pixel sparks")
+		print("DEBUG PIXEL BURSTS: ", get_nodes_in_group("outpost_pixel_feedback").size(), " children=", game.get_child_count())
+	check(found_number, "Hits create readable floating damage numbers and pixel sparks")
 		boar.receive_damage(100.0)
 		check(not boar.alive and not boar.visible, "Defeated boar still follows original respawn rules")
 		var lethal_visual: bool = false
-		for child in game.get_children():
-			if child.name == "PixelBurst" and bool(child.get("_lethal")):
+		for child in get_nodes_in_group("outpost_pixel_feedback"):
+			if child.get_node_or_null("PixelFragments") != null and bool(child.get("_lethal")):
 				lethal_visual = true
 		check(lethal_visual, "Enemy death triggers voxel disintegration")
 	game.hero.health = 5.0
 	game.hero.take_hit(9.0)
 	check(is_equal_approx(game.hero.health, 100.0), "Hero defeat preserves current solo respawn behavior")
 	var hero_burst: bool = false
-	for child in game.get_children():
-		if child.name == "PixelBurst" and bool(child.get("_lethal")):
+	for child in get_nodes_in_group("outpost_pixel_feedback"):
+		if child.get_node_or_null("PixelFragments") != null and bool(child.get("_lethal")):
 			hero_burst = true
 	check(hero_burst, "Hero defeat also creates pixel burst")
 	var before_count: int = world.loaded_chunk_count()
