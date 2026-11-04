@@ -1,98 +1,182 @@
 extends Node3D
-## Fixed-size world-skin experiment. No collisions, changes to saves, or voxel mining.
-## Procedural meshes share an original 16x16-pixel atlas; terrain is grouped in 8x8 chunks.
+## Walkable, chunked voxel Fields biome. The existing Outpost clearing stays
+## level and traversable; seeded Perlin noise forms one-voxel terraces outside.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
-const CHUNK_SIZE: int = 8
+const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
+const FIELDS_MAP_HALF: int = 48
+const SAFE_CLEARING_RADIUS: float = 23.0
+const HEIGHT_BLEND_BAND: float = 12.0
+const MAX_ELEVATION: float = 3.0
 
-func build() -> void:
+var map_half: int = MAP_HALF
+var fields_enabled: bool = false
+var world_seed: int = 64012
+var _noise: FastNoiseLite
+var chunk_meshes: Array[MeshInstance3D] = []
+
+func build(enable_fields: bool = false, seed: int = 64012) -> void:
 	name = "VoxelAtmosphere"
+	fields_enabled = enable_fields
+	map_half = FIELDS_MAP_HALF if fields_enabled else MAP_HALF
+	world_seed = seed
+	_noise = FastNoiseLite.new()
+	_noise.seed = world_seed
+	_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	_noise.frequency = 0.037
+	_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	_noise.fractal_octaves = 3
+	_noise.fractal_gain = 0.45
 	_make_ground()
 	_make_cliff_rim()
 	_make_grass_detail()
+	if fields_enabled:
+		_make_fields_scenery()
+
+func surface_y_at(x: float, z: float) -> float:
+	# All landmarks, stations and starter portals remain on the original flat
+	# ground. Quantized Perlin elevation beyond the clearing gives the visual
+	# silhouette and traversable one-block steps of Minecraft Dungeons.
+	if not fields_enabled:
+		return -0.055
+	var radial: float = maxf(absf(x), absf(z))
+	var blend: float = clampf((radial - SAFE_CLEARING_RADIUS) / HEIGHT_BLEND_BAND, 0.0, 1.0)
+	blend = blend * blend * (3.0 - 2.0 * blend)
+	if blend <= 0.0:
+		return -0.055
+	var sample: float = _noise.get_noise_2d(floorf(x) + 0.5, floorf(z) + 0.5)
+	var field_height: float = (1.1 + (sample + 1.0) * 1.05) * blend
+	return -0.055 + clampf(roundf(field_height), 0.0, MAX_ELEVATION)
 
 func _make_ground() -> void:
-	for chunk_x in range(-MAP_HALF, MAP_HALF, CHUNK_SIZE):
-		for chunk_z in range(-MAP_HALF, MAP_HALF, CHUNK_SIZE):
+	for chunk_x in range(-map_half, map_half, CHUNK_SIZE):
+		for chunk_z in range(-map_half, map_half, CHUNK_SIZE):
 			var st := SurfaceTool.new()
 			st.begin(Mesh.PRIMITIVE_TRIANGLES)
-			for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, MAP_HALF)):
-				for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, MAP_HALF)):
-					var tile: int = _ground_tile(x, z)
+			for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
+				for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
+					var x0: float = float(x)
+					var z0: float = float(z)
+					var x1: float = x0 + 1.0
+					var z1: float = z0 + 1.0
+					var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
 					PIXELS.quad(st,
-						Vector3(x, -0.055, z),
-						Vector3(x, -0.055, z + 1),
-						Vector3(x + 1, -0.055, z + 1),
-						Vector3(x + 1, -0.055, z), tile)
-					if x == -MAP_HALF:
-						PIXELS.quad(st, Vector3(x, -2.2, z + 1), Vector3(x, -2.2, z),
-							Vector3(x, -0.055, z), Vector3(x, -0.055, z + 1), 3)
-					if x == MAP_HALF - 1:
-						PIXELS.quad(st, Vector3(x + 1, -2.2, z),
-							Vector3(x + 1, -2.2, z + 1), Vector3(x + 1, -0.055, z + 1),
-							Vector3(x + 1, -0.055, z), 4)
-					if z == -MAP_HALF:
-						PIXELS.quad(st, Vector3(x, -2.2, z),
-							Vector3(x + 1, -2.2, z), Vector3(x + 1, -0.055, z),
-							Vector3(x, -0.055, z), 3)
-					if z == MAP_HALF - 1:
-						PIXELS.quad(st, Vector3(x + 1, -2.2, z + 1),
-							Vector3(x, -2.2, z + 1), Vector3(x, -0.055, z + 1),
-							Vector3(x + 1, -0.055, z + 1), 4)
-			add_child(PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z]))
+						Vector3(x0, height, z0), Vector3(x0, height, z1),
+						Vector3(x1, height, z1), Vector3(x1, height, z0),
+						_ground_tile(x, z))
+					# Vertical pixel-textured walls seal every changed height,
+					# including neighbouring tiles stored in DIFFERENT chunks.
+					var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
+					var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
+					var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
+					var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
+					if east < height - 0.01:
+						PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
+					if west < height - 0.01:
+						PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
+					if south < height - 0.01:
+						PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
+					if north < height - 0.01:
+						PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
+			var chunk: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
+			add_child(chunk)
+			chunk_meshes.append(chunk)
+			if fields_enabled:
+				var body := StaticBody3D.new()
+				body.name = "GroundCollision_%d_%d" % [chunk_x, chunk_z]
+				body.collision_layer = 1
+				body.collision_mask = 1
+				var shape := CollisionShape3D.new()
+				var collision_mesh: ConcavePolygonShape3D = chunk.mesh.create_trimesh_shape()
+				collision_mesh.backface_collision = true
+				shape.shape = collision_mesh
+				body.add_child(shape)
+				add_child(body)
 
 func _ground_tile(x: int, z: int) -> int:
-	var p := Vector2(float(x) + 0.5, float(z) + 0.5)
-	var path_distance: float = minf(_distance_segment(p, Vector2(-18, -1), Vector2(20, 2)),
-		minf(_distance_segment(p, Vector2(0, -21), Vector2(-1, 21)),
-		_distance_segment(p, Vector2(-1, -4), Vector2(6, 4))))
-	var hash_value: int = posmod(x * 137 + z * 113 + x * z * 7, 17)
-	if path_distance < 1.55:
-		return 5 if hash_value < 13 else 6
-	if path_distance < 2.0 and hash_value % 2 == 0:
-		return 6
-	if hash_value <= 2:
+	var pos := Vector2(float(x) + 0.5, float(z) + 0.5)
+	var path_distance: float = minf(_distance_segment(pos, Vector2(-18, -1), Vector2(20, 2)),
+		minf(_distance_segment(pos, Vector2(0, -21), Vector2(-1, 21)),
+		_distance_segment(pos, Vector2(-1, -4), Vector2(6, 4))))
+	var index: int = posmod(x * 137 + z * 113 + x * z * 7, 17)
+	if maxf(absf(float(x)), absf(float(z))) < 23.0:
+		if path_distance < 1.55:
+			return 5 if index < 13 else 6
+		if path_distance < 2.0 and index % 2 == 0:
+			return 6
+	if fields_enabled and maxf(absf(float(x)), absf(float(z))) >= 23.0:
+		if index == 0:
+			return 7
+		if index >= 14:
+			return 2
+		if index <= 3:
+			return 1
+		return 0
+	if index <= 2:
 		return 1
-	if hash_value >= 14:
+	if index >= 14:
 		return 2
 	return 0
 
-func _distance_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+func _distance_segment(pos: Vector2, a: Vector2, b: Vector2) -> float:
 	var segment: Vector2 = b - a
-	var t: float = clampf((p - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
-	return p.distance_to(a + segment * t)
+	var factor: float = clampf((pos - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
+	return pos.distance_to(a + segment * factor)
 
 func _make_cliff_rim() -> void:
-	# Hills are safely beyond the existing +/-23 invisible world walls.
-	# They never affect pathing, NPC/harvest positions, physics or interaction ranges.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for x in range(-31, 32, 2):
-		for z in range(-31, 32, 2):
-			if absi(x) < 24 and absi(z) < 24:
+	for x in range(-map_half - 9, map_half + 10, 3):
+		for z in range(-map_half - 9, map_half + 10, 3):
+			if absi(x) <= map_half and absi(z) <= map_half:
 				continue
-			var height: float = 1.8 + float(posmod(x * 31 + z * 47, 6)) * 0.37
-			var high: bool = posmod(x * 7 + z * 11, 11) >= 7
-			if high:
-				height += 0.9
+			var noise_height: float = _noise.get_noise_2d(float(x), float(z))
+			var height: float = 2.4 + (noise_height + 1.0) * 1.6
+			var raised: bool = noise_height > 0.12
 			PIXELS.box(st, Vector3(float(x), (height - 2.0) * 0.5, float(z)),
-				Vector3(2.0, height + 2.0, 2.0), 1 if high else 0, 4 if high else 3)
+				Vector3(3.0, height + 2.0, 3.0), 1 if raised else 0, 4 if raised else 3)
 	add_child(PIXELS.as_instance(st, "SteppedDistanceCliffs"))
 
 func _make_grass_detail() -> void:
-	# Pixel-sized flowers/grass rather than hundreds of individually drawn nodes.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(90):
-		var x: float = float(posmod(i * 41 + 7, 42)) - 21.0
-		var z: float = float(posmod(i * 83 + 13, 42)) - 21.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world_seed + 711
+	for i in range(300 if fields_enabled else 90):
+		var x: float = rng.randf_range(-float(map_half) + 2.0, float(map_half) - 2.0)
+		var z: float = rng.randf_range(-float(map_half) + 2.0, float(map_half) - 2.0)
 		if _ground_tile(int(floorf(x)), int(floorf(z))) in [5, 6]:
 			continue
 		if absf(x) < 4.0 and absf(z) < 4.0:
 			continue
 		var h: float = 0.11 + float(i % 4) * 0.035
-		PIXELS.box(st, Vector3(x, h * 0.5 - 0.03, z),
-			Vector3(0.10, h, 0.10), 1, 9)
+		var y: float = surface_y_at(x, z)
+		PIXELS.box(st, Vector3(x, y + h * 0.5 + 0.02, z), Vector3(0.10, h, 0.10), 1, 9)
 		if i % 7 == 0:
-			PIXELS.box(st, Vector3(x, h + 0.03, z), Vector3(0.17, 0.12, 0.17), 14, 14)
+			PIXELS.box(st, Vector3(x, y + h + 0.08, z), Vector3(0.17, 0.12, 0.17), 14, 14)
 	add_child(PIXELS.as_instance(st, "VoxelWildflowers"))
+
+func _make_fields_scenery() -> void:
+	# Far-field vegetation is decorative and batched into ONE mesh draw call.
+	# Individual harvestables/collisions belong to the future chunk streamer.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world_seed + 1903
+	for i in range(85):
+		var x: float = rng.randf_range(-44.0, 44.0)
+		var z: float = rng.randf_range(-44.0, 44.0)
+		if maxf(absf(x), absf(z)) < 29.0:
+			continue
+		var y: float = surface_y_at(x, z)
+		if i % 4 == 0:
+			PIXELS.box(st, Vector3(x, y + 0.75, z), Vector3(0.45, 1.45, 0.48), 8, 8)
+			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), 9, 10)
+			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), 1, 9)
+		elif i % 4 == 1:
+			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
+			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
+		else:
+			PIXELS.box(st, Vector3(x, y + 0.28, z), Vector3(0.88, 0.58, 0.82), 9, 10)
+			PIXELS.box(st, Vector3(x + 0.28, y + 0.43, z), Vector3(0.75, 0.69, 0.85), 1, 9)
+	add_child(PIXELS.as_instance(st, "FieldsBatchedScenery"))
