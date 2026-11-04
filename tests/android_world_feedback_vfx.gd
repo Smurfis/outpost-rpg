@@ -75,7 +75,13 @@ func _run() -> void:
 			hero_burst = true
 	check(hero_burst, "Hero defeat also creates pixel burst")
 	var before_count: int = world.loaded_chunk_count()
+	game.hero.global_position = Vector3(78.0, 3.5, 78.0)
+	# Procedural portals are enabled in real Play -> loading workflows;
+	# direct-scene tests deliberately preserve the five starter previews.
+	world.defer_streaming = true
 	world.update_streaming_for(Vector3(78.0, 0.0, 78.0))
+	var manager: Node = game.get_node("Dungeons")
+	check(manager.entrances.size() > 5, "Exploring distant chunks offers new functional dungeon portals")
 	await physics_frame
 	check(world.loaded_chunk_count() <= before_count, "Streamed harvestables do not keep distant terrain resident")
 	check(world.get_node_or_null("ChunkInteractables_72_72") != null, "Distant traversable terrain contains new interactive world nodes")
