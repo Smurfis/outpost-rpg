@@ -86,6 +86,28 @@ func _run() -> void:
 	await physics_frame
 	var blocked: bool = game.hero._try_auto_step(Vector3(0, 0, -0.88))
 	check(not blocked, "Two-voxel obstacle cannot be climbed automatically")
+	# Prove that the ordinary joystick -> move_and_slide path can trigger the
+	# auto-step after the capsule hits the obstacle's face.
+	game.hero.global_position = Vector3(-1, 20.03, 0.24)
+	game.hero.velocity = Vector3.ZERO
+	game.hud.move_vector = Vector2.ZERO
+	await physics_frame
+	var climbed_by_joystick: bool = false
+	for frame_number in range(95):
+		var camera_forward: Vector3 = -game.camera.global_transform.basis.z
+		camera_forward.y = 0.0
+		camera_forward = camera_forward.normalized()
+		var camera_right: Vector3 = game.camera.global_transform.basis.x
+		camera_right.y = 0.0
+		camera_right = camera_right.normalized()
+		var desired := Vector3(0, 0, -1)
+		game.hud.move_vector = Vector2(desired.dot(camera_right), -desired.dot(camera_forward)).limit_length()
+		await physics_frame
+		if game.hero.global_position.y > 20.90 and game.hero.global_position.z < -0.5:
+			climbed_by_joystick = true
+			break
+	game.hud.move_vector = Vector2.ZERO
+	check(climbed_by_joystick, "Ordinary joystick walking climbs the one-voxel ledge automatically")
 	game.queue_free()
 	await process_frame
 	print("FIELDS RESULT: %d failed assertion(s)." % failed)

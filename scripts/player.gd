@@ -27,6 +27,7 @@ var last_gather: String = ""
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
 const STEP_LANDING_TOLERANCE: float = 0.06
+const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front edge.
 # Dungeon portal interaction state: manually operated by default.
 var interaction_target: Vector3 = Vector3.ZERO
 var interaction_moving: bool = false
@@ -234,9 +235,13 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	if test_move(original, up):
 		return false # Low ceiling or other obstacle directly above the player.
 	var raised: Transform3D = original.translated(up)
-	if test_move(raised, horizontal_motion):
+	# A 0.38-radius capsule contacts the wall BEFORE its centre reaches the
+	# top tile. Extend the safe probe past that radius, or normal joystick
+	# movement would never find the landing surface.
+	var probe_motion: Vector3 = horizontal_motion + horizontal_motion.normalized() * STEP_CAPSULE_PROBE
+	if test_move(raised, probe_motion):
 		return false # The elevated path is blocked by a full-height wall.
-	var candidate: Vector3 = original.origin + horizontal_motion
+	var candidate: Vector3 = original.origin + probe_motion
 	var start: Vector3 = candidate + Vector3.UP * (max_auto_step_height + 0.28)
 	var end: Vector3 = candidate - Vector3.UP * 0.25
 	var query := PhysicsRayQueryParameters3D.create(start, end, collision_mask, [get_rid()])
@@ -251,7 +256,7 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 		return false
 	# Revalidate horizontally at the final elevation before moving the body.
 	var landing: Transform3D = original.translated(Vector3.UP * (rise + STEP_LANDING_TOLERANCE))
-	if test_move(landing, horizontal_motion):
+	if test_move(landing, probe_motion):
 		return false
 	global_position = candidate + Vector3.UP * (rise + STEP_LANDING_TOLERANCE)
 	velocity.y = 0.0
