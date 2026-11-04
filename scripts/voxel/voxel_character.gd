@@ -56,6 +56,12 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 0.03, -0.09), Vector3(0.66, 0.72, 0.08), 12, 4)
 			PIXELS.box(st, Vector3(0, -0.15, -0.15), Vector3(0.20, 0.27, 0.06), 5, 5)
 			PIXELS.box(st, Vector3(0, 0.15, -0.16), Vector3(0.52, 0.11, 0.07), 5, 5)
+		"hand_torch":
+			# A short wood-wrapped torch with an ember head and gold flame.
+			PIXELS.box(st, Vector3(0, 0.13, 0), Vector3(0.19, 0.78, 0.19), 8, 8)
+			PIXELS.box(st, Vector3(0, 0.52, 0), Vector3(0.34, 0.26, 0.33), 15, 8)
+			PIXELS.box(st, Vector3(0, 0.77, 0), Vector3(0.26, 0.31, 0.24), 5, 13)
+			PIXELS.box(st, Vector3(0, 0.97, 0), Vector3(0.12, 0.21, 0.12), 13, 5)
 		"cloth_cloak":
 			# Stepped cape rather than the smooth imported OBJ cloth silhouette.
 			PIXELS.box(st, Vector3(0, -0.21, 0.04), Vector3(0.88, 0.58, 0.13), 2, 10)

@@ -16,6 +16,8 @@ var right_arm: Node3D
 var left_leg: Node3D
 var right_leg: Node3D
 var shield_mesh: MeshInstance3D
+var torch_pivot: Node3D
+var torch_light: OmniLight3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
 var weapon_grip: Node3D
@@ -79,6 +81,23 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	sword_mesh = _model("steel_sword", weapon_grip, Vector3.ZERO)
 	shield_mesh = _model("kite_shield", left_arm, Vector3(-0.07, -0.46, -0.29))
 	shield_mesh.visible = false
+	# Independent off-hand torch, compatible with the existing shield slot.
+	torch_pivot = Node3D.new()
+	torch_pivot.name = "OffhandTorch"
+	torch_pivot.position = Vector3(-0.07, -0.46, -0.25)
+	left_arm.add_child(torch_pivot)
+	var lantern: MeshInstance3D = VOXEL_CHARACTER.create_part("hand_torch")
+	if lantern != null:
+		torch_pivot.add_child(lantern)
+	torch_light = OmniLight3D.new()
+	torch_light.name = "TorchLight"
+	torch_light.position = Vector3(0, 0.88, 0)
+	torch_light.light_color = Color("ffb665")
+	torch_light.light_energy = 1.75
+	torch_light.omni_range = 7.4
+	torch_light.shadow_enabled = false # One cheap, shadowless local light for mobile.
+	torch_pivot.add_child(torch_light)
+	torch_pivot.visible = false
 	cloak_pivot = _pivot("Cloak", Vector3(0, 1.50, 0.27))
 	_model("cloth_cloak", cloak_pivot, Vector3.ZERO)
 	cloak_pivot.visible = false
@@ -144,6 +163,12 @@ func set_spear(equipped: bool) -> void:
 func set_shield(equipped: bool) -> void:
 	if shield_mesh != null:
 		shield_mesh.visible = equipped
+
+func set_torch(equipped: bool) -> void:
+	if torch_pivot != null:
+		torch_pivot.visible = equipped
+	if torch_light != null:
+		torch_light.visible = equipped
 
 func set_cloak(equipped: bool) -> void:
 	if cloak_pivot != null:

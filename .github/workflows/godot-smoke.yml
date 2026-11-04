@@ -87,6 +87,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fields_step.gd 2>&1 | tee fields-step.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FIELDS:' fields-step.log; then exit 1; fi
           grep -q "FIELDS RESULT: 0 failed assertion(s)." fields-step.log
+      - name: Validate day/night and mutually exclusive torch/shield equipment
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/day_night_torch.gd 2>&1 | tee day-night.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL NIGHT:' day-night.log; then exit 1; fi
+          grep -q "DAY NIGHT RESULT: 0 failures." day-night.log
       - name: Verify boar pixel atlas, draw-call batching and legacy fallback
         run: |
           set -o pipefail
