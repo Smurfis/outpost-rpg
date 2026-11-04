@@ -20,9 +20,32 @@ static func rock(kind: String = "stone") -> MeshInstance3D:
 	PIXELS.box(st, Vector3(-0.35, 0.33, 0.02), Vector3(1.06, 0.67, 0.94), top, side)
 	PIXELS.box(st, Vector3(0.32, 0.42, -0.12), Vector3(0.9, 0.83, 0.81), side, side)
 	PIXELS.box(st, Vector3(0.1, 0.24, 0.44), Vector3(0.87, 0.48, 0.56), side, side)
+	# Iron gets a separate silver/white metal vein rather than tile 13
+	# (purple MAGIC CRYSTAL, which should never be used for iron).
 	if kind == "iron":
-		PIXELS.box(st, Vector3(-0.27, 0.79, -0.13), Vector3(0.22, 0.43, 0.25), 13, 13)
-		PIXELS.box(st, Vector3(0.45, 0.90, 0.06), Vector3(0.26, 0.38, 0.26), 13, 13)
+		var silver_mesh := BoxMesh.new()
+		silver_mesh.size = Vector3.ONE
+		var silver := StandardMaterial3D.new()
+		silver.albedo_color = Color("dfe8ee")
+		silver.metallic = 0.48
+		silver.roughness = 0.36
+		silver.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		var vein_a := MeshInstance3D.new()
+		vein_a.name = "SilverWhiteIronVein"
+		vein_a.mesh = silver_mesh
+		vein_a.material_override = silver
+		vein_a.scale = Vector3(0.26, 0.46, 0.28)
+		vein_a.position = Vector3(-0.27, 0.81, -0.12)
+		var vein_b := MeshInstance3D.new()
+		vein_b.name = "SilverWhiteIronVeinSecond"
+		vein_b.mesh = silver_mesh
+		vein_b.material_override = silver
+		vein_b.scale = Vector3(0.29, 0.36, 0.29)
+		vein_b.position = Vector3(0.43, 0.91, 0.06)
+		var root: MeshInstance3D = PIXELS.as_instance(st, "VoxelIron")
+		root.add_child(vein_a)
+		root.add_child(vein_b)
+		return root
 	if kind == "coal":
 		PIXELS.box(st, Vector3(0.34, 0.87, 0.10), Vector3(0.38, 0.26, 0.27), 15, 15)
 	return PIXELS.as_instance(st, "Voxel" + kind.capitalize())
