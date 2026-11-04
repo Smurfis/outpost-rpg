@@ -511,6 +511,8 @@ func _sync_preview() -> void:
 	add_child(dungeon)
 	dungeon.position = Vector3(0.0, 10.0, -800.0 - float(party_id()) * 700.0)
 	dungeon.setup(str(descriptor.get("entrance_id", "")), int(descriptor.get("rarity", 0)), game.hero, new_floor)
+	dungeon.stairs_selected.connect(_on_preview_exit_selected)
+	dungeon.chest_selected.connect(_on_preview_exit_selected)
 	for guardian in dungeon.get_tree().get_nodes_in_group("dungeon_guardians"):
 		if dungeon.is_ancestor_of(guardian):
 			guardian.set_physics_process(false)
@@ -530,6 +532,18 @@ func _sync_preview() -> void:
 	game.hero.velocity = Vector3.ZERO
 	status_message = "Party %d — dungeon preview floor %d/%d (no combat loot)" % [party_id(), new_floor, int(descriptor.get("floors", 1))]
 	private_run_changed.emit()
+
+func _on_preview_exit_selected(_instance: Node3D) -> void:
+	if not is_party_leader():
+		game.hud.toast("The party leader must open this dungeon exit.")
+		return
+	if not can_advance_preview():
+		game.hud.toast("Defeat the guardians to unlock the exit.")
+		return
+	if int(preview_descriptor.get("floor", 1)) < int(preview_descriptor.get("floors", 1)):
+		request_next_floor()
+	else:
+		request_complete_run()
 
 func _clear_preview() -> void:
 	if run_preview != null and is_instance_valid(run_preview):
