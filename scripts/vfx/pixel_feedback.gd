@@ -19,6 +19,8 @@ static func emit_feedback(parent: Node3D, at: Vector3, damage: float, tone: Colo
 	if parent == null:
 		return null
 	var feedback = load("res://scripts/vfx/pixel_feedback.gd").new()
+	feedback.name = "PixelBurst"
+	feedback.add_to_group("outpost_pixel_feedback")
 	feedback._damage = maxi(0, roundi(damage))
 	feedback._tone = tone
 	feedback._lethal = lethal
