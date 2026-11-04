@@ -10,6 +10,7 @@ const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const GUARDIAN = preload("res://scripts/dungeons/dungeon_guardian.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
 const LOOT = preload("res://scripts/dungeons/dungeon_loot.gd")
+const ROOM_DECOR = preload("res://scripts/dungeons/dungeon_room_decor.gd")
 const ASSET_ROOT = "res://assets/third_party/kaykit_dungeon/"
 # Bring paired doorframes closer together while keeping the seeded room graph
 # and chest/guardian locations deterministic per entrance.
@@ -202,6 +203,9 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 	if rng.randf() < 0.45:
 		var torch := _model("torch_lit", center + Vector3(-4.8, 0.0, -4.8), RARITY.color(quality).lerp(Color("f2b36c"), 0.72))
 		torch.scale = Vector3(0.92, 0.92, 0.92)
+	# Add one batched nearest-filtered mesh for each room's unique archetype.
+	# No new colliders inside traversable doors or guardian/chest locations.
+	ROOM_DECOR.decorate(floor_root, room, center, quality)
 
 func _build_connector(a: Vector2i, b: Vector2i) -> void:
 	var a_center: Vector3 = Vector3(float(a.x) * STEP, 0.0, float(a.y) * STEP)

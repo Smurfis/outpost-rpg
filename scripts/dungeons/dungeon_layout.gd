@@ -3,6 +3,7 @@ extends RefCounted
 ## Independent from visual scenes, safe for procedural streaming and tests.
 const BALANCE = "res://data/progression/balance.json"
 const DELTAS: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]
+const ROOM_ARCHETYPES: Array[String] = ["pillar_hall", "collapsed_ruin", "old_armory", "fungal_grotto", "shrine", "scorched_hall", "gallery"]
 const DEFAULTS: Dictionary = {
 	"floor_ranges": [[1, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
 	"room_ranges": [[4, 6], [5, 7], [6, 8], [7, 9], [8, 10]],
@@ -136,13 +137,31 @@ static func generate(entrance_id: String, rarity: int, floor_index: int, pattern
 			bonus.append(i)
 	if bonus.is_empty() and coords.size() >= 5:
 		bonus.append(1 if exit_id != 1 else 2)
+	# Shuffle an independent style deck seeded from this dungeon floor. This
+	# never consumes layout RNG, so existing seeds, graphs and rewards stay stable.
+	var style_rng := RandomNumberGenerator.new()
+	style_rng.seed = stable_seed("%s:%d:%d:decor" % [entrance_id, rarity_index, index])
+	var styles: Array[String] = ROOM_ARCHETYPES.duplicate()
+	for shuffle_index in range(styles.size() - 1, 0, -1):
+		var other: int = style_rng.randi_range(0, shuffle_index)
+		var held: String = styles[shuffle_index]
+		styles[shuffle_index] = styles[other]
+		styles[other] = held
+	var normal_count: int = 0
 	var rooms: Array = []
 	for i in range(coords.size()):
+		var role: String = "start" if i == 0 else "stairs" if i == exit_id and index < total_floors - 1 else "boss" if i == exit_id else "treasure" if i in bonus else "normal"
+		var style: String = role.replace("start", "entry")
+		if role == "normal":
+			style = styles[normal_count % styles.size()]
+			normal_count += 1
 		rooms.append({
 			"id": i,
 			"grid": coords[i],
 			"links": adjacency[i].duplicate(),
-			"role": "start" if i == 0 else "stairs" if i == exit_id and index < total_floors - 1 else "boss" if i == exit_id else "treasure" if i in bonus else "normal"
+			"role": role,
+			"archetype": style,
+			"decor_seed": stable_seed("%s:room:%d" % [str(layout_seed), i])
 		})
 	return {
 		"seed": layout_seed,
