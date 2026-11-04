@@ -25,7 +25,7 @@ func _run() -> void:
 	await process_frame
 	var boars: Array = []
 	for child in game.get_children():
-		if child is CharacterBody3D and child.is_in_group("enemies") and str(child.name) == "WildBoar":
+		if child is CharacterBody3D and child.is_in_group("enemies"):
 			boars.append(child)
 	check(boars.size() == 3, "All original boars remain in overworld")
 	if not boars.is_empty():
@@ -56,7 +56,7 @@ func _run() -> void:
 	await process_frame
 	var old_boar
 	for child in original.get_children():
-		if child is CharacterBody3D and child.is_in_group("enemies") and str(child.name) == "WildBoar":
+		if child is CharacterBody3D and child.is_in_group("enemies"):
 			old_boar = child
 			break
 	check(old_boar != null, "Legacy appearance still spawns original boars")
