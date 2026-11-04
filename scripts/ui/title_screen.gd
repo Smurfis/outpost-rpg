@@ -3,6 +3,7 @@ extends Control
 ## The PNG artwork is optional until final art sign-off; transparent SVG placeholders render without it.
 const DESIGN := Vector2(1280.0, 720.0)
 const MAIN_GAME := "res://scenes/main.tscn"
+const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
@@ -135,6 +136,8 @@ func _make_screen() -> void:
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	var path := "res://assets/ui/title/" + png
+	if not ResourceLoader.exists(path) and png == "title_background.png":
+		path = "res://assets/ui/title/title_background.jpg"
 	if not ResourceLoader.exists(path):
 		path = "res://assets/ui/title/" + svg
 	if not ResourceLoader.exists(path):
@@ -147,6 +150,8 @@ func _add_image(node_name: String, png: String, svg: String, where: Vector2, how
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_SCALE
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if node_name == "Backdrop":
+		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(image)
 
 func _label_style(label: Label, font_size: int, ink: Color, outline: Color) -> void:
@@ -182,7 +187,7 @@ func _begin_continue() -> void:
 
 func _launch_game(new_adventure: bool) -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
-	get_tree().change_scene_to_file(MAIN_GAME)
+	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
 	if _show_tips:

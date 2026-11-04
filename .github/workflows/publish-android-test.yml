@@ -1,0 +1,44 @@
+name: Publish Outpost Android test APK
+
+on:
+  push:
+    branches: [build/android-phase5b-test]
+    paths: [.github/workflows/publish-android-test.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Retrieve verified APK from successful Godot Android build
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41832556378 --repo "$REPOSITORY" --name outpost-phase5b-android-debug-apk --dir release
+          test -s release/Outpost-Phase5B-Android.apk
+          unzip -t release/Outpost-Phase5B-Android.apk >/dev/null
+          ls -lh release/Outpost-Phase5B-Android.apk
+      - name: Publish GitHub prerelease with direct APK download
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="outpost-android-phase5b-2026-11-04"
+          if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" release/Outpost-Phase5B-Android.apk --repo "$REPOSITORY" --clobber
+          else
+            gh release create "$tag" release/Outpost-Phase5B-Android.apk \
+              --repo "$REPOSITORY" \
+              --target 7542226a65cc160fe0096ac6f26ba84767d4decf \
+              --title "Outpost Android Phase 5B — test build (4 November 2026)" \
+              --notes "Development-only Android ARM64 APK from tested Phase 5B branch. Includes dungeon guardian host AI, crafting, voxel world, and day/night. This is NOT a final stable release. Install from APK after download. Signing is a temporary debug key, so future builds may require uninstalling this preview. Build source: https://github.com/Smurfis/outpost-rpg/actions/runs/41832556378" \
+              --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$REPOSITORY" --json url,assets --jq '{url:.url,assets:[.assets[].url]}'

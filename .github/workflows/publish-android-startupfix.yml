@@ -1,0 +1,42 @@
+name: Publish Outpost Android startup-fix APK
+on:
+  push:
+    branches: [fix/android-world-loader-title]
+    paths: [.github/workflows/publish-android-startupfix.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Retrieve tested Godot Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41850557487 --repo "$REPOSITORY" --name outpost-phase5b-android-debug-apk --dir release
+          test -s release/Outpost-Phase5B-Android.apk
+          unzip -t release/Outpost-Phase5B-Android.apk >/dev/null
+          mv release/Outpost-Phase5B-Android.apk release/Outpost-Android-LoadingFix.apk
+          ls -lh release/Outpost-Android-LoadingFix.apk
+      - name: Publish standalone APK download on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="outpost-android-loadingfix-2026-11-04"
+          if gh release view "$tag" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" release/Outpost-Android-LoadingFix.apk --repo "$REPOSITORY" --clobber
+          else
+            gh release create "$tag" release/Outpost-Android-LoadingFix.apk \
+              --repo "$REPOSITORY" \
+              --target e050fb57b9cf511e88d560b6cb4640857557f8c0 \
+              --title "Outpost Android — world loading fix test build (4 November 2026)" \
+              --notes "Android Play crash mitigation: progress-driven world generation loading screen; mobile 5x5 terrain budget and chunk batching; approved title-screen landscape asset from design pack, with remaining title sprites pending. This is an experimental debug APK, not a confirmed crash fix. Godot 4.7.2 CI Play-to-game regression and APK packaging both passed. Physical Android validation required. Previous debug APK may need to be uninstalled first if signatures differ. Parent PR: https://github.com/Smurfis/outpost-rpg/pull/27" \
+              --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$REPOSITORY" --json url,assets --jq '{url:.url,assets:[.assets[].url]}'
