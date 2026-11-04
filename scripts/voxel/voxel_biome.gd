@@ -8,7 +8,8 @@ const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
 const STREAM_MAP_HALF: int = 96
 const STREAM_RADIUS: int = 3 # Keep 7x7 neighbour chunks around the active player
-const CHUNK_CREATION_BUDGET: int = 2 # Android: do not construct 49 meshes/colliders during one _ready().
+const CHUNK_CREATION_BUDGET: int = 2 # Avoid building all terrain in one frame.
+const MOBILE_STREAM_RADIUS: int = 2 # 5x5 around the player on weaker Android GPUs.
 const SAFE_CLEARING_RADIUS: float = 23.0
 const HEIGHT_BLEND_BAND: float = 12.0
 const MAX_ELEVATION: float = 3.0
@@ -101,6 +102,9 @@ func initial_generation_progress() -> float:
 func initial_generation_complete() -> bool:
 	return _initial_completed
 
+func _active_radius() -> int:
+	return MOBILE_STREAM_RADIUS if OS.has_feature("mobile") else STREAM_RADIUS
+
 func _queue_streaming_for(point: Vector3) -> void:
 	if absf(point.x) >= float(map_half) or absf(point.z) >= float(map_half):
 		return
@@ -110,8 +114,8 @@ func _queue_streaming_for(point: Vector3) -> void:
 	_stream_center = center
 	var wanted: Dictionary = {}
 	var candidates: Array[Vector2i] = []
-	for dx in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
-		for dz in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+	for dx in range(-_active_radius(), _active_radius() + 1):
+		for dz in range(-_active_radius(), _active_radius() + 1):
 			var cell: Vector2i = center + Vector2i(dx, dz) * CHUNK_SIZE
 			if cell.x < -map_half or cell.x >= map_half or cell.y < -map_half or cell.y >= map_half:
 				continue
@@ -160,8 +164,8 @@ func update_streaming_for(point: Vector3) -> void:
 		return
 	_stream_center = center
 	var required: Dictionary = {}
-	for dx in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
-		for dz in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+	for dx in range(-_active_radius(), _active_radius() + 1):
+		for dz in range(-_active_radius(), _active_radius() + 1):
 			var cell: Vector2i = center + Vector2i(dx, dz) * CHUNK_SIZE
 			if cell.x < -map_half or cell.x >= map_half or cell.y < -map_half or cell.y >= map_half:
 				continue
