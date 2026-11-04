@@ -142,6 +142,7 @@ func _queue_streaming_for(point: Vector3) -> void:
 		if wanted.has(cell):
 			continue
 		var members: Array = _loaded[cell]
+		_unregister_streamed_portal(cell)
 		for object in members:
 			if object != null and is_instance_valid(object):
 				if object is MeshInstance3D:
@@ -185,6 +186,7 @@ func update_streaming_for(point: Vector3) -> void:
 		if required.has(cell):
 			continue
 		var previous: Array = _loaded[cell]
+		_unregister_streamed_portal(cell)
 		for object in previous:
 			if object != null and is_instance_valid(object):
 				if object is MeshInstance3D:
@@ -322,6 +324,39 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		if interactables != null:
 			members.append(interactables)
 	_loaded[key] = members
+	_register_streamed_portal(chunk_x, chunk_z)
+
+func _register_streamed_portal(chunk_x: int, chunk_z: int) -> void:
+	# Real Play sessions stream discoverable dungeon gates outside the camp.
+	# Direct-scene legacy tests retain the five predictable preview portals.
+	if not defer_streaming or not stream_enabled:
+		return
+	var sample: int = posmod((chunk_x + 101) * 37 + (chunk_z + 101) * 91 + world_seed, 13)
+	if sample != 0:
+		return
+	var x: float = float(chunk_x) + float(CHUNK_SIZE) * 0.5
+	var z: float = float(chunk_z) + float(CHUNK_SIZE) * 0.5
+	if maxf(absf(x), absf(z)) < 32.0:
+		return
+	var game: Node = get_parent()
+	if game == null:
+		return
+	var dungeons: Node = game.get_node_or_null("Dungeons")
+	if dungeons == null or not dungeons.has_method("register_chunk"):
+		return
+	var key: String = "fields_%d_%d" % [chunk_x, chunk_z]
+	var distance: float = maxf(absf(x), absf(z))
+	var tier: int = 0 if distance < 48.0 else 1 if distance < 72.0 else 2
+	var entry: Vector3 = Vector3(x, surface_y_at(x, z) + 0.055, z)
+	dungeons.register_chunk(key, Rect2(Vector2(float(chunk_x), float(chunk_z)), Vector2(CHUNK_SIZE, CHUNK_SIZE)), tier, [entry], false)
+
+func _unregister_streamed_portal(cell: Vector2i) -> void:
+	var game: Node = get_parent()
+	if game == null:
+		return
+	var dungeons: Node = game.get_node_or_null("Dungeons")
+	if dungeons != null and dungeons.has_method("unregister_chunk"):
+		dungeons.unregister_chunk("fields_%d_%d" % [cell.x, cell.y])
 
 func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
 	# Unlike earlier purely decorative distant trees, these are harvestable and
