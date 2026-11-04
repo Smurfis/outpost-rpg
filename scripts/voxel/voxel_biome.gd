@@ -2,6 +2,7 @@ extends Node3D
 ## Walkable, chunked voxel Fields biome. The existing Outpost clearing stays
 ## level and traversable; seeded Perlin noise forms one-voxel terraces outside.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
@@ -117,38 +118,100 @@ func _make_ground() -> void:
 		for chunk_z in range(-map_half, map_half, CHUNK_SIZE):
 			_build_ground_chunk(chunk_x, chunk_z)
 
+func _tile_height(x: int, z: int) -> float:
+	return surface_y_at(float(x) + 0.5, float(z) + 0.5)
+
 func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 	var key: Vector2i = Vector2i(chunk_x, chunk_z)
 	if _loaded.has(key):
 		return
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
-		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
-			var x0: float = float(x)
-			var z0: float = float(z)
-			var x1: float = x0 + 1.0
-			var z1: float = z0 + 1.0
-			var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
-			PIXELS.quad(st,
-				Vector3(x0, height, z0), Vector3(x0, height, z1),
-				Vector3(x1, height, z1), Vector3(x1, height, z0),
-				_ground_tile(x, z))
-			# Exposed faces use the same heights even when the neighbour has
-			# not been loaded yet: no seam when a chunk later streams in.
-			var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
-			var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
-			var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
-			var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
-			if east < height - 0.01:
-				PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
-			if west < height - 0.01:
-				PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
-			if south < height - 0.01:
-				PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
-			if north < height - 0.01:
-				PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
+	var x_end: int = mini(chunk_x + CHUNK_SIZE, map_half)
+	var z_end: int = mini(chunk_z + CHUNK_SIZE, map_half)
+	# Merge adjacent coplanar upper faces when BOTH height and atlas tile match.
+	# This is intentionally per-chunk; no mesh/collision dependency crosses
+	# an asynchronously loaded cell boundary.
+	var used: Dictionary = {}
+	for x in range(chunk_x, x_end):
+		for z in range(chunk_z, z_end):
+			if used.has(Vector2i(x, z)):
+				continue
+			var tile: int = _ground_tile(x, z)
+			var height: float = _tile_height(x, z)
+			var width: int = 1
+			while x + width < x_end:
+				if used.has(Vector2i(x + width, z)) or _ground_tile(x + width, z) != tile or not is_equal_approx(_tile_height(x + width, z), height):
+					break
+				width += 1
+			var depth: int = 1
+			while z + depth < z_end:
+				var same: bool = true
+				for ox in range(width):
+					if used.has(Vector2i(x + ox, z + depth)) or _ground_tile(x + ox, z + depth) != tile or not is_equal_approx(_tile_height(x + ox, z + depth), height):
+						same = false
+						break
+				if not same:
+					break
+				depth += 1
+			for ox in range(width):
+				for oz in range(depth):
+					used[Vector2i(x + ox, z + oz)] = true
+			GREEDY.tiled_quad(st,
+				Vector3(float(x), height, float(z)),
+				Vector3(float(x), height, float(z + depth)),
+				Vector3(float(x + width), height, float(z + depth)),
+				Vector3(float(x + width), height, float(z)), tile, "top")
+	# Merge exposed vertical walls along a continuous row when they share
+	# exactly the same upper/lower heights; all directions handle unloaded
+	# neighbour chunks using the world-wide deterministic height sampler.
+	for side in ["east", "west", "south", "north"]:
+		if side in ["east", "west"]:
+			for x in range(chunk_x, x_end):
+				var z: int = chunk_z
+				while z < z_end:
+					var high: float = _tile_height(x, z)
+					var adjacent: float = _tile_height(x + (1 if side == "east" else -1), z) if (x < map_half - 1 if side == "east" else x > -map_half) else -2.2
+					if high <= adjacent + 0.01:
+						z += 1
+						continue
+					var stop: int = z + 1
+					while stop < z_end:
+						var next_high: float = _tile_height(x, stop)
+						var next_low: float = _tile_height(x + (1 if side == "east" else -1), stop) if (x < map_half - 1 if side == "east" else x > -map_half) else -2.2
+						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low):
+							break
+						stop += 1
+					var plane_x: float = float(x + 1 if side == "east" else x)
+					if side == "east":
+						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, stop), Vector3(plane_x, adjacent, z), Vector3(plane_x, high, z), Vector3(plane_x, high, stop), 3, "x")
+					else:
+						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, z), Vector3(plane_x, adjacent, stop), Vector3(plane_x, high, stop), Vector3(plane_x, high, z), 3, "x")
+					z = stop
+		else:
+			for z in range(chunk_z, z_end):
+				var x: int = chunk_x
+				while x < x_end:
+					var high: float = _tile_height(x, z)
+					var adjacent: float = _tile_height(x, z + (1 if side == "south" else -1)) if (z < map_half - 1 if side == "south" else z > -map_half) else -2.2
+					if high <= adjacent + 0.01:
+						x += 1
+						continue
+					var stop: int = x + 1
+					while stop < x_end:
+						var next_high: float = _tile_height(stop, z)
+						var next_low: float = _tile_height(stop, z + (1 if side == "south" else -1)) if (z < map_half - 1 if side == "south" else z > -map_half) else -2.2
+						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low):
+							break
+						stop += 1
+					var plane_z: float = float(z + 1 if side == "south" else z)
+					if side == "south":
+						GREEDY.tiled_quad(st, Vector3(x, adjacent, plane_z), Vector3(stop, adjacent, plane_z), Vector3(stop, high, plane_z), Vector3(x, high, plane_z), 3, "z")
+					else:
+						GREEDY.tiled_quad(st, Vector3(stop, adjacent, plane_z), Vector3(x, adjacent, plane_z), Vector3(x, high, plane_z), Vector3(stop, high, plane_z), 3, "z")
+					x = stop
 	var mesh: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
+	mesh.material_override = GREEDY.material()
 	add_child(mesh)
 	chunk_meshes.append(mesh)
 	var members: Array = [mesh]
