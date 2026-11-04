@@ -4,6 +4,7 @@ const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 var game
 var root: Control
 var status: Label
+var world_clock: Label
 var quest: Label
 var hint: Label
 var toast_label: Label
@@ -32,6 +33,7 @@ func _ready() -> void:
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_panel(0.015, 0.02, 0.302, 0.215, Color("#291d1b"))
+	world_clock = _label("DAY 12:00", 13, Color("#e9d4ab"), 0.780, 0.046, 0.879, 0.110)
 	status = _label("OUTPOST  ◆  HP 100/100", 16, Color("#f9e2b7"), 0.029, 0.028, 0.29, 0.077)
 	health_bar = _meter(0.03, 0.079, 0.284, 0.105, Color("#d94f44"))
 	xp_bar = _meter(0.03, 0.113, 0.284, 0.131, Color("#6db4dd"))
@@ -239,6 +241,12 @@ func _notification(what: int) -> void:
 
 func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
+
+func set_world_clock(display_time: String, night: bool) -> void:
+	if world_clock == null:
+		return
+	world_clock.text = ("NIGHT " if night else "DAY ") + display_time
+	world_clock.add_theme_color_override("font_color", Color("#eab970") if night else Color("#e9d4ab"))
 
 func render_status(hp: float, inventory: Dictionary, xp: int, kills: int, weapon: String, objective: String, helper: String) -> void:
 	status.text = "OUTPOST  ◆  HP %d/100\nXP %d  •  KILLS %d  •  %s" % [int(ceilf(hp)), xp, kills, weapon.replace("_", " ").to_upper()]

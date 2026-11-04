@@ -26,7 +26,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"]
+var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -289,7 +289,7 @@ func _render_equipment() -> void:
 	}
 	var possible: Dictionary = {
 		"weapon": ["spear", "iron_blade"],
-		"offhand": ["shield"],
+		"offhand": ["shield", "torch"],
 		"back": ["cloak"],
 		"tool_wood": ["axe"],
 		"tool_mining": ["pickaxe"],
@@ -369,6 +369,7 @@ func _render_preview() -> void:
 	var damage: int = 24 if weapon == "iron_blade" else 16 if weapon == "spear" else 8
 	details_text.add_child(_label("Attack: %d  •  %s" % [damage, weapon.replace("_", " ").capitalize()], 17))
 	details_text.add_child(_label("Defense: %s" % ("40% less boar damage" if game.is_equipped("shield") else "Unarmoured"), 17))
+	details_text.add_child(_label("Light: %s" % ("Off-hand torch (illuminated)" if game.is_equipped("torch") else "None"), 17))
 	details_text.add_child(_label("Movement: %s" % ("Fast (+18%)" if game.is_equipped("cloak") else "Normal"), 17))
 	details_text.add_child(_label("Tools: %d active" % [int(game.is_equipped("axe")) + int(game.is_equipped("pickaxe")) + int(game.is_equipped("satchel"))], 17))
 	details_text.add_child(_label("Tip: craft new gear at the four stations, then equip it here.", 16, Color("bcc9be")))

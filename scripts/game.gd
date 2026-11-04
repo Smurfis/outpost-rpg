@@ -10,6 +10,8 @@ const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 @export var voxel_art_enabled: bool = true
+@export var day_night_enabled: bool = true
+@export_range(120.0, 1800.0, 30.0) var day_length_seconds: float = 540.0
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
 const SAVE = "user://outpost_progress_v02.json"
@@ -18,7 +20,7 @@ var hero
 var hud
 var camera: Camera3D
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "torch": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var coop
 var recipes: Array = []
@@ -32,6 +34,11 @@ var spear_crafted: bool = false
 var attack_delay: float = 0.0
 var gather_delay: float = 0.0
 var world_time: float = 0.0
+var sky_environment: Environment
+var sky_material: ProceduralSkyMaterial
+var sun_light: DirectionalLight3D
+var dusk_announced: bool = false
+var previous_day_phase: float = 0.25
 var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
@@ -69,6 +76,7 @@ func _ready() -> void:
 	add_child(coop)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
+	_update_day_night()
 
 func _register_keys() -> void:
 	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H]}
@@ -98,6 +106,7 @@ func _process(delta: float) -> void:
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
 	world_time += delta
+	_update_day_night()
 	_camera(delta)
 	if hero == null or hud == null:
 		return
@@ -172,9 +181,11 @@ func _lighting() -> void:
 		dawn.ground_horizon_color = Color("d9b8a6")
 		sky.sky_material = dawn
 		env.sky = sky
+		sky_material = dawn
 		env.ambient_light_color = Color("fff0d1")
 		env.ambient_light_energy = 0.9
 	w.environment = env
+	sky_environment = env
 	add_child(w)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-53, -30, 0)
@@ -184,6 +195,40 @@ func _lighting() -> void:
 		sun.light_energy = 1.45
 	sun.shadow_enabled = false # Preserve Android budget on first visual pass.
 	add_child(sun)
+	sun_light = sun
+
+func day_phase() -> float:
+	return fposmod(0.25 + world_time / maxf(1.0, day_length_seconds), 1.0)
+
+func is_night() -> bool:
+	var phase: float = day_phase()
+	return phase >= 0.60 and phase < 0.94
+
+func _update_day_night() -> void:
+	if not day_night_enabled or sun_light == null or sky_environment == null:
+		return
+	var phase: float = day_phase()
+	# Midday at 0.25; dusk at 0.50; midnight at 0.75; dawn at 0.00.
+	# Never completely black: players without a torch can still navigate.
+	var daylight: float = clampf((sin(phase * TAU) + 0.16) * 1.15, 0.0, 1.0)
+	sun_light.light_energy = lerpf(0.035, 1.45 if voxel_art_enabled else 1.25, daylight)
+	sun_light.light_color = Color("7e9abf").lerp(Color("ffe0a9"), daylight)
+	sun_light.rotation_degrees = Vector3(-90.0 + phase * 360.0, -30.0, 0.0)
+	sky_environment.ambient_light_energy = lerpf(0.19, 0.9 if voxel_art_enabled else 0.85, daylight)
+	sky_environment.ambient_light_color = Color("829bbf").lerp(Color("fff0d1"), daylight)
+	if sky_material != null:
+		sky_material.sky_top_color = Color("10213e").lerp(Color("5d81b7"), daylight)
+		sky_material.sky_horizon_color = Color("302d4f").lerp(Color("efb49b"), daylight)
+		sky_material.ground_horizon_color = Color("2c3452").lerp(Color("d9b8a6"), daylight)
+	if hud != null:
+		var hour: int = int(floorf(phase * 24.0))
+		var minute: int = int(floorf(fposmod(phase * 24.0, 1.0) * 60.0))
+		hud.set_world_clock("%02d:%02d" % [hour, minute], is_night())
+	if not dusk_announced and previous_day_phase < 0.50 and phase >= 0.50:
+		dusk_announced = true
+		if hud != null:
+			hud.toast("No matter how dark the world becomes, you are its light.")
+	previous_day_phase = phase
 
 func _world() -> void:
 	var floor_body := StaticBody3D.new()
@@ -531,7 +576,7 @@ func _recipe_by_id(id: String) -> Dictionary:
 func equipment_slot(item_id: String) -> String:
 	if item_id in ["spear", "iron_blade"]:
 		return "weapon"
-	if item_id == "shield":
+	if item_id in ["shield", "torch"]:
 		return "offhand"
 	if item_id == "cloak":
 		return "back"
@@ -567,10 +612,11 @@ func _apply_equipment() -> void:
 		return
 	hero.set_weapon(str(equipment.get("weapon", "training_blade")))
 	hero.set_shield(str(equipment.get("offhand", "")) == "shield")
+	hero.set_torch(str(equipment.get("offhand", "")) == "torch")
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)
@@ -725,7 +771,7 @@ func on_enemy_killed() -> void:
 	_refresh_menu()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "world_time_seconds": world_time}
 	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -738,6 +784,7 @@ func _load() -> void:
 	if not (data is Dictionary):
 		return
 	var version: int = int(data.get("version", 0))
+	world_time = maxf(0.0, float(data.get("world_time_seconds", 0.0)))
 	if version not in [2, 3, 4, 5]:
 		return
 	var stored: Variant = data.get("inventory", {})
