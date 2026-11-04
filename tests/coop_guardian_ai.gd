@@ -19,7 +19,7 @@ func _run() -> void:
 	ledger.configure({"id": 91, "floor": 1, "members": [1, 2]}, [
 		{"slot": 0, "hp": 24.0, "position": Vector3.ZERO, "damage": 10.0}
 	])
-	var players: Dictionary = {1: Vector3(3.0, 0, 0), 2: Vector3(6.0, 0, 0)}
+	var players: Dictionary = {1: Vector3(6.0, 0, 0), 2: Vector3(9.0, 0, 0)}
 	ledger.tick_ai(0.3, players, 1000)
 	var moved: Vector3 = ledger.guards[0]["position"]
 	check(moved.x > 0.0, "Guardian chases the nearest live party member")
