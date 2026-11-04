@@ -142,6 +142,8 @@ static func apply_button(button: Button, kind: String = "wood") -> void:
 	button.add_theme_color_override("font_hover_color", text_color)
 	button.add_theme_color_override("font_pressed_color", text_color)
 	button.add_theme_color_override("font_disabled_color", text_color.darkened(0.21))
-	button.add_theme_font_size_override("font_size", 16)
+	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_color_override("font_outline_color", Color("#21161a"))
+	button.add_theme_constant_override("outline_size", 2)
 	button.focus_mode = Control.FOCUS_NONE
 	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
