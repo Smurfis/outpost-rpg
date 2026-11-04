@@ -8,6 +8,7 @@ const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
 const STREAM_MAP_HALF: int = 96
 const STREAM_RADIUS: int = 3 # Keep 7x7 neighbour chunks around the active player
+const CHUNK_CREATION_BUDGET: int = 2 # Android: do not construct 49 meshes/colliders during one _ready().
 const SAFE_CLEARING_RADIUS: float = 23.0
 const HEIGHT_BLEND_BAND: float = 12.0
 const MAX_ELEVATION: float = 3.0
@@ -20,11 +21,21 @@ var chunk_meshes: Array[MeshInstance3D] = []
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
 var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
+var defer_streaming: bool = false
+var _pending_chunks: Array[Vector2i] = []
+var _initial_total: int = 0
+var _initial_built: int = 0
+var _initial_completed: bool = true
 
-func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false) -> void:
+func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false, defer_initial_chunks: bool = false) -> void:
 	name = "VoxelAtmosphere"
 	fields_enabled = enable_fields
 	stream_enabled = enable_fields and enable_streaming
+	defer_streaming = stream_enabled and defer_initial_chunks
+	_pending_chunks.clear()
+	_initial_total = 0
+	_initial_built = 0
+	_initial_completed = not defer_streaming
 	map_half = STREAM_MAP_HALF if stream_enabled else FIELDS_MAP_HALF if fields_enabled else MAP_HALF
 	world_seed = seed
 	_noise = FastNoiseLite.new()
@@ -35,7 +46,10 @@ func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: boo
 	_noise.fractal_octaves = 3
 	_noise.fractal_gain = 0.45
 	if stream_enabled:
-		update_streaming_for(Vector3.ZERO)
+		if defer_streaming:
+			_queue_streaming_for(Vector3.ZERO)
+		else:
+			update_streaming_for(Vector3.ZERO)
 	else:
 		_make_ground()
 	_make_cliff_rim()
@@ -73,7 +87,66 @@ func _process(_delta: float) -> void:
 	# unload the entire Fields map merely because the player entered an instance.
 	if absf(point.x) > float(map_half) or absf(point.z) > float(map_half):
 		return
-	update_streaming_for(point)
+	if defer_streaming:
+		_queue_streaming_for(point)
+		_build_pending_chunks()
+	else:
+		update_streaming_for(point)
+
+func initial_generation_progress() -> float:
+	if not defer_streaming or _initial_completed:
+		return 1.0
+	return float(_initial_built) / float(maxi(1, _initial_total))
+
+func initial_generation_complete() -> bool:
+	return _initial_completed
+
+func _queue_streaming_for(point: Vector3) -> void:
+	if absf(point.x) >= float(map_half) or absf(point.z) >= float(map_half):
+		return
+	var center: Vector2i = _cell_at(point)
+	if center == _stream_center:
+		return
+	_stream_center = center
+	var wanted: Dictionary = {}
+	var candidates: Array[Vector2i] = []
+	for dx in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+		for dz in range(-STREAM_RADIUS, STREAM_RADIUS + 1):
+			var cell: Vector2i = center + Vector2i(dx, dz) * CHUNK_SIZE
+			if cell.x < -map_half or cell.x >= map_half or cell.y < -map_half or cell.y >= map_half:
+				continue
+			wanted[cell] = true
+			if not _loaded.has(cell):
+				candidates.append(cell)
+	# Spawn collision first; never build outer rings before the hero's tile.
+	candidates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.distance_squared_to(center) < b.distance_squared_to(center)
+	)
+	_pending_chunks = candidates
+	if _initial_total == 0:
+		_initial_total = candidates.size()
+	for cell in _loaded.keys():
+		if wanted.has(cell):
+			continue
+		var members: Array = _loaded[cell]
+		for object in members:
+			if object != null and is_instance_valid(object):
+				if object is MeshInstance3D:
+					chunk_meshes.erase(object)
+				remove_child(object)
+				object.queue_free()
+		_loaded.erase(cell)
+
+func _build_pending_chunks() -> void:
+	for i in range(mini(CHUNK_CREATION_BUDGET, _pending_chunks.size())):
+		var cell: Vector2i = _pending_chunks.pop_front()
+		if _loaded.has(cell):
+			continue
+		_build_ground_chunk(cell.x, cell.y)
+		if not _initial_completed:
+			_initial_built += 1
+	if _pending_chunks.is_empty() and not _initial_completed:
+		_initial_completed = true
 
 func _cell_at(point: Vector3) -> Vector2i:
 	return Vector2i(floori(point.x / float(CHUNK_SIZE)) * CHUNK_SIZE,
