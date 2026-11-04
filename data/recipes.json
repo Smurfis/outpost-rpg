@@ -193,5 +193,20 @@
       "mushrooms": 2,
       "berries": 2
     }
+  },
+  {
+    "id": "torch",
+    "name": "Wanderer's Torch",
+    "result": "torch",
+    "amount": 1,
+    "station": "workbench",
+    "seconds": 1.6,
+    "strokes": 3,
+    "category": "Tools",
+    "desc": "Illuminates the night. Occupies the off-hand instead of a shield.",
+    "ingredients": {
+      "wood": 2,
+      "fiber": 1
+    }
   }
 ]

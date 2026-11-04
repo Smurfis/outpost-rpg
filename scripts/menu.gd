@@ -1,5 +1,6 @@
 extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
@@ -26,7 +27,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"]
+var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -35,6 +36,7 @@ func _ready() -> void:
 	layer = 8
 	shell = Control.new()
 	shell.name = "CraftingInterface"
+	shell.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	shell.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(shell)
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -44,10 +46,10 @@ func _ready() -> void:
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
-	frame.anchor_left = 0.185
-	frame.anchor_right = 0.815
-	frame.anchor_top = 0.105
-	frame.anchor_bottom = 0.89
+	frame.anchor_left = 0.135
+	frame.anchor_right = 0.865
+	frame.anchor_top = 0.085
+	frame.anchor_bottom = 0.915
 	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
 	shell.add_child(frame)
 	var page := VBoxContainer.new()
@@ -55,34 +57,34 @@ func _ready() -> void:
 	frame.add_child(page)
 	var header := HBoxContainer.new()
 	page.add_child(header)
-	title = _label("OUTPOST  ◆  CRAFTING", 22, Color("f6dba4"))
+	title = _label("OUTPOST  ◆  CRAFTING", 28, Color("fff0ce"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var bag := Button.new()
 	bag.text = "BAG"
-	bag.custom_minimum_size = Vector2(66, 40)
+	bag.custom_minimum_size = Vector2(66, 48)
 	SKIN.apply_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
-	gear.custom_minimum_size = Vector2(67, 40)
+	gear.custom_minimum_size = Vector2(67, 48)
 	SKIN.apply_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
-	craft.custom_minimum_size = Vector2(74, 40)
+	craft.custom_minimum_size = Vector2(74, 48)
 	SKIN.apply_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
 	header.add_child(craft)
 	var close := Button.new()
 	close.text = "X"
-	close.custom_minimum_size = Vector2(44, 40)
+	close.custom_minimum_size = Vector2(48, 48)
 	SKIN.apply_button(close, "red")
 	close.pressed.connect(close_page)
 	header.add_child(close)
-	subtitle = _label("", 14, Color("e7d0a5"))
+	subtitle = _label("", 18, Color("f4d9a6"))
 	page.add_child(subtitle)
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
@@ -95,7 +97,8 @@ func _ready() -> void:
 	surface.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(surface)
 	surface.add_child(panes)
-	left_scroll = ScrollContainer.new()
+	left_scroll = TOUCH_SCROLL.new()
+	left_scroll.name = "RecipeSwipeList"
 	left_scroll.custom_minimum_size = Vector2(210, 0)
 	left_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_scroll.size_flags_stretch_ratio = 0.79
@@ -105,7 +108,8 @@ func _ready() -> void:
 	recipes_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	recipes_list.add_theme_constant_override("separation", 7)
 	left_scroll.add_child(recipes_list)
-	right_scroll = ScrollContainer.new()
+	right_scroll = TOUCH_SCROLL.new()
+	right_scroll.name = "CraftingDetailsSwipe"
 	right_scroll.custom_minimum_size = Vector2(300, 0)
 	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_scroll.size_flags_stretch_ratio = 1.21
@@ -132,7 +136,9 @@ func _label(value: String, font_size: int = 18, tint: Color = Color.WHITE) -> La
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override("font_color", tint)
-	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_font_size_override("font_size", maxi(19, font_size))
+	label.add_theme_color_override("font_outline_color", Color("1c1117"))
+	label.add_theme_constant_override("outline_size", 2)
 	return label
 
 func _icon(id: String, size: float = 58.0) -> TextureRect:
@@ -145,6 +151,7 @@ func _icon(id: String, size: float = 58.0) -> TextureRect:
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return image
 
 func _clear(parent: Node) -> void:
@@ -216,7 +223,7 @@ func _recipe_change(id: String) -> void:
 	if not game.crafting.is_empty():
 		return
 	selected_id = id
-	craft_step = "browse"
+	craft_step = "detail" # One recipe at a time on small touchscreens.
 	loaded.clear()
 	completed_id = ""
 	refresh()
@@ -238,6 +245,13 @@ func refresh() -> void:
 		_render_equipment()
 	else:
 		_render_craft()
+	# The prior two-column recipe browser was cramped on a phone. Browse
+	# full-width, tap a recipe for a focused popup, then Prepare / Work.
+	var recipe_browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == "" and craft_step == "browse"
+	left_scroll.visible = current_page != "craft" or recipe_browse
+	right_scroll.visible = current_page != "craft" or not recipe_browse
+	left_scroll.scroll_vertical = 0 if current_page == "craft" and recipe_browse else left_scroll.scroll_vertical
+	right_scroll.scroll_vertical = 0 if current_page == "craft" and not recipe_browse else right_scroll.scroll_vertical
 
 func _render_bag() -> void:
 	title.text = "OUTPOST | INVENTORY"
@@ -287,7 +301,7 @@ func _render_equipment() -> void:
 	}
 	var possible: Dictionary = {
 		"weapon": ["spear", "iron_blade"],
-		"offhand": ["shield"],
+		"offhand": ["shield", "torch"],
 		"back": ["cloak"],
 		"tool_wood": ["axe"],
 		"tool_mining": ["pickaxe"],
@@ -382,7 +396,7 @@ func _use_food(id: String) -> void:
 func _render_craft() -> void:
 	title.text = "OUTPOST  ◆  HANDCRAFTING"
 	var nearby: String = game.closest_station()
-	subtitle.text = "Station: %s   •   Select > Prepare > Craft" % (nearby.capitalize() if nearby != "" else "None (browse anywhere)")
+	subtitle.text = "Near: %s    •    Swipe recipes, tap an item, then prepare materials" % (nearby.capitalize() if nearby != "" else "none — browsing")
 	for station_id in ["workbench", "forge", "loom", "campfire"]:
 		var tab := Button.new()
 		tab.text = str(station_names[station_id])
@@ -436,6 +450,12 @@ func _render_recipe() -> void:
 	if recipe.is_empty():
 		details.add_child(_label("Choose a recipe to see its requirements.", 20, Color("f5deb0")))
 		return
+	var browse_back := Button.new()
+	browse_back.text = "‹  ALL RECIPES"
+	browse_back.custom_minimum_size = Vector2(0, 58)
+	SKIN.apply_button(browse_back, "wood")
+	browse_back.pressed.connect(_back_to_browse)
+	details.add_child(browse_back)
 	var product_id: String = str(recipe.get("result", ""))
 	var intro := _column_panel(details, Color("5f3b29"))
 	var head := HBoxContainer.new()

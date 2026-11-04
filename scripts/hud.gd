@@ -4,6 +4,8 @@ const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 var game
 var root: Control
 var status: Label
+var clock_label: Label
+var torch_button: Button
 var quest: Label
 var hint: Label
 var toast_label: Label
@@ -27,6 +29,7 @@ func setup(ref: Node) -> void:
 func _ready() -> void:
 	root = Control.new()
 	root.name = "OutpostHUD"
+	root.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -59,6 +62,24 @@ func _ready() -> void:
 	toast_label = _label("", 17, Color("#4d3020"), 0.367, 0.144, 0.716, 0.214)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Minimal co-op entry for Android: functional control, not an art overhaul.
+	var multiplayer_entry := Button.new()
+	multiplayer_entry.name = "CoopEntryButton"
+	multiplayer_entry.text = "CO-OP"
+	multiplayer_entry.add_theme_font_size_override("font_size", 16)
+	SKIN.apply_button(multiplayer_entry, "wood")
+	root.add_child(multiplayer_entry)
+	_anchors(multiplayer_entry, 0.882, 0.035, 0.974, 0.116)
+	multiplayer_entry.pressed.connect(_open_coop)
+	clock_label = _label("DAY 09:07", 15, Color("#e8d8a4"), 0.789, 0.035, 0.876, 0.111)
+	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	torch_button = Button.new()
+	torch_button.name = "TorchQuickSlot"
+	torch_button.text = "TORCH"
+	SKIN.apply_button(torch_button, "wood")
+	root.add_child(torch_button)
+	_anchors(torch_button, 0.683, 0.625, 0.771, 0.727)
+	torch_button.pressed.connect(_toggle_torch)
 	_action("bag", "BAG", 0.761, 0.475, 0.839, 0.612, Color("#6e4a32"))
 	_action("craft", "CRAFT", 0.852, 0.475, 0.937, 0.612, Color("#6e4a32"))
 	_action("heal", "HEAL", 0.693, 0.746, 0.772, 0.893, Color("#476c43"))
@@ -66,14 +87,14 @@ func _ready() -> void:
 	_action("attack", "ATTACK", 0.883, 0.69, 0.986, 0.934, Color("#844237"))
 	joystick = Panel.new()
 	joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ring := SKIN.box("hud")
+	var ring := SKIN.flat("hud")
 	ring.set_corner_radius_all(90)
 	joystick.add_theme_stylebox_override("panel", ring)
 	root.add_child(joystick)
 	joystick.size = Vector2(154, 154)
 	knob = Panel.new()
 	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var thumb := SKIN.box("parchment_light")
+	var thumb := SKIN.flat("parchment_light")
 	thumb.set_corner_radius_all(60)
 	knob.add_theme_stylebox_override("panel", thumb)
 	joystick.add_child(knob)
@@ -86,9 +107,9 @@ func _meter(left: float, top: float, right: float, bottom: float, front: Color) 
 	meter.value = 100.0
 	meter.show_percentage = false
 	meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bg := SKIN.box("inset")
+	var bg := SKIN.flat("inset")
 	bg.set_corner_radius_all(4)
-	var fill := SKIN.box("wood_selected")
+	var fill := SKIN.flat("wood_selected")
 	fill.bg_color = front
 	fill.set_border_width_all(0)
 	fill.set_corner_radius_all(3)
@@ -127,8 +148,10 @@ func _label(value: String, size: int, color: Color, left: float, top: float, rig
 	n.text = value
 	n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	n.add_theme_font_size_override("font_size", size)
+	n.add_theme_font_size_override("font_size", maxi(17, size))
 	n.add_theme_color_override("font_color", color)
+	n.add_theme_color_override("font_outline_color", Color("#21161a"))
+	n.add_theme_constant_override("outline_size", 2)
 	root.add_child(n)
 	_anchors(n, left, top, right, bottom)
 	return n
@@ -144,14 +167,11 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	elif key == "craft":
 		craft_button = button
 	SKIN.apply_button(button, "red" if key == "attack" else "green" if key in ["gather", "heal"] else "wood")
-	for state in ["normal", "hover", "pressed", "disabled"]:
-		var art := button.get_theme_stylebox(state) as StyleBoxFlat
-		if art != null:
-			art.set_corner_radius_all(44)
 	root.add_child(button)
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
-	art_icon.texture = load("res://assets/ui/icons/" + key + ".svg") as Texture2D
+	art_icon.texture = load("res://assets/ui/icons/" + key + ".png") as Texture2D
+	art_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	art_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	art_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -165,7 +185,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color("#f9e7c0"))
-	title.add_theme_font_size_override("font_size", 13)
+	title.add_theme_font_size_override("font_size", 16)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(title)
 	title.anchor_left = 0.0
@@ -197,30 +217,38 @@ func _position_stick() -> void:
 	joystick.position = Vector2(28, screen.y - 182)
 
 func _center() -> Vector2:
-	return joystick.position + joystick.size * 0.5
+	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
-	if game != null and game.menu != null and game.menu.visible:
-		move_vector = Vector2.ZERO
+	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
+		_reset_touch()
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 104:
 			finger = event.index
+			mouse_stick = false
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
-			finger = -1
-			move_vector = Vector2.ZERO
+			_reset_touch()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and event.position.distance_to(_center()) < 104:
+		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 104:
 			mouse_stick = true
 			_stick(event.position)
-		elif not event.pressed and mouse_stick:
-			mouse_stick = false
-			move_vector = Vector2.ZERO
-	elif event is InputEventMouseMotion and mouse_stick:
+		elif not event.pressed and mouse_stick and finger == -1:
+			_reset_touch()
+	elif event is InputEventMouseMotion and mouse_stick and finger == -1:
 		_stick(event.position)
+
+func _reset_touch() -> void:
+	finger = -1
+	mouse_stick = false
+	move_vector = Vector2.ZERO
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		_reset_touch()
 
 func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
@@ -248,6 +276,21 @@ func toast(message: String) -> void:
 	toast_label.text = message
 	toast_panel.visible = true
 	toast_time = 3.4
+
+func set_day_clock(time_text: String, is_dark: bool, torch_on: bool) -> void:
+	if clock_label != null:
+		clock_label.text = ("NIGHT " if is_dark else "DAY ") + time_text
+		clock_label.add_theme_color_override("font_color", Color("bac4ee") if is_dark else Color("#e8d8a4"))
+	if torch_button != null:
+		torch_button.text = "PUT OUT" if torch_on else "TORCH"
+
+func _toggle_torch() -> void:
+	if game != null:
+		game.toggle_torch()
+
+func _open_coop() -> void:
+	if game.coop != null and game.coop.ui != null:
+		game.coop.ui.open()
 
 func _gather() -> void:
 	game.gather()

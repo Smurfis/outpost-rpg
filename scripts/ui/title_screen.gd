@@ -3,6 +3,7 @@ extends Control
 ## The PNG artwork is optional until final art sign-off; transparent SVG placeholders render without it.
 const DESIGN := Vector2(1280.0, 720.0)
 const MAIN_GAME := "res://scenes/main.tscn"
+const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
@@ -134,14 +135,22 @@ func _make_screen() -> void:
 	_build_settings()
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
-	var path := "res://assets/ui/title/" + png
-	if not ResourceLoader.exists(path):
-		path = "res://assets/ui/title/" + svg
-	if not ResourceLoader.exists(path):
+	# The screenshot/mock-up is not one flattened UI. Every asset stays a
+	# separate clickable/replaceable Godot node, including the backdrop.
+	var base := "res://assets/ui/title/"
+	var texture: Texture2D
+	for path in [base + png, base + svg]:
+		if not ResourceLoader.exists(path):
+			continue
+		texture = load(path) as Texture2D
+		if texture != null:
+			break
+	if texture == null:
+		push_warning("Outpost title artwork missing: " + png + " / " + svg)
 		return
 	var image := TextureRect.new()
 	image.name = node_name
-	image.texture = load(path) as Texture2D
+	image.texture = texture
 	image.position = where
 	image.size = how_big
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -184,7 +193,7 @@ func _begin_continue() -> void:
 
 func _launch_game(new_adventure: bool) -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
-	get_tree().change_scene_to_file(MAIN_GAME)
+	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
 	if _show_tips:

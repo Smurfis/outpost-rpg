@@ -26,18 +26,142 @@ jobs:
             echo "Runtime script errors detected"
             exit 1
           fi
+      - name: Exercise Play button through incremental world generation
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_play_startup.gd 2>&1 | tee android-play.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ANDROID START:' android-play.log; then exit 1; fi
+          grep -q "ANDROID STARTUP RESULT: 0 failures" android-play.log
+      - name: Verify phone report fixes for terrain, labels, combat and crafting
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_phone_feedback.gd 2>&1 | tee phone-ux.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PHONE UX:' phone-ux.log; then exit 1; fi
+          grep -q "PHONE UX RESULT: 0 failures" phone-ux.log
+      - name: Test harvestables, silver iron, floating damage and voxel death bursts
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_world_feedback_vfx.gd 2>&1 | tee world-feedback.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WORLD FEEDBACK:' world-feedback.log; then exit 1; fi
+          grep -q "WORLD FEEDBACK RESULT: 0 failures" world-feedback.log
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
-      - name: Test standalone studio and title screen
+
+      - name: Validate LAN party membership and private dungeon previews
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_parties.gd 2>&1 | tee coop.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL COOP:' coop.log; then exit 1; fi
+          grep -q "COOP RESULT: 0 failed assertion(s)." coop.log
+      - name: Validate host-controlled dungeon hits, floor gates and replay-safe rewards
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_host_encounters.gd 2>&1 | tee coop-host.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HOST COMBAT:' coop-host.log; then exit 1; fi
+          grep -q "COOP HOST COMBAT RESULT: 0 failures" coop-host.log
+      - name: Validate host AI pursuit, health, knockout and revive
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_guardian_ai.gd 2>&1 | tee coop-ai.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL AI:' coop-ai.log; then exit 1; fi
+          grep -q "COOP GUARDIAN AI RESULT: 0 failures" coop-ai.log
+      - name: Test real ENet LAN host/client across two Godot processes
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --host > host.log 2>&1 &
+          host_pid=$!
+          sleep 2
+          if ! timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --client > client.log 2>&1; then
+            cat host.log client.log
+            kill "$host_pid" || true
+            exit 1
+          fi
+          if ! wait "$host_pid"; then
+            cat host.log client.log
+            exit 1
+          fi
+          cat host.log client.log
+          grep -q "LAN PAIR RESULT: host 0 failed assertion(s)" host.log
+          grep -q "LAN PAIR RESULT: client 0 failed assertion(s)" client.log
+      - name: Verify voxel weapons, neutral sword pose and legacy equipment
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/voxel_weapon_pose.gd 2>&1 | tee voxel-weapon.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WEAPON:' voxel-weapon.log; then
+            echo "Voxel equipment smoke errors detected"
+            exit 1
+          fi
+      - name: Verify experimental voxel art and legacy world mode
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/voxel_art_smoke.gd 2>&1 | tee voxel-test.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' voxel-test.log; then
+            echo "Voxel visual smoke errors detected"
+            exit 1
+          fi
+      - name: Verify atlas-safe greedy top and cliff face merges
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/greedy_meshing.gd 2>&1 | tee greedy.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL GREEDY:' greedy.log; then exit 1; fi
+          grep -q "GREEDY RESULT: 0 failures" greedy.log
+      - name: Verify lazy chunk load, unload and deterministic reconstruction
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/chunk_streaming.gd 2>&1 | tee chunk-stream.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL STREAM:' chunk-stream.log; then exit 1; fi
+          grep -q "CHUNK STREAM RESULT: 0 failures." chunk-stream.log
+      - name: Validate expanded Fields, voxel portal monuments and one-block auto-step
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fields_step.gd 2>&1 | tee fields-step.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FIELDS:' fields-step.log; then exit 1; fi
+          grep -q "FIELDS RESULT: 0 failed assertion(s)." fields-step.log
+      - name: Verify day-night sky, offhand torch light and isolated save
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/night_torch.gd 2>&1 | tee night-torch.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL NIGHT:' night-torch.log; then exit 1; fi
+          grep -q "NIGHT TORCH RESULT: 0 failures." night-torch.log
+      - name: Verify boar pixel atlas, draw-call batching and legacy fallback
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/voxel_boar.gd 2>&1 | tee voxel-boar.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BOAR:' voxel-boar.log; then exit 1; fi
+          grep -q "VOXEL BOAR RESULT: 0 failed assertion(s)." voxel-boar.log
+      - name: Verify varied dungeon room archetypes and deterministic layout
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_archetypes.gd 2>&1 | tee dungeon-archetypes.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ROOMS:' dungeon-archetypes.log; then exit 1; fi
+          grep -q "ROOM ARCHETYPES RESULT: 0 failures" dungeon-archetypes.log
+      - name: Validate procedural room connector seams and side parapets
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_seams.gd 2>&1 | tee dungeon-seams.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SEAMS:' dungeon-seams.log; then exit 1; fi
+          grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon-seams.log
+      - name: Verify voxel-world dungeon portals and movement-lock release
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/portals_pixel_integration.gd 2>&1 | tee portals-pixel.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTAL:' portals-pixel.log; then exit 1; fi
+          grep -q "PORTAL INTEGRATION RESULT: 0 failure(s)." portals-pixel.log
+      - name: Verify imported PNG textures and complete crafting UI journey
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/pixel_ui_integration.gd 2>&1 | tee pixel-ui.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PIXEL UI:' pixel-ui.log; then exit 1; fi
+          grep -q "PIXEL UI RESULT: 0 failure(s)." pixel-ui.log
+      - name: Verify complete vector title art is present and visible in menu
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 50s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_art_assets.gd 2>&1 | tee title-art.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE ART:' title-art.log; then exit 1; fi
+          grep -q "TITLE ART RESULT: 0 failures" title-art.log
+      - name: Verify Five Star splash, title logo and menu
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_logo_smoke.gd 2>&1 | tee title-logo.log
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_screen_smoke.gd 2>&1 | tee title-screen.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' title-logo.log title-screen.log; then
-            exit 1
-          fi
-
-
-
-      - name: Check shipped illustrated title assets
-        run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_art_assets.gd
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' title-logo.log title-screen.log; then exit 1; fi

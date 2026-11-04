@@ -1,0 +1,73 @@
+{
+  "material_tiers": [
+    [
+      "wood",
+      "stone",
+      "fiber",
+      "berries",
+      "clay",
+      "reeds"
+    ],
+    [
+      "iron",
+      "coal",
+      "hide",
+      "herbs",
+      "mushrooms"
+    ],
+    [
+      "iron_ingot",
+      "linen",
+      "bricks",
+      "ancient_ore"
+    ],
+    [
+      "ancient_ore",
+      "ether_dust",
+      "crystal_shard",
+      "gem_fragment"
+    ],
+    [
+      "ancient_ore",
+      "ether_dust",
+      "gem_fragment",
+      "legendary_core"
+    ]
+  ],
+  "book_chances": [
+    0.1,
+    0.18,
+    0.25,
+    0.35,
+    0.5
+  ],
+  "gem_fragment_chances": [
+    0,
+    0.04,
+    0.12,
+    0.24,
+    0.39
+  ],
+  "full_prismatic_gem_chances": [
+    0,
+    0,
+    0,
+    0.005,
+    0.03
+  ],
+  "base_coins": [
+    15,
+    28,
+    52,
+    85,
+    135
+  ],
+  "base_experience": [
+    20,
+    38,
+    70,
+    120,
+    210
+  ],
+  "bonus_chest_materials": 2
+}

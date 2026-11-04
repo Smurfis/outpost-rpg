@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+ <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffdf9d"/><stop offset=".58" stop-color="#c78550"/><stop offset="1" stop-color="#824733"/></linearGradient>
+ <linearGradient id="door" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffe99c"/><stop offset=".52" stop-color="#ffad47"/><stop offset="1" stop-color="#b24b27"/></linearGradient>
+ <radialGradient id="glow"><stop stop-color="#fff3af" stop-opacity=".75"/><stop offset="1" stop-color="#ff8e39" stop-opacity="0"/></radialGradient>
+</defs>
+<!-- Strong single centered silhouette remains legible in Android adaptive mask. -->
+<ellipse cx="256" cy="363" rx="178" ry="49" fill="#111c2d" opacity=".45"/>
+<ellipse cx="254" cy="291" rx="116" ry="115" fill="url(#glow)"/>
+<g stroke="#3d2b34" stroke-width="11" stroke-linejoin="round" stroke-linecap="round">
+ <path d="M138 348 L248 137 L368 348 Z" fill="#a95c47"/>
+ <path d="M142 350 L245 162 L315 350 Z" fill="url(#canvas)"/>
+ <path d="M245 162 L369 350 L315 350Z" fill="#9b4a3e"/>
+ <path d="M191 348 L252 238 L311 348Z" fill="url(#door)" stroke-width="8"/>
+ <path d="M252 238 L281 348 L311 348Z" fill="#cc6b35" stroke-width="0"/>
+ <path d="M248 152 L247 353" fill="none" stroke="#644133" stroke-width="6"/>
+ <path d="M219 143 L272 113 M225 112 L274 144" fill="none" stroke="#784636" stroke-width="15"/>
+ <path d="M124 357 L383 357" fill="none" stroke="#9c7149" stroke-width="15"/>
+</g>
+<!-- A distinct little burgundy pennant, hand-off assets are original. -->
+<path d="M275 128 L333 141 L303 161 L274 154Z" fill="#bc5944" stroke="#422b3b" stroke-width="5" stroke-linejoin="round"/>
+<g shape-rendering="crispEdges">
+<path d="M104 362 L136 350 L153 367 L139 384 L107 380 Z" fill="#8f8890" stroke="#3b3747" stroke-width="6"/>
+<path d="M359 368 L381 345 L405 357 L402 383 L369 386 Z" fill="#87818f" stroke="#3b3747" stroke-width="6"/>
+<rect x="158" y="377" width="198" height="13" fill="#6b492d"/>
+<rect x="168" y="369" width="181" height="8" fill="#b58b54"/>
+</g>
+<!-- Camp ember and gold lantern cue: readability without tiny text. -->
+<path d="M244 368 L254 339 L266 366 L278 376 L254 386 L233 376Z" fill="#f8cb53" stroke="#a15e31" stroke-width="5"/>
+<path d="M251 367 L256 349 L264 373Z" fill="#fff0aa"/>
+</svg>
