@@ -28,6 +28,7 @@ var mouse_stick := false
 var gather_button: Button
 var attack_button: Button
 var craft_button: Button
+var heal_button: Button
 var toast_time := 0.0
 
 func setup(ref: Node) -> void:
@@ -56,14 +57,17 @@ func _ready() -> void:
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(portrait)
 	_anchors(portrait, 0.028, 0.040, 0.088, 0.150)
-	status = _label("OUTPOST  •  ADVENTURER", 19, Color("#fff1c7"), 0.103, 0.033, 0.254, 0.074)
+	status = _label("OUTPOST", 19, Color("#fff1c7"), 0.103, 0.033, 0.254, 0.074)
 	status.clip_text = true
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	health_bar = _meter(0.105, 0.082, 0.252, 0.107, Color("#d74c43"))
 	health_numbers = _label("HP 100 / 100", 15, Color("#fff1db"), 0.117, 0.081, 0.244, 0.107)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Experience is an absolute total in gameplay, not a level meter.
+	# Keep the reference shape available but never show invented %100 progress.
 	xp_bar = _meter(0.105, 0.124, 0.252, 0.141, Color("#65b4e4"))
-	hero_detail = _label("TRAINING BLADE", 14, Color("#edc98d"), 0.105, 0.147, 0.256, 0.172)
+	xp_bar.visible = false
+	hero_detail = _label("XP 0  •  TRAINING BLADE", 15, Color("#edc98d"), 0.105, 0.121, 0.256, 0.164)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
@@ -230,6 +234,8 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		attack_button = button
 	elif key == "craft":
 		craft_button = button
+	elif key == "heal":
+		heal_button = button
 	SKIN.apply_button(button, "wood")
 	if kind == "round":
 		var normal: StyleBoxFlat = SKIN.flat("hud")
@@ -356,11 +362,14 @@ func _stick(pos: Vector2) -> void:
 	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
 
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
-	status.text = "OUTPOST  •  ADVENTURER"
+	status.text = "OUTPOST"
 	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
-	hero_detail.text = "%s  •  XP %d" % [weapon.replace("_", " ").to_upper(), xp]
+	hero_detail.text = "XP %d  •  %s" % [xp, weapon.replace("_", " ").to_upper()]
 	health_bar.value = clampf(hp, 0.0, 100.0)
-	xp_bar.value = float(xp % 100)
+	if heal_button != null:
+		heal_button.disabled = int(inventory.get("meal", 0)) <= 0
+	if torch_button != null:
+		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
 	quest.text = objective
