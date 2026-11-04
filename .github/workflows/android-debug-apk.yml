@@ -1,0 +1,115 @@
+name: Export Outpost Android debug APK
+
+on:
+  push:
+    branches: [build/android-phase5b-test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17 for Godot Android exporter
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform and signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platform-tools' 'build-tools;35.0.0' 'platforms;android-35'
+      - name: Fetch exact Godot editor and Android debug templates (4.7.2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
+          curl --fail --location --retry 3 -o godot.zip "$base/Godot_v4.7.2-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          template_dir="$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          mkdir -p "$template_dir"
+          curl --fail --location --retry 3 -o "$template_dir/android_debug.apk" "$base/Godot_v4.7.2-stable_android_debug.perfetto.apk"
+          curl --fail --location --retry 3 -o "$template_dir/android_release.apk" "$base/Godot_v4.7.2-stable_android_release.perfetto.apk"
+          printf '4.7.2.stable\n' > "$template_dir/version.txt"
+      - name: Configure local Android debug signing and export preset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android" "$HOME/.config/godot" build
+          keytool -genkeypair -alias androiddebugkey -keyalg RSA -keysize 2048 \
+            -validity 3650 -keystore "$HOME/.android/debug.keystore" -storepass android \
+            -keypass android -dname 'CN=Outpost Dev, O=Five Star Interactive, C=GB' -noprompt
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+          cat > export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Android"
+          platform="Android"
+          runnable=true
+          advanced_options=false
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/Outpost-Phase5B-Android.apk"
+          patches=PackedStringArray()
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          seed=0
+          encrypt_pck=false
+          encrypt_directory=false
+          script_export_mode=2
+
+          [preset.0.options]
+
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          version/code=6
+          version/name="0.5.0-dev"
+          package/unique_name="com.fivestarinteractive.outpost.preview"
+          package/name="Outpost Preview"
+          package/signed=true
+          permissions/internet=true
+          permissions/access_network_state=true
+          EOF
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey' >> "$GITHUB_ENV"
+          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android' >> "$GITHUB_ENV"
+      - name: Import project and export installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
+            --export-debug Android build/Outpost-Phase5B-Android.apk
+          test -s build/Outpost-Phase5B-Android.apk
+          unzip -t build/Outpost-Phase5B-Android.apk >/dev/null
+          ls -lh build/Outpost-Phase5B-Android.apk
+      - name: Upload APK for Android phone testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-phase5b-android-debug-apk
+          path: build/Outpost-Phase5B-Android.apk
+          if-no-files-found: error
+          retention-days: 14
