@@ -59,7 +59,7 @@ func _run() -> void:
 		if child is MeshInstance3D and child.material_override == atlas:
 			pixel_station_blocks += 1
 	_check(pixel_station_blocks > 0, "Crafting stations use matching pixel textures")
-	_check(game.get("recipes").size() == 13, "All existing crafting recipes retained")
+	_check(game.get("recipes").size() == 14, "Original recipes and torch crafting retained")
 	var kinds: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		kinds[node.kind] = true
