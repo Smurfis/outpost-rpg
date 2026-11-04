@@ -34,6 +34,9 @@ var tick_elapsed: float = 0.0
 var host_encounters: Dictionary = {}
 var host_session_id: String = ""
 var preview_health_revision: int = -1
+var party_health: Dictionary = {}
+var last_synced_health: float = 100.0
+var return_health: float = 100.0
 
 func _ready() -> void:
 	name = "CoopSession"
@@ -162,7 +165,7 @@ func request_preview(entrance_id: String, rarity: int) -> void:
 		_request_start_preview.rpc_id(1, entrance_id, rarity)
 
 func request_strike(slot: int) -> void:
-	if not in_party_dungeon() or slot < 0:
+	if not in_party_dungeon() or slot < 0 or float(party_health.get(multiplayer.get_unique_id(), 100.0)) <= 0.0:
 		return
 	var run_id: int = int(preview_descriptor.get("id", 0))
 	var floor_number: int = int(preview_descriptor.get("floor", 0))
@@ -170,6 +173,36 @@ func request_strike(slot: int) -> void:
 		_handle_strike(1, run_id, floor_number, slot)
 	else:
 		_request_strike.rpc_id(1, run_id, floor_number, slot)
+
+func revive_available() -> bool:
+	if not in_party_dungeon() or float(party_health.get(multiplayer.get_unique_id(), 100.0)) <= 0.0:
+		return false
+	for member in my_party().get("members", []):
+		var peer_id: int = int(member)
+		if peer_id == multiplayer.get_unique_id() or float(party_health.get(peer_id, 100.0)) > 0.0:
+			continue
+		var at: Vector3 = roster.get(peer_id, {}).get("position", Vector3.ZERO)
+		if game.hero.global_position.distance_to(at) <= ENCOUNTER.REVIVE_RADIUS:
+			return true
+	return false
+
+func request_revive_nearest() -> void:
+	if not revive_available():
+		return
+	var run_id: int = int(preview_descriptor.get("id", 0))
+	var floor_number: int = int(preview_descriptor.get("floor", 0))
+	for member in my_party().get("members", []):
+		var peer_id: int = int(member)
+		if peer_id == multiplayer.get_unique_id() or float(party_health.get(peer_id, 100.0)) > 0.0:
+			continue
+		var at: Vector3 = roster.get(peer_id, {}).get("position", Vector3.ZERO)
+		if game.hero.global_position.distance_to(at) > ENCOUNTER.REVIVE_RADIUS:
+			continue
+		if multiplayer.is_server():
+			_revive_member(1, run_id, floor_number, peer_id)
+		else:
+			_request_revive.rpc_id(1, run_id, floor_number, peer_id)
+		return
 
 func can_advance_preview() -> bool:
 	return run_preview != null and is_instance_valid(run_preview) and int(run_preview.guards_remaining) == 0
@@ -323,6 +356,49 @@ func _request_complete_run(run_id: int) -> void:
 	if multiplayer.is_server():
 		_complete_run(multiplayer.get_remote_sender_id(), run_id)
 
+@rpc("any_peer", "call_remote", "reliable")
+func _request_revive(run_id: int, floor_number: int, ally_id: int) -> void:
+	if multiplayer.is_server():
+		_revive_member(multiplayer.get_remote_sender_id(), run_id, floor_number, ally_id)
+
+func _revive_member(sender: int, run_id: int, floor_number: int, ally_id: int) -> void:
+	if not multiplayer.is_server() or not players.has(sender):
+		return
+	var run: Dictionary = registry.active_run(registry.party_of(sender))
+	if int(run.get("id", 0)) != run_id or int(run.get("floor", 0)) != floor_number:
+		return
+	if not (run.get("members", []) as Array).has(ally_id) or not host_encounters.has(run_id):
+		return
+	var positions: Dictionary = _party_positions(run)
+	if host_encounters[run_id]["ledger"].revive(sender, ally_id, positions):
+		_broadcast_encounter_state(run_id)
+
+func _party_positions(descriptor: Dictionary) -> Dictionary:
+	var positions: Dictionary = {}
+	for member in descriptor.get("members", []):
+		var peer_id: int = int(member)
+		if players.has(peer_id):
+			positions[peer_id] = game.hero.global_position if peer_id == 1 else players[peer_id].get("position", Vector3.ZERO)
+	return positions
+
+func _tick_host_encounters(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	for run_id in host_encounters:
+		var descriptor: Dictionary = {}
+		for party in party_snapshot.get("parties", []):
+			var run: Dictionary = party.get("run", {})
+			if int(run.get("id", 0)) == int(run_id):
+				descriptor = run
+				break
+		if descriptor.is_empty():
+			continue
+		var ledger = host_encounters[run_id]["ledger"]
+		var before: int = int(ledger.revision)
+		ledger.tick_ai(delta, _party_positions(descriptor), Time.get_ticks_msec())
+		if int(ledger.revision) != before:
+			_broadcast_encounter_state(int(run_id))
+
 func _encounter_cleared(requester: int, run_id: int) -> bool:
 	var party: int = registry.party_of(requester)
 	var run: Dictionary = registry.active_run(party)
@@ -420,7 +496,11 @@ func _sync_host_encounters() -> void:
 			guardian.set_process(false)
 			guardian.collision_layer = 0
 			guardian.collision_mask = 0
-			records.append({"slot": int(guardian.get_meta("encounter_slot", -1)), "hp": float(guardian.hp), "position": guardian.global_position})
+			records.append({
+				"slot": int(guardian.get_meta("encounter_slot", -1)),
+				"hp": float(guardian.hp), "position": guardian.global_position,
+				"damage": (6.0 + float(guardian.quality) * 2.1) * float(guardian.damage_multiplier)
+			})
 		var ledger = ENCOUNTER.new()
 		ledger.configure(descriptor, records)
 		host_encounters[run_id] = {"ledger": ledger, "instance": dungeon, "owned": owned}
@@ -456,10 +536,29 @@ func _apply_encounter_state(state: Dictionary) -> void:
 		return
 	preview_health_revision = current_revision
 	var hp_data: Dictionary = state.get("hp", {})
+	var positions: Dictionary = state.get("positions", {})
+	var health_snapshot: Dictionary = state.get("player_health", {})
+	party_health = health_snapshot.duplicate(true)
+	var self_id: int = multiplayer.get_unique_id()
+	if health_snapshot.has(self_id):
+		var new_hp: float = clampf(float(health_snapshot[self_id]), 0.0, 100.0)
+		if new_hp <= 0.0 and last_synced_health > 0.0:
+			game.hud.toast("Knocked out! Another party member can revive you.")
+		elif new_hp > last_synced_health + 1.0 and last_synced_health <= 0.0:
+			game.hud.toast("Revived! Return to the fight.")
+		elif new_hp < last_synced_health - 0.5:
+			game.hud.toast("Guardian struck! -%d HP" % int(ceilf(last_synced_health - new_hp)))
+		last_synced_health = new_hp
+		game.hero.health = new_hp
+		game.hero.interaction_locked = new_hp <= 0.0
 	for guardian in get_tree().get_nodes_in_group("dungeon_guardians"):
 		if not run_preview.is_ancestor_of(guardian):
 			continue
 		var slot: int = int(guardian.get_meta("encounter_slot", -1))
+		if positions.has(slot):
+			var at: Vector3 = positions[slot]
+			if at.is_finite():
+				guardian.global_position = at
 		if not hp_data.has(slot):
 			continue
 		var hp: float = maxf(0.0, float(hp_data[slot]))
@@ -522,15 +621,19 @@ func _sync_preview() -> void:
 	run_preview = dungeon
 	preview_descriptor = descriptor.duplicate(true)
 	preview_health_revision = -1
+	party_health.clear()
+	last_synced_health = 100.0
 	if not has_return_point:
 		return_position = game.hero.global_position
+		return_health = game.hero.health
 		has_return_point = true
+	game.hero.health = 100.0
 	game.hero.stop_interaction_move()
 	game.hero.interaction_locked = false
 	game.hud._reset_touch()
 	game.hero.global_position = dungeon.hero_spawn_point()
 	game.hero.velocity = Vector3.ZERO
-	status_message = "Party %d — dungeon preview floor %d/%d (no combat loot)" % [party_id(), new_floor, int(descriptor.get("floors", 1))]
+	status_message = "Party %d — dungeon floor %d/%d (host-controlled guardians)" % [party_id(), new_floor, int(descriptor.get("floors", 1))]
 	private_run_changed.emit()
 
 func _on_preview_exit_selected(_instance: Node3D) -> void:
@@ -551,7 +654,9 @@ func _clear_preview() -> void:
 	run_preview = null
 	preview_descriptor.clear()
 	preview_health_revision = -1
+	party_health.clear()
 	if has_return_point and game != null and game.hero != null:
+		game.hero.health = return_health
 		game.hero.global_position = return_position
 		game.hero.velocity = Vector3.ZERO
 		game.hero.interaction_locked = false
@@ -565,11 +670,13 @@ func _process(delta: float) -> void:
 	tick_elapsed += delta
 	if tick_elapsed < TICK:
 		return
+	var actual_tick: float = tick_elapsed
 	tick_elapsed = 0.0
 	var world_pos: Vector3 = game.hero.global_position
 	if multiplayer.is_server():
 		players[1]["position"] = world_pos
 		players[1]["yaw"] = game.hero.visual.rotation.y
+		_tick_host_encounters(actual_tick)
 		_send_positions()
 	else:
 		_send_position.rpc_id(1, world_pos, game.hero.visual.rotation.y)
@@ -582,7 +689,8 @@ func _send_position(at: Vector3, yaw: float) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if not players.has(sender) or not at.is_finite() or not is_finite(yaw):
 		return
-	# Cosmetic peer positions only. Never grant loot, item or damage authority.
+	# Movement is reported by peers; the host validates encounter actions
+	# but does not yet simulate player movement/anti-cheat.
 	if at.length() > 10000.0:
 		return
 	players[sender]["position"] = at
