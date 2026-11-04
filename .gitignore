@@ -6,3 +6,7 @@
 Thumbs.db
 export.cfg
 export_presets.cfg
+*.keystore
+*.jks
+*.p12
+.launcher-venv/

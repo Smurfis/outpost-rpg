@@ -1,8 +1,8 @@
-name: Export Outpost Android debug APK
+name: Export Outpost Android updateable APK
 
 on:
   push:
-    branches: [integration/v05-android-stable-main, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -48,14 +48,32 @@ jobs:
           python3 -m venv .launcher-venv
           .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
           .launcher-venv/bin/python tools/generate_android_launcher_icons.py
-      - name: Configure local Android debug signing and export preset
+      - name: Configure permanent Android signing identity and version
         shell: bash
+        env:
+          OUTPOST_KEYSTORE_B64: ${{ secrets.OUTPOST_ANDROID_KEYSTORE_B64 }}
+          OUTPOST_KEY_ALIAS: ${{ secrets.OUTPOST_ANDROID_KEY_ALIAS }}
+          OUTPOST_KEY_PASSWORD: ${{ secrets.OUTPOST_ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          # Never create a fresh key in CI: installed Android apps require the
+          # same signing identity for an in-place update.
+          if [[ -z "$OUTPOST_KEYSTORE_B64" || -z "$OUTPOST_KEY_ALIAS" || -z "$OUTPOST_KEY_PASSWORD" ]]; then
+            echo "::error::Set permanent OUTPOST_ANDROID_KEYSTORE_B64, OUTPOST_ANDROID_KEY_ALIAS and OUTPOST_ANDROID_KEY_PASSWORD in GitHub Actions secrets. See docs/ANDROID_UPDATER_SETUP.md."
+            exit 1
+          fi
           mkdir -p "$HOME/.android" "$HOME/.config/godot" build
-          keytool -genkeypair -alias androiddebugkey -keyalg RSA -keysize 2048 \
-            -validity 3650 -keystore "$HOME/.android/debug.keystore" -storepass android \
-            -keypass android -dname 'CN=Outpost Dev, O=Five Star Interactive, C=GB' -noprompt
+          printf '%s' "$OUTPOST_KEYSTORE_B64" | base64 --decode > "$HOME/.android/outpost-update-signing.jks"
+          chmod 600 "$HOME/.android/outpost-update-signing.jks"
+          keytool -list -keystore "$HOME/.android/outpost-update-signing.jks" \
+            -storepass "$OUTPOST_KEY_PASSWORD" -alias "$OUTPOST_KEY_ALIAS" >/dev/null
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/outpost-update-signing.jks" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=$OUTPOST_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$OUTPOST_KEY_PASSWORD" >> "$GITHUB_ENV"
+          # Monotonic over subsequent runs of this workflow, and higher
+          # than the last disposable-key preview's versionCode 11.
+          OUTPOST_BUILD_CODE="$((1000 + GITHUB_RUN_NUMBER))"
+          echo "OUTPOST_BUILD_CODE=$OUTPOST_BUILD_CODE" >> "$GITHUB_ENV"
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
 
@@ -93,7 +111,7 @@ jobs:
           architectures/arm64-v8a=true
           architectures/x86=false
           architectures/x86_64=false
-          version/code=11
+          version/code=__OUTPOST_BUILD_CODE__
           version/name="0.5.0-dev"
           package/unique_name="com.fivestarinteractive.outpost.preview"
           package/name="Outpost Preview"
@@ -106,21 +124,23 @@ jobs:
           permissions/internet=true
           permissions/access_network_state=true
           EOF
-          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
-          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey' >> "$GITHUB_ENV"
-          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android' >> "$GITHUB_ENV"
+          sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
+          grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg
       - name: Import project and export installable APK
         shell: bash
         run: |
           set -euo pipefail
           # Linux import needs Android ETC2/ASTC texture variants enabled.
+          sed -i "s/^config\/android_build_code=.*/config\/android_build_code=$OUTPOST_BUILD_CODE/" project.godot
+          grep -q "^config/android_build_code=$OUTPOST_BUILD_CODE$" project.godot
           sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
             --export-debug Android build/Outpost-v05-Unified-Android.apk
           test -s build/Outpost-v05-Unified-Android.apk
           unzip -t build/Outpost-v05-Unified-Android.apk >/dev/null
-          ls -lh build/Outpost-v05-Unified-Android.apk
+          cp build/Outpost-v05-Unified-Android.apk "build/Outpost-Android-v$OUTPOST_BUILD_CODE.apk"
+          ls -lh "build/Outpost-Android-v$OUTPOST_BUILD_CODE.apk"
       - name: Verify actual Android package contains the custom launcher icons
         shell: bash
         run: |
@@ -151,26 +171,27 @@ jobs:
       - name: Upload APK for Android phone testing
         uses: actions/upload-artifact@v4
         with:
-          name: outpost-v05-unified-debug-apk
-          path: build/Outpost-v05-Unified-Android.apk
+          name: outpost-android-update-${{ github.run_number }}-apk
+          path: build/Outpost-Android-v*.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish tested unified APK from main on GitHub Releases
+      - name: Publish updateable APK from main on GitHub Releases
         if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag='outpost-v05-unified-2026-11-04'
+          tag="outpost-android-v$OUTPOST_BUILD_CODE"
+          apk="build/Outpost-Android-v$OUTPOST_BUILD_CODE.apk"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" build/Outpost-v05-Unified-Android.apk --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$tag" build/Outpost-v05-Unified-Android.apk \
+            gh release create "$tag" "$apk" \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Outpost Android v0.5.0-dev — unified title + crafting + voxel gameplay" \
-              --notes "Unified Android ARM64 APK built directly from the main branch: Five Star title splash and illustrated tent logo, parchment+wood touch crafting and HUD, budgeted chunk loading, finite voxel terrain, dungeons, LAN co-op, hit VFX and world exploration. Pixel-art title artwork remains a vector approximation requiring phone review. Android debug signing may require uninstalling earlier preview and can erase locally saved data." \
+              --title "Outpost Android 0.5.0-dev - build $OUTPOST_BUILD_CODE" \
+              --notes "OUTPOST_ANDROID_VERSION_CODE=$OUTPOST_BUILD_CODE. Signed with Outpost's persistent Android test key. Compatible with in-place updates for subsequent APKs signed with the same identity. First upgrade from older preview key may require a final uninstall; Android requires confirmation to install." \
               --prerelease --latest=false
           fi
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url'

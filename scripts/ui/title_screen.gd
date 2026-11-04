@@ -9,6 +9,7 @@ const UI_PREFS := "user://outpost_ui.cfg"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
 const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
+const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
 	"Tip: Equipped tools can increase your resource yields.",
@@ -29,6 +30,11 @@ var _splash: Label
 var _tip_text: Label
 var _continue_button: Button
 var _settings_panel: PanelContainer
+var _updater: Node
+var _update_button: Button
+var _update_status: Label
+var _update_notice: Button
+var _update_download_url: String = ""
 var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
@@ -40,6 +46,10 @@ func _ready() -> void:
 	_make_screen()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
+	if OS.has_feature("Android") and _updater != null:
+		# Passive, single startup check; only display a banner if there's
+		# a newer signed APK. Never download or install automatically.
+		_updater.check_for_updates.call_deferred()
 	set_process(true)
 
 func _layout() -> void:
@@ -133,6 +143,22 @@ func _make_screen() -> void:
 	_tip_text.visible = _show_tips
 
 	_build_settings()
+	_update_notice = Button.new()
+	_update_notice.name = "UpdateAvailable"
+	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
+	_update_notice.position = Vector2(912, 591)
+	_update_notice.size = Vector2(314, 53)
+	_update_notice.visible = false
+	_update_notice.add_theme_font_size_override("font_size", 18)
+	_update_notice.add_theme_color_override("font_color", Color("ffefbd"))
+	var update_frame := StyleBoxFlat.new()
+	update_frame.bg_color = Color("392833")
+	update_frame.border_color = Color("f1bd69")
+	update_frame.set_border_width_all(4)
+	update_frame.set_corner_radius_all(7)
+	_update_notice.add_theme_stylebox_override("normal", update_frame)
+	_update_notice.pressed.connect(_check_or_download_update)
+	_canvas.add_child(_update_notice)
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	# The screenshot/mock-up is not one flattened UI. Every asset stays a
@@ -206,8 +232,8 @@ func _process(delta: float) -> void:
 func _build_settings() -> void:
 	_settings_panel = PanelContainer.new()
 	_settings_panel.name = "SettingsPanel"
-	_settings_panel.position = Vector2(340, 213)
-	_settings_panel.size = Vector2(600, 345)
+	_settings_panel.position = Vector2(340, 169)
+	_settings_panel.size = Vector2(600, 405)
 	_settings_panel.visible = false
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("25243b")
@@ -245,11 +271,55 @@ func _build_settings() -> void:
 		_write_prefs()
 	)
 	stack.add_child(tips)
+
+	# Update checking belongs in the existing title settings; no gameplay modal
+	# and no background traffic until the player asks for an update.
+	_updater = ANDROID_UPDATER.new()
+	_updater.name = "AndroidUpdater"
+	add_child(_updater)
+	_updater.status_changed.connect(_on_update_status)
+	_updater.update_found.connect(_on_update_found)
+	_update_button = Button.new()
+	_update_button.name = "CheckForUpdates"
+	_update_button.text = "CHECK FOR ANDROID UPDATES"
+	_update_button.custom_minimum_size = Vector2(0, 55)
+	_update_button.pressed.connect(_check_or_download_update)
+	stack.add_child(_update_button)
+	_update_status = Label.new()
+	_update_status.name = "UpdateStatus"
+	_update_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_update_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_update_status.text = "Android build %d • Updates keep saves with the same signing key" % int(ProjectSettings.get_setting("application/config/android_build_code", 11))
+	_label_style(_update_status, 16, Color("fff1d5"), Color("2b1e25"))
+	stack.add_child(_update_status)
 	var back := Button.new()
 	back.text = "Back"
 	back.custom_minimum_size = Vector2(0, 54)
 	back.pressed.connect(_toggle_settings)
 	stack.add_child(back)
+
+func _check_or_download_update() -> void:
+	if not _update_download_url.is_empty():
+		# The Android installer always needs the user's approval. A browser
+		# download avoids unsafe file:// URI / FileProvider workarounds.
+		var error: Error = OS.shell_open(_update_download_url)
+		if error != OK:
+			_on_update_status("Couldn't open your browser; use the GitHub Releases page.")
+		return
+	if _updater != null:
+		_updater.check_for_updates()
+
+func _on_update_status(message: String) -> void:
+	if _update_status != null:
+		_update_status.text = message
+
+func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
+	_update_download_url = download_url
+	_update_button.text = "DOWNLOAD ANDROID UPDATE"
+	if _update_notice != null:
+		_update_notice.text = "UPDATE AVAILABLE  •  BUILD %d" % version_code
+		_update_notice.visible = true
+	_on_update_status("New Outpost build %d available. Tap Download, then approve Android's install prompt." % version_code)
 
 func _toggle_settings() -> void:
 	_settings_panel.visible = not _settings_panel.visible
