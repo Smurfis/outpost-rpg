@@ -164,6 +164,7 @@ func block(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
 func _lighting() -> void:
 	var w := WorldEnvironment.new()
 	var env := Environment.new()
+	var dawn: ProceduralSkyMaterial
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("a6c4c9")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -173,7 +174,7 @@ func _lighting() -> void:
 		# Warm lavender sunrise with a peach horizon; cheap, mobile-friendly sky.
 		env.background_mode = Environment.BG_SKY
 		var sky := Sky.new()
-		var dawn := ProceduralSkyMaterial.new()
+		dawn = ProceduralSkyMaterial.new()
 		dawn.sky_top_color = Color("5d81b7")
 		dawn.sky_horizon_color = Color("efb49b")
 		dawn.ground_bottom_color = Color("66677f")
@@ -195,7 +196,7 @@ func _lighting() -> void:
 	day_night = NIGHTFALL.new()
 	day_night.name = "DayNightCycle"
 	add_child(day_night)
-	day_night.configure(env, sun, dawn if voxel_art_enabled else null)
+	day_night.configure(env, sun, dawn)
 
 func _world() -> void:
 	var floor_body := StaticBody3D.new()
