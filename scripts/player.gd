@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Outpost v0.5: modular original OBJ adventurer with animated limbs and equipment.
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
+const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 
 var game
 var hud
@@ -195,7 +196,8 @@ func set_cloak(equipped: bool) -> void:
 		cloak_pivot.visible = equipped
 
 func swing() -> void:
-	combat_phase = 1.0
+	# Start inside the forward part of the strike, never on the zero sine at PI.
+	combat_phase = 0.86
 
 func gather_swing(kind: String) -> void:
 	last_gather = kind
@@ -319,7 +321,9 @@ func take_hit(amount: float) -> void:
 	var actual: float = amount * protection
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
-	if health <= 0.0:
+	var defeated: bool = health <= 0.0
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated)
+	if defeated:
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		game.hud.toast("Defeated! Respawned at outpost; items kept.")

@@ -148,8 +148,10 @@ func _label(value: String, size: int, color: Color, left: float, top: float, rig
 	n.text = value
 	n.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	n.add_theme_font_size_override("font_size", size)
+	n.add_theme_font_size_override("font_size", maxi(17, size))
 	n.add_theme_color_override("font_color", color)
+	n.add_theme_color_override("font_outline_color", Color("#21161a"))
+	n.add_theme_constant_override("outline_size", 2)
 	root.add_child(n)
 	_anchors(n, left, top, right, bottom)
 	return n
@@ -183,7 +185,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", Color("#f9e7c0"))
-	title.add_theme_font_size_override("font_size", 13)
+	title.add_theme_font_size_override("font_size", 16)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(title)
 	title.anchor_left = 0.0
