@@ -11,9 +11,14 @@ const GUARDIAN = preload("res://scripts/dungeons/dungeon_guardian.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
 const LOOT = preload("res://scripts/dungeons/dungeon_loot.gd")
 const ASSET_ROOT = "res://assets/third_party/kaykit_dungeon/"
-const STEP: float = 14.0
+# Bring paired doorframes closer together while keeping the seeded room graph
+# and chest/guardian locations deterministic per entrance.
+const STEP: float = 13.0
 const HALF: float = 6.0
 const ROOM_SIZE: float = 12.0
+const CONNECTOR_LENGTH: float = 4.6
+const CONNECTOR_WIDTH: float = 6.6
+const CONNECTOR_WALL_OFFSET: float = 3.02
 const NORTH: Vector2i = Vector2i(0, -1)
 const SOUTH: Vector2i = Vector2i(0, 1)
 const WEST: Vector2i = Vector2i(-1, 0)
@@ -199,11 +204,44 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 		torch.scale = Vector3(0.92, 0.92, 0.92)
 
 func _build_connector(a: Vector2i, b: Vector2i) -> void:
-	var a_center: Vector3 = Vector3(float(a.x) * STEP, 0, float(a.y) * STEP)
-	var b_center: Vector3 = Vector3(float(b.x) * STEP, 0, float(b.y) * STEP)
+	var a_center: Vector3 = Vector3(float(a.x) * STEP, 0.0, float(a.y) * STEP)
+	var b_center: Vector3 = Vector3(float(b.x) * STEP, 0.0, float(b.y) * STEP)
 	var middle: Vector3 = (a_center + b_center) * 0.5
-	_solid(Vector3(4.0, 0.55, 4.0), middle + Vector3(0, -0.34, 0))
+	var along_x: bool = a.x != b.x
+	# The prior bridge only had a 4x4 floor between 12.2-wide rooms, with
+	# completely exposed outer edges. The new 6.6-wide collision deck spans
+	# BOTH doorway lips and all three visible connector tile positions.
+	var floor_size: Vector3 = Vector3(CONNECTOR_LENGTH, 0.56, CONNECTOR_WIDTH) if along_x else Vector3(CONNECTOR_WIDTH, 0.56, CONNECTOR_LENGTH)
+	_solid(floor_size, middle + Vector3(0, -0.34, 0))
+	# A contiguous visible stone slab matches the collision; the KayKit
+	# centre tile adds detail without leaving decorative holes at the sides.
+	var bridge_art := BoxMesh.new()
+	bridge_art.size = Vector3(CONNECTOR_LENGTH, 0.12, CONNECTOR_WIDTH) if along_x else Vector3(CONNECTOR_WIDTH, 0.12, CONNECTOR_LENGTH)
+	var bridge := MeshInstance3D.new()
+	bridge.name = "ConnectorDeck"
+	bridge.mesh = bridge_art
+	bridge.position = middle + Vector3(0, -0.095, 0)
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("777f7c")
+	stone.roughness = 0.94
+	bridge.material_override = stone
+	floor_root.add_child(bridge)
 	_model("floor_tile_large", middle + Vector3(0, 0.02, 0), Color("a3a69a"))
+	# Side parapets make it impossible to walk diagonally off the join even
+	# while camera movement is held against its edge on a touchscreen.
+	for direction in [-1.0, 1.0]:
+		var offset: Vector3 = Vector3(0, 0, direction * CONNECTOR_WALL_OFFSET) if along_x else Vector3(direction * CONNECTOR_WALL_OFFSET, 0, 0)
+		var wall_size: Vector3 = Vector3(CONNECTOR_LENGTH, 1.45, 0.65) if along_x else Vector3(0.65, 1.45, CONNECTOR_LENGTH)
+		var wall_at: Vector3 = middle + offset + Vector3(0, 0.68, 0)
+		_solid(wall_size, wall_at)
+		var wall_art := BoxMesh.new()
+		wall_art.size = wall_size
+		var stone_wall := MeshInstance3D.new()
+		stone_wall.name = "ConnectorParapet"
+		stone_wall.mesh = wall_art
+		stone_wall.position = wall_at
+		stone_wall.material_override = stone
+		floor_root.add_child(stone_wall)
 
 func _solid(size: Vector3, at: Vector3) -> void:
 	var body := StaticBody3D.new()
