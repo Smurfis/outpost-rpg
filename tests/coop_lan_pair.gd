@@ -30,6 +30,7 @@ func _run() -> void:
 		quit(1)
 		return
 	var game = scene.instantiate()
+	game.save_path = save_path
 	root.set_meta("outpost_new_adventure", true)
 	root.add_child(game)
 	await frames(3)
@@ -61,10 +62,26 @@ func _run() -> void:
 		var run_id: int = int(game.coop.preview_descriptor.get("id", 0))
 		var authority = game.coop.host_encounters.get(run_id, {}).get("ledger", null)
 		check(authority != null and int(authority.revision) > 0, "Host received and validated real client ATTACK RPC")
-		game.coop.request_end_preview()
-		await frames(30)
-		got_exit = game.coop.run_preview == null
-		check(got_exit, "Host ends preview for party")
+		if authority != null and int(authority.revision) > 0:
+			var at_ms: int = Time.get_ticks_msec() + 1000
+			for slot in authority.guards.keys():
+				var target: Dictionary = authority.guards[slot]
+				game.hero.global_position = target["position"] + Vector3(0.0, 0.0, 1.0)
+				while float(authority.guards[slot]["hp"]) > 0.0:
+					var hit: Dictionary = authority.strike(1, run_id, authority.floor_number, int(slot), game.hero.global_position, at_ms)
+					if hit.is_empty():
+						break
+					at_ms += 600
+			game.coop._broadcast_encounter_state(run_id)
+			game.coop.request_complete_run()
+			await frames(30)
+			got_exit = game.coop.run_preview == null
+			check(game.coop_reward_receipts.size() == 1, "Host receives exactly one final chest reward")
+		else:
+			game.coop.request_end_preview()
+			await frames(30)
+			got_exit = game.coop.run_preview == null
+		check(got_exit, "Host completes or safely ends party dungeon")
 	else:
 		for i in range(240):
 			await create_timer(0.05).timeout
@@ -100,7 +117,8 @@ func _run() -> void:
 				if game.coop.run_preview == null:
 					got_exit = true
 					break
-			check(got_exit, "Client returns to overworld when host ends party preview")
+			check(got_exit, "Client returns to overworld on host completion")
+			check(game.coop_reward_receipts.size() == 1, "Client receives one host-authorized chest reward")
 	check(not game.hero.interaction_locked, "Movement remains unlocked after LAN session actions")
 	game.coop.disconnect_session()
 	game.queue_free()
