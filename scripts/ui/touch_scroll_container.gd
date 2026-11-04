@@ -9,7 +9,6 @@ var _previous_point: Vector2 = Vector2.ZERO
 var _dragged: bool = false
 
 func _ready() -> void:
-	scroll_horizontal_enabled = false
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll_deadzone = 4
