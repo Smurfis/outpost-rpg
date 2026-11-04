@@ -6,14 +6,23 @@ const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
+const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
+const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
+const COOP = preload("res://scripts/network/coop_session.gd")
+@export var voxel_art_enabled: bool = true
+@export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
+@export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
 const SAVE = "user://outpost_progress_v02.json"
+@export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
 var hero
 var hud
 var camera: Camera3D
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
+var coop
 var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
@@ -25,6 +34,9 @@ var spear_crafted: bool = false
 var attack_delay: float = 0.0
 var gather_delay: float = 0.0
 var world_time: float = 0.0
+var day_night
+var night_quote_seen: bool = false
+var coop_reward_receipts: Dictionary = {}
 var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
@@ -49,8 +61,7 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
-	# Startup menu's Play skips the old save once; Continue preserves it.
-	# Do not delete the previous save before the user actually plays/saves.
+	# Title Play starts a fresh run; Continue reads the previous save.
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
 		get_tree().root.remove_meta("outpost_new_adventure")
@@ -59,6 +70,10 @@ func _ready() -> void:
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
+	if day_night != null:
+		day_night.night_started.connect(_on_first_night)
+	coop = COOP.new()
+	add_child(coop)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
@@ -91,6 +106,8 @@ func _process(delta: float) -> void:
 	gather_delay = maxf(0.0, gather_delay - delta)
 	world_time += delta
 	_camera(delta)
+	if day_night != null and hud != null:
+		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
 		return
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
@@ -108,7 +125,7 @@ func _process(delta: float) -> void:
 	if resource != null:
 		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
 	elif enemy != null:
-		hint = "Wild boar nearby • use ATTACK"
+		hint = "Dungeon guardian nearby • use ATTACK" if coop != null and coop.in_party_dungeon() else "Wild boar nearby • use ATTACK"
 	elif closest_station() != "":
 		hint = "%s nearby • open CRAFT to make items" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
@@ -148,18 +165,39 @@ func block(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
 func _lighting() -> void:
 	var w := WorldEnvironment.new()
 	var env := Environment.new()
+	var dawn: ProceduralSkyMaterial
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color("a6c4c9")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("f0e3c6")
 	env.ambient_light_energy = 0.85
+	if voxel_art_enabled:
+		# Warm lavender sunrise with a peach horizon; cheap, mobile-friendly sky.
+		env.background_mode = Environment.BG_SKY
+		var sky := Sky.new()
+		dawn = ProceduralSkyMaterial.new()
+		dawn.sky_top_color = Color("5d81b7")
+		dawn.sky_horizon_color = Color("efb49b")
+		dawn.ground_bottom_color = Color("66677f")
+		dawn.ground_horizon_color = Color("d9b8a6")
+		sky.sky_material = dawn
+		env.sky = sky
+		env.ambient_light_color = Color("fff0d1")
+		env.ambient_light_energy = 0.9
 	w.environment = env
 	add_child(w)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-53, -30, 0)
 	sun.light_energy = 1.25
-	sun.shadow_enabled = false
+	if voxel_art_enabled:
+		sun.light_color = Color("ffe0a9")
+		sun.light_energy = 1.45
+	sun.shadow_enabled = false # Preserve Android budget on first visual pass.
 	add_child(sun)
+	day_night = NIGHTFALL.new()
+	day_night.name = "DayNightCycle"
+	add_child(day_night)
+	day_night.configure(env, sun, dawn)
 
 func _world() -> void:
 	var floor_body := StaticBody3D.new()
@@ -171,11 +209,17 @@ func _world() -> void:
 	collider.shape = shape
 	floor_body.add_child(collider)
 	add_child(floor_body)
-	block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
-	# Winding, triangulated paths replace the former perfectly rectangular slabs.
-	_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
-	_terrain_path(Vector3(0, 0, -21), Vector3(-1, 0, 21), 1.45, Color("ac956f"))
-	_terrain_path(Vector3(-1, 0, -4), Vector3(6, 0, 4), 2.95, Color("b09b75"))
+	if voxel_art_enabled:
+		var landscape = VOXEL_BIOME.new()
+		add_child(landscape)
+		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
+		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
+	else:
+		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
+		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
+		_terrain_path(Vector3(0, 0, -21), Vector3(-1, 0, 21), 1.45, Color("ac956f"))
+		_terrain_path(Vector3(-1, 0, -4), Vector3(6, 0, 4), 2.95, Color("b09b75"))
 	# Distinct 3D mesh assets for the skyline and outpost supplies.
 	for position_at in [Vector3(-18, 0, -6), Vector3(17, 0, -4), Vector3(-11, 0, 16), Vector3(15, 0, 18), Vector3(-19, 0, 13)]:
 		_mesh_asset("oak_tree", position_at, 0.82, position_at.x * 0.18)
@@ -183,12 +227,17 @@ func _world() -> void:
 		_mesh_asset("rock_deposit", position_at, 0.79, position_at.z * 0.22)
 	for position_at in [Vector3(1.7, 0, 1.8), Vector3(2.7, 0, 2.1), Vector3(7.2, 0, 5.2), Vector3(-9.5, 0, -0.9)]:
 		_mesh_asset("supply_crate", position_at, 0.9, position_at.x * 0.34)
-	var tent := CylinderMesh.new()
-	tent.top_radius = 0.0
-	tent.bottom_radius = 2.1
-	tent.height = 2.9
-	part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
-	block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
+	if voxel_art_enabled:
+		var shelter: MeshInstance3D = VOXEL_PROPS.tent()
+		shelter.position = Vector3(-6.1, 0.0, 2.8)
+		add_child(shelter)
+	else:
+		var tent := CylinderMesh.new()
+		tent.top_radius = 0.0
+		tent.bottom_radius = 2.1
+		tent.height = 2.9
+		part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
+		block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
 	# Decorative shrubs and wildflowers (deterministic for stable map)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 512309
@@ -197,13 +246,20 @@ func _world() -> void:
 		var z := rng.randf_range(-21.0, 21.0)
 		if absf(x) < 5.3 and absf(z) < 5.3:
 			continue
-		var mesh := SphereMesh.new()
-		mesh.radial_segments = 7
-		mesh.rings = 3
-		mesh.radius = rng.randf_range(0.15, 0.38)
-		mesh.height = 0.40
-		var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
-		tuft.scale = Vector3(1.4, 0.53, 1.0)
+		if voxel_art_enabled:
+			if i % 2 == 0:
+				var shrub: MeshInstance3D = VOXEL_PROPS.bush(i % 13 == 0)
+				shrub.position = Vector3(x, 0, z)
+				shrub.scale = Vector3.ONE * rng.randf_range(0.18, 0.40)
+				add_child(shrub)
+		else:
+			var mesh := SphereMesh.new()
+			mesh.radial_segments = 7
+			mesh.rings = 3
+			mesh.radius = rng.randf_range(0.15, 0.38)
+			mesh.height = 0.40
+			var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
+			tuft.scale = Vector3(1.4, 0.53, 1.0)
 	# Details: timber palisade sections, supply crates, stumps and path stones
 	for i in range(12):
 		var px: float = -10.0 + float(i) * 1.75
@@ -220,13 +276,33 @@ func _world() -> void:
 		stones.height = 0.045
 		stones.radial_segments = 6
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
-	# Invisible boundary
-	_wall(Vector3(-23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(23, 1.5, 0), Vector3(0.5, 3, 46))
-	_wall(Vector3(0, 1.5, -23), Vector3(46, 3, 0.5))
-	_wall(Vector3(0, 1.5, 23), Vector3(46, 3, 0.5))
+	# Make the Fields truly walkable. Keep the original small camp collision
+	# underneath its centre; outside it the chunk trimeshes own collision.
+	var half_extent: float = 96.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
+	var span: float = half_extent * 2.0
+	_wall(Vector3(-half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
+	_wall(Vector3(half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
+	_wall(Vector3(0, 2.0, -half_extent), Vector3(span, 6.0, 0.5))
+	_wall(Vector3(0, 2.0, half_extent), Vector3(span, 6.0, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
+	if voxel_art_enabled:
+		var prop: MeshInstance3D
+		match id:
+			"oak_tree":
+				prop = VOXEL_PROPS.tree()
+			"rock_deposit":
+				prop = VOXEL_PROPS.rock()
+			"supply_crate":
+				prop = VOXEL_PROPS.crate()
+		if prop != null:
+			# Stable unique names avoid Godot's auto-generated sibling names.
+			prop.name = "%s_%d_%d" % [str(prop.name), roundi(where.x * 10.0), roundi(where.z * 10.0)]
+			prop.position = where
+			prop.scale = Vector3.ONE * size_factor
+			prop.rotation.y = angle
+			add_child(prop)
+			return
 	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
 	if mesh == null:
 		push_warning("Unable to import 3D model: " + id)
@@ -341,6 +417,24 @@ func _resources() -> void:
 			node.position = pos
 			node.setup(str(item_id))
 
+	# The wider Fields has a few harvestable nodes beyond the original camp.
+	# Do not move the starting resources or alter recipe/save data.
+	if voxel_art_enabled and fields_biome_enabled:
+		var landscape = get_node_or_null("VoxelAtmosphere")
+		if landscape != null:
+			var field_sites: Dictionary = {
+				"wood": [Vector2(-34, -32), Vector2(32, -37), Vector2(-35, 29), Vector2(39, 24)],
+				"stone": [Vector2(35, 34), Vector2(-38, 34), Vector2(-34, -38)],
+				"berries": [Vector2(35, -31), Vector2(-37, 27)],
+				"fiber": [Vector2(32, 27), Vector2(-32, -31)]
+			}
+			for kind in field_sites:
+				for site in field_sites[kind]:
+					var field_node = NODE.new()
+					add_child(field_node)
+					field_node.position = Vector3(site.x, landscape.surface_y_at(site.x, site.y) + 0.055, site.y)
+					field_node.setup(str(kind))
+
 func _enemies() -> void:
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
 		var boar = ENEMY.new()
@@ -453,7 +547,7 @@ func _recipe_by_id(id: String) -> Dictionary:
 func equipment_slot(item_id: String) -> String:
 	if item_id in ["spear", "iron_blade"]:
 		return "weapon"
-	if item_id == "shield":
+	if item_id in ["shield", "torch"]:
 		return "offhand"
 	if item_id == "cloak":
 		return "back"
@@ -489,10 +583,11 @@ func _apply_equipment() -> void:
 		return
 	hero.set_weapon(str(equipment.get("weapon", "training_blade")))
 	hero.set_shield(str(equipment.get("offhand", "")) == "shield")
+	hero.set_torch(str(equipment.get("offhand", "")) == "torch")
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)
@@ -621,6 +716,14 @@ func use_meal() -> void:
 func attack() -> void:
 	if attack_delay > 0.0 or menu != null and menu.visible:
 		return
+	if coop != null and coop.in_party_dungeon():
+		var guardian = _nearest_enemy()
+		if guardian == null or not guardian.has_meta("encounter_slot"):
+			return
+		attack_delay = 0.55
+		hero.swing()
+		coop.request_strike(int(guardian.get_meta("encounter_slot")))
+		return
 	var target = _nearest_enemy()
 	if target == null:
 		return # No popup spam when outside combat range.
@@ -641,26 +744,74 @@ func on_enemy_killed() -> void:
 	_save()
 	_refresh_menu()
 
+func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
+	# Receipts survive a restart and prevent duplicate host event delivery.
+	if receipt.is_empty() or receipt.length() > 128 or coop_reward_receipts.has(receipt):
+		return false
+	if not receipt.begins_with("lan:"):
+		return false
+	coop_reward_receipts[receipt] = true
+	inventory["coins"] = int(inventory.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	experience += maxi(0, int(reward.get("xp", 0)))
+	var materials: Dictionary = reward.get("materials", {})
+	for item_id in materials:
+		var key: String = str(item_id)
+		if not key.is_empty():
+			inventory[key] = int(inventory.get(key, 0)) + maxi(0, int(materials[item_id]))
+	for book in reward.get("books", []):
+		var key: String = str(book)
+		if not key.is_empty():
+			inventory[key] = int(inventory.get(key, 0)) + 1
+	_save()
+	_refresh_menu()
+	if hud != null:
+		hud.toast("Party dungeon cleared! +%d coins • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+	return true
+
+func toggle_torch() -> void:
+	if int(inventory.get("torch", 0)) < 1:
+		if hud != null:
+			hud.toast("Craft a torch at the workbench to light the dark.")
+		return
+	equip_item("torch")
+
+func _on_first_night() -> void:
+	if night_quote_seen:
+		return
+	night_quote_seen = true
+	if hud != null:
+		hud.toast("I don't care how dark the world gets. You are its light.")
+	_save()
+
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted}
-	var f: FileAccess = FileAccess.open(SAVE, FileAccess.WRITE)
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts}
+	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
 
 func _load() -> void:
-	if not FileAccess.file_exists(SAVE):
+	if not FileAccess.file_exists(save_path):
 		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if not (data is Dictionary):
 		return
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	night_quote_seen = bool(data.get("night_quote_seen", false))
+	if data.get("coop_reward_receipts", {}) is Dictionary:
+		coop_reward_receipts = (data.get("coop_reward_receipts", {}) as Dictionary).duplicate(true)
+	if day_night != null:
+		day_night.set_phase(clampf(float(data.get("day_phase", 0.38)), 0.0, 1.0))
 	var stored: Variant = data.get("inventory", {})
 	if stored is Dictionary:
 		for key in inventory:
 			inventory[key] = maxi(0, int(stored.get(key, 0)))
+		# Preserve newly introduced skill books and dungeon material keys.
+		for key in stored:
+			if key is String and not inventory.has(key) and key.length() <= 64:
+				inventory[key] = maxi(0, int(stored[key]))
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
@@ -674,7 +825,7 @@ func _load() -> void:
 				equipment[slot] = item
 	else:
 		# Migrate existing v2, v3 and v4 gear: previously auto-equipped.
-		for item in ["spear", "iron_blade", "shield", "cloak", "axe", "pickaxe", "satchel"]:
+		for item in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"]:
 			if int(inventory.get(item, 0)) > 0:
 				equipment[equipment_slot(item)] = item
 	_apply_equipment()

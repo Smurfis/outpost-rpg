@@ -1,5 +1,7 @@
 extends Node3D
-## Outpost v0.4: ten distinct harvestables, each with faceted silhouette.
+## Ten harvestables; optional voxel art changes visuals, never harvesting rules.
+const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
@@ -22,7 +24,7 @@ func setup(resource_type: String) -> void:
 		"berries":
 			_bush(true)
 		"iron":
-			_ore(Color("738fa4"), Color("9fc8d9"))
+			_ore(Color("717b86"), Color("dfe5e8"))
 		"coal":
 			_ore(Color("303b44"), Color("63737e"))
 		"clay":
@@ -39,10 +41,26 @@ func setup(resource_type: String) -> void:
 	_setup_target_marker()
 	add_to_group("resources")
 
+func _is_voxel_skin() -> bool:
+	var node: Node = get_parent()
+	# Harvestables may be children of streamed-chunk containers, not the game.
+	while node != null:
+		if node.has_method("_world") and bool(node.get("voxel_art_enabled")):
+			return true
+		node = node.get_parent()
+	return false
+
 func _model(id: String, size_factor: Vector3) -> void:
-	var model := MeshInstance3D.new()
+	var model: MeshInstance3D
+	if _is_voxel_skin():
+		if id == "oak_tree":
+			model = VOXEL_PROPS.tree()
+		elif id == "rock_deposit":
+			model = VOXEL_PROPS.rock()
+	if model == null:
+		model = MeshInstance3D.new()
+		model.mesh = load("res://assets/models/" + id + ".obj") as Mesh
 	model.name = "HarvestableModel"
-	model.mesh = load("res://assets/models/" + id + ".obj") as Mesh
 	model.scale = size_factor
 	add_child(model)
 
@@ -123,6 +141,9 @@ func _rock() -> void:
 	_model("rock_deposit", Vector3.ONE)
 
 func _ore(base: Color, vein: Color) -> void:
+	if _is_voxel_skin():
+		add_child(VOXEL_PROPS.rock(kind))
+		return
 	var points := [Vector3(-0.48, 0.52, 0.10), Vector3(0.42, 0.62, 0.26), Vector3(0.10, 0.39, -0.49)]
 	for i in range(3):
 		var p := _orb(points[i], Vector3(1.4, 1.25, 1.30), base.lightened(float(i) * 0.12))
@@ -132,6 +153,9 @@ func _ore(base: Color, vein: Color) -> void:
 		c.rotation.z = 0.10 * float(i - 1)
 
 func _bush(berries: bool) -> void:
+	if _is_voxel_skin():
+		add_child(VOXEL_PROPS.bush(berries))
+		return
 	for p in [Vector3(-0.38, 0.50, 0.22), Vector3(0.25, 0.63, 0), Vector3(0.60, 0.36, -0.14)]:
 		_orb(p, Vector3(1.50, 1.0, 1.42), Color("49714d") if berries else Color("75a47a"))
 	if berries:
@@ -142,6 +166,9 @@ func _bush(berries: bool) -> void:
 			_spike(0.07, 0.0, 1.25, Vector3(x, 0.87, 0.15), Color("dec686"), 4)
 
 func _clay() -> void:
+	if _is_voxel_skin():
+		add_child(VOXEL_PROPS.rock("clay"))
+		return
 	for p in [Vector3(-0.45, 0.40, 0.0), Vector3(0.4, 0.36, 0.25), Vector3(-0.05, 0.51, -0.34)]:
 		_orb(p, Vector3(1.55, 0.84, 1.20), Color("bd7658") if p.x < 0.0 else Color("9a564b"))
 	_orb(Vector3(0.18, 0.72, 0.24), Vector3(0.80, 0.30, 0.5), Color("d79f77"))
@@ -182,6 +209,11 @@ func harvest() -> String:
 	if not active:
 		return ""
 	hits_left -= 1
+	var game_node: Node = get_parent()
+	while game_node != null and not game_node.has_method("_world"):
+		game_node = game_node.get_parent()
+	if game_node is Node3D:
+		PIXEL_FEEDBACK.emit_feedback(game_node, global_position + Vector3.UP * 0.55, 0, Color("d9ba87"), hits_left <= 0)
 	if target_label != null:
 		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
 	var bump := create_tween()

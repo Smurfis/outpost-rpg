@@ -1,5 +1,7 @@
 extends CharacterBody3D
 ## Simple boar with pursuit, melee range damage and respawn.
+const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd")
+const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var hero
 var game
 var hp := 32.0
@@ -26,18 +28,22 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	add_child(shape)
 	visual = Node3D.new()
 	add_child(visual)
-	_sphere(Vector3(0, 0.63, 0), Vector3(1.55, 0.95, 1.85), Color("794d3b"))
-	_sphere(Vector3(0, 0.72, -0.63), Vector3(0.96, 0.80, 0.85), Color("906048"))
-	_sphere(Vector3(0, 0.53, -1.02), Vector3(0.62, 0.40, 0.42), Color("ca9b82"))
-	for x in [-0.30, 0.30]:
-		_sphere(Vector3(x, 1.02, -0.82), Vector3(0.12, 0.14, 0.12), Color("f9d5a4"))
-		_sphere(Vector3(x, 1.03, -0.90), Vector3(0.062, 0.070, 0.06), Color("242a29"))
-		_sphere(Vector3(x, 0.32, -0.95), Vector3(0.13, 0.22, 0.15), Color("f0d4a0"))
-	_sphere(Vector3(0, 0.93, 0.82), Vector3(0.15, 0.15, 0.66), Color("5f3c31"))
-	for x in [-0.47, 0.47]:
-		_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, 0.55), Color("51382f"))
-		_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, -0.55), Color("51382f"))
-		_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
+	if game != null and bool(game.get("voxel_art_enabled")):
+		# Single mesh/draw call, shared 16x16 pixel atlas and nearest filter.
+		visual.add_child(VOXEL_CREATURES.create_boar())
+	else:
+		_sphere(Vector3(0, 0.63, 0), Vector3(1.55, 0.95, 1.85), Color("794d3b"))
+		_sphere(Vector3(0, 0.72, -0.63), Vector3(0.96, 0.80, 0.85), Color("906048"))
+		_sphere(Vector3(0, 0.53, -1.02), Vector3(0.62, 0.40, 0.42), Color("ca9b82"))
+		for x in [-0.30, 0.30]:
+			_sphere(Vector3(x, 1.02, -0.82), Vector3(0.12, 0.14, 0.12), Color("f9d5a4"))
+			_sphere(Vector3(x, 1.03, -0.90), Vector3(0.062, 0.070, 0.06), Color("242a29"))
+			_sphere(Vector3(x, 0.32, -0.95), Vector3(0.13, 0.22, 0.15), Color("f0d4a0"))
+		_sphere(Vector3(0, 0.93, 0.82), Vector3(0.15, 0.15, 0.66), Color("5f3c31"))
+		for x in [-0.47, 0.47]:
+			_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, 0.55), Color("51382f"))
+			_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, -0.55), Color("51382f"))
+			_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
 	add_to_group("enemies")
 
 func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
@@ -97,7 +103,9 @@ func _physics_process(delta: float) -> void:
 func receive_damage(amount: float) -> void:
 	if not alive:
 		return
+	var dealt: float = minf(hp, maxf(0.0, amount))
 	hp -= amount
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		visible = false

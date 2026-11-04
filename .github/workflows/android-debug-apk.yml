@@ -1,0 +1,175 @@
+name: Export Outpost Android debug APK
+
+on:
+  push:
+    branches: [build/android-phase5b-test, fix/android-world-loader-title, feature/android-tent-app-icon, feature/title-art-visual-bridge, feature/android-playtest-combat-resources-vfx]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17 for Godot Android exporter
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK without obsolete SDK tools package
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - name: Install Android platform and signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'build-tools;35.0.0' 'platforms;android-35'
+      - name: Fetch exact Godot editor and Android debug templates (4.7.2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
+          curl --fail --location --retry 3 -o godot.zip "$base/Godot_v4.7.2-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          template_dir="$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          mkdir -p "$template_dir"
+          curl --fail --location --retry 3 -o "$template_dir/android_debug.apk" "$base/Godot_v4.7.2-stable_android_debug.perfetto.apk"
+          curl --fail --location --retry 3 -o "$template_dir/android_release.apk" "$base/Godot_v4.7.2-stable_android_release.perfetto.apk"
+          printf '4.7.2.stable\n' > "$template_dir/version.txt"
+      - name: Generate tent launcher PNGs from checked-in artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .launcher-venv
+          .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
+          .launcher-venv/bin/python tools/generate_android_launcher_icons.py
+      - name: Configure local Android debug signing and export preset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android" "$HOME/.config/godot" build
+          keytool -genkeypair -alias androiddebugkey -keyalg RSA -keysize 2048 \
+            -validity 3650 -keystore "$HOME/.android/debug.keystore" -storepass android \
+            -keypass android -dname 'CN=Outpost Dev, O=Five Star Interactive, C=GB' -noprompt
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+          cat > export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Android"
+          platform="Android"
+          runnable=true
+          advanced_options=false
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/Outpost-PhoneFeedback-Android.apk"
+          patches=PackedStringArray()
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          seed=0
+          encrypt_pck=false
+          encrypt_directory=false
+          script_export_mode=2
+
+          [preset.0.options]
+
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          version/code=9
+          version/name="0.5.0-dev"
+          package/unique_name="com.fivestarinteractive.outpost.preview"
+          package/name="Outpost Preview"
+          package/signed=true
+          ; Explicit main + adaptive + themed launcher images prevent fallback to the Godot logo.
+          launcher_icons/main_192x192="res://assets/branding/generated/outpost_main_192.png"
+          launcher_icons/adaptive_foreground_432x432="res://assets/branding/generated/outpost_adaptive_foreground_432.png"
+          launcher_icons/adaptive_background_432x432="res://assets/branding/generated/outpost_adaptive_background_432.png"
+          launcher_icons/adaptive_monochrome_432x432="res://assets/branding/generated/outpost_adaptive_monochrome_432.png"
+          permissions/internet=true
+          permissions/access_network_state=true
+          EOF
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey' >> "$GITHUB_ENV"
+          echo 'GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android' >> "$GITHUB_ENV"
+      - name: Import project and export installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Linux import needs Android ETC2/ASTC texture variants enabled.
+          sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
+            --export-debug Android build/Outpost-PhoneFeedback-Android.apk
+          test -s build/Outpost-PhoneFeedback-Android.apk
+          unzip -t build/Outpost-PhoneFeedback-Android.apk >/dev/null
+          ls -lh build/Outpost-PhoneFeedback-Android.apk
+      - name: Verify actual Android package contains the custom launcher icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          .launcher-venv/bin/python - <<'PY'
+          import io, zipfile, pathlib
+          from PIL import Image, ImageChops, ImageStat
+          apk = pathlib.Path('build/Outpost-PhoneFeedback-Android.apk')
+          baseline = pathlib.Path('assets/branding/generated')
+          required = (
+              ('res/mipmap-xxxhdpi-v4/icon.webp', 'outpost_main_192.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_foreground.webp', 'outpost_adaptive_foreground_432.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_background.webp', 'outpost_adaptive_background_432.png'),
+          )
+          with zipfile.ZipFile(apk) as bundle:
+              names = set(bundle.namelist())
+              for resource, expected in required:
+                  assert resource in names, 'Missing launcher icon in APK: ' + resource
+                  inside = Image.open(io.BytesIO(bundle.read(resource))).convert('RGBA')
+                  original = Image.open(baseline / expected).convert('RGBA')
+                  assert inside.size == original.size, (resource, inside.size, original.size)
+                  # Godot's Android exporter re-encodes to WebP, so check image
+                  # similarity rather than byte equality.
+                  difference = ImageStat.Stat(ImageChops.difference(inside, original)).mean
+                  assert max(difference) < 23.0, (resource, difference)
+                  print('APK icon verified:', resource, 'pixel-channel mean delta:', difference)
+          PY
+      - name: Upload APK for Android phone testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-phone-feedback-debug-apk
+          path: build/Outpost-PhoneFeedback-Android.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish installable icon test APK directly on GitHub Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag='outpost-android-phone-feedback-2026-11-04'
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" build/Outpost-PhoneFeedback-Android.apk --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" build/Outpost-PhoneFeedback-Android.apk \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Outpost Android v0.5.0-dev — phone feedback pass 2" \
+              --notes "Android ARM64 test build stacked on title/launcher/loading fixes, with downhill terrain and water horizon from PR #30, silver-white iron, streamed harvestables and boars, forward sword swing, hit damage numbers and voxel death bursts. The title art remains an integration-ready vector approximation, not the approved final PNG cutouts. Android testing is required; debug signing may require uninstalling previous preview and can erase local saves." \
+              --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url'

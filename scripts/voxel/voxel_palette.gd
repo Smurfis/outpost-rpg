@@ -1,0 +1,107 @@
+extends RefCounted
+## Single shared, nearest-filtered pixel atlas. Prefer checked-in source PNG, with
+## deterministic generated fallback for local tools and recovery.
+const TILE_PIXELS: int = 16
+const GRID: int = 4
+const PIXELS: int = TILE_PIXELS * GRID
+const ART_ATLAS_PATH: String = "res://assets/voxel/outpost_atlas_16px.png"
+static var _shared_material: StandardMaterial3D
+
+# 0 grass | 1 light grass | 2 deep grass | 3 soil
+# 4 stone | 5 path | 6 gravel | 7 moss
+# 8 bark | 9 leaves | 10 dark leaves | 11 planks
+# 12 masonry | 13 magic crystal | 14 berries | 15 coal
+static func get_material() -> StandardMaterial3D:
+	if _shared_material != null:
+		return _shared_material
+	var tex: Texture2D
+	if ResourceLoader.exists(ART_ATLAS_PATH):
+		tex = load(ART_ATLAS_PATH) as Texture2D
+	if tex != null and (tex.get_width() != PIXELS or tex.get_height() != PIXELS):
+		push_warning("Voxel atlas must be 64x64 pixels; using procedural fallback.")
+		tex = null
+	if tex == null:
+		var bases: Array[Color] = [
+			Color("74a852"), Color("96bd60"), Color("4b814a"), Color("8b6546"),
+			Color("8d8990"), Color("b79c6b"), Color("a4a098"), Color("668958"),
+			Color("785339"), Color("6ca34d"), Color("386e49"), Color("ae8051"),
+			Color("a29b91"), Color("9882ce"), Color("c05061"), Color("353f52")
+		]
+		var image := Image.create(PIXELS, PIXELS, false, Image.FORMAT_RGBA8)
+		for tile in range(16):
+			for y in range(TILE_PIXELS):
+				for x in range(TILE_PIXELS):
+					var hash_value: int = posmod((x + 3) * 71 + (y + 5) * 137 + tile * 173 + x * y * 29, 31)
+					var base: Color = bases[tile]
+					var ink: Color = base
+					if hash_value < 5:
+						ink = base.darkened(0.23)
+					elif hash_value < 11:
+						ink = base.lightened(0.17)
+					elif hash_value > 27:
+						ink = base.darkened(0.12)
+					if tile == 3 and (y == 5 or y == 11) and x % 4 != 0:
+						ink = base.darkened(0.18)
+					elif tile == 4 and (x == 7 or y == 10) and hash_value < 13:
+						ink = base.darkened(0.2)
+					elif tile == 8 and x % 6 == 0:
+						ink = base.darkened(0.22)
+					elif tile == 11 and y in [4, 10]:
+						ink = base.darkened(0.3)
+					elif tile == 12 and (y == 7 or (x == 8 and y < 7) or (x == 4 and y > 7)):
+						ink = base.darkened(0.3)
+					elif tile == 13 and (x + y) % 6 == 0:
+						ink = base.lightened(0.5)
+					image.set_pixel((tile % GRID) * TILE_PIXELS + x, (tile / GRID) * TILE_PIXELS + y, ink)
+		tex = ImageTexture.create_from_image(image)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	mat.roughness = 1.0
+	mat.metallic = 0.0
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shared_material = mat
+	return mat
+
+static func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tile: int) -> void:
+	var t: int = clampi(tile, 0, 15)
+	# Half-texel UV inset prevents a tile pulling pixels from its neighbours.
+	var u0: float = float((t % GRID) * TILE_PIXELS) + 0.5
+	var v0: float = float((t / GRID) * TILE_PIXELS) + 0.5
+	var u1: float = u0 + float(TILE_PIXELS - 1)
+	var v1: float = v0 + float(TILE_PIXELS - 1)
+	var uv: Array[Vector2] = [
+		Vector2(u0, v1) / float(PIXELS),
+		Vector2(u1, v1) / float(PIXELS),
+		Vector2(u1, v0) / float(PIXELS),
+		Vector2(u0, v0) / float(PIXELS)
+	]
+	var points: Array[Vector3] = [a, b, c, d]
+	for index in [0, 1, 2, 0, 2, 3]:
+		st.set_uv(uv[index])
+		st.add_vertex(points[index])
+
+static func box(st: SurfaceTool, center: Vector3, full_size: Vector3, top_tile: int, side_tile: int, bottom_tile: int = 3) -> void:
+	var l: float = center.x - full_size.x * 0.5
+	var r: float = center.x + full_size.x * 0.5
+	var b: float = center.y - full_size.y * 0.5
+	var t: float = center.y + full_size.y * 0.5
+	var n: float = center.z - full_size.z * 0.5
+	var f: float = center.z + full_size.z * 0.5
+	quad(st, Vector3(l, t, n), Vector3(l, t, f), Vector3(r, t, f), Vector3(r, t, n), top_tile)
+	quad(st, Vector3(l, b, f), Vector3(l, b, n), Vector3(r, b, n), Vector3(r, b, f), bottom_tile)
+	quad(st, Vector3(l, b, f), Vector3(r, b, f), Vector3(r, t, f), Vector3(l, t, f), side_tile)
+	quad(st, Vector3(r, b, f), Vector3(r, b, n), Vector3(r, t, n), Vector3(r, t, f), side_tile)
+	quad(st, Vector3(r, b, n), Vector3(l, b, n), Vector3(l, t, n), Vector3(r, t, n), side_tile)
+	quad(st, Vector3(l, b, n), Vector3(l, b, f), Vector3(l, t, f), Vector3(l, t, n), side_tile)
+
+static func create_mesh(st: SurfaceTool) -> ArrayMesh:
+	st.generate_normals()
+	return st.commit()
+
+static func as_instance(st: SurfaceTool, label: String) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.name = label
+	node.mesh = create_mesh(st)
+	node.material_override = get_material()
+	return node
