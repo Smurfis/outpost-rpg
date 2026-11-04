@@ -11,6 +11,7 @@ var label: Label3D
 var orb: MeshInstance3D
 var aura: MeshInstance3D
 var clock: float = 0.0
+const PORTAL_LABEL_RADIUS: float = 9.0
 
 func configure(id: String, owner_chunk: String, tier: int) -> void:
 	entrance_id = id
@@ -74,7 +75,9 @@ func configure(id: String, owner_chunk: String, tier: int) -> void:
 	label.font_size = 44
 	label.pixel_size = 0.0062
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = false
 	label.position = Vector3(0, 6.12, 0)
+	label.visible = false
 	add_child(label)
 	input_event.connect(_on_input_event)
 
@@ -103,6 +106,10 @@ func _emissive(tint: Color, strength: float, alpha: float) -> StandardMaterial3D
 
 func _process(delta: float) -> void:
 	clock += delta
+	if label != null:
+		var manager: Node = get_parent()
+		var adventurer: Node3D = manager.get("hero") as Node3D if manager != null else null
+		label.visible = adventurer != null and Vector2(adventurer.global_position.x - global_position.x, adventurer.global_position.z - global_position.z).length_squared() < PORTAL_LABEL_RADIUS * PORTAL_LABEL_RADIUS
 	if orb != null:
 		orb.scale.x = 1.0 + sin(clock * 1.9) * 0.025
 		orb.scale.y = 1.0 + sin(clock * 1.4) * 0.025
