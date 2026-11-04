@@ -45,8 +45,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --user cairosvg Pillow
-          python3 tools/generate_android_launcher_icons.py
+          python3 -m venv .launcher-venv
+          .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
+          .launcher-venv/bin/python tools/generate_android_launcher_icons.py
       - name: Configure local Android debug signing and export preset
         shell: bash
         run: |
@@ -97,7 +98,7 @@ jobs:
           package/unique_name="com.fivestarinteractive.outpost.preview"
           package/name="Outpost Preview"
           package/signed=true
-          # Explicit main + adaptive + themed launcher images prevent fallback to the Godot logo.
+          ; Explicit main + adaptive + themed launcher images prevent fallback to the Godot logo.
           launcher_icons/main_192x192="res://assets/branding/generated/outpost_main_192.png"
           launcher_icons/adaptive_foreground_432x432="res://assets/branding/generated/outpost_adaptive_foreground_432.png"
           launcher_icons/adaptive_background_432x432="res://assets/branding/generated/outpost_adaptive_background_432.png"
@@ -124,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          .launcher-venv/bin/python - <<'PY'
           import io, zipfile, pathlib
           from PIL import Image, ImageChops, ImageStat
           apk = pathlib.Path('build/Outpost-TentIcon-Android.apk')
