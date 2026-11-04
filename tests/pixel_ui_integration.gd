@@ -60,7 +60,8 @@ func _run() -> void:
 	var attack: Button = game.hud.root.get_node_or_null("Action_attack") as Button
 	verify(attack != null, "Attack touch button exists")
 	if attack != null:
-		verify(attack.get_theme_stylebox("normal") is StyleBoxTexture, "Attack action uses graphic red button")
+		var attack_skin: StyleBox = attack.get_theme_stylebox("normal")
+		verify(attack_skin is StyleBoxFlat and (attack_skin as StyleBoxFlat).corner_radius_top_left >= 60, "Attack action uses the approved circular gold-ring holder")
 		var icon: TextureRect = attack.get_child(0) as TextureRect
 		verify(icon != null and icon.texture != null and icon.texture.resource_path.ends_with("attack.png"), "Attack action shows original PNG icon")
 		verify(attack.size.x >= 85 and attack.size.y >= 85, "Attack button is large enough to tap at 1280x720")
