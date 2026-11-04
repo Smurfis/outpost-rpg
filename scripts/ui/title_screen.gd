@@ -33,6 +33,7 @@ var _settings_panel: PanelContainer
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
+var _update_notice: Button
 var _update_download_url: String = ""
 var _show_tips := true
 var _reduced_motion := false
@@ -45,6 +46,10 @@ func _ready() -> void:
 	_make_screen()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
+	if OS.has_feature("Android") and _updater != null:
+		# Passive, single startup check; only display a banner if there's
+		# a newer signed APK. Never download or install automatically.
+		_updater.check_for_updates.call_deferred()
 	set_process(true)
 
 func _layout() -> void:
@@ -138,6 +143,22 @@ func _make_screen() -> void:
 	_tip_text.visible = _show_tips
 
 	_build_settings()
+	_update_notice = Button.new()
+	_update_notice.name = "UpdateAvailable"
+	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
+	_update_notice.position = Vector2(912, 591)
+	_update_notice.size = Vector2(314, 53)
+	_update_notice.visible = false
+	_update_notice.add_theme_font_size_override("font_size", 18)
+	_update_notice.add_theme_color_override("font_color", Color("ffefbd"))
+	var update_frame := StyleBoxFlat.new()
+	update_frame.bg_color = Color("392833")
+	update_frame.border_color = Color("f1bd69")
+	update_frame.set_border_width_all(4)
+	update_frame.set_corner_radius_all(7)
+	_update_notice.add_theme_stylebox_override("normal", update_frame)
+	_update_notice.pressed.connect(_check_or_download_update)
+	_canvas.add_child(_update_notice)
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	# The screenshot/mock-up is not one flattened UI. Every asset stays a
@@ -295,6 +316,9 @@ func _on_update_status(message: String) -> void:
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
 	_update_download_url = download_url
 	_update_button.text = "DOWNLOAD ANDROID UPDATE"
+	if _update_notice != null:
+		_update_notice.text = "UPDATE AVAILABLE  •  BUILD %d" % version_code
+		_update_notice.visible = true
 	_on_update_status("New Outpost build %d available. Tap Download, then approve Android's install prompt." % version_code)
 
 func _toggle_settings() -> void:
