@@ -136,6 +136,8 @@ func _make_screen() -> void:
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	var path := "res://assets/ui/title/" + png
+	if not ResourceLoader.exists(path) and png == "title_background.png":
+		path = "res://assets/ui/title/title_background.jpg"
 	if not ResourceLoader.exists(path):
 		path = "res://assets/ui/title/" + svg
 	if not ResourceLoader.exists(path):
@@ -148,6 +150,8 @@ func _add_image(node_name: String, png: String, svg: String, where: Vector2, how
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_SCALE
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if node_name == "Backdrop":
+		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(image)
 
 func _label_style(label: Label, font_size: int, ink: Color, outline: Color) -> void:
