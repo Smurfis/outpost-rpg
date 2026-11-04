@@ -101,6 +101,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Linux import needs Android ETC2/ASTC texture variants enabled.
+          sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
             --export-debug Android build/Outpost-Phase5B-Android.apk
