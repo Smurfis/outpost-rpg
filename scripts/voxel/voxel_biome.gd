@@ -331,7 +331,7 @@ func _register_streamed_portal(chunk_x: int, chunk_z: int) -> void:
 	# Direct-scene legacy tests retain the five predictable preview portals.
 	if not defer_streaming or not stream_enabled:
 		return
-	var sample: int = posmod((chunk_x + 101) * 37 + (chunk_z + 101) * 91 + world_seed, 13)
+	var sample: int = posmod((chunk_x + 101) * 37 + (chunk_z + 101) * 43 + world_seed, 13)
 	if sample != 0:
 		return
 	var x: float = float(chunk_x) + float(CHUNK_SIZE) * 0.5
