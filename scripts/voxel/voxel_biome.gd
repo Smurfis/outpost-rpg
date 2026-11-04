@@ -53,7 +53,10 @@ func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: boo
 			update_streaming_for(Vector3.ZERO)
 	else:
 		_make_ground()
-	_make_cliff_rim()
+	if stream_enabled:
+		_make_water_horizon()
+	else:
+		_make_cliff_rim()
 	if not stream_enabled:
 		_make_grass_detail()
 		if fields_enabled:
@@ -65,14 +68,18 @@ func surface_y_at(x: float, z: float) -> float:
 	# silhouette and traversable one-block steps of Minecraft Dungeons.
 	if not fields_enabled:
 		return -0.055
-	var radial: float = maxf(absf(x), absf(z))
-	var blend: float = clampf((radial - SAFE_CLEARING_RADIUS) / HEIGHT_BLEND_BAND, 0.0, 1.0)
-	blend = blend * blend * (3.0 - 2.0 * blend)
-	if blend <= 0.0:
+	# The original square/circular height band made a one-block wall when
+	# walking *out* of the camp, even though perspective made it look lower.
+	# Keep the full starter clearing level, then roll gently DOWN into fields.
+	var outside: float = maxf(0.0, maxf(absf(x), absf(z)) - SAFE_CLEARING_RADIUS)
+	if outside <= 0.0:
 		return -0.055
+	var edge_warp: float = _noise.get_noise_2d(x * 0.57 + 147.0, z * 0.57 - 93.0) * 5.5
+	var blend: float = clampf((outside + edge_warp * clampf(outside / HEIGHT_BLEND_BAND, 0.0, 1.0)) / HEIGHT_BLEND_BAND, 0.0, 1.0)
+	blend = blend * blend * (3.0 - 2.0 * blend)
 	var sample: float = _noise.get_noise_2d(floorf(x) + 0.5, floorf(z) + 0.5)
-	var field_height: float = (1.1 + (sample + 1.0) * 1.05) * blend
-	return -0.055 + clampf(roundf(field_height), 0.0, MAX_ELEVATION)
+	var descent: float = (-1.45 + sample * 1.35) * blend
+	return -0.055 + clampf(roundf(descent), -3.0, 0.0)
 
 func _process(_delta: float) -> void:
 	if not stream_enabled:
@@ -367,6 +374,24 @@ func _distance_segment(pos: Vector2, a: Vector2, b: Vector2) -> float:
 	var segment: Vector2 = b - a
 	var factor: float = clampf((pos - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
 	return pos.distance_to(a + segment * factor)
+
+func _make_water_horizon() -> void:
+	# A calm water horizon replaces the conspicuous stacks of decorative stone
+	# at the end of the finite test map. Water is below terrain and not yet
+	# traversable; future continuous-world streaming removes the hard edge.
+	var sea := MeshInstance3D.new()
+	sea.name = "DistantWaterHorizon"
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(float(map_half) * 2.0 + 160.0, float(map_half) * 2.0 + 160.0)
+	sea.mesh = plane
+	sea.position = Vector3(0.0, -3.25, 0.0)
+	var surface := StandardMaterial3D.new()
+	surface.albedo_color = Color("639db1")
+	surface.roughness = 0.46
+	surface.metallic = 0.0
+	surface.cull_mode = BaseMaterial3D.CULL_DISABLED
+	sea.material_override = surface
+	add_child(sea)
 
 func _make_cliff_rim() -> void:
 	var st := SurfaceTool.new()
