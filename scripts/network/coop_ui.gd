@@ -22,6 +22,7 @@ var join_party_button: Button
 var preview_button: Button
 var next_button: Button
 var end_button: Button
+var revive_button: Button
 
 func setup(ref: Node3D) -> void:
 	session = ref
@@ -122,7 +123,9 @@ func _ready() -> void:
 	floor_row.add_child(next_button)
 	end_button = _button("LEAVE PREVIEW", _end_preview)
 	floor_row.add_child(end_button)
-	var note := _label("EARLY CO-OP: guardian health, strikes, floor unlocks and final loot are host controlled. Guardians currently stay in place; enemy AI, player damage, PvP, remote torch lighting and online relay are not synchronized. Test on two Android devices.", 15, Color("bdc9c2"))
+	revive_button = _button("REVIVE NEARBY ALLY", _revive)
+	run_actions.add_child(revive_button)
+	var note := _label("EARLY CO-OP: Host-owned guardians pursue nearby adventurers and strike with synchronized damage. Knocked-out allies can be revived within reach. This is LAN-only: remote movement still needs anti-cheat and advanced pathfinding is not yet available.", 15, Color("bdc9c2"))
 	contents.add_child(note)
 	visible = false
 	session.session_changed.connect(_refresh)
@@ -199,6 +202,7 @@ func _refresh() -> void:
 	next_button.text = "CLAIM FINAL TREASURE" if not run.is_empty() and int(run.get("floor", 1)) >= int(run.get("floors", 1)) else "NEXT FLOOR"
 	next_button.disabled = not session.is_party_leader() or run.is_empty() or not session.can_advance_preview()
 	end_button.disabled = not session.is_party_leader() or run.is_empty()
+	revive_button.disabled = not session.revive_available()
 
 func _host() -> void:
 	session.host_lan(profile_name.text)
@@ -228,6 +232,10 @@ func _next_floor() -> void:
 		session.request_complete_run()
 	else:
 		session.request_next_floor()
+	close_page()
+
+func _revive() -> void:
+	session.request_revive_nearest()
 	close_page()
 
 func _end_preview() -> void:

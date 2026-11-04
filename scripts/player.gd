@@ -264,7 +264,9 @@ func _physics_process(delta: float) -> void:
 	if combat_phase <= 0.0:
 		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
-	if elapsed - last_hit > 6.0:
+	# In LAN dungeons only the host owns health; local auto-healing must
+	# never revive knocked-out characters or desync peer health snapshots.
+	if elapsed - last_hit > 6.0 and not (game.coop != null and game.coop.in_party_dungeon()):
 		health = minf(100.0, health + delta * 2.0)
 
 func _try_auto_step(horizontal_motion: Vector3) -> bool:

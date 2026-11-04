@@ -58,7 +58,7 @@ func _run() -> void:
 		await frames(24)
 		got_run = game.coop.run_preview != null and int(game.coop.preview_descriptor.get("floor", 0)) == 1
 		check(got_run, "Host creates one dungeon preview for the party")
-		await create_timer(2.8).timeout
+		await create_timer(4.5).timeout
 		var run_id: int = int(game.coop.preview_descriptor.get("id", 0))
 		var authority = game.coop.host_encounters.get(run_id, {}).get("ledger", null)
 		check(authority != null and int(authority.revision) > 0, "Host received and validated real client ATTACK RPC")
@@ -100,6 +100,10 @@ func _run() -> void:
 					break
 			if guardian != null:
 				var original_hp: float = float(guardian.hp)
+				var origin: Vector3 = guardian.global_position
+				game.hero.global_position = origin + Vector3(0.0, 0.0, 3.0)
+				await create_timer(1.1).timeout
+				check(guardian.global_position.distance_to(origin) > 0.06, "Client sees host-authoritative guardian pursuit")
 				game.hero.global_position = guardian.global_position + Vector3(0.0, 0.0, 1.0)
 				await create_timer(0.75).timeout # Allow peer-position packet to reach host.
 				game.attack() # Goes over the real ENet RPC, not a direct local health edit.
