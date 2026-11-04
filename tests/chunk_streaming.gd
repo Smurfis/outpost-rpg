@@ -32,7 +32,8 @@ func _run() -> void:
 	var original = field.get_node_or_null("GroundChunk_0_0")
 	check(original != null, "Origin mesh exists")
 	var original_vertices: PackedVector3Array = (original.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	field.update_streaming_for(Vector3(78, 0, 78))
+	game.hero.global_position = Vector3(78, 4.0, 78)
+	field.update_streaming_for(game.hero.global_position)
 	await physics_frame
 	check(field.has_chunk_at(78, 78), "Moving into distant Fields loads nearby terrain")
 	check(not field.has_chunk_at(0, 0), "Travelling unloads distant starting cells")
@@ -44,7 +45,8 @@ func _run() -> void:
 	var count_before: int = field.loaded_chunk_count()
 	field.update_streaming_for(Vector3(2500, 0, 2500)) # direct calls must be safe
 	check(field.loaded_chunk_count() == count_before, "Out-of-world dungeon positions never unload overworld cells")
-	field.update_streaming_for(Vector3.ZERO)
+	game.hero.global_position = Vector3(0, 0.35, 0)
+	field.update_streaming_for(game.hero.global_position)
 	await physics_frame
 	check(field.has_chunk_at(0, 0), "Return trip reconstructs starting terrain")
 	check(not field.has_chunk_at(78, 78), "Return trip unloads far-off terrain")
