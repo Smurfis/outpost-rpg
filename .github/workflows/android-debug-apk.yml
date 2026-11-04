@@ -2,7 +2,7 @@ name: Export Outpost Android debug APK
 
 on:
   push:
-    branches: [build/android-phase5b-test, fix/android-world-loader-title, feature/android-tent-app-icon, feature/title-art-visual-bridge]
+    branches: [build/android-phase5b-test, fix/android-world-loader-title, feature/android-tent-app-icon, feature/title-art-visual-bridge, feature/android-playtest-combat-resources-vfx]
   workflow_dispatch:
 
 permissions:
@@ -75,7 +75,7 @@ jobs:
           export_filter="all_resources"
           include_filter=""
           exclude_filter=""
-          export_path="build/Outpost-TitleArt-Android.apk"
+          export_path="build/Outpost-PhoneFeedback-Android.apk"
           patches=PackedStringArray()
           encryption_include_filters=""
           encryption_exclude_filters=""
@@ -93,7 +93,7 @@ jobs:
           architectures/arm64-v8a=true
           architectures/x86=false
           architectures/x86_64=false
-          version/code=8
+          version/code=9
           version/name="0.5.0-dev"
           package/unique_name="com.fivestarinteractive.outpost.preview"
           package/name="Outpost Preview"
@@ -117,10 +117,10 @@ jobs:
           sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
-            --export-debug Android build/Outpost-TitleArt-Android.apk
-          test -s build/Outpost-TitleArt-Android.apk
-          unzip -t build/Outpost-TitleArt-Android.apk >/dev/null
-          ls -lh build/Outpost-TitleArt-Android.apk
+            --export-debug Android build/Outpost-PhoneFeedback-Android.apk
+          test -s build/Outpost-PhoneFeedback-Android.apk
+          unzip -t build/Outpost-PhoneFeedback-Android.apk >/dev/null
+          ls -lh build/Outpost-PhoneFeedback-Android.apk
       - name: Verify actual Android package contains the custom launcher icons
         shell: bash
         run: |
@@ -128,7 +128,7 @@ jobs:
           .launcher-venv/bin/python - <<'PY'
           import io, zipfile, pathlib
           from PIL import Image, ImageChops, ImageStat
-          apk = pathlib.Path('build/Outpost-TitleArt-Android.apk')
+          apk = pathlib.Path('build/Outpost-PhoneFeedback-Android.apk')
           baseline = pathlib.Path('assets/branding/generated')
           required = (
               ('res/mipmap-xxxhdpi-v4/icon.webp', 'outpost_main_192.png'),
@@ -151,8 +151,8 @@ jobs:
       - name: Upload APK for Android phone testing
         uses: actions/upload-artifact@v4
         with:
-          name: outpost-title-art-android-debug-apk
-          path: build/Outpost-TitleArt-Android.apk
+          name: outpost-phone-feedback-debug-apk
+          path: build/Outpost-PhoneFeedback-Android.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -162,14 +162,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag='outpost-android-title-art-2026-11-04'
+          tag='outpost-android-phone-feedback-2026-11-04'
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" build/Outpost-TitleArt-Android.apk --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$tag" build/Outpost-PhoneFeedback-Android.apk --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$tag" build/Outpost-TitleArt-Android.apk \
+            gh release create "$tag" build/Outpost-PhoneFeedback-Android.apk \
               --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Outpost Android v0.5.0-dev — illustrated title-screen preview" \
-              --notes "Android ARM64 development build with custom tent launcher icon, illustrated sunset title background and vector tent wordmark layer, plus Play -> world-generation startup fix. Title art is an integration-ready vector approximation, not the originally approved PNG cutout. Please verify on a real device. Debug signing may require uninstalling prior previews, so back up data." \
+              --title "Outpost Android v0.5.0-dev — phone feedback pass 2" \
+              --notes "Android ARM64 test build stacked on title/launcher/loading fixes, with downhill terrain and water horizon from PR #30, silver-white iron, streamed harvestables and boars, forward sword swing, hit damage numbers and voxel death bursts. The title art remains an integration-ready vector approximation, not the approved final PNG cutouts. Android testing is required; debug signing may require uninstalling previous preview and can erase local saves." \
               --prerelease --latest=false
           fi
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url'
