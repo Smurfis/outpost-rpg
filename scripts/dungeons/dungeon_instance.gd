@@ -295,6 +295,7 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 		floor_root.add_child(guard)
 		var boss: bool = current_floor == floor_count and i == guards_remaining - 1
 		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z))
+		guard.set_meta("encounter_slot", i) # Stable across every peer's seeded room copy.
 		guard.hp *= pow(1.20, current_floor - 1) * (2.1 if boss else 1.0)
 		guard.damage_multiplier = pow(1.12, current_floor - 1) * (1.40 if boss else 1.0)
 		if boss:

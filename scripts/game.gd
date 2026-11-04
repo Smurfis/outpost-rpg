@@ -36,6 +36,7 @@ var gather_delay: float = 0.0
 var world_time: float = 0.0
 var day_night
 var night_quote_seen: bool = false
+var coop_reward_receipts: Dictionary = {}
 var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
@@ -124,7 +125,7 @@ func _process(delta: float) -> void:
 	if resource != null:
 		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
 	elif enemy != null:
-		hint = "Wild boar nearby • use ATTACK"
+		hint = "Dungeon guardian nearby • use ATTACK" if coop != null and coop.in_party_dungeon() else "Wild boar nearby • use ATTACK"
 	elif closest_station() != "":
 		hint = "%s nearby • open CRAFT to make items" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
@@ -711,12 +712,15 @@ func use_meal() -> void:
 	consume("meal", 40.0)
 
 func attack() -> void:
-	if coop != null and coop.in_party_dungeon():
-		# Do not let independent clients kill local guardian copies or award
-		# unverified loot. Server-authoritative co-op combat comes next.
-		hud.toast("Co-op encounter preview: synchronized combat is not enabled.")
-		return
 	if attack_delay > 0.0 or menu != null and menu.visible:
+		return
+	if coop != null and coop.in_party_dungeon():
+		var guardian = _nearest_enemy()
+		if guardian == null or not guardian.has_meta("encounter_slot"):
+			return
+		attack_delay = 0.55
+		hero.swing()
+		coop.request_strike(int(guardian.get_meta("encounter_slot")))
 		return
 	var target = _nearest_enemy()
 	if target == null:
@@ -738,6 +742,30 @@ func on_enemy_killed() -> void:
 	_save()
 	_refresh_menu()
 
+func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
+	# Receipts survive a restart and prevent duplicate host event delivery.
+	if receipt.is_empty() or receipt.length() > 128 or coop_reward_receipts.has(receipt):
+		return false
+	if not receipt.begins_with("lan:"):
+		return false
+	coop_reward_receipts[receipt] = true
+	inventory["coins"] = int(inventory.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	experience += maxi(0, int(reward.get("xp", 0)))
+	var materials: Dictionary = reward.get("materials", {})
+	for item_id in materials:
+		var key: String = str(item_id)
+		if not key.is_empty():
+			inventory[key] = int(inventory.get(key, 0)) + maxi(0, int(materials[item_id]))
+	for book in reward.get("books", []):
+		var key: String = str(book)
+		if not key.is_empty():
+			inventory[key] = int(inventory.get(key, 0)) + 1
+	_save()
+	_refresh_menu()
+	if hud != null:
+		hud.toast("Party dungeon cleared! +%d coins • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+	return true
+
 func toggle_torch() -> void:
 	if int(inventory.get("torch", 0)) < 1:
 		if hud != null:
@@ -754,7 +782,7 @@ func _on_first_night() -> void:
 	_save()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -770,12 +798,18 @@ func _load() -> void:
 	if version not in [2, 3, 4, 5]:
 		return
 	night_quote_seen = bool(data.get("night_quote_seen", false))
+	if data.get("coop_reward_receipts", {}) is Dictionary:
+		coop_reward_receipts = (data.get("coop_reward_receipts", {}) as Dictionary).duplicate(true)
 	if day_night != null:
 		day_night.set_phase(clampf(float(data.get("day_phase", 0.38)), 0.0, 1.0))
 	var stored: Variant = data.get("inventory", {})
 	if stored is Dictionary:
 		for key in inventory:
 			inventory[key] = maxi(0, int(stored.get(key, 0)))
+		# Preserve newly introduced skill books and dungeon material keys.
+		for key in stored:
+			if key is String and not inventory.has(key) and key.length() <= 64:
+				inventory[key] = maxi(0, int(stored[key]))
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
