@@ -1,6 +1,7 @@
 extends Node3D
 ## Ten harvestables; optional voxel art changes visuals, never harvesting rules.
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
@@ -23,7 +24,7 @@ func setup(resource_type: String) -> void:
 		"berries":
 			_bush(true)
 		"iron":
-			_ore(Color("738fa4"), Color("9fc8d9"))
+			_ore(Color("717b86"), Color("dfe5e8"))
 		"coal":
 			_ore(Color("303b44"), Color("63737e"))
 		"clay":
@@ -41,8 +42,13 @@ func setup(resource_type: String) -> void:
 	add_to_group("resources")
 
 func _is_voxel_skin() -> bool:
-	var world: Node = get_parent()
-	return world != null and bool(world.get("voxel_art_enabled"))
+	var node: Node = get_parent()
+	# Harvestables may be children of streamed-chunk containers, not the game.
+	while node != null:
+		if node.has_method("_world") and bool(node.get("voxel_art_enabled")):
+			return true
+		node = node.get_parent()
+	return false
 
 func _model(id: String, size_factor: Vector3) -> void:
 	var model: MeshInstance3D
@@ -203,6 +209,11 @@ func harvest() -> String:
 	if not active:
 		return ""
 	hits_left -= 1
+	var game_node: Node = get_parent()
+	while game_node != null and not game_node.has_method("_world"):
+		game_node = game_node.get_parent()
+	if game_node is Node3D:
+		PIXEL_FEEDBACK.emit_feedback(game_node, global_position + Vector3.UP * 0.55, 0, Color("d9ba87"), hits_left <= 0)
 	if target_label != null:
 		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
 	var bump := create_tween()
