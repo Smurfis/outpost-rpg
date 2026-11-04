@@ -11,7 +11,8 @@ const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
-@export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
+@export var chunk_streaming_enabled: bool = true
+@export var greedy_meshing_enabled: bool = true # Exact 16x16 tiled atlas, merged top quads # Stream finite 192x192 Fields in 12x12 cells.
 const SAVE = "user://outpost_progress_v02.json"
 
 var hero
@@ -198,7 +199,7 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
-		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled)
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, greedy_meshing_enabled)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))

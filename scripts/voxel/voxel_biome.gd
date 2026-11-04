@@ -2,6 +2,7 @@ extends Node3D
 ## Walkable, chunked voxel Fields biome. The existing Outpost clearing stays
 ## level and traversable; seeded Perlin noise forms one-voxel terraces outside.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const GREEDY = preload("res://scripts/voxel/voxel_greedy.gd")
 const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
@@ -17,13 +18,15 @@ var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
 var stream_enabled: bool = false
+var greedy_enabled: bool = true
 var _stream_center: Vector2i = Vector2i(99999, 99999)
 var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
 
-func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false) -> void:
+func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false, enable_greedy: bool = true) -> void:
 	name = "VoxelAtmosphere"
 	fields_enabled = enable_fields
 	stream_enabled = enable_fields and enable_streaming
+	greedy_enabled = enable_greedy
 	map_half = STREAM_MAP_HALF if stream_enabled else FIELDS_MAP_HALF if fields_enabled else MAP_HALF
 	world_seed = seed
 	_noise = FastNoiseLite.new()
@@ -121,34 +124,39 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 	var key: Vector2i = Vector2i(chunk_x, chunk_z)
 	if _loaded.has(key):
 		return
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
-		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
-			var x0: float = float(x)
-			var z0: float = float(z)
-			var x1: float = x0 + 1.0
-			var z1: float = z0 + 1.0
-			var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
-			PIXELS.quad(st,
-				Vector3(x0, height, z0), Vector3(x0, height, z1),
-				Vector3(x1, height, z1), Vector3(x1, height, z0),
-				_ground_tile(x, z))
-			# Exposed faces use the same heights even when the neighbour has
-			# not been loaded yet: no seam when a chunk later streams in.
-			var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
-			var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
-			var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
-			var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
-			if east < height - 0.01:
-				PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
-			if west < height - 0.01:
-				PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
-			if south < height - 0.01:
-				PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
-			if north < height - 0.01:
-				PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
-	var mesh: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
+	var mesh: MeshInstance3D
+	if greedy_enabled:
+		mesh = GREEDY.build_chunk(chunk_x, chunk_z, CHUNK_SIZE, map_half,
+			Callable(self, "surface_y_at"), Callable(self, "_ground_tile"))
+	else:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
+			for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
+				var x0: float = float(x)
+				var z0: float = float(z)
+				var x1: float = x0 + 1.0
+				var z1: float = z0 + 1.0
+				var height: float = surface_y_at(x0 + 0.5, z0 + 0.5)
+				PIXELS.quad(st,
+					Vector3(x0, height, z0), Vector3(x0, height, z1),
+					Vector3(x1, height, z1), Vector3(x1, height, z0),
+					_ground_tile(x, z))
+				# Exposed faces use the same heights even when the neighbour has
+				# not been loaded yet: no seam when a chunk later streams in.
+				var east: float = surface_y_at(x1 + 0.5, z0 + 0.5) if x < map_half - 1 else -2.2
+				var west: float = surface_y_at(x0 - 0.5, z0 + 0.5) if x > -map_half else -2.2
+				var south: float = surface_y_at(x0 + 0.5, z1 + 0.5) if z < map_half - 1 else -2.2
+				var north: float = surface_y_at(x0 + 0.5, z0 - 0.5) if z > -map_half else -2.2
+				if east < height - 0.01:
+					PIXELS.quad(st, Vector3(x1, east, z1), Vector3(x1, east, z0), Vector3(x1, height, z0), Vector3(x1, height, z1), 3)
+				if west < height - 0.01:
+					PIXELS.quad(st, Vector3(x0, west, z0), Vector3(x0, west, z1), Vector3(x0, height, z1), Vector3(x0, height, z0), 3)
+				if south < height - 0.01:
+					PIXELS.quad(st, Vector3(x0, south, z1), Vector3(x1, south, z1), Vector3(x1, height, z1), Vector3(x0, height, z1), 3)
+				if north < height - 0.01:
+					PIXELS.quad(st, Vector3(x1, north, z0), Vector3(x0, north, z0), Vector3(x0, height, z0), Vector3(x1, height, z0), 3)
+		mesh = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
 	add_child(mesh)
 	chunk_meshes.append(mesh)
 	var members: Array = [mesh]
