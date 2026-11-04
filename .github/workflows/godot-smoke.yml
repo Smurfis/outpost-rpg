@@ -141,6 +141,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/pixel_ui_integration.gd 2>&1 | tee pixel-ui.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PIXEL UI:' pixel-ui.log; then exit 1; fi
           grep -q "PIXEL UI RESULT: 0 failure(s)." pixel-ui.log
+      - name: Verify complete vector title art is present and visible in menu
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 50s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_art_assets.gd 2>&1 | tee title-art.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE ART:' title-art.log; then exit 1; fi
+          grep -q "TITLE ART RESULT: 0 failures" title-art.log
       - name: Verify Five Star splash, title logo and menu
         run: |
           set -o pipefail

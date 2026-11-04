@@ -135,16 +135,22 @@ func _make_screen() -> void:
 	_build_settings()
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
-	var path := "res://assets/ui/title/" + png
-	if not ResourceLoader.exists(path) and png == "title_background.png":
-		path = "res://assets/ui/title/title_background.jpg"
-	if not ResourceLoader.exists(path):
-		path = "res://assets/ui/title/" + svg
-	if not ResourceLoader.exists(path):
+	# The screenshot/mock-up is not one flattened UI. Every asset stays a
+	# separate clickable/replaceable Godot node, including the backdrop.
+	var base := "res://assets/ui/title/"
+	var texture: Texture2D
+	for path in [base + png, base + svg]:
+		if not ResourceLoader.exists(path):
+			continue
+		texture = load(path) as Texture2D
+		if texture != null:
+			break
+	if texture == null:
+		push_warning("Outpost title artwork missing: " + png + " / " + svg)
 		return
 	var image := TextureRect.new()
 	image.name = node_name
-	image.texture = load(path) as Texture2D
+	image.texture = texture
 	image.position = where
 	image.size = how_big
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
