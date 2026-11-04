@@ -8,6 +8,7 @@ const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const COOP = preload("res://scripts/network/coop_session.gd")
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
@@ -19,6 +20,7 @@ var camera: Camera3D
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
+var coop
 var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
@@ -63,6 +65,8 @@ func _ready() -> void:
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
+	coop = COOP.new()
+	add_child(coop)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
@@ -693,6 +697,11 @@ func use_meal() -> void:
 	consume("meal", 40.0)
 
 func attack() -> void:
+	if coop != null and coop.in_party_dungeon():
+		# Do not let independent clients kill local guardian copies or award
+		# unverified loot. Server-authoritative co-op combat comes next.
+		hud.toast("Co-op encounter preview: synchronized combat is not enabled.")
+		return
 	if attack_delay > 0.0 or menu != null and menu.visible:
 		return
 	var target = _nearest_enemy()

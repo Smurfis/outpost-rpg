@@ -29,6 +29,30 @@ jobs:
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
+      - name: Validate LAN party membership and private dungeon previews
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 80s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_parties.gd 2>&1 | tee coop.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL COOP:' coop.log; then exit 1; fi
+          grep -q "COOP RESULT: 0 failed assertion(s)." coop.log
+      - name: Test real ENet LAN host/client across two Godot processes
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --host > host.log 2>&1 &
+          host_pid=$!
+          sleep 2
+          if ! timeout --signal=TERM --kill-after=3s 35s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coop_lan_pair.gd -- --client > client.log 2>&1; then
+            cat host.log client.log
+            kill "$host_pid" || true
+            exit 1
+          fi
+          if ! wait "$host_pid"; then
+            cat host.log client.log
+            exit 1
+          fi
+          cat host.log client.log
+          grep -q "LAN PAIR RESULT: host 0 failed assertion(s)" host.log
+          grep -q "LAN PAIR RESULT: client 0 failed assertion(s)" client.log
       - name: Verify voxel weapons, neutral sword pose and legacy equipment
         run: |
           set -o pipefail

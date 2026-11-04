@@ -60,6 +60,15 @@ func _ready() -> void:
 	toast_label = _label("", 17, Color("#4d3020"), 0.367, 0.144, 0.716, 0.214)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Minimal co-op entry for Android: functional control, not an art overhaul.
+	var multiplayer_entry := Button.new()
+	multiplayer_entry.name = "CoopEntryButton"
+	multiplayer_entry.text = "CO-OP"
+	multiplayer_entry.add_theme_font_size_override("font_size", 16)
+	SKIN.apply_button(multiplayer_entry, "wood")
+	root.add_child(multiplayer_entry)
+	_anchors(multiplayer_entry, 0.882, 0.035, 0.974, 0.116)
+	multiplayer_entry.pressed.connect(_open_coop)
 	_action("bag", "BAG", 0.761, 0.475, 0.839, 0.612, Color("#6e4a32"))
 	_action("craft", "CRAFT", 0.852, 0.475, 0.937, 0.612, Color("#6e4a32"))
 	_action("heal", "HEAL", 0.693, 0.746, 0.772, 0.893, Color("#476c43"))
@@ -198,7 +207,7 @@ func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
-	if game != null and game.menu != null and game.menu.visible:
+	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
 		_reset_touch()
 		return
 	if event is InputEventScreenTouch:
@@ -254,6 +263,10 @@ func toast(message: String) -> void:
 	toast_label.text = message
 	toast_panel.visible = true
 	toast_time = 3.4
+
+func _open_coop() -> void:
+	if game.coop != null and game.coop.ui != null:
+		game.coop.ui.open()
 
 func _gather() -> void:
 	game.gather()
