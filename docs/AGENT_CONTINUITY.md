@@ -13,6 +13,8 @@ This document exists so a new main agent can resume without silently resetting r
 - **Current next PR:** #25, `feature/coop-host-encounters` -> PR #24 branch. Phase 5A moves to host-owned guardian HP, validated strikes, cleared exits and one-off seeded rewards. Read `docs/COOP_HOST_ENCOUNTERS.md`.
 - PR #24 was green under the Godot 4.7.2 CI on 4 November. PR #25 must pass CI independently after each change; Android device testing is still pending.
 - Preserve separate draft PRs and the existing solo gameplay/save data; do not fast-forward or auto-merge `main` merely because CI is green.
+- **New stacked branch:** `feature/coop-guardian-ai-phase5b` follows #25 with server-simulated guardian chase/attacks, synchronized knockouts, and range-validated teammate revives. See `docs/COOP_GUARDIAN_AI.md`. Keep it separate from the earlier review branches until phone tests.
+- **Deferred character creation:** Human (existing model), Goblin, Gnome, Orc; documented at `docs/CHARACTER_CREATOR_BACKLOG.md`. Do not interrupt Phase 5B work to implement the creator yet.
 
 ## User-approved priorities
 
