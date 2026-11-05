@@ -74,6 +74,34 @@ func _run() -> void:
 		game.hud._finish_smart_hold()
 		verify(game.active_quick_tool == "axe" and game.is_equipped("axe"), "Sliding to axe selects and equips the real tool")
 		verify(not game.hud.smart_tray.visible, "Quick tool panel collapses after selection")
+	# Exercise the same touch events sent by Android, not just the helper
+	# methods. Press on the real action, hold, drag upward to pickaxe, lift.
+	if main_action != null:
+		var start: Vector2 = main_action.get_global_rect().get_center()
+		var down := InputEventScreenTouch.new()
+		down.index = 14
+		down.pressed = true
+		down.position = start
+		game.hud._input(down)
+		game.hud._process(0.5)
+		verify(game.hud.smart_tray_open, "Long press launches the equipped-tools slider")
+		var index: int = game.hud.smart_tool_ids.find("pickaxe")
+		if index >= 0:
+			var bounds: Rect2 = game.hud.smart_tray.get_global_rect()
+			var position: Vector2 = Vector2(bounds.get_center().x, bounds.position.y + bounds.size.y * (float(index) + 0.5) / float(game.hud.smart_tool_ids.size()))
+			var drag := InputEventScreenDrag.new()
+			drag.index = 14
+			drag.position = position
+			game.hud._input(drag)
+			verify(game.hud.smart_selected_index == index, "Upward finger drag highlights the correct owned tool")
+			var lift := InputEventScreenTouch.new()
+			lift.index = 14
+			lift.pressed = false
+			lift.position = position
+			game.hud._input(lift)
+			verify(game.active_quick_tool == "pickaxe" and game.is_equipped("pickaxe"), "Finger release equips pickaxe without opening a menu")
+		else:
+			game.hud._cancel_smart_hold()
 	verify(not game.select_quick_tool("iron_blade"), "Cannot quick-equip unowned weapon")
 	verify(game.available_quick_tools().has("training_blade"), "Default blade remains available as fallback")
 
