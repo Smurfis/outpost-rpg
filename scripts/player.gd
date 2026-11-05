@@ -8,6 +8,7 @@ var game
 var hud
 var camera: Camera3D
 var health: float = 100.0
+var knockback_velocity: Vector3 = Vector3.ZERO
 var elapsed: float = 0.0
 var last_hit: float = -100.0
 
@@ -236,8 +237,11 @@ func _physics_process(delta: float) -> void:
 	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
 	if gather_phase > 0.0:
 		speed *= 0.42
-	velocity.x = direction.x * speed
-	velocity.z = direction.z * speed
+	# Separate short hit impulse from player steering. It decays rapidly,
+	# feels like voxel-sandbox combat, and cannot keep moving the character.
+	velocity.x = direction.x * speed + knockback_velocity.x
+	velocity.z = direction.z * speed + knockback_velocity.z
+	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 13.0)
 	var grounded_before_motion: bool = is_on_floor()
 	velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
@@ -318,7 +322,17 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	apply_floor_snap()
 	return true
 
-func take_hit(amount: float) -> void:
+func apply_knockback(source: Vector3, force: float = 6.0) -> void:
+	var push: Vector3 = global_position - source
+	push.y = 0.0
+	if push.length_squared() < 0.001:
+		push = Vector3(0.0, 0.0, 1.0)
+	knockback_velocity = (push.normalized() * clampf(force, 0.0, 9.5))
+	stop_interaction_move()
+
+func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
+	if source != Vector3.ZERO:
+		apply_knockback(source, 6.3)
 	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
@@ -328,6 +342,7 @@ func take_hit(amount: float) -> void:
 	var defeated: bool = health <= 0.0
 	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated)
 	if defeated:
+		knockback_velocity = Vector3.ZERO
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		game.hud.toast("Defeated! Respawned at outpost; items kept.")

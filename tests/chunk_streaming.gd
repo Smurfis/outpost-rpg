@@ -39,7 +39,14 @@ func _run() -> void:
 	check(not field.has_chunk_at(0, 0), "Travelling unloads distant starting cells")
 	check(field.get_node_or_null("GroundCollision_72_72") != null, "New destination collision loads with mesh")
 	check(field.loaded_chunk_count() <= 49, "Loaded mesh/collider budget stays bounded")
-	check(field.get_node_or_null("ChunkDecor_72_72") != null, "Chunk decoration streams in as a unit")
+	# A fixed diagonal corner chunk may now be open water. Decoration must
+	# stream with populated land chunks, never decorate the ocean floor.
+	var land_decor: bool = false
+	for child in field.get_children():
+		if str(child.name).begins_with("ChunkDecor_"):
+			land_decor = true
+			break
+	check(land_decor, "Chunk decoration streams on nearby island land as a unit")
 	# Private dungeons teleport the hero to coordinates far beyond Fields.
 	# The streaming subsystem must ignore that without tearing down the map.
 	var count_before: int = field.loaded_chunk_count()

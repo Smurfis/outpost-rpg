@@ -29,6 +29,19 @@ var gather_button: Button
 var attack_button: Button
 var craft_button: Button
 var heal_button: Button
+var smart_button: Button
+var smart_tray: Panel
+var smart_tool_list: VBoxContainer
+var smart_tool_rows: Array[Button] = []
+var smart_tool_ids: Array[String] = []
+var smart_selected_index: int = -1
+var smart_hold_finger: int = -1
+var smart_hold_mouse: bool = false
+var smart_hold_seconds: float = 0.0
+var smart_hold_origin: Vector2 = Vector2.ZERO
+var smart_tray_open: bool = false
+var smart_icon_id: String = ""
+var smart_ignore_mouse_until: int = 0
 var toast_time := 0.0
 
 func setup(ref: Node) -> void:
@@ -142,9 +155,29 @@ func _ready() -> void:
 	torch_button = _action("torch", "TORCH", 0.513, 0.835, 0.572, 0.940, "slot")
 	_action("gear", "GEAR", 0.584, 0.835, 0.643, 0.940, "slot")
 
-	_action("heal", "HEAL", 0.734, 0.829, 0.800, 0.940, "round")
-	_action("gather", "GATHER", 0.810, 0.796, 0.886, 0.940, "round")
-	_action("attack", "ATTACK", 0.893, 0.749, 0.986, 0.941, "round")
+	# Thumb ergonomics: the large primary action is on the outer edge.
+	# Existing Attack/Gather buttons remain live secondary fallbacks.
+	_action("heal", "HEAL", 0.685, 0.835, 0.748, 0.940, "round")
+	_action("gather", "GATHER", 0.758, 0.797, 0.816, 0.923, "round")
+	_action("attack", "ATTACK", 0.820, 0.779, 0.887, 0.923, "round")
+	smart_button = _action("interact", "INTERACT", 0.895, 0.739, 0.986, 0.941, "round")
+	smart_button.name = "Action_interact"
+	# Handle hold/swipe with finger identity in _input; a normal Button
+	# release here would fire a second, unintended interaction.
+	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var swipe_hint := Label.new()
+	swipe_hint.name = "QuickToolGestureHint"
+	swipe_hint.text = "HOLD  ↑  TOOLS"
+	swipe_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	swipe_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
+	swipe_hint.add_theme_color_override("font_outline_color", Color("#241619"))
+	swipe_hint.add_theme_constant_override("outline_size", 2)
+	swipe_hint.add_theme_font_size_override("font_size", 14)
+	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(swipe_hint)
+	_anchors(swipe_hint, 0.882, 0.694, 0.987, 0.737)
+	_build_smart_tray()
 	var hint_frame: Panel = _panel(0.347, 0.747, 0.678, 0.807)
 	hint_frame.name = "ContextPrompt"
 	hint = _label("Explore the forest", 16, SKIN.CREAM, 0.363, 0.753, 0.664, 0.800)
@@ -172,6 +205,7 @@ func _ready() -> void:
 	joystick.add_child(knob)
 	knob.size = Vector2(55, 55)
 	_position_stick()
+	_make_camera_buttons()
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -300,9 +334,186 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.pressed.connect(_bag)
 	elif key == "gear":
 		button.pressed.connect(_gear)
+	elif key == "interact":
+		pass # Dedicated short-tap / hold-and-slide gesture handler.
 	else:
 		button.pressed.connect(_heal)
 	return button
+
+func _make_camera_buttons() -> void:
+	# Discrete 45-degree turns let players unhide the side of a voxel ledge.
+	for direction in [-1, 1]:
+		var turn := Button.new()
+		turn.name = "RotateCameraLeft" if direction < 0 else "RotateCameraRight"
+		turn.text = "◀" if direction < 0 else "▶"
+		turn.tooltip_text = "Rotate isometric camera 45 degrees"
+		SKIN.apply_button(turn, "wood")
+		root.add_child(turn)
+		if direction < 0:
+			_anchors(turn, 0.824, 0.112, 0.888, 0.180)
+		else:
+			_anchors(turn, 0.900, 0.112, 0.964, 0.180)
+		turn.pressed.connect(_rotate_camera.bind(direction))
+
+func _rotate_camera(direction: int) -> void:
+	if game != null:
+		game.rotate_camera(direction)
+
+func _build_smart_tray() -> void:
+	smart_tray = Panel.new()
+	smart_tray.name = "QuickToolSlider"
+	smart_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	smart_tray.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	root.add_child(smart_tray)
+	_anchors(smart_tray, 0.788, 0.206, 0.985, 0.731)
+	smart_tray.visible = false
+	smart_tool_list = VBoxContainer.new()
+	smart_tool_list.name = "OwnedQuickTools"
+	smart_tool_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	smart_tool_list.add_theme_constant_override("separation", 3)
+	smart_tray.add_child(smart_tool_list)
+	smart_tool_list.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	smart_tool_list.offset_left = 7.0
+	smart_tool_list.offset_top = 8.0
+	smart_tool_list.offset_right = -7.0
+	smart_tool_list.offset_bottom = -8.0
+
+func _open_smart_tray() -> void:
+	if smart_tray_open or game == null or smart_tray == null:
+		return
+	smart_tray_open = true
+	smart_selected_index = -1
+	smart_tool_ids = game.available_quick_tools()
+	smart_tool_rows.clear()
+	for child in smart_tool_list.get_children():
+		smart_tool_list.remove_child(child)
+		child.queue_free()
+	for tool in smart_tool_ids:
+		var row := Button.new()
+		row.name = "Quick_" + tool
+		row.text = "      " + tool.replace("_", " ").capitalize()
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.custom_minimum_size = Vector2(0, 40)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		SKIN.apply_button(row, "wood")
+		smart_tool_list.add_child(row)
+		smart_tool_rows.append(row)
+		var icon := TextureRect.new()
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.texture = load("res://assets/icons/" + ("iron_blade" if tool == "training_blade" else tool) + ".svg") as Texture2D
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
+		icon.anchor_left = 0.035
+		icon.anchor_right = 0.215
+		icon.anchor_top = 0.12
+		icon.anchor_bottom = 0.88
+	smart_tray.visible = true
+
+func _mark_smart_option(index: int) -> void:
+	if smart_tool_rows.is_empty():
+		return
+	var chosen: int = clampi(index, 0, smart_tool_rows.size() - 1)
+	if chosen == smart_selected_index:
+		return
+	smart_selected_index = chosen
+	for i in range(smart_tool_rows.size()):
+		var row: Button = smart_tool_rows[i]
+		var selected: bool = i == chosen
+		row.add_theme_stylebox_override("normal", SKIN.box("wood_selected") if selected else SKIN.box("item"))
+		row.add_theme_color_override("font_color", SKIN.CREAM)
+
+func _drag_smart_slider(pointer: Vector2) -> void:
+	if not smart_tray_open and pointer.distance_to(smart_hold_origin) > 34.0 and pointer.y < smart_hold_origin.y:
+		_open_smart_tray()
+	if smart_tray_open and pointer.y < smart_hold_origin.y - 26.0:
+		var bounds: Rect2 = smart_tray.get_global_rect()
+		var proportion: float = clampf((pointer.y - bounds.position.y) / maxf(1.0, bounds.size.y), 0.0, 0.999)
+		_mark_smart_option(int(floorf(proportion * float(smart_tool_rows.size()))))
+
+func _finish_smart_hold() -> void:
+	var was_slider: bool = smart_tray_open
+	var selected: int = smart_selected_index
+	var ids: Array[String] = smart_tool_ids.duplicate()
+	_cancel_smart_hold()
+	if game == null:
+		return
+	if was_slider:
+		if selected >= 0 and selected < ids.size() and game.select_quick_tool(ids[selected]):
+			_refresh_smart_button()
+			toast("Selected " + ids[selected].replace("_", " ").capitalize())
+	else:
+		game.smart_interact()
+
+func _cancel_smart_hold() -> void:
+	smart_hold_finger = -1
+	smart_hold_mouse = false
+	smart_hold_seconds = 0.0
+	smart_tray_open = false
+	smart_selected_index = -1
+	if smart_tray != null:
+		smart_tray.visible = false
+
+func _handle_smart_input(event: InputEvent) -> bool:
+	if smart_button == null or game == null:
+		return false
+	if (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible):
+		_cancel_smart_hold()
+		return false
+	if event is InputEventScreenTouch:
+		if event.pressed and smart_hold_finger < 0 and not smart_hold_mouse and smart_button.get_global_rect().grow(6.0).has_point(event.position):
+			smart_hold_finger = event.index
+			smart_hold_origin = event.position
+			smart_hold_seconds = 0.0
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and event.index == smart_hold_finger:
+			# Android sometimes emits a synthetic mouse click after a touch.
+			smart_ignore_mouse_until = Time.get_ticks_msec() + 220
+			_finish_smart_hold()
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventScreenDrag and event.index == smart_hold_finger:
+		_drag_smart_slider(event.position)
+		get_viewport().set_input_as_handled()
+		return true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < smart_ignore_mouse_until:
+			return false
+		if event.pressed and not smart_hold_mouse and smart_hold_finger < 0 and smart_button.get_global_rect().grow(6.0).has_point(event.position):
+			smart_hold_mouse = true
+			smart_hold_origin = event.position
+			smart_hold_seconds = 0.0
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and smart_hold_mouse:
+			_finish_smart_hold()
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventMouseMotion and smart_hold_mouse:
+		_drag_smart_slider(event.position)
+		get_viewport().set_input_as_handled()
+		return true
+	return false
+
+func _refresh_smart_button() -> void:
+	if game == null or smart_button == null:
+		return
+	var context: Dictionary = game.smart_context()
+	var title: Label = smart_button.get_node_or_null("ActionLabel") as Label
+	var icon: TextureRect = smart_button.get_node_or_null("ActionIcon") as TextureRect
+	if title != null:
+		title.text = str(context.get("label", "INTERACT"))
+	var requested: String = str(context.get("icon", "gather"))
+	if icon != null and requested != smart_icon_id:
+		smart_icon_id = requested
+		var path: String = "res://assets/ui/icons/" + requested + ".png"
+		if not ResourceLoader.exists(path):
+			path = "res://assets/icons/" + requested + ".svg"
+		if ResourceLoader.exists(path):
+			icon.texture = load(path) as Texture2D
 
 func _toggle_quest() -> void:
 	quest_expanded = not quest_expanded
@@ -311,6 +522,10 @@ func _toggle_quest() -> void:
 	quest_detail.text = quest.text
 
 func _process(delta: float) -> void:
+	if (smart_hold_finger >= 0 or smart_hold_mouse) and not smart_tray_open:
+		smart_hold_seconds += delta
+		if smart_hold_seconds >= 0.34:
+			_open_smart_tray()
 	_position_stick()
 	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0
 	if toast_time > 0.0:
@@ -328,6 +543,8 @@ func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
+	if _handle_smart_input(event):
+		return
 	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
 		_reset_touch()
 		return
@@ -350,6 +567,7 @@ func _input(event: InputEvent) -> void:
 		_stick(event.position)
 
 func _reset_touch() -> void:
+	_cancel_smart_hold()
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
@@ -384,6 +602,7 @@ func update_context(has_resource: bool, has_enemy: bool, at_bench: bool) -> void
 		attack_button.disabled = not has_enemy
 	if craft_button != null:
 		craft_button.modulate = Color.WHITE if at_bench else Color(0.75, 0.75, 0.75)
+	_refresh_smart_button()
 
 func toast(message: String) -> void:
 	toast_label.text = message

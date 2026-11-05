@@ -19,7 +19,12 @@ const SAVE = "user://outpost_progress_v02.json"
 var hero
 var hud
 var camera: Camera3D
+var camera_angle: float = atan2(17.0, 20.0)
+var camera_angle_target: float = atan2(17.0, 20.0)
+var camera_occlusion_rise: float = 0.0
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
+var active_quick_tool: String = "training_blade"
+const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
 var coop
@@ -78,7 +83,7 @@ func _ready() -> void:
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_G], "interact": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -89,7 +94,9 @@ func _register_keys() -> void:
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("outpost_gather"):
+	if event.is_action_pressed("outpost_interact"):
+		smart_interact()
+	elif event.is_action_pressed("outpost_gather"):
 		gather()
 	elif event.is_action_pressed("outpost_attack"):
 		attack()
@@ -99,6 +106,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		show_inventory()
 	elif event.is_action_pressed("outpost_heal"):
 		use_meal()
+	elif event.is_action_pressed("outpost_camera_left"):
+		rotate_camera(-1)
+	elif event.is_action_pressed("outpost_camera_right"):
+		rotate_camera(1)
 
 func _process(delta: float) -> void:
 	_update_crafting(delta)
@@ -110,6 +121,14 @@ func _process(delta: float) -> void:
 		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
 		return
+	# The new coast has real drops into deep water. Until a boat/swimming
+	# controller is built, recover the player instead of trapping them below
+	# an opaque ocean surface. Never affect isolated dungeon coordinates.
+	if voxel_art_enabled and chunk_streaming_enabled and hero.global_position.y < -3.60 and absf(hero.global_position.x) < 96.0 and absf(hero.global_position.z) < 96.0:
+		hero.global_position = Vector3(0, 0.35, 0)
+		hero.velocity = Vector3.ZERO
+		hero.knockback_velocity = Vector3.ZERO
+		hud.toast("Deep water! A boat is needed to leave the island.")
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
@@ -132,11 +151,25 @@ func _process(delta: float) -> void:
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
 
+func rotate_camera(direction: int) -> void:
+	# Allow eight readable isometric directions. This changes neither hero
+	# position nor chunk ownership; movement is always camera-relative.
+	camera_angle_target += float(clampi(direction, -1, 1)) * PI / 4.0
+
 func _camera(delta: float) -> void:
-	if hero == null:
+	if hero == null or camera == null:
 		return
+	camera_angle = lerp_angle(camera_angle, camera_angle_target, clampf(delta * 5.0, 0.0, 1.0))
 	var focus: Vector3 = hero.global_position + Vector3(0, 0.9, 0)
-	var destination: Vector3 = focus + Vector3(17.0, 20.0, 20.0)
+	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
+	var destination: Vector3 = focus + orbit
+	# Voxel terraces may otherwise hide the player on a fixed isometric view.
+	# Temporarily lift the camera if terrain blocks a line to their torso.
+	var query := PhysicsRayQueryParameters3D.create(destination, focus, 1, [hero.get_rid()])
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(focus) > 1.8
+	camera_occlusion_rise = move_toward(camera_occlusion_rise, 7.0 if occluded else 0.0, delta * 8.0)
+	destination.y += camera_occlusion_rise
 	if camera.global_position == Vector3.ZERO:
 		camera.global_position = destination
 	else:
@@ -559,6 +592,64 @@ func equipment_slot(item_id: String) -> String:
 		return "tool_forage"
 	return ""
 
+func available_quick_tools() -> Array[String]:
+	var candidates: Array[String] = ["training_blade"]
+	for item in QUICK_TOOL_IDS:
+		if item != "training_blade" and int(inventory.get(item, 0)) > 0:
+			candidates.append(item)
+	return candidates
+
+func select_quick_tool(item_id: String) -> bool:
+	if item_id not in QUICK_TOOL_IDS:
+		return false
+	if item_id != "training_blade" and int(inventory.get(item_id, 0)) <= 0:
+		return false
+	# Equip in its actual owned slot. Don't toggle OFF an already-equipped
+	# tool just because the player chose it again in the quick selector.
+	if item_id == "training_blade":
+		equipment["weapon"] = "training_blade"
+		_apply_equipment()
+	elif not is_equipped(item_id) and not equip_item(item_id):
+		return false
+	active_quick_tool = item_id
+	_save()
+	_refresh_menu()
+	return true
+
+func smart_context() -> Dictionary:
+	# Context is derived only from live proximity and active equipment.
+	var resource = _nearest_resource()
+	var enemy = _nearest_enemy()
+	var combat_tool: bool = active_quick_tool in ["training_blade", "spear", "iron_blade", "shield"]
+	if enemy != null and (resource == null or combat_tool):
+		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
+	if resource != null:
+		var resource_tool: String = "axe" if str(resource.kind) == "wood" else "pickaxe" if str(resource.kind) in ["stone", "iron", "coal"] else "satchel"
+		return {"kind":"gather", "label":"GATHER", "icon":resource_tool if active_quick_tool == resource_tool else "gather"}
+	if enemy != null:
+		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
+	if closest_station() != "":
+		return {"kind":"craft", "label":"CRAFT", "icon":"craft"}
+	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
+		return {"kind":"torch", "label":"TORCH", "icon":"torch"}
+	return {"kind":"none", "label":"INTERACT", "icon":active_quick_tool if active_quick_tool != "training_blade" else "gather"}
+
+func smart_interact() -> void:
+	if menu != null and menu.visible:
+		return
+	var action: String = str(smart_context().get("kind", "none"))
+	match action:
+		"attack":
+			attack()
+		"gather":
+			gather()
+		"craft":
+			craft()
+		"torch":
+			toggle_torch()
+		_:
+			pass
+
 func is_equipped(item_id: String) -> bool:
 	var slot: String = equipment_slot(item_id)
 	return slot != "" and str(equipment.get(slot, "")) == item_id
@@ -784,7 +875,7 @@ func _on_first_night() -> void:
 	_save()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -812,6 +903,9 @@ func _load() -> void:
 		for key in stored:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
+	active_quick_tool = str(data.get("active_quick_tool", "training_blade"))
+	if active_quick_tool not in QUICK_TOOL_IDS or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
+		active_quick_tool = "training_blade"
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
