@@ -77,7 +77,20 @@ func _run() -> void:
 	check(shoreline_heights.size() > 20, "Beach is a multi-cell band, not a one-tile coastline sticker")
 	check(biome._tile_height(0, 0) > biome.SEA_LEVEL + 1.0, "Camp mesh remains physically above ocean")
 
-	biome.update_streaming_for(Vector3(79.0, 0, 7.0))
+	# Pick a real sandy shoreline cell. Coastal islands have irregular bays,
+	# so fixed-coordinate tests can land in open sea or grass after a seed bump.
+	var shore_sample: Vector2i = Vector2i(-999, -999)
+	for sx in range(43, 95):
+		if shore_sample.x != -999:
+			break
+		for sz in range(-50, 51):
+			var sample_tile: int = biome._ground_tile(sx, sz)
+			if sample_tile >= biome.TILE_DRY_SAND and sample_tile <= biome.TILE_COAST_SOIL:
+				shore_sample = Vector2i(sx, sz)
+				break
+	check(shore_sample.x != -999, "Deterministic island contains an addressable beach cell")
+	biome.update_streaming_for(Vector3(float(shore_sample.x) + 0.5, 0.0, float(shore_sample.y) + 0.5))
+	print("COAST STREAM SAMPLE: ", shore_sample, " tile=", biome._ground_tile(shore_sample.x, shore_sample.y), " loaded=", biome.loaded_chunk_count())
 	var coast_material_count: int = 0
 	var mesh_count: int = 0
 	for node in biome.get_children():
