@@ -153,6 +153,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/portals_pixel_integration.gd 2>&1 | tee portals-pixel.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTAL:' portals-pixel.log; then exit 1; fi
           grep -q "PORTAL INTEGRATION RESULT: 0 failure(s)." portals-pixel.log
+      - name: Verify carry limits, specialist bags, star crafting and touch camera smoothing
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/carry_bags_camera.gd 2>&1 | tee carry-bags.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CARRY CAMERA:' carry-bags.log; then exit 1; fi
+          grep -q "CARRY CAMERA RESULT: 0 failures" carry-bags.log
       - name: Validate smart-action tool slider, camera rotation, knockback and island coastline
         run: |
           set -o pipefail
