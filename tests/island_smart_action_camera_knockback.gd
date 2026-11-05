@@ -57,9 +57,30 @@ func _run() -> void:
 	verify(not is_equal_approx(game.camera_angle, old_camera_yaw), "Camera orbit actually updates")
 	game.rotate_camera(-1)
 	verify(is_equal_approx(game.camera_angle_target, old_camera_yaw), "Camera rotates in both directions")
-	var left: Button = game.hud.root.get_node_or_null("RotateCameraLeft") as Button
-	var right: Button = game.hud.root.get_node_or_null("RotateCameraRight") as Button
-	verify(left != null and right != null, "Mobile HUD has both camera rotate buttons")
+	var camera_hint: Label = game.hud.root.get_node_or_null("CameraDragHint") as Label
+	verify(camera_hint != null, "Camera rotation is guided by a nonblocking drag hint")
+	verify(game.hud.root.get_node_or_null("RotateCameraLeft") == null and game.hud.root.get_node_or_null("RotateCameraRight") == null, "Discrete camera buttons do not block the world")
+	var drag_start: Vector2 = game.hud.get_viewport().get_visible_rect().size * Vector2(0.50, 0.42)
+	var press := InputEventScreenTouch.new()
+	press.index = 12
+	press.pressed = true
+	press.position = drag_start
+	game.hud._input(press)
+	verify(game.hud.camera_drag_finger == 12, "Touching open world captures a camera drag finger")
+	var angle_before: float = game.camera_angle_target
+	var orbit_drag := InputEventScreenDrag.new()
+	orbit_drag.index = 12
+	orbit_drag.position = drag_start + Vector2(75.0, 0.0)
+	orbit_drag.relative = Vector2(75.0, 0.0)
+	orbit_drag.screen_relative = Vector2(75.0, 0.0)
+	game.hud._input(orbit_drag)
+	verify(absf(game.camera_angle_target - angle_before) > 0.2, "Actual Android drag rotates camera continuously")
+	var release := InputEventScreenTouch.new()
+	release.index = 12
+	release.pressed = false
+	release.position = orbit_drag.position
+	game.hud._input(release)
+	verify(game.hud.camera_drag_finger == -1, "Camera drag finger releases cleanly")
 	var main_action: Button = game.hud.root.get_node_or_null("Action_interact") as Button
 	verify(main_action != null, "Primary interaction has a dedicated large touch target")
 	verify(game.hud.smart_tray != null, "Hold gesture has a real owned-item slider")

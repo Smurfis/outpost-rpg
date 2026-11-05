@@ -235,6 +235,10 @@ func _physics_process(delta: float) -> void:
 			else:
 				direction = towards.normalized()
 	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
+	# Changing to a smaller bag can leave legacy inventories temporarily
+	# overloaded. Slow the character, but never silently destroy saved items.
+	if game.has_method("bag_load") and game.bag_load() > game.bag_capacity():
+		speed *= 0.48
 	if gather_phase > 0.0:
 		speed *= 0.42
 	# Separate short hit impulse from player steering. It decays rapidly,

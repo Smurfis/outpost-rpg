@@ -6,6 +6,8 @@ var game
 var root: Control
 var status: Label
 var health_numbers: Label
+var bag_weight_label: Label
+var camera_drag_finger: int = -1
 var hero_detail: Label
 var clock_label: Label
 var torch_button: Button
@@ -101,6 +103,8 @@ func _ready() -> void:
 		amount.clip_text = true
 		items[key] = amount
 		start_x += 0.060
+	bag_weight_label = _label("BAG  0 / 36", 15, Color("#e3b75d"), 0.022, 0.232, 0.252, 0.269)
+	bag_weight_label.name = "CarryWeightLabel"
 
 	# A slim interactive quest ribbon; expand for long objectives on demand.
 	var quest_frame: Panel = _panel(0.348, 0.021, 0.710, 0.095)
@@ -205,7 +209,7 @@ func _ready() -> void:
 	joystick.add_child(knob)
 	knob.size = Vector2(55, 55)
 	_position_stick()
-	_make_camera_buttons()
+	_make_camera_drag_hint()
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -340,24 +344,19 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.pressed.connect(_heal)
 	return button
 
-func _make_camera_buttons() -> void:
-	# Discrete 45-degree turns let players unhide the side of a voxel ledge.
-	for direction in [-1, 1]:
-		var turn := Button.new()
-		turn.name = "RotateCameraLeft" if direction < 0 else "RotateCameraRight"
-		turn.text = "◀" if direction < 0 else "▶"
-		turn.tooltip_text = "Rotate isometric camera 45 degrees"
-		SKIN.apply_button(turn, "wood")
-		root.add_child(turn)
-		if direction < 0:
-			_anchors(turn, 0.824, 0.112, 0.888, 0.180)
-		else:
-			_anchors(turn, 0.900, 0.112, 0.964, 0.180)
-		turn.pressed.connect(_rotate_camera.bind(direction))
+func _make_camera_drag_hint() -> void:
+	# Camera movement belongs to the player's free finger on empty world;
+	# the old rotated-arrow UI took important Android screen space.
+	var hint_label: Label = _label("DRAG WORLD TO ROTATE", 14, Color("#f7dc9c"), 0.790, 0.123, 0.985, 0.160)
+	hint_label.name = "CameraDragHint"
+	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-func _rotate_camera(direction: int) -> void:
-	if game != null:
-		game.rotate_camera(direction)
+func _can_start_camera_drag(pos: Vector2) -> bool:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	# Reserve joystick, hotbar, co-op, quest, top HUD and smart-action areas.
+	# Central visible world accepts drag even while movement uses finger 0.
+	return pos.x >= screen.x * 0.26 and pos.x <= screen.x * 0.80 and pos.y >= screen.y * 0.21 and pos.y <= screen.y * 0.70
+
 
 func _build_smart_tray() -> void:
 	smart_tray = Panel.new()
@@ -548,6 +547,20 @@ func _input(event: InputEvent) -> void:
 	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
 		_reset_touch()
 		return
+	if event is InputEventScreenTouch and game != null:
+		if event.pressed and camera_drag_finger < 0 and event.index != finger and _can_start_camera_drag(event.position):
+			camera_drag_finger = event.index
+			return
+		elif not event.pressed and event.index == camera_drag_finger:
+			camera_drag_finger = -1
+			return
+	elif event is InputEventScreenDrag and event.index == camera_drag_finger and game != null:
+		game.drag_camera(event.screen_relative.x)
+		return
+	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		if _can_start_camera_drag(event.position):
+			game.drag_camera(event.relative.x)
+		return
 	if event is InputEventScreenTouch:
 		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 104.0:
 			finger = event.index
@@ -568,6 +581,7 @@ func _input(event: InputEvent) -> void:
 
 func _reset_touch() -> void:
 	_cancel_smart_hold()
+	camera_drag_finger = -1
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
@@ -582,6 +596,9 @@ func _stick(pos: Vector2) -> void:
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
 	status.text = "OUTPOST"
 	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
+	if bag_weight_label != null and game != null:
+		bag_weight_label.text = "BAG  %.1f / %.1f  %s" % [game.bag_load(), game.bag_capacity(), "★".repeat(game.equipped_bag_stars())]
+		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if game.bag_load() >= game.bag_capacity() else Color("#e3b75d"))
 	hero_detail.text = "XP %d  •  %s" % [xp, weapon.replace("_", " ").to_upper()]
 	health_bar.value = clampf(hp, 0.0, 100.0)
 	if heal_button != null:

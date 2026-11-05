@@ -1,6 +1,7 @@
 extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
+const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
@@ -28,7 +29,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"]
+var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -256,8 +257,36 @@ func refresh() -> void:
 
 func _render_bag() -> void:
 	title.text = "OUTPOST  •  BAG"
-	subtitle.text = "A travel satchel of resources, consumables and crafted equipment."
-	station_tabs.add_child(_label("INVENTORY  •  TAP A SLOT TO INSPECT", 17, SKIN.CREAM))
+	var current_bag: String = game.equipped_bag_id()
+	var stars: int = game.equipped_bag_stars()
+	subtitle.text = "CARRY  %.1f / %.1f    •    %s" % [game.bag_load(), game.bag_capacity(), current_bag.replace("_", " ").capitalize() if current_bag != "" else "No backpack"]
+	var carry_column := VBoxContainer.new()
+	carry_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	station_tabs.add_child(carry_column)
+	var used := _label("INVENTORY WEIGHT  •  %.1f / %.1f" % [game.bag_load(), game.bag_capacity()], 17, SKIN.CREAM)
+	carry_column.add_child(used)
+	var meter := ProgressBar.new()
+	meter.name = "BagCapacityMeter"
+	meter.max_value = game.bag_capacity()
+	meter.value = minf(game.bag_load(), game.bag_capacity())
+	meter.show_percentage = false
+	meter.custom_minimum_size = Vector2(0, 16)
+	meter.add_theme_stylebox_override("background", SKIN.box("inset"))
+	meter.add_theme_stylebox_override("fill", SKIN.box("wood_selected"))
+	carry_column.add_child(meter)
+	if game.bag_load() > game.bag_capacity():
+		carry_column.add_child(_label("OVERLOADED — equip a larger bag or unload items.", 15, Color("#ffb29a")))
+	var stored: int = 0
+	for amount in game.overflow_loot.values():
+		stored += int(amount)
+	if stored > 0:
+		var claim := Button.new()
+		claim.name = "RecoverStoredLoot"
+		claim.text = "RECOVER LOOT (%d)" % stored
+		claim.custom_minimum_size = Vector2(0, 48)
+		SKIN.apply_button(claim, "green")
+		claim.pressed.connect(game.claim_overflow)
+		station_tabs.add_child(claim)
 	var owned_ids: Array[String] = []
 	for raw_id in item_ids:
 		var item: String = str(raw_id)
@@ -326,6 +355,9 @@ func _render_bag() -> void:
 	facts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	item_header.add_child(facts)
 	facts.add_child(_label("OWNED  x%d" % int(game.inventory.get(focused, 0)), 19, SKIN.GOLD))
+	if CARRY.is_bag(focused):
+		facts.add_child(_label("T%d   %s" % [CARRY.tier(focused), "★".repeat(int(game.bag_quality.get(focused, 0)))], 19, SKIN.GOLD))
+		facts.add_child(_label("Capacity +%.0f • weight bonus for %s" % [CARRY.capacity(focused, int(game.bag_quality.get(focused, 0))) - CARRY.BASE_CAPACITY, CARRY.specialty(focused) if CARRY.specialty(focused) != "" else "all items"], 16, SKIN.CREAM))
 	facts.add_child(_label("EQUIPPED" if game.is_equipped(focused) else _bag_type(focused), 17, Color("#cde8bc")))
 	var description: String = "Collected while exploring Outpost."
 	for recipe in game.recipes:
@@ -355,7 +387,7 @@ func _render_bag() -> void:
 	detail.add_child(gear_button)
 
 func _bag_type(id: String) -> String:
-	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"]:
+	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"] or CARRY.is_bag(id):
 		return "EQUIPMENT"
 	if id in ["meal", "tonic", "stew"]:
 		return "CONSUMABLE"
@@ -373,6 +405,7 @@ func _render_equipment() -> void:
 		"weapon": "MAIN HAND",
 		"offhand": "OFF HAND",
 		"back": "CLOAK",
+		"bag": "BACKPACK / SPECIALIST SATCHEL",
 		"tool_wood": "WOODCUTTING",
 		"tool_mining": "MINING",
 		"tool_forage": "FORAGING"
@@ -381,6 +414,7 @@ func _render_equipment() -> void:
 		"weapon": ["spear", "iron_blade"],
 		"offhand": ["shield", "torch"],
 		"back": ["cloak"],
+		"bag": ["backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2"],
 		"tool_wood": ["axe"],
 		"tool_mining": ["pickaxe"],
 		"tool_forage": ["satchel"]
@@ -411,7 +445,7 @@ func _render_equipment() -> void:
 			if int(game.inventory.get(item_id, 0)) <= 0:
 				continue
 			var option := Button.new()
-			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize()
+			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize() + ("  %s" % "★".repeat(int(game.bag_quality.get(item_id, 0))) if CARRY.is_bag(item_id) else "")
 			option.custom_minimum_size = Vector2(0, 50)
 			option.disabled = game.is_equipped(item_id)
 			option.pressed.connect(_equip_click.bind(item_id))
@@ -461,6 +495,7 @@ func _render_preview() -> void:
 	details_text.add_child(_label("Defense: %s" % ("40% less boar damage" if game.is_equipped("shield") else "Unarmoured"), 17))
 	details_text.add_child(_label("Movement: %s" % ("Fast (+18%)" if game.is_equipped("cloak") else "Normal"), 17))
 	details_text.add_child(_label("Tools: %d active" % [int(game.is_equipped("axe")) + int(game.is_equipped("pickaxe")) + int(game.is_equipped("satchel"))], 17))
+	details_text.add_child(_label("Load: %.1f / %.1f  %s" % [game.bag_load(), game.bag_capacity(), "★".repeat(game.equipped_bag_stars())], 17))
 	details_text.add_child(_label("Tip: craft new gear at the four stations, then equip it here.", 16, Color("bcc9be")))
 
 func _use_food(id: String) -> void:
@@ -540,7 +575,7 @@ func _render_craft() -> void:
 		material_label.anchor_bottom = 0.85
 		choose.add_child(material_label)
 		var badge := Label.new()
-		badge.text = "OWNED" if owned_unique else "READY" if affordable else "NEEDS MATERIALS"
+		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "OWNED" if owned_unique else "READY" if affordable else "NEEDS MATERIALS"
 		badge.add_theme_font_size_override("font_size", 13)
 		badge.add_theme_color_override("font_color", Color("#38653d") if affordable and not owned_unique and selected_id == id else Color("#ffe1a2") if affordable else Color("#edb597"))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -592,7 +627,9 @@ func _render_recipe() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(info)
 	info.add_child(_label(str(recipe.get("name", "")), 23, Color("ffe2a6")))
-	info.add_child(_label(str(recipe.get("category", "Equipment")).to_upper() + "  •  TIER 1", 15, Color("eabf77")))
+	info.add_child(_label(str(recipe.get("category", "Equipment")).to_upper() + "  •  TIER %d" % maxi(1, CARRY.tier(product_id)), 15, Color("eabf77")))
+	if CARRY.is_bag(product_id):
+		info.add_child(_label("QUALITY   %s    •    RECRAFT TO IMPROVE" % "★".repeat(int(game.bag_quality.get(product_id, 0))), 16, SKIN.GOLD))
 	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("f3dfbb")))
 	details.add_child(_label("REQUIRED MATERIALS", 18, SKIN.INK))
 	var ingredients: Dictionary = recipe.get("ingredients", {})
@@ -605,14 +642,16 @@ func _render_recipe() -> void:
 		row.add_child(_icon(id, 38))
 		row.add_child(_label("%s    %d / %d   %s" % [id.capitalize(), own, need, "✓" if own >= need else "!"], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
-	next.text = "NEXT  ◆  PREPARE ITEM"
+	next.text = "ENHANCE  ◆  PREPARE" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "NEXT  ◆  PREPARE ITEM"
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
-	next.disabled = game.owns_unique(product_id)
+	next.disabled = game.owns_unique(product_id) or (CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3)
 	next.pressed.connect(_begin_prepare)
 	details.add_child(next)
 	if game.owns_unique(product_id):
 		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
+	elif CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3:
+		details.add_child(_label("Maximum 3 stars. Select a different bag or tier.", 15, SKIN.GOLD))
 	elif not game.near_station(selected_station):
 		details.add_child(_label("You can browse anywhere. Craft beside the matching station.", 14, Color("ffe2a6")))
 
@@ -632,6 +671,8 @@ func _render_prepare() -> void:
 	info.add_child(_label(str(recipe.get("name", "")), 24, Color("f0d9aa")))
 	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("bdd0c8")))
 	info.add_child(_label("Output x%d     •     %s" % [int(recipe.get("amount", 1)), str(station_names[selected_station])], 17))
+	if CARRY.is_bag(product_id):
+		info.add_child(_label("Improves star quality, not duplicate stock." if int(game.inventory.get(product_id, 0)) > 0 else "Equips automatically after crafting.", 16, SKIN.CREAM))
 	details.add_child(_label("STEP 2  •  LOAD MATERIALS", 18, SKIN.INK))
 	var ingredients: Dictionary = recipe.get("ingredients", {})
 	for key in ingredients:
@@ -674,6 +715,8 @@ func _render_prepare() -> void:
 		details.add_child(_label("Move beside the %s to begin." % selected_station.capitalize(), 17, Color("#88422d")))
 	elif game.owns_unique(product_id):
 		details.add_child(_label("You already own this unique equipment.", 17, Color("#88422d")))
+	elif loaded_count == ingredients.size() and not game.can_craft(selected_id):
+		details.add_child(_label(game.craft_block_reason(selected_id), 17, Color("#88422d")))
 
 func _toggle_ingredient(id: String) -> void:
 	loaded[id] = not bool(loaded.get(id, false))
@@ -763,7 +806,7 @@ func _render_result() -> void:
 	var result := _column_panel(details, Color("305141"))
 	result.add_child(_label("CRAFT COMPLETE", 27, Color("e4dfaa")))
 	result.add_child(_icon(completed_id, 126))
-	result.add_child(_label(completed_id.replace("_", " ").capitalize() + " added to your inventory!", 21, Color("c3e9b7")))
+	result.add_child(_label(completed_id.replace("_", " ").capitalize() + (" • now %s!" % "★".repeat(int(game.bag_quality.get(completed_id, 0))) if CARRY.is_bag(completed_id) else " added to your inventory!"), 21, Color("c3e9b7")))
 	var again := Button.new()
 	again.text = "CHOOSE ANOTHER RECIPE"
 	again.custom_minimum_size = Vector2(0, 52)

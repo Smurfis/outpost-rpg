@@ -10,6 +10,7 @@ const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
+const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
@@ -22,10 +23,14 @@ var camera: Camera3D
 var camera_angle: float = atan2(17.0, 20.0)
 var camera_angle_target: float = atan2(17.0, 20.0)
 var camera_occlusion_rise: float = 0.0
-var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
+var camera_focus_smooth: Vector3 = Vector3.ZERO
+const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
+var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
+var bag_quality: Dictionary = {} # One maintained 0-3 star quality per owned bag type.
+var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
 var menu
 var coop
 var recipes: Array = []
@@ -152,28 +157,40 @@ func _process(delta: float) -> void:
 
 
 func rotate_camera(direction: int) -> void:
-	# Allow eight readable isometric directions. This changes neither hero
-	# position nor chunk ownership; movement is always camera-relative.
+	# Keyboard-accessible 45 degree increments remain available on desktop.
 	camera_angle_target += float(clampi(direction, -1, 1)) * PI / 4.0
+
+func drag_camera(screen_pixels: float) -> void:
+	# Continuous world-space orbit from Android one-finger drag or desktop
+	# right mouse drag. It never changes movement/chunk ownership directly.
+	camera_angle_target -= clampf(screen_pixels, -140.0, 140.0) * CAMERA_DRAG_RADIANS_PER_PIXEL
 
 func _camera(delta: float) -> void:
 	if hero == null or camera == null:
 		return
-	camera_angle = lerp_angle(camera_angle, camera_angle_target, clampf(delta * 5.0, 0.0, 1.0))
-	var focus: Vector3 = hero.global_position + Vector3(0, 0.9, 0)
+	var t: float = maxf(delta, 0.0)
+	camera_angle = lerp_angle(camera_angle, camera_angle_target, 1.0 - exp(-6.5 * t))
+	var desired_focus: Vector3 = hero.global_position + Vector3(0, 0.95, 0)
+	if camera_focus_smooth == Vector3.ZERO or camera_focus_smooth.distance_to(desired_focus) > 36.0:
+		camera_focus_smooth = desired_focus # Dungeon teleport / initial spawn
+	else:
+		# Vertical smoothing is slower so stepping down coastal terraces
+		# never makes the isometric camera jerk up or down every voxel.
+		camera_focus_smooth.x = lerpf(camera_focus_smooth.x, desired_focus.x, 1.0 - exp(-9.0 * t))
+		camera_focus_smooth.z = lerpf(camera_focus_smooth.z, desired_focus.z, 1.0 - exp(-9.0 * t))
+		camera_focus_smooth.y = lerpf(camera_focus_smooth.y, desired_focus.y, 1.0 - exp(-3.7 * t))
+	var focus: Vector3 = camera_focus_smooth
 	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
 	var destination: Vector3 = focus + orbit
-	# Voxel terraces may otherwise hide the player on a fixed isometric view.
-	# Temporarily lift the camera if terrain blocks a line to their torso.
-	var query := PhysicsRayQueryParameters3D.create(destination, focus, 1, [hero.get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(destination, desired_focus, 1, [hero.get_rid()])
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(focus) > 1.8
-	camera_occlusion_rise = move_toward(camera_occlusion_rise, 7.0 if occluded else 0.0, delta * 8.0)
+	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(desired_focus) > 1.8
+	camera_occlusion_rise = lerpf(camera_occlusion_rise, 7.0 if occluded else 0.0, 1.0 - exp(-5.0 * t))
 	destination.y += camera_occlusion_rise
 	if camera.global_position == Vector3.ZERO:
 		camera.global_position = destination
 	else:
-		camera.global_position = camera.global_position.lerp(destination, clampf(delta * 6.0, 0.0, 1.0))
+		camera.global_position = camera.global_position.lerp(destination, 1.0 - exp(-7.0 * t))
 	camera.look_at(focus, Vector3.UP)
 
 func material(color: Color) -> StandardMaterial3D:
@@ -506,22 +523,29 @@ func gather() -> void:
 		return
 	var resource = _nearest_resource()
 	if resource == null:
-		return # No alerts on empty interaction or held buttons.
+		return
+	var expected_item: String = str(resource.kind)
+	var desired: int = 1
+	if expected_item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
+		desired = 2
+	elif expected_item in ["stone", "iron", "coal"] and str(equipment.get("tool_mining", "")) == "pickaxe":
+		desired = 2
+	elif expected_item in ["fiber", "reeds"] and str(equipment.get("tool_forage", "")) == "satchel":
+		desired = 2
+	# Do not deplete a resource node when there is literally no bag room.
+	if CARRY.max_fit(inventory, expected_item, desired, equipped_bag_id(), equipped_bag_stars()) <= 0:
+		hud.toast("Bag full! Equip a larger bag or unload materials.")
+		return
 	gather_delay = 0.33
 	var item: String = resource.harvest()
-	if item != "":
-		hero.gather_swing(item)
-		_show_gather_pickup(resource.global_position, item)
 	if item == "":
 		return
-	var amount: int = 1
-	if item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
-		amount = 2
-	elif item in ["stone", "iron", "coal"] and str(equipment.get("tool_mining", "")) == "pickaxe":
-		amount = 2
-	elif item in ["fiber", "reeds"] and str(equipment.get("tool_forage", "")) == "satchel":
-		amount = 2
-	inventory[item] = int(inventory.get(item, 0)) + amount
+	hero.gather_swing(item)
+	var amount: int = grant_item(item, desired)
+	if amount <= 0:
+		hud.toast("Bag full — gathering stopped.")
+		return
+	_show_gather_pickup(resource.global_position, item)
 	experience += 2 * amount
 	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
 	_save()
@@ -584,6 +608,8 @@ func equipment_slot(item_id: String) -> String:
 		return "offhand"
 	if item_id == "cloak":
 		return "back"
+	if CARRY.is_bag(item_id):
+		return "bag"
 	if item_id == "axe":
 		return "tool_wood"
 	if item_id == "pickaxe":
@@ -650,6 +676,83 @@ func smart_interact() -> void:
 		_:
 			pass
 
+func equipped_bag_id() -> String:
+	return str(equipment.get("bag", ""))
+
+func equipped_bag_stars() -> int:
+	return clampi(int(bag_quality.get(equipped_bag_id(), 0)), 0, 3)
+
+func bag_load() -> float:
+	return CARRY.used(inventory, equipped_bag_id(), equipped_bag_stars())
+
+func bag_capacity() -> float:
+	return CARRY.capacity(equipped_bag_id(), equipped_bag_stars())
+
+func grant_item(item_id: String, amount: int, store_excess: bool = false) -> int:
+	if amount <= 0:
+		return 0
+	var fitting: int = CARRY.max_fit(inventory, item_id, amount, equipped_bag_id(), equipped_bag_stars())
+	if fitting > 0:
+		inventory[item_id] = int(inventory.get(item_id, 0)) + fitting
+	var excess: int = amount - fitting
+	if excess > 0 and store_excess:
+		overflow_loot[item_id] = int(overflow_loot.get(item_id, 0)) + excess
+	return fitting
+
+func claim_overflow() -> int:
+	var moved: int = 0
+	for item_id in overflow_loot.keys():
+		var key: String = str(item_id)
+		var pending: int = int(overflow_loot[key])
+		var count: int = grant_item(key, pending)
+		moved += count
+		if count == pending:
+			overflow_loot.erase(key)
+		else:
+			overflow_loot[key] = pending - count
+	if moved > 0:
+		_save()
+		_refresh_menu()
+	if hud != null:
+		hud.toast("Recovered %d stored loot items." % moved if moved > 0 else "Make more room in your bag first.")
+	return moved
+
+func _craft_fits(recipe: Dictionary) -> bool:
+	var staged: Dictionary = inventory.duplicate()
+	var ingredients: Dictionary = recipe.get("ingredients", {})
+	for raw_key in ingredients:
+		var key: String = str(raw_key)
+		staged[key] = int(staged.get(key, 0)) - int(ingredients[raw_key])
+	var result_id: String = str(recipe.get("result", ""))
+	var new_bag: bool = CARRY.is_bag(result_id)
+	var already_owned: bool = int(staged.get(result_id, 0)) > 0
+	if not new_bag or not already_owned:
+		staged[result_id] = int(staged.get(result_id, 0)) + maxi(1, int(recipe.get("amount", 1)))
+	var preview_bag: String = result_id if new_bag else equipped_bag_id()
+	var preview_stars: int = (mini(3, int(bag_quality.get(result_id, 0)) + 1)) if new_bag else equipped_bag_stars()
+	return CARRY.used(staged, preview_bag, preview_stars) <= CARRY.capacity(preview_bag, preview_stars) + 0.0001
+
+func craft_block_reason(id: String) -> String:
+	var recipe: Dictionary = _recipe_by_id(id)
+	if recipe.is_empty():
+		return "Recipe unavailable."
+	if not crafting.is_empty():
+		return "Finish your current crafting job first."
+	var result: String = str(recipe.get("result", ""))
+	if owns_unique(result):
+		return "You already own this unique item."
+	if CARRY.is_bag(result) and int(inventory.get(result, 0)) > 0 and int(bag_quality.get(result, 0)) >= 3:
+		return "This bag already has maximum 3-star quality."
+	var ingredients: Dictionary = recipe.get("ingredients", {})
+	for key in ingredients:
+		if int(inventory.get(str(key), 0)) < int(ingredients[key]):
+			return "Missing %s materials." % str(key).replace("_", " ")
+	if not _craft_fits(recipe):
+		return "Not enough carry capacity for the crafted item."
+	if not near_station(str(recipe.get("station", "workbench"))):
+		return "Move to the correct crafting station."
+	return ""
+
 func is_equipped(item_id: String) -> bool:
 	var slot: String = equipment_slot(item_id)
 	return slot != "" and str(equipment.get(slot, "")) == item_id
@@ -667,6 +770,8 @@ func equip_item(item_id: String) -> bool:
 	_apply_equipment()
 	_save()
 	_refresh_menu()
+	if slot == "bag" and bag_load() > bag_capacity() and hud != null:
+		hud.toast("Overloaded! Change bag or unload materials.")
 	return true
 
 func _apply_equipment() -> void:
@@ -688,13 +793,7 @@ func can_craft(id: String) -> bool:
 	if not near_station(station):
 		return false
 	var result_id: String = str(recipe.get("result", ""))
-	if owns_unique(result_id):
-		return false
-	var ingredients: Dictionary = recipe.get("ingredients", {})
-	for key in ingredients:
-		if int(inventory.get(str(key), 0)) < int(ingredients[key]):
-			return false
-	return true
+	return craft_block_reason(id).is_empty()
 
 func begin_craft(id: String) -> bool:
 	if not can_craft(id):
@@ -765,10 +864,21 @@ func _try_finish_craft() -> void:
 			hud.toast("Craft cancelled: ingredients are no longer available.")
 			_refresh_menu()
 			return
+	if not _craft_fits(recipe):
+		hud.toast("Craft cancelled: not enough free bag capacity.")
+		_refresh_menu()
+		return
 	for ingredient in ingredients:
 		inventory[str(ingredient)] = int(inventory.get(str(ingredient), 0)) - int(ingredients[ingredient])
 	var result: String = str(recipe.get("result", ""))
-	inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
+	var is_bag: bool = CARRY.is_bag(result)
+	if is_bag:
+		var existing: bool = int(inventory.get(result, 0)) > 0
+		if not existing:
+			inventory[result] = 1
+		bag_quality[result] = mini(3, int(bag_quality.get(result, 0)) + 1)
+	else:
+		inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
 	if result == "spear":
 		spear_crafted = true
 	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
@@ -777,7 +887,7 @@ func _try_finish_craft() -> void:
 		equipment[slot] = result
 		_apply_equipment()
 	experience += 8
-	hud.toast("Created %s! +8 XP" % str(recipe.get("name", result)))
+	hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
 	_save()
 	if menu != null:
 		menu.on_craft_completed(result)
@@ -828,10 +938,10 @@ func attack() -> void:
 
 func on_enemy_killed() -> void:
 	kills += 1
-	inventory["hide"] += 1
-	inventory["coins"] += 3
+	grant_item("hide", 1, true)
+	grant_item("coins", 3, true)
 	experience += 12
-	hud.toast("Boar defeated! +1 hide  +3 coins  +12 XP")
+	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()
 
@@ -842,17 +952,17 @@ func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
 	if not receipt.begins_with("lan:"):
 		return false
 	coop_reward_receipts[receipt] = true
-	inventory["coins"] = int(inventory.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	grant_item("coins", maxi(0, int(reward.get("coins", 0))), true)
 	experience += maxi(0, int(reward.get("xp", 0)))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
 		var key: String = str(item_id)
 		if not key.is_empty():
-			inventory[key] = int(inventory.get(key, 0)) + maxi(0, int(materials[item_id]))
+			grant_item(key, maxi(0, int(materials[item_id])), true)
 	for book in reward.get("books", []):
 		var key: String = str(book)
 		if not key.is_empty():
-			inventory[key] = int(inventory.get(key, 0)) + 1
+			grant_item(key, 1, true)
 	_save()
 	_refresh_menu()
 	if hud != null:
@@ -875,7 +985,7 @@ func _on_first_night() -> void:
 	_save()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -891,6 +1001,16 @@ func _load() -> void:
 	if version not in [2, 3, 4, 5]:
 		return
 	night_quote_seen = bool(data.get("night_quote_seen", false))
+	if data.get("bag_quality", {}) is Dictionary:
+		for bag_id in data.get("bag_quality", {}):
+			var key: String = str(bag_id)
+			if CARRY.is_bag(key):
+				bag_quality[key] = clampi(int(data["bag_quality"][bag_id]), 0, 3)
+	if data.get("overflow_loot", {}) is Dictionary:
+		for item_id in data.get("overflow_loot", {}):
+			var key: String = str(item_id)
+			if key.length() <= 64 and key != "":
+				overflow_loot[key] = maxi(0, int(data["overflow_loot"][item_id]))
 	if data.get("coop_reward_receipts", {}) is Dictionary:
 		coop_reward_receipts = (data.get("coop_reward_receipts", {}) as Dictionary).duplicate(true)
 	if day_night != null:
