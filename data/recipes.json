@@ -208,5 +208,102 @@
       "wood": 2,
       "fiber": 1
     }
+  },
+  {
+    "id": "backpack_t1",
+    "name": "Apprentice Backpack",
+    "result": "backpack_t1",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 2.4,
+    "strokes": 4,
+    "category": "Backpacks",
+    "desc": "Tier 1 • +26 carry weight. Recraft to raise quality, up to three stars.",
+    "ingredients": {
+      "fiber": 7,
+      "hide": 3
+    }
+  },
+  {
+    "id": "backpack_t2",
+    "name": "Explorer Backpack",
+    "result": "backpack_t2",
+    "amount": 1,
+    "station": "loom",
+    "seconds": 3.1,
+    "strokes": 5,
+    "category": "Backpacks",
+    "desc": "Tier 2 • +52 carry weight. Recraft to improve star quality.",
+    "ingredients": {
+      "linen": 4,
+      "hide": 4,
+      "iron_ingot": 1
+    }
+  },
+  {
+    "id": "wood_satchel_t1",
+    "name": "Lumber Satchel I",
+    "result": "wood_satchel_t1",
+    "amount": 1,
+    "station": "workbench",
+    "seconds": 2.4,
+    "strokes": 4,
+    "category": "Backpacks",
+    "desc": "Tier 1 • +15 carry weight and 38% reduced wood weight. Improve quality by recrafting.",
+    "ingredients": {
+      "wood": 5,
+      "hide": 3,
+      "fiber": 3
+    }
+  },
+  {
+    "id": "wood_satchel_t2",
+    "name": "Lumber Satchel II",
+    "result": "wood_satchel_t2",
+    "amount": 1,
+    "station": "workbench",
+    "seconds": 3.2,
+    "strokes": 5,
+    "category": "Backpacks",
+    "desc": "Tier 2 • +27 carry weight and 50% reduced wood weight.",
+    "ingredients": {
+      "wood": 8,
+      "linen": 3,
+      "hide": 3,
+      "iron_ingot": 1
+    }
+  },
+  {
+    "id": "ore_satchel_t1",
+    "name": "Miner Satchel I",
+    "result": "ore_satchel_t1",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 2.5,
+    "strokes": 4,
+    "category": "Backpacks",
+    "desc": "Tier 1 • +15 carry weight and 38% reduced ore, coal and stone weight.",
+    "ingredients": {
+      "stone": 5,
+      "hide": 3,
+      "fiber": 3
+    }
+  },
+  {
+    "id": "ore_satchel_t2",
+    "name": "Miner Satchel II",
+    "result": "ore_satchel_t2",
+    "amount": 1,
+    "station": "forge",
+    "seconds": 3.3,
+    "strokes": 5,
+    "category": "Backpacks",
+    "desc": "Tier 2 • +27 carry weight and 50% reduced ore, coal and stone weight.",
+    "ingredients": {
+      "iron_ingot": 3,
+      "hide": 3,
+      "linen": 3,
+      "coal": 2
+    }
   }
 ]
