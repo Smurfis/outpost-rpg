@@ -91,6 +91,16 @@ func _run() -> void:
 	check(shore_sample.x != -999, "Deterministic island contains an addressable beach cell")
 	biome.update_streaming_for(Vector3(float(shore_sample.x) + 0.5, 0.0, float(shore_sample.y) + 0.5))
 	print("COAST STREAM SAMPLE: ", shore_sample, " tile=", biome._ground_tile(shore_sample.x, shore_sample.y), " loaded=", biome.loaded_chunk_count())
+	var sample_cell: Vector2i = biome._cell_at(Vector3(float(shore_sample.x) + 0.5, 0.0, float(shore_sample.y) + 0.5))
+	var sample_mesh: MeshInstance3D = biome.get_node_or_null("GroundChunk_%d_%d" % [sample_cell.x, sample_cell.y]) as MeshInstance3D
+	check(sample_mesh != null, "Discovered sand cell has an actual generated mesh in its chunk")
+	if sample_mesh != null:
+		var sample_arrays: Array = (sample_mesh.mesh as ArrayMesh).surface_get_arrays(0)
+		var sample_uv2: PackedVector2Array = sample_arrays[Mesh.ARRAY_TEX_UV2]
+		var seen: Dictionary = {}
+		for pos in sample_uv2:
+			seen[int(roundi(pos.x))] = true
+		print("BEACH SAMPLE GROUND UV2 IDS: ", seen.keys(), " sampled=", shore_sample, " expected=", biome._ground_tile(shore_sample.x, shore_sample.y))
 	var coast_material_count: int = 0
 	var mesh_count: int = 0
 	for node in biome.get_children():
