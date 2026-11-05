@@ -19,6 +19,9 @@ const SAVE = "user://outpost_progress_v02.json"
 var hero
 var hud
 var camera: Camera3D
+var camera_angle: float = atan2(17.0, 20.0)
+var camera_angle_target: float = atan2(17.0, 20.0)
+var camera_occlusion_rise: float = 0.0
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0}
 var menu
@@ -78,7 +81,7 @@ func _ready() -> void:
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -99,6 +102,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		show_inventory()
 	elif event.is_action_pressed("outpost_heal"):
 		use_meal()
+	elif event.is_action_pressed("outpost_camera_left"):
+		rotate_camera(-1)
+	elif event.is_action_pressed("outpost_camera_right"):
+		rotate_camera(1)
 
 func _process(delta: float) -> void:
 	_update_crafting(delta)
@@ -132,11 +139,25 @@ func _process(delta: float) -> void:
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
 
+func rotate_camera(direction: int) -> void:
+	# Allow eight readable isometric directions. This changes neither hero
+	# position nor chunk ownership; movement is always camera-relative.
+	camera_angle_target += float(clampi(direction, -1, 1)) * PI / 4.0
+
 func _camera(delta: float) -> void:
-	if hero == null:
+	if hero == null or camera == null:
 		return
+	camera_angle = lerp_angle(camera_angle, camera_angle_target, clampf(delta * 5.0, 0.0, 1.0))
 	var focus: Vector3 = hero.global_position + Vector3(0, 0.9, 0)
-	var destination: Vector3 = focus + Vector3(17.0, 20.0, 20.0)
+	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
+	var destination: Vector3 = focus + orbit
+	# Voxel terraces may otherwise hide the player on a fixed isometric view.
+	# Temporarily lift the camera if terrain blocks a line to their torso.
+	var query := PhysicsRayQueryParameters3D.create(destination, focus, 1, [hero.get_rid()])
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(focus) > 1.8
+	camera_occlusion_rise = move_toward(camera_occlusion_rise, 7.0 if occluded else 0.0, delta * 8.0)
+	destination.y += camera_occlusion_rise
 	if camera.global_position == Vector3.ZERO:
 		camera.global_position = destination
 	else:
