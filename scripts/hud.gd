@@ -165,6 +165,18 @@ func _ready() -> void:
 	# Handle hold/swipe with finger identity in _input; a normal Button
 	# release here would fire a second, unintended interaction.
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var swipe_hint := Label.new()
+	swipe_hint.name = "QuickToolGestureHint"
+	swipe_hint.text = "HOLD  ↑  TOOLS"
+	swipe_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	swipe_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
+	swipe_hint.add_theme_color_override("font_outline_color", Color("#241619"))
+	swipe_hint.add_theme_constant_override("outline_size", 2)
+	swipe_hint.add_theme_font_size_override("font_size", 14)
+	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(swipe_hint)
+	_anchors(swipe_hint, 0.882, 0.694, 0.987, 0.737)
 	_build_smart_tray()
 	var hint_frame: Panel = _panel(0.347, 0.747, 0.678, 0.807)
 	hint_frame.name = "ContextPrompt"
