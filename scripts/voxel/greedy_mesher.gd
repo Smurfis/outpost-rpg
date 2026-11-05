@@ -25,5 +25,5 @@ static func tiled_quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: V
 		elif axes == "z":
 			uv = Vector2(at.x, at.y)
 		st.set_uv(uv)
-		st.set_uv2(Vector2(float(clampi(tile, 0, 15)), 0.0))
+		st.set_uv2(Vector2(float(clampi(tile, 0, 19)), 0.0))
 		st.add_vertex(at)
