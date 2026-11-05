@@ -159,6 +159,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/island_smart_action_camera_knockback.gd 2>&1 | tee island-ux.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ISLAND UX:' island-ux.log; then exit 1; fi
           grep -q "ISLAND UX RESULT: 0 failures" island-ux.log
+      - name: Verify actual beach elevation, sand atlas and sea-depth safety
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coastal_beach_biome.gd 2>&1 | tee coastal-beach.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BEACH:' coastal-beach.log; then exit 1; fi
+          grep -q "COASTAL BEACH RESULT: 0 failures" coastal-beach.log
       - name: Guard against Android water drawing over invisible island terrain
         run: |
           set -o pipefail
