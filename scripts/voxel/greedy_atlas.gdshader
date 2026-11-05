@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley, specular_disabled;
+render_mode cull_disabled, diffuse_burley, specular_disabled, depth_draw_opaque;
 
 // 64x64 source, a 4x4 grid of 16x16 painted atlas tiles.
 // UV repeats in world-space; UV2.x selects the atlas tile. Each merged plane
@@ -13,6 +13,8 @@ void fragment() {
 	vec2 atlas_uv = (block * 16.0 + vec2(0.5) + local_uv * 15.0) / 64.0;
 	vec4 pixel = texture(atlas_texture, atlas_uv);
 	ALBEDO = pixel.rgb;
-	ALPHA = pixel.a;
+	// The voxel atlas is fully opaque RGBA. Writing ALPHA, even 1.0,
+	// forces the transparent pipeline and makes the animated ocean render
+	// over solid walkable ground on Android Compatibility.
 	ROUGHNESS = 1.0;
 }
