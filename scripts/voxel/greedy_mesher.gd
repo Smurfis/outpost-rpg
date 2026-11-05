@@ -11,6 +11,7 @@ static func material() -> ShaderMaterial:
 	var result := ShaderMaterial.new()
 	result.shader = SHADER
 	result.set_shader_parameter("atlas_texture", PIXELS.get_material().albedo_texture)
+	result.set_shader_parameter("coast_texture", PIXELS.coast_texture())
 	_material = result
 	return result
 
@@ -24,5 +25,5 @@ static func tiled_quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: V
 		elif axes == "z":
 			uv = Vector2(at.x, at.y)
 		st.set_uv(uv)
-		st.set_uv2(Vector2(float(clampi(tile, 0, 15)), 0.0))
+		st.set_uv2(Vector2(float(clampi(tile, 0, 19)), 0.0))
 		st.add_vertex(at)

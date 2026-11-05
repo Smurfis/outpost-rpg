@@ -18,6 +18,15 @@ const MOBILE_STREAM_RADIUS: int = 2 # 5x5 around the player on weaker Android GP
 const SAFE_CLEARING_RADIUS: float = 23.0
 const HEIGHT_BLEND_BAND: float = 12.0
 const MAX_ELEVATION: float = 3.0
+# Signed coastal distance drives all height, shore texture and decoration masks.
+const WET_SAND_BAND: float = 2.2
+const DRY_SAND_BAND: float = 5.8
+const SAND_GRASS_BAND: float = 9.3
+const COAST_BLEND_END: float = 12.0
+const TILE_DRY_SAND: int = 16
+const TILE_WET_SAND: int = 17
+const TILE_GRASS_SAND: int = 18
+const TILE_COAST_SOIL: int = 19
 
 var map_half: int = MAP_HALF
 var fields_enabled: bool = false
@@ -209,12 +218,11 @@ func _make_ground() -> void:
 		for chunk_z in range(-map_half, map_half, CHUNK_SIZE):
 			_build_ground_chunk(chunk_x, chunk_z)
 
-func is_land_at(x: float, z: float) -> bool:
+func _coast_margin(x: float, z: float) -> float:
+	# Positive inland, negative offshore. Rotation-independent sampled world
+	# coordinates ensure deterministic tiles, physical heights and collisions.
 	if not stream_enabled:
-		return absf(x) < float(map_half) and absf(z) < float(map_half)
-	# Superellipse rather than a true circle or four straight borders:
-	# warped bays, headlands and coastline nooks remain deterministic
-	# when a chunk is unloaded and regenerated.
+		return minf(float(map_half) - absf(x), float(map_half) - absf(z))
 	var distance: float = pow(pow(absf(x), 4.0) + pow(absf(z), 4.0), 0.25)
 	var angle: float = atan2(z, x)
 	var reach: float = float(map_half) - 4.0
@@ -224,15 +232,54 @@ func is_land_at(x: float, z: float) -> bool:
 	if _noise != null:
 		reach += 2.0 * _noise.get_noise_2d(x * 0.65 + 240.0, z * 0.65 - 180.0)
 	reach = minf(reach, float(map_half) - 2.2)
-	return distance < reach and absf(x) < float(map_half) - 1.0 and absf(z) < float(map_half) - 1.0
+	return minf(reach - distance,
+		minf(float(map_half) - 1.0 - absf(x), float(map_half) - 1.0 - absf(z)))
+
+func is_land_at(x: float, z: float) -> bool:
+	return _coast_margin(x, z) > 0.0
 
 func _land_cell(x: int, z: int) -> bool:
-	return is_land_at(float(x) + 0.5, float(z) + 0.5)
+	return _coast_margin(float(x) + 0.5, float(z) + 0.5) > 0.0
+
+func coast_zone_at(x: float, z: float) -> String:
+	if not stream_enabled:
+		return "inland"
+	var margin: float = _coast_margin(x, z)
+	if margin <= 0.0:
+		return "water"
+	if margin < WET_SAND_BAND:
+		return "wet_sand"
+	if margin < DRY_SAND_BAND:
+		return "dry_sand"
+	if margin < SAND_GRASS_BAND:
+		return "grass_sand"
+	if margin < COAST_BLEND_END:
+		return "coastal_soil"
+	return "inland"
 
 func _tile_height(x: int, z: int) -> float:
-	if stream_enabled and not _land_cell(x, z):
-		return SEABED_LEVEL
-	return surface_y_at(float(x) + 0.5, float(z) + 0.5)
+	var px: float = float(x) + 0.5
+	var pz: float = float(z) + 0.5
+	var margin: float = _coast_margin(px, pz)
+	if stream_enabled and margin <= 0.0:
+		# Sloping seabed remains below the solid opaque ocean mesh.
+		return SEA_LEVEL - 0.38 - minf(-margin, 9.0) * 0.155
+	var baseline: float = surface_y_at(px, pz)
+	if not stream_enabled:
+		return baseline
+	# Clamp the sparse lowest inland steps to keep all playable terrain
+	# ABOVE the opaque ocean. Original camp and quantized steps unchanged.
+	var dry_inland: float = maxf(baseline, -2.055)
+	if margin >= COAST_BLEND_END:
+		return dry_inland
+	# Continuous beach rise from surf to dry sand, dune and grassy slope.
+	# Heights are shared by the rendered triangles and collision meshes.
+	var beach_height: float = SEA_LEVEL + 0.28 + margin * 0.16
+	return lerpf(beach_height, dry_inland, smoothstep(7.0, COAST_BLEND_END, margin))
+
+func _cliff_tile(x: int, z: int) -> int:
+	return TILE_DRY_SAND if stream_enabled and _coast_margin(float(x) + 0.5, float(z) + 0.5) < SAND_GRASS_BAND else 3
+
 
 func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 	var key: Vector2i = Vector2i(chunk_x, chunk_z)
@@ -292,14 +339,14 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 					while stop < z_end:
 						var next_high: float = _tile_height(x, stop)
 						var next_low: float = _tile_height(x + (1 if side == "east" else -1), stop) if (x < map_half - 1 if side == "east" else x > -map_half) else -2.2
-						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low):
+						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low) or _cliff_tile(x, z) != _cliff_tile(x, stop):
 							break
 						stop += 1
 					var plane_x: float = float(x + 1 if side == "east" else x)
 					if side == "east":
-						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, stop), Vector3(plane_x, adjacent, z), Vector3(plane_x, high, z), Vector3(plane_x, high, stop), 3, "x")
+						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, stop), Vector3(plane_x, adjacent, z), Vector3(plane_x, high, z), Vector3(plane_x, high, stop), _cliff_tile(x, z), "x")
 					else:
-						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, z), Vector3(plane_x, adjacent, stop), Vector3(plane_x, high, stop), Vector3(plane_x, high, z), 3, "x")
+						GREEDY.tiled_quad(st, Vector3(plane_x, adjacent, z), Vector3(plane_x, adjacent, stop), Vector3(plane_x, high, stop), Vector3(plane_x, high, z), _cliff_tile(x, z), "x")
 					z = stop
 		else:
 			for z in range(chunk_z, z_end):
@@ -314,14 +361,14 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 					while stop < x_end:
 						var next_high: float = _tile_height(stop, z)
 						var next_low: float = _tile_height(stop, z + (1 if side == "south" else -1)) if (z < map_half - 1 if side == "south" else z > -map_half) else -2.2
-						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low):
+						if not is_equal_approx(high, next_high) or not is_equal_approx(adjacent, next_low) or _cliff_tile(x, z) != _cliff_tile(stop, z):
 							break
 						stop += 1
 					var plane_z: float = float(z + 1 if side == "south" else z)
 					if side == "south":
-						GREEDY.tiled_quad(st, Vector3(x, adjacent, plane_z), Vector3(stop, adjacent, plane_z), Vector3(stop, high, plane_z), Vector3(x, high, plane_z), 3, "z")
+						GREEDY.tiled_quad(st, Vector3(x, adjacent, plane_z), Vector3(stop, adjacent, plane_z), Vector3(stop, high, plane_z), Vector3(x, high, plane_z), _cliff_tile(x, z), "z")
 					else:
-						GREEDY.tiled_quad(st, Vector3(stop, adjacent, plane_z), Vector3(x, adjacent, plane_z), Vector3(x, high, plane_z), Vector3(stop, high, plane_z), 3, "z")
+						GREEDY.tiled_quad(st, Vector3(stop, adjacent, plane_z), Vector3(x, adjacent, plane_z), Vector3(x, high, plane_z), Vector3(stop, high, plane_z), _cliff_tile(x, z), "z")
 					x = stop
 	var mesh: MeshInstance3D = PIXELS.as_instance(st, "GroundChunk_%d_%d" % [chunk_x, chunk_z])
 	mesh.material_override = GREEDY.material()
@@ -404,7 +451,7 @@ func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
 	for i in range(2):
 		var x: float = float(chunk_x) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
 		var z: float = float(chunk_z) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		if maxf(absf(x), absf(z)) < 27.0 or not is_land_at(x, z):
+		if maxf(absf(x), absf(z)) < 27.0 or _coast_margin(x, z) < SAND_GRASS_BAND:
 			continue # Preserve the original safe starter resource layout and sea.
 		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
 		var harvestable = HARVESTABLE.new()
@@ -417,7 +464,7 @@ func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
 	if hero != null and rng.randf() < 0.19:
 		var ex: float = float(chunk_x) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
 		var ez: float = float(chunk_z) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		if maxf(absf(ex), absf(ez)) > 32.0 and is_land_at(ex, ez):
+		if maxf(absf(ex), absf(ez)) > 32.0 and _coast_margin(ex, ez) >= SAND_GRASS_BAND:
 			var boar = WILD_BOAR.new()
 			container.add_child(boar)
 			boar.setup(owner, hero, Vector3(ex, surface_y_at(ex, ez) + 0.08, ez))
@@ -437,7 +484,7 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	for i in range(13):
 		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
 		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
-		if (absf(x) < 24.0 and absf(z) < 24.0) or not is_land_at(x, z):
+		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
 			continue
 		placed += 1
 		var y: float = surface_y_at(x, z)
@@ -500,12 +547,17 @@ func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 
 func _ground_tile(x: int, z: int) -> int:
 	if stream_enabled:
-		if not _land_cell(x, z):
-			return 4 # Hidden ocean floor; also supports stable collision meshes.
-		# Beach follows the coastline, not the world square border.
-		for offset in [Vector2i(3, 0), Vector2i(-3, 0), Vector2i(0, 3), Vector2i(0, -3)]:
-			if not _land_cell(x + offset.x, z + offset.y):
-				return 5 if posmod(x * 19 + z * 23, 5) != 0 else 6
+		var margin: float = _coast_margin(float(x) + 0.5, float(z) + 0.5)
+		if margin <= 0.0:
+			return 4 # Underwater stone floor.
+		if margin < WET_SAND_BAND:
+			return TILE_WET_SAND
+		if margin < DRY_SAND_BAND:
+			return TILE_DRY_SAND
+		if margin < SAND_GRASS_BAND:
+			return TILE_GRASS_SAND
+		if margin < COAST_BLEND_END:
+			return TILE_COAST_SOIL
 	var pos := Vector2(float(x) + 0.5, float(z) + 0.5)
 	var path_distance: float = minf(_distance_segment(pos, Vector2(-18, -1), Vector2(20, 2)),
 		minf(_distance_segment(pos, Vector2(0, -21), Vector2(-1, 21)),

@@ -5,6 +5,39 @@ const TILE_PIXELS: int = 16
 const GRID: int = 4
 const PIXELS: int = TILE_PIXELS * GRID
 const ART_ATLAS_PATH: String = "res://assets/voxel/outpost_atlas_16px.png"
+const COAST_ATLAS_PATH: String = "res://assets/voxel/coastal_terrain_16px.svg"
+static var _shared_coast_atlas: Texture2D
+
+# Coastal terrain 2x2 atlas (16 px per cell), distinct from the legacy
+# material atlas used by trees/resources/props.
+# 16 dry sand | 17 wet sand | 18 grass to sand | 19 coastal soil
+static func coast_texture() -> Texture2D:
+	if _shared_coast_atlas != null:
+		return _shared_coast_atlas
+	var tex: Texture2D = null
+	if ResourceLoader.exists(COAST_ATLAS_PATH):
+		tex = load(COAST_ATLAS_PATH) as Texture2D
+	if tex == null or tex.get_size() != Vector2(32.0, 32.0):
+		# Keep Android playable if a designer intentionally replaces
+		# or temporarily removes the external art during migration.
+		var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		var palette: Array[Color] = [
+			Color("dfc18a"), Color("ae976f"),
+			Color("b1ba6d"), Color("7c8254")
+		]
+		for cell in range(4):
+			for yy in range(16):
+				for xx in range(16):
+					var tint: Color = palette[cell]
+					var pattern: int = posmod(xx * 79 + yy * 43 + cell * 61 + xx * yy, 17)
+					if pattern < 3:
+						tint = tint.darkened(0.12)
+					elif pattern > 13:
+						tint = tint.lightened(0.13)
+					img.set_pixel((cell % 2) * 16 + xx, (cell / 2) * 16 + yy, tint)
+		tex = ImageTexture.create_from_image(img)
+	_shared_coast_atlas = tex
+	return tex
 static var _shared_material: StandardMaterial3D
 
 # 0 grass | 1 light grass | 2 deep grass | 3 soil
