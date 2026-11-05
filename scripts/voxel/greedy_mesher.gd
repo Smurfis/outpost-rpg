@@ -11,6 +11,7 @@ static func material() -> ShaderMaterial:
 	var result := ShaderMaterial.new()
 	result.shader = SHADER
 	result.set_shader_parameter("atlas_texture", PIXELS.get_material().albedo_texture)
+	result.set_shader_parameter("coast_texture", PIXELS.coast_texture())
 	_material = result
 	return result
 
