@@ -85,7 +85,16 @@ func _run() -> void:
 	check(manager.entrances.size() > 5, "Exploring distant chunks offers new functional dungeon portals")
 	await physics_frame
 	check(world.loaded_chunk_count() <= before_count, "Streamed harvestables do not keep distant terrain resident")
-	check(world.get_node_or_null("ChunkInteractables_72_72") != null, "Distant traversable terrain contains new interactive world nodes")
+	# The old square map guaranteed land at 72,72. Warped island coasts
+	# may flood that cell; resources must instead appear on reachable land.
+	var coastal_harvestables: int = 0
+	for chunk_nodes in world.get_children():
+		if not str(chunk_nodes.name).begins_with("ChunkInteractables_"):
+			continue
+		for child in chunk_nodes.get_children():
+			if child.has_method("harvest") and world.is_land_at(child.global_position.x, child.global_position.z):
+				coastal_harvestables += 1
+	check(coastal_harvestables > 0, "Distant land chunks contain real harvestables without placing them in open water")
 	game.queue_free()
 	await process_frame
 	print("WORLD FEEDBACK RESULT: %d failures" % failures)
