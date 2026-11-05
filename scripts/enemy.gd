@@ -10,6 +10,8 @@ var cooldown := 1.5
 var respawn := 0.0
 var spawn_pos := Vector3.ZERO
 var visual: Node3D
+var knockback_velocity: Vector3 = Vector3.ZERO
+var hit_lift: float = 0.0
 
 func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	game = game_ref
@@ -80,6 +82,8 @@ func _physics_process(delta: float) -> void:
 			hp = 32.0
 			global_position = spawn_pos
 			visible = true
+			knockback_velocity = Vector3.ZERO
+			hit_lift = 0.0
 			collision_layer = 2
 			collision_mask = 1
 		return
@@ -89,22 +93,37 @@ func _physics_process(delta: float) -> void:
 	var pursuit := Vector3.ZERO
 	if dist < 8.0 and dist > 1.45:
 		pursuit = direction.normalized()
-	velocity.x = pursuit.x * 2.0
-	velocity.z = pursuit.z * 2.0
+	# A physical short recoil breaks up pursuit without teleportation.
+	velocity.x = pursuit.x * 2.0 + knockback_velocity.x
+	velocity.z = pursuit.z * 2.0 + knockback_velocity.z
+	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 12.0)
 	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
+	if hit_lift > 0.0:
+		velocity.y = hit_lift
+		hit_lift = 0.0
 	move_and_slide()
 	if pursuit.length() > 0.1:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-pursuit.x, -pursuit.z), minf(delta * 10.0, 1.0))
 	cooldown -= delta
 	if dist < 1.8 and cooldown <= 0.0:
 		cooldown = 1.7
-		hero.take_hit(9.0)
+		hero.take_hit(9.0, global_position)
+
+func apply_knockback(source: Vector3, strength: float = 6.8) -> void:
+	var push: Vector3 = global_position - source
+	push.y = 0.0
+	if push.length_squared() < 0.001:
+		push = Vector3(0.0, 0.0, 1.0)
+	knockback_velocity = push.normalized() * clampf(strength, 0.0, 10.0)
+	hit_lift = 1.7
 
 func receive_damage(amount: float) -> void:
 	if not alive:
 		return
 	var dealt: float = minf(hp, maxf(0.0, amount))
 	hp -= amount
+	if hp > 0.0 and is_instance_valid(hero):
+		apply_knockback(hero.global_position)
 	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
