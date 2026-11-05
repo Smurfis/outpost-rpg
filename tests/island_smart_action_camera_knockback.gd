@@ -60,7 +60,7 @@ func _run() -> void:
 	var camera_hint: Label = game.hud.root.get_node_or_null("CameraDragHint") as Label
 	verify(camera_hint != null, "Camera rotation is guided by a nonblocking drag hint")
 	verify(game.hud.root.get_node_or_null("RotateCameraLeft") == null and game.hud.root.get_node_or_null("RotateCameraRight") == null, "Discrete camera buttons do not block the world")
-	var drag_start: Vector2 = get_viewport().get_visible_rect().size * Vector2(0.50, 0.42)
+	var drag_start: Vector2 = Vector2(root.size) * Vector2(0.50, 0.42)
 	var press := InputEventScreenTouch.new()
 	press.index = 12
 	press.pressed = true
