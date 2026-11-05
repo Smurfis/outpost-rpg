@@ -5,6 +5,9 @@ const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const HARVESTABLE = preload("res://scripts/resource_node.gd")
 const WILD_BOAR = preload("res://scripts/enemy.gd")
+const WATER_SHADER = preload("res://scripts/voxel/coastal_water.gdshader")
+const SEA_LEVEL: float = -2.82
+const SEABED_LEVEL: float = -4.20
 const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
@@ -206,7 +209,29 @@ func _make_ground() -> void:
 		for chunk_z in range(-map_half, map_half, CHUNK_SIZE):
 			_build_ground_chunk(chunk_x, chunk_z)
 
+func is_land_at(x: float, z: float) -> bool:
+	if not stream_enabled:
+		return absf(x) < float(map_half) and absf(z) < float(map_half)
+	# Superellipse rather than a true circle or four straight borders:
+	# warped bays, headlands and coastline nooks remain deterministic
+	# when a chunk is unloaded and regenerated.
+	var distance: float = pow(pow(absf(x), 4.0) + pow(absf(z), 4.0), 0.25)
+	var angle: float = atan2(z, x)
+	var reach: float = float(map_half) - 4.0
+	reach += 4.0 * sin(3.0 * angle + 0.5)
+	reach += 3.0 * sin(7.0 * angle - 0.3)
+	reach += 2.0 * sin(5.0 * angle + 1.1)
+	if _noise != null:
+		reach += 2.0 * _noise.get_noise_2d(x * 0.65 + 240.0, z * 0.65 - 180.0)
+	reach = minf(reach, float(map_half) - 2.2)
+	return distance < reach and absf(x) < float(map_half) - 1.0 and absf(z) < float(map_half) - 1.0
+
+func _land_cell(x: int, z: int) -> bool:
+	return is_land_at(float(x) + 0.5, float(z) + 0.5)
+
 func _tile_height(x: int, z: int) -> float:
+	if stream_enabled and not _land_cell(x, z):
+		return SEABED_LEVEL
 	return surface_y_at(float(x) + 0.5, float(z) + 0.5)
 
 func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
@@ -320,6 +345,10 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		if decor != null:
 			add_child(decor)
 			members.append(decor)
+		var surf: MeshInstance3D = _shore_foam(chunk_x, chunk_z)
+		if surf != null:
+			add_child(surf)
+			members.append(surf)
 		var interactables: Node3D = _spawn_chunk_interactables(chunk_x, chunk_z)
 		if interactables != null:
 			members.append(interactables)
@@ -336,7 +365,7 @@ func _register_streamed_portal(chunk_x: int, chunk_z: int) -> void:
 		return
 	var x: float = float(chunk_x) + float(CHUNK_SIZE) * 0.5
 	var z: float = float(chunk_z) + float(CHUNK_SIZE) * 0.5
-	if maxf(absf(x), absf(z)) < 32.0:
+	if maxf(absf(x), absf(z)) < 32.0 or not is_land_at(x, z):
 		return
 	var game: Node = get_parent()
 	if game == null:
@@ -375,8 +404,8 @@ func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
 	for i in range(2):
 		var x: float = float(chunk_x) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
 		var z: float = float(chunk_z) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		if maxf(absf(x), absf(z)) < 27.0:
-			continue # Preserve the original safe starter resource layout.
+		if maxf(absf(x), absf(z)) < 27.0 or not is_land_at(x, z):
+			continue # Preserve the original safe starter resource layout and sea.
 		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
 		var harvestable = HARVESTABLE.new()
 		container.add_child(harvestable)
@@ -388,7 +417,7 @@ func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
 	if hero != null and rng.randf() < 0.19:
 		var ex: float = float(chunk_x) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
 		var ez: float = float(chunk_z) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		if maxf(absf(ex), absf(ez)) > 32.0:
+		if maxf(absf(ex), absf(ez)) > 32.0 and is_land_at(ex, ez):
 			var boar = WILD_BOAR.new()
 			container.add_child(boar)
 			boar.setup(owner, hero, Vector3(ex, surface_y_at(ex, ez) + 0.08, ez))
@@ -408,7 +437,7 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	for i in range(13):
 		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
 		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
-		if absf(x) < 24.0 and absf(z) < 24.0:
+		if (absf(x) < 24.0 and absf(z) < 24.0) or not is_land_at(x, z):
 			continue
 		placed += 1
 		var y: float = surface_y_at(x, z)
@@ -424,7 +453,59 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		return null
 	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
 
+func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
+	# One batched, semi-transparent strip mesh per coastal chunk. It marks
+	# *water* cells bordering solid land, not the old square world boundary.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count: int = 0
+	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
+		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
+			if _land_cell(x, z):
+				continue
+			var land_east: bool = _land_cell(x + 1, z)
+			var land_west: bool = _land_cell(x - 1, z)
+			var land_south: bool = _land_cell(x, z + 1)
+			var land_north: bool = _land_cell(x, z - 1)
+			if not (land_east or land_west or land_south or land_north):
+				continue
+			var cx: float = float(x) + 0.5
+			var cz: float = float(z) + 0.5
+			var half_x: float = 0.28 if land_east or land_west else 0.42
+			var half_z: float = 0.28 if land_south or land_north else 0.42
+			var offset_x: float = 0.23 if land_east else -0.23 if land_west else 0.0
+			var offset_z: float = 0.23 if land_south else -0.23 if land_north else 0.0
+			var y: float = SEA_LEVEL + 0.032
+			var a := Vector3(cx + offset_x - half_x, y, cz + offset_z - half_z)
+			var b := Vector3(cx + offset_x - half_x, y, cz + offset_z + half_z)
+			var c := Vector3(cx + offset_x + half_x, y, cz + offset_z + half_z)
+			var d := Vector3(cx + offset_x + half_x, y, cz + offset_z - half_z)
+			for vertex in [a, b, c, a, c, d]:
+				st.add_vertex(vertex)
+			count += 1
+	if count == 0:
+		return null
+	var foam := MeshInstance3D.new()
+	foam.name = "ShoreFoam_%d_%d" % [chunk_x, chunk_z]
+	st.generate_normals()
+	foam.mesh = st.commit()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = Color(0.77, 0.88, 0.77, 0.53)
+	foam.material_override = material
+	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return foam
+
 func _ground_tile(x: int, z: int) -> int:
+	if stream_enabled:
+		if not _land_cell(x, z):
+			return 4 # Hidden ocean floor; also supports stable collision meshes.
+		# Beach follows the coastline, not the world square border.
+		for offset in [Vector2i(3, 0), Vector2i(-3, 0), Vector2i(0, 3), Vector2i(0, -3)]:
+			if not _land_cell(x + offset.x, z + offset.y):
+				return 5 if posmod(x * 19 + z * 23, 5) != 0 else 6
 	var pos := Vector2(float(x) + 0.5, float(z) + 0.5)
 	var path_distance: float = minf(_distance_segment(pos, Vector2(-18, -1), Vector2(20, 2)),
 		minf(_distance_segment(pos, Vector2(0, -21), Vector2(-1, 21)),
@@ -455,21 +536,18 @@ func _distance_segment(pos: Vector2, a: Vector2, b: Vector2) -> float:
 	return pos.distance_to(a + segment * factor)
 
 func _make_water_horizon() -> void:
-	# A calm water horizon replaces the conspicuous stacks of decorative stone
-	# at the end of the finite test map. Water is below terrain and not yet
-	# traversable; future continuous-world streaming removes the hard edge.
+	# Animated colour bands and small glints are driven by the GPU shader;
+	# no expensive reflections, ocean physics or mobile postprocessing.
 	var sea := MeshInstance3D.new()
 	sea.name = "DistantWaterHorizon"
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(float(map_half) * 2.0 + 160.0, float(map_half) * 2.0 + 160.0)
 	sea.mesh = plane
-	sea.position = Vector3(0.0, -3.25, 0.0)
-	var surface := StandardMaterial3D.new()
-	surface.albedo_color = Color("639db1")
-	surface.roughness = 0.46
-	surface.metallic = 0.0
-	surface.cull_mode = BaseMaterial3D.CULL_DISABLED
+	sea.position = Vector3(0.0, SEA_LEVEL, 0.0)
+	var surface := ShaderMaterial.new()
+	surface.shader = WATER_SHADER
 	sea.material_override = surface
+	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(sea)
 
 func _make_cliff_rim() -> void:
