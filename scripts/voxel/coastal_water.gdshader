@@ -22,5 +22,7 @@ void fragment() {
 	vec3 hue = mix(ocean_deep.rgb, ocean_swell.rgb, broad);
 	ALBEDO = mix(hue, ocean_glint.rgb, streaks * 0.21);
 	EMISSION = ocean_glint.rgb * streaks * 0.035;
-	ALPHA = 1.0;
+	// Intentionally no ALPHA write. This is an opaque water surface;
+	// the Compatibility renderer must use its depth buffer so terrain
+	// remains visible in front of ocean, even on Adreno/Mali devices.
 }
