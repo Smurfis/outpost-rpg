@@ -52,20 +52,26 @@ func _run() -> void:
 			var ground_height: float = biome._tile_height(x, z)
 			if biome.is_land_at(posx, posz):
 				if zone != "inland":
-					check(ground_height > biome.SEA_LEVEL, "Sand and dune cells remain above sea at " + str(x) + "," + str(z)) if ground_height <= biome.SEA_LEVEL else false
+					if ground_height <= biome.SEA_LEVEL:
+						check(false, "Sand and dune surface must remain above sea at " + str(x) + "," + str(z))
 					shoreline_heights.append(ground_height)
 				var texture_id: int = biome._ground_tile(x, z)
 				match zone:
 					"wet_sand":
-						check(texture_id == biome.TILE_WET_SAND, "Wet sand maps to atlas 17") if texture_id != 17 else false
+						if texture_id != biome.TILE_WET_SAND:
+							check(false, "Wet sand maps to atlas 17")
 					"dry_sand":
-						check(texture_id == biome.TILE_DRY_SAND, "Dry sand maps to atlas 16") if texture_id != 16 else false
+						if texture_id != biome.TILE_DRY_SAND:
+							check(false, "Dry sand maps to atlas 16")
 					"grass_sand":
-						check(texture_id == biome.TILE_GRASS_SAND, "Grass-to-sand transition maps to atlas 18") if texture_id != 18 else false
+						if texture_id != biome.TILE_GRASS_SAND:
+							check(false, "Grass-to-sand transition maps to atlas 18")
 					"coastal_soil":
-						check(texture_id == biome.TILE_COAST_SOIL, "Dirt transition maps to atlas 19") if texture_id != 19 else false
+						if texture_id != biome.TILE_COAST_SOIL:
+							check(false, "Dirt transition maps to atlas 19")
 			elif zone == "water":
-				check(ground_height < biome.SEA_LEVEL, "Submerged floor stays below ocean") if ground_height >= biome.SEA_LEVEL else false
+				if ground_height >= biome.SEA_LEVEL:
+					check(false, "Submerged floor stays below ocean")
 	for required in ["inland", "coastal_soil", "grass_sand", "dry_sand", "wet_sand", "water"]:
 		check(zones.has(required), "Procedural island creates real " + required + " cells")
 	check(shoreline_heights.size() > 20, "Beach is a multi-cell band, not a one-tile coastline sticker")
@@ -75,7 +81,7 @@ func _run() -> void:
 	var coast_material_count: int = 0
 	var mesh_count: int = 0
 	for node in biome.get_children():
-		if not str(node.name).begins_with("GroundChunk_") or not node is MeshInstance3D:
+		if not str(node.name).begins_with("GroundChunk_") or not (node is MeshInstance3D):
 			continue
 		var mesh_node: MeshInstance3D = node
 		mesh_count += 1
