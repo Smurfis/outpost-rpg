@@ -50,7 +50,7 @@ func _apply_appearance() -> void:
 			add_theme_stylebox_override(state, art_style)
 		var art_focus := StyleBoxFlat.new()
 		art_focus.bg_color = Color.TRANSPARENT
-		art_focus.border_color = Color("f9c55e", 0.88)
+		art_focus.border_color = Color(0.98, 0.77, 0.37, 0.88)
 		art_focus.set_border_width_all(3)
 		art_focus.set_corner_radius_all(18)
 		add_theme_stylebox_override("focus", art_focus)
