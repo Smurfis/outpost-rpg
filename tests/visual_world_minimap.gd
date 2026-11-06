@@ -38,15 +38,15 @@ func _run() -> void:
 		# The minimap always samples the player's actual current world position.
 		var player_position: Vector3 = game.hero.global_position
 		game.hero.global_position = player_position + Vector3(5.0, 0.0, -4.0)
-		game.camera_angle = PI * 0.5
+		game.set("camera_angle", PI * 0.5)
 		mini._process(0.02)
-		_check((mini.get("_center") as Vector3).distance_to(game.hero.global_position) < 0.01, "Minimap is centred on player immediately after moving")
+		_check((Vector3(mini.get("_center"))).distance_to(game.hero.global_position) < 0.01, "Minimap is centred on player immediately after moving")
 		_check(is_equal_approx(float(mini.get("_sample_angle")), PI * 0.5), "Minimap uses current smoothed camera angle")
-		var north_pixel: Vector2 = mini._world_to_map(Vector2(0.0, -1.0))
+		var north_pixel: Vector2 = mini.call("_world_to_map", Vector2(0.0, -1.0))
 		_check(north_pixel.distance_to(Vector2(1.0, 0.0)) < 0.01, "Camera quarter-turn rotates world north to the right")
-		var upper_world: Vector2 = mini._map_to_world(Vector2(0.0, -1.0))
+		var upper_world: Vector2 = mini.call("_map_to_world", Vector2(0.0, -1.0))
 		_check(upper_world.distance_to(Vector2(-1.0, 0.0)) < 0.01, "Top of minimap aligns with camera-forward world direction")
-		game.camera_angle = PI
+		game.set("camera_angle", PI)
 		mini._process(0.02)
 		_check(mini._world_to_map(Vector2(0.0, -1.0)).distance_to(Vector2(0.0, 1.0)) < 0.01, "Second camera rotation also updates compass and map")
 
