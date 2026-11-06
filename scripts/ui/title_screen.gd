@@ -12,22 +12,40 @@ const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
-	"Tip: Equipped tools can increase your resource yields.",
-	"Tip: Visit the forge to turn iron ore into iron ingots.",
-	"Tip: Equip your newly crafted weapons through BAG and GEAR.",
-	"Tip: Keep supplies ready before exploring the wilderness.",
-	"Tip: Campfires and crafting stations are your friends.",
-	"Tip: Use a shield to reduce damage from wild creatures.",
-	"Tip: A cloak can help you move a little faster.",
-	"Tip: Check nearby resources before swinging your tools.",
-	"Tip: Collect herbs, berries and mushrooms when travelling.",
-	"Tip: Your workbench can turn simple resources into useful tools.",
-	"Tip: Finish each crafting action to complete the recipe.",
+	"Tip: Equipped tools increase your harvest from the right resources.",
+	"Tip: Smelt iron at the forge before crafting stronger equipment.",
+	"Tip: Switch weapons and armour through the BAG and GEAR screens.",
+	"Tip: Workbenches turn simple resources into useful equipment.",
+	"Tip: A shield reduces incoming damage but occupies your off-hand.",
+	"Tip: A torch shares the off-hand slot with your shield.",
+	"Tip: Keep a torch handy before the light begins to fade.",
+	"Tip: The Fields stretch beyond the clearing. Bring supplies.",
+	"Tip: Portals lead to dungeons. Prepare your gear before entering.",
+	"Tip: A cloak can help you travel through the world a little faster.",
+	"Tip: Harvestable trees and ore deposits recover after a while.",
+	"Tip: Search near cliffs and paths for stone, ore and plants.",
+	"Tip: Stock up on herbs, berries and mushrooms while exploring.",
+	"Tip: Your bag has a carry limit. Upgrade it before a long expedition.",
+	"Tip: Gather materials first, then load a recipe at its crafting station.",
+	"Tip: Finish the station's work actions to complete crafting.",
+	"Tip: Keep an eye on enemy movement before closing the distance.",
+	"Tip: A forged blade is a useful upgrade over your starting weapon.",
+	"Tip: Your gathering, crafting and combat all help your adventure grow.",
+	"Tip: Try rotating the camera to see what's hidden behind the trees.",
+	"Tip: On a keyboard, press E to interact and C to open crafting.",
+	"Tip: A brighter campfire makes the night feel less lonely.",
+	"Tip: Every outpost begins with one small shelter and a little hope.",
+	"Tip: The purple glow on the horizon may hide a dungeon entrance.",
+	"Tip: What you craft today may save you when night falls.",
+	"Tip: Take time to explore. Not every reward is found in a fight.",
+	"Tip: However dark the world gets, you are its light.",
 	"Tip: Keep the campfire burning — Chloe and Iyla need a safe outpost after dark."
 ]
 var _canvas: Control
 var _splash: Label
 var _tip_text: Label
+var _tip_plaque: TextureRect
+var _light_layer: TextureRect
 var _continue_button: Button
 var _settings_panel: PanelContainer
 var _updater: Node
@@ -39,10 +57,13 @@ var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
 var _tip_elapsed := 0.0
+const TIP_CYCLE_SECONDS: float = 9.0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_read_prefs()
+	# Pick a different opening tip each session; every tip remains in the rotation.
+	_tip_index = randi_range(0, TIPS.size() - 1)
 	_make_screen()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
@@ -72,6 +93,9 @@ func _make_screen() -> void:
 	_canvas.size = DESIGN
 	add_child(_canvas)
 	_add_image("Backdrop", "title_background.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
+	# Independent light pass: campsite lanterns, fire, distant portal and waterfall.
+	_add_image("TitleLights", "title_lights.png", "title_lights.svg", Vector2.ZERO, DESIGN)
+	_light_layer = _canvas.get_node_or_null("TitleLights") as TextureRect
 	_add_image("TitleFrame", "title_frame.png", "title_frame.svg", Vector2.ZERO, DESIGN)
 	_add_image("LeftBanner", "banner_star.png", "banner_star.svg", Vector2(51, 17), Vector2(90, 115))
 	_add_image("RightBanner", "banner_star.png", "banner_star.svg", Vector2(1140, 17), Vector2(90, 115))
@@ -128,6 +152,9 @@ func _make_screen() -> void:
 	_canvas.add_child(version)
 
 	_add_image("TipPlaque", "tip_panel.png", "tip_panel.svg", Vector2(247, 656), Vector2(785, 53))
+	_tip_plaque = _canvas.get_node_or_null("TipPlaque") as TextureRect
+	if _tip_plaque != null:
+		_tip_plaque.visible = _show_tips
 	_tip_text = Label.new()
 	_tip_text.name = "WorldTip"
 	_tip_text.position = Vector2(280, 662)
@@ -222,12 +249,25 @@ func _launch_game(new_adventure: bool) -> void:
 	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
-	if _show_tips:
+	# A restrained breathing light pass; no particles, shaders or heavy post effects.
+	if _light_layer != null:
+		_light_layer.modulate.a = 0.79 if _reduced_motion else 0.78 + 0.14 * sin(float(Time.get_ticks_msec()) * 0.0017)
+	if _show_tips and _tip_text != null:
 		_tip_elapsed += delta
-		if _tip_elapsed >= 10.0:
+		if _tip_elapsed >= TIP_CYCLE_SECONDS:
 			_tip_elapsed = 0.0
-			_tip_index = (_tip_index + 1) % TIPS.size()
-			_tip_text.text = TIPS[_tip_index]
+			_advance_tip()
+
+func _advance_tip() -> void:
+	_tip_index = (_tip_index + 1) % TIPS.size()
+	if _reduced_motion:
+		_tip_text.text = TIPS[_tip_index]
+		_tip_text.modulate.a = 1.0
+		return
+	var fade := create_tween()
+	fade.tween_property(_tip_text, "modulate:a", 0.12, 0.20)
+	fade.tween_callback(func() -> void: _tip_text.text = TIPS[_tip_index])
+	fade.tween_property(_tip_text, "modulate:a", 1.0, 0.26)
 
 func _build_settings() -> void:
 	_settings_panel = PanelContainer.new()
@@ -268,6 +308,8 @@ func _build_settings() -> void:
 	tips.toggled.connect(func(enabled: bool) -> void:
 		_show_tips = enabled
 		_tip_text.visible = enabled
+		if _tip_plaque != null:
+			_tip_plaque.visible = enabled
 		_write_prefs()
 	)
 	stack.add_child(tips)
