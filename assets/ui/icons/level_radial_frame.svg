@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
+<!-- Original Outpost radial level frame: silver circle, gold dragon silhouettes, crown gem. Transparent artwork. -->
+<circle cx="64" cy="67" r="45" fill="#1d1d28" stroke="#4b3d43" stroke-width="10"/>
+<circle cx="64" cy="67" r="43" fill="none" stroke="#a5aab4" stroke-width="7"/>
+<circle cx="64" cy="67" r="36" fill="#392d38" stroke="#161821" stroke-width="4"/>
+<circle cx="64" cy="67" r="33" fill="#282633" stroke="#8d7280" stroke-width="2"/>
+<path d="M64 9L76 19L73 33L64 40L55 33L52 19Z" fill="#c19b52" stroke="#2f2736" stroke-width="3"/>
+<path d="M64 13L71 21L69 29L64 35L59 29L57 21Z" fill="#ac7ce1"/>
+<path d="M64 14L60 21L63 25L64 32L67 24L69 21Z" fill="#dfb9ff"/>
+<path d="M18 38L26 32L20 49L27 57L22 70L30 86L23 81L16 65L18 56L12 53Z" fill="#b6853a" stroke="#46312b" stroke-width="2"/>
+<path d="M110 38L102 32L108 49L101 57L106 70L98 86L105 81L112 65L110 56L116 53Z" fill="#b6853a" stroke="#46312b" stroke-width="2"/>
+<path d="M26 26L20 30L15 28L17 21L24 18L33 23L31 29L26 35L22 33Z" fill="#dfbb70" stroke="#44322c" stroke-width="2"/>
+<path d="M102 26L108 30L113 28L111 21L104 18L95 23L97 29L102 35L106 33Z" fill="#dfbb70" stroke="#44322c" stroke-width="2"/>
+<path d="M24 24H28V27H24Z M100 24H104V27H100Z" fill="#703e63"/>
+<path d="M35 101L26 91L29 83L37 89L47 103L56 109L64 112L72 109L81 103L91 89L99 83L102 91L93 101L80 112L64 121L48 112Z" fill="#b48c52" stroke="#473627" stroke-width="3"/>
+<path d="M33 97L43 106L53 112L64 116L75 112L85 106L95 97" fill="none" stroke="#e3c47d" stroke-width="3"/>
+<path d="M52 115L64 123L76 115L70 114L64 117L58 114Z" fill="#8a7196"/>
+<path d="M20 57H25V67H20Z M103 57H108V67H103Z" fill="#f4db9a"/>
+</svg>

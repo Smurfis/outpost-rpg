@@ -30,11 +30,13 @@ func _run() -> void:
 	verify(status_box != null, "Compact player card")
 	var crest: TextureRect = hud.get_node_or_null("OutpostSigil") as TextureRect
 	verify(crest != null and crest.texture != null, "Original small crest replaces blocky fixed face")
-	verify(hud.get_node_or_null("HeroPortrait") == null, "Generic hero portrait removed from gameplay HUD")
+	var portrait: TextureRect = hud.get_node_or_null("HeroPortrait") as TextureRect
+	verify(portrait != null and portrait.texture != null, "New original adventurer portrait is visible inside compact player card")
+	verify(hud.get_node_or_null("HeroPortraitFrame") != null, "Portrait has its own illustrated frame")
 	if status_box != null:
 		var screen: Vector2 = game.hud.get_viewport().get_visible_rect().size
-		verify(status_box.size.y <= screen.y * 0.135, "Top-left identity uses at most 13.5% of screen height")
-		verify(status_box.size.x <= screen.x * 0.26, "Status card leaves space for real world view")
+		verify(status_box.size.y <= screen.y * 0.15, "Top-left portrait and HP use at most 15% of screen height")
+		verify(status_box.size.x <= screen.x * 0.285, "Status card remains below 28.5% of viewport width")
 	verify(hud.get_node_or_null("ResourceQuickChips") != null, "Actual inventory resource chips")
 	verify(hud.get_node_or_null("QuestBanner") != null, "One slim quest banner")
 	var toggle: Button = hud.get_node_or_null("QuestToggle") as Button
@@ -62,7 +64,12 @@ func _run() -> void:
 	var camera_hint: Label = hud.get_node_or_null("CameraDragHint") as Label
 	verify(tool_hint != null and not tool_hint.visible, "Temporary tool help no longer blocks the world")
 	verify(camera_hint != null and not camera_hint.visible, "Temporary camera help no longer blocks the world")
-	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character level XP bar spans lower screen")
+	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character XP remains in its bottom bar")
+	var radial: Control = hud.get_node_or_null("RadialLevelFrame") as Control
+	verify(radial != null and radial.get_node_or_null("LevelNumber") != null, "Ornate radial level frame is separate from player HP portrait")
+	if radial != null:
+		verify(radial.position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.8, "Radial level jewel remains attached to bottom XP")
+		verify(radial.get("fill_amount") >= 0.0, "Radial jewel has live level progress")
 	var coop: Button = hud.get_node_or_null("CoopEntryButton") as Button
 	verify(coop != null and coop.pressed.is_connected(game.hud._open_coop), "Co-op remains usable")
 	game.hud.render_status(67.0, {"wood": 8, "stone": 5, "hide": 3, "coins": 12}, 52, 0, "spear", "Gather more wood", "Nearby: a tree")
@@ -83,6 +90,11 @@ func _run() -> void:
 	game.inventory["stone"] = 5
 	game.show_inventory()
 	verify(game.menu.current_page == "bag", "Bag opens from old gameplay API")
+	var filter_all: Button = game.menu.recipes_list.get_node_or_null("BagFilters/BagFilter_all") as Button
+	verify(filter_all != null, "Inventory has real All, Materials, Gear and Food category filters")
+	game.menu._set_bag_filter("material")
+	verify(game.menu.bag_filter == "material" and game.menu.recipes_list.get_node_or_null("BagItemGrid/Item_wood") != null, "Material filter shows only actual owned resources")
+	game.menu._set_bag_filter("all")
 	var bag_meter: ProgressBar = game.menu.station_tabs.find_child("BagCapacityMeter", true, false) as ProgressBar
 	verify(bag_meter != null and bag_meter.get_theme_stylebox("fill") is StyleBoxFlat, "Carry-weight meter uses a visible solid fill instead of transparent frame")
 	var grid: GridContainer = game.menu.recipes_list.get_node_or_null("BagItemGrid") as GridContainer
@@ -104,6 +116,8 @@ func _run() -> void:
 		verify(crafting.size.x <= 880.0 and crafting.size.y <= 600.0, "Craft modal pixel dimensions capped on wide phones")
 		verify(crafting.size.x < game.menu.shell.size.x * 0.75, "Craft leaves landscape visible on Android")
 	verify(game.menu.craft_step == "browse", "Craft stage begins on full-width recipe cards")
+	verify(game.menu.craft_stage_strip.get_child_count() == 4, "Four illustrated workflow steps visible only in crafting")
+	verify(game.menu.craft_stage_strip.get_node_or_null("CraftStage_1") != null, "Select stage is a separate highlighted UI element")
 	verify(game.menu.subtitle.text.contains("CHOOSE RECIPE"), "Workshop has concise staged navigation")
 	verify(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Single pane recipe browse")
 	var spear: Button = game.menu.recipes_list.get_node_or_null("Recipe_spear") as Button
