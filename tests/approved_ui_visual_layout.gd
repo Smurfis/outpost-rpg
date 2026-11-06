@@ -55,6 +55,13 @@ func _run() -> void:
 			var shape: StyleBox = action.get_theme_stylebox("normal")
 			verify(shape is StyleBoxFlat and (shape as StyleBoxFlat).corner_radius_top_left >= 60, "Round framed " + key)
 	verify(hud.get_node_or_null("Action_attack") == null and hud.get_node_or_null("Action_gather") == null, "No redundant attack or gather tiles")
+	var main_action: Button = hud.get_node_or_null("Action_interact") as Button
+	verify(main_action != null and main_action.get_node_or_null("ToolSwipeChevron") != null, "Hold-to-select gesture keeps a small always-visible arrow")
+	game.hud._process(8.5)
+	var tool_hint: Label = hud.get_node_or_null("QuickToolGestureHint") as Label
+	var camera_hint: Label = hud.get_node_or_null("CameraDragHint") as Label
+	verify(tool_hint != null and not tool_hint.visible, "Temporary tool help no longer blocks the world")
+	verify(camera_hint != null and not camera_hint.visible, "Temporary camera help no longer blocks the world")
 	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character level XP bar spans lower screen")
 	var coop: Button = hud.get_node_or_null("CoopEntryButton") as Button
 	verify(coop != null and coop.pressed.is_connected(game.hud._open_coop), "Co-op remains usable")
