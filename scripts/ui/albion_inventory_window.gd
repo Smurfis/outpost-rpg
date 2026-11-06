@@ -10,8 +10,8 @@ const SLOT_NAMES: Dictionary = {
 	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_forage":"FORAGING"
 }
 const CONSUMABLES: Array[String] = ["meal", "tonic", "stew"]
-var game: Node
-var menu: Node
+var game
+var menu
 var window: PanelContainer
 var item_card: PanelContainer
 var item_info: VBoxContainer
