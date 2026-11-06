@@ -30,6 +30,16 @@ func _run() -> void:
 	if updater_script == null:
 		quit(1)
 		return
+	var browser_script = load("res://scripts/ui/android_external_browser.gd")
+	check(browser_script != null, "External Chrome launcher script imports")
+	if browser_script != null:
+		check(str(browser_script.CHROME_PACKAGE) == "com.android.chrome", "Android APK downloads explicitly prefer Google Chrome")
+		check(browser_script.is_trusted_release_apk("https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v1047/Outpost-Android-v1047.apk"), "Current Stable APK URL is accepted")
+		check(browser_script.is_trusted_release_apk("https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1005/Outpost-Alpha-v1005.apk"), "Alpha APK URLs are accepted for future channel support")
+		check(not browser_script.is_trusted_release_apk("https://evil.example/Outpost-Android-v1047.apk"), "Untrusted APK download hosts are rejected")
+		check(not browser_script.is_trusted_release_apk("https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v1047/Outpost-Android-v1047.apk?redirect=evil"), "Query or redirect injections are rejected")
+		check(not browser_script.is_trusted_release_apk("https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v1047/Outpost-Alpha-v1047.apk"), "Stable and Alpha filenames cannot be swapped")
+		check(browser_script.open_apk_in_browser("https://evil.example/app.apk") == ERR_INVALID_PARAMETER, "Invalid downloads are refused before any browser is opened")
 	var older: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v12/Outpost-Android-v12.apk"
 	var newer: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v15/Outpost-Android-v15.apk"
 	var inputs: Array = [_release(12, older), _release(15, newer), _release(14, "https://attacker.example/update.apk"), _release(99, newer, true)]
