@@ -32,7 +32,7 @@ func _run() -> void:
 	if mini != null:
 		mini._process(0.6)
 		var texture: ImageTexture = mini.get("_texture") as ImageTexture
-		_check(texture != null and texture.get_size() == Vector2(48, 48), "Minimap builds low-cost sampled terrain texture")
+		_check(texture != null and texture.get_size() == Vector2(64, 64), "Minimap builds higher-detail cached terrain texture")
 		_check(mini.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Minimap never blocks touch controls")
 		# Camera orbit should rotate the map, markers and compass together.
 		# The minimap always samples the player's actual current world position.
@@ -46,9 +46,18 @@ func _run() -> void:
 		_check(north_pixel.distance_to(Vector2(1.0, 0.0)) < 0.01, "Camera quarter-turn rotates world north to the right")
 		var upper_world: Vector2 = mini.call("_map_to_world", Vector2(0.0, -1.0))
 		_check(upper_world.distance_to(Vector2(-1.0, 0.0)) < 0.01, "Top of minimap aligns with camera-forward world direction")
+		var cached_renders: int = int(mini.get("_refresh_count"))
 		game.set("camera_angle", PI)
 		mini._process(0.02)
 		_check(mini._world_to_map(Vector2(0.0, -1.0)).distance_to(Vector2(0.0, 1.0)) < 0.01, "Second camera rotation also updates compass and map")
+		_check(int(mini.get("_refresh_count")) == cached_renders, "Camera-only orbit never re-samples terrain pixels")
+		game.set("camera_angle", TAU + 0.3)
+		mini._process(0.02)
+		_check(int(mini.get("_refresh_count")) == cached_renders, "Even full camera orbit reuses cached map art")
+		game.hero.global_position += Vector3(5.0, 0.0, 0.0)
+		mini._process(0.02)
+		_check(int(mini.get("_refresh_count")) > cached_renders, "Significant movement refreshes actual terrain data")
+		_check(mini.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Map never claims touch input")
 
 	var player = game.hero
 	_check(player.visual.scale.x < 1.0, "Voxel character uses smaller proportions")

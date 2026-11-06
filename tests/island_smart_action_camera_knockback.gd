@@ -88,6 +88,27 @@ func _run() -> void:
 	release.position = orbit_drag.position
 	game.hud._input(release)
 	verify(game.hud.camera_drag_finger == -1, "Camera drag finger releases cleanly")
+	# Short, deliberate swipes must orbit without waiting for the long-hold.
+	var fast_press := InputEventScreenTouch.new()
+	fast_press.index = 17
+	fast_press.pressed = true
+	fast_press.position = drag_start
+	game.hud._input(fast_press)
+	var yaw_before_swipe: float = game.camera_angle_target
+	var early_swipe := InputEventScreenDrag.new()
+	early_swipe.index = 17
+	early_swipe.position = drag_start + Vector2(48.0, 0.0)
+	early_swipe.relative = Vector2(48.0, 0.0)
+	early_swipe.screen_relative = Vector2(48.0, 0.0)
+	game.hud._input(early_swipe)
+	verify(game.hud.camera_drag_finger == 17 and game.hud.camera_hold_ready, "Deliberate drag activates orbit without hold")
+	verify(absf(game.camera_angle_target - yaw_before_swipe) > 0.1, "Early world drag rotates camera instead of cancelling")
+	var fast_release := InputEventScreenTouch.new()
+	fast_release.index = 17
+	fast_release.pressed = false
+	fast_release.position = early_swipe.position
+	game.hud._input(fast_release)
+	verify(game.hud.camera_drag_finger == -1, "Fast orbit finger also releases cleanly")
 	var main_action: Button = game.hud.root.get_node_or_null("Action_interact") as Button
 	verify(main_action != null, "Primary interaction has a dedicated large touch target")
 	verify(game.hud.smart_tray != null, "Hold gesture has a real owned-item slider")
