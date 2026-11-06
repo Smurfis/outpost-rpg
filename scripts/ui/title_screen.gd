@@ -15,6 +15,7 @@ const BAKED_VERSION_ART := "res://assets/ui/title/version_badge_original.png"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
 const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
+const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
@@ -55,6 +56,8 @@ var _splash: Label
 var _tip_text: Label
 var _tip_plaque: TextureRect
 var _light_layer: TextureRect
+var _embers: Control
+var _ambient_elapsed: float = 0.0
 var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
@@ -169,6 +172,15 @@ func _make_screen() -> void:
 	_canvas.add_child(logo)
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
+	if _approved_art:
+		# Cheap 2D ember glints over the real campsite and crest campfires.
+		# Particles ignore mouse/touch and leave the button art untouched.
+		_embers = EMBER_SCRIPT.new()
+		_embers.name = "CampfireEmbers"
+		_embers.size = DESIGN
+		_embers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_embers.set("reduced_motion", _reduced_motion)
+		_canvas.add_child(_embers)
 
 	_splash = SPLASH_SCENE.instantiate() as Label
 	_splash.name = "UpdateSplash"
@@ -195,6 +207,7 @@ func _make_screen() -> void:
 		var b: Button = BUTTON_SCENE.instantiate() as Button
 		b.name = kind.capitalize() + "Button"
 		b.set("button_kind", kind)
+		b.set("reduced_motion", _reduced_motion)
 		var placement: Rect2 = approved_rects[kind] if _approved_art else Rect2(425, 342 + 79 * i, 430, 72)
 		_canvas.add_child(b)
 		# Button._ready() restores legacy 430×76 minimum; reset it before
@@ -362,7 +375,18 @@ func _launch_game(new_adventure: bool) -> void:
 	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
-	# A restrained breathing light pass; no particles, shaders or heavy post effects.
+	# A restrained dusk cycle tints only the distant landscape, NOT the
+	# logo, lettering, buttons or version plaque. The sun stays painted:
+	# a proper moon needs its own night-background master in a later pass.
+	if _approved_art:
+		_ambient_elapsed += delta
+		var dusk_amount: float = 0.40 if _reduced_motion else 0.25 + 0.55 * (0.5 - 0.5 * cos(_ambient_elapsed * 0.07))
+		var landscape_tint: Color = Color.WHITE.lerp(Color(0.77, 0.82, 0.94), dusk_amount)
+		if _approved_backdrop != null:
+			_approved_backdrop.modulate = landscape_tint
+		if _wide_backdrop != null:
+			_wide_backdrop.modulate = landscape_tint
+	# Legacy SVG light pass remains available as an optional fallback.
 	if _light_layer != null:
 		_light_layer.modulate.a = 0.79 if _reduced_motion else 0.78 + 0.14 * sin(float(Time.get_ticks_msec()) * 0.0017)
 	if _show_tips and _tip_text != null:
@@ -410,6 +434,14 @@ func _build_settings() -> void:
 	motion.toggled.connect(func(enabled: bool) -> void:
 		_reduced_motion = enabled
 		_splash.animate_bounce = not enabled
+		if _embers != null:
+			_embers.set("reduced_motion", enabled)
+			_embers.queue_redraw()
+		for kind in ["Play", "Continue", "Settings", "Quit"]:
+			var button: Button = _canvas.get_node_or_null(kind + "Button") as Button
+			if button != null:
+				button.set("reduced_motion", enabled)
+				button.queue_redraw()
 		if enabled:
 			_splash.scale = Vector2.ONE
 		_write_prefs()
