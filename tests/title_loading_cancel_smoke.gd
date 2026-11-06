@@ -62,7 +62,7 @@ func _run() -> void:
 		loading.call("_cancel_to_title")
 		await process_frame
 		await process_frame
-		_check(current_scene != null and current_scene.name == "TitleScreen", "Cancel returns to title without entering the game")
+		_check(current_scene != null and current_scene.name == "OutpostTitleScreen", "Cancel returns to title without entering the game")
 		_check(root.get_node_or_null("Outpost") == null, "Cancel removes any partially built world")
 		_check(not root.has_meta("outpost_new_adventure"), "Cancel clears launch-only metadata")
 	_restore_save(had_save, backup)
