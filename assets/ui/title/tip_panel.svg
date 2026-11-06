@@ -1,5 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="785" height="44" viewBox="0 0 785 44">
-<path d="M14 3 H770 L782 22 L771 41 H14 L3 22Z" fill="#302025" stroke="#bd824d" stroke-width="5"/>
-<path d="M18 9 H767 L774 22 L766 35 H19 L12 22Z" fill="#56322d" stroke="#e3aa5d" stroke-width="2"/>
-<path d="M29 22 L36 14 L43 22 L36 30Z M751 22 L758 14 L765 22 L758 30Z" fill="#ffcb70"/>
+<defs>
+  <linearGradient id="board" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#694136"/><stop offset=".45" stop-color="#49302c"/><stop offset="1" stop-color="#2b2027"/>
+  </linearGradient>
+</defs>
+<!-- An independent textless wood-and-brass tip plaque, like the source mock-up. -->
+<path d="M18 1 H767 L784 21 L768 43 H17 L1 21Z" fill="#241a24" stroke="#251b25" stroke-width="3"/>
+<path d="M19 4 H766 L778 21 L765 39 H19 L7 21Z" fill="#9b613c" stroke="#d4a05c" stroke-width="2"/>
+<path d="M23 8 H762 L771 21 L762 35 H23 L14 21Z" fill="url(#board)" stroke="#d7ad66" stroke-width="1.5"/>
+<path d="M67 13 H716" stroke="#b4815a" stroke-opacity=".38" stroke-width="1"/>
+<path d="M70 29 H714" stroke="#211920" stroke-opacity=".45" stroke-width="1"/>
+<!-- Rivets, compass diamonds and stitched corner details. -->
+<g fill="#cfb48a" stroke="#38272a" stroke-width="1.5">
+ <circle cx="45" cy="21" r="4.7"/><circle cx="740" cy="21" r="4.7"/>
+</g>
+<g fill="#ffda86" stroke="#7e492e" stroke-width="1.3">
+ <path d="M24 21 L32 12 L40 21 L32 30Z"/>
+ <path d="M745 21 L753 12 L761 21 L753 30Z"/>
+</g>
+<g fill="#5e913f" stroke="#315b32" stroke-width="1.5">
+ <path d="M21 5 Q35 3 44 11 Q33 15 21 5Z"/>
+ <path d="M767 5 Q752 3 744 11 Q756 15 767 5Z"/>
+</g>
 </svg>
