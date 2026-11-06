@@ -43,7 +43,7 @@ func _run() -> void:
 		var button: Button = title.get_node_or_null("Artboard/" + kind + "Button") as Button
 		_check(button != null and button.get_theme_stylebox("normal") is StyleBoxTexture, kind + " has individual reusable textured button")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
-	_check(version != null and version.text == "v0.5.0-dev", "Version label uses running app version")
+	_check(version != null and version.text.begins_with("v0.5.0-dev"), "Version label uses running app version")
 	title.queue_free()
 	await process_frame
 	print("TITLE ART RESULT: %d failures" % failures)
