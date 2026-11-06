@@ -23,7 +23,7 @@ func _test_game() -> void:
 	await process_frame
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.7, "Hero remains at starting outpost")
-	check(game.recipes.size() == 20, "Original 14 recipes plus six real bag recipes load")
+	check(game.recipes.size() == 21, "Fourteen starter recipes, six real bags and first fiery enchant load")
 	for bag_id in ["backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2"]:
 		check(not game._recipe_by_id(bag_id).is_empty(), "Craftable carry item: " + bag_id)
 	check(game.stations.size() == 5, "Five interactive 3D stations including enchanting bench exist")
