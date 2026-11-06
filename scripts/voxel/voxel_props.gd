@@ -2,7 +2,7 @@ extends RefCounted
 ## Single-draw-call textured mesh props, safe to hide for gathering respawn.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 
-static func tree() -> MeshInstance3D:
+static func tree(tint: Color = Color.WHITE) -> MeshInstance3D:
 	# Layered square canopies and bark branches: chunky readable silhouette
 	# similar to the approved mobile isometric reference. ONE mesh per tree.
 	var st := SurfaceTool.new()
@@ -10,15 +10,20 @@ static func tree() -> MeshInstance3D:
 	PIXELS.box(st, Vector3(0, 1.35, 0), Vector3(0.60, 2.70, 0.64), 8, 8)
 	PIXELS.box(st, Vector3(-0.55, 2.40, 0.0), Vector3(1.25, 0.29, 0.29), 8, 8)
 	PIXELS.box(st, Vector3(0.42, 2.90, 0.1), Vector3(0.94, 0.26, 0.29), 8, 8)
-	PIXELS.box(st, Vector3(-0.27, 2.62, 0), Vector3(2.00, 0.95, 2.22), 10, 10)
-	PIXELS.box(st, Vector3(0.34, 3.10, 0.08), Vector3(2.65, 1.05, 2.50), 9, 10)
-	PIXELS.box(st, Vector3(-0.20, 3.72, 0.0), Vector3(2.26, 0.94, 2.20), 9, 9)
-	PIXELS.box(st, Vector3(0.05, 4.22, -0.12), Vector3(1.52, 0.76, 1.60), 1, 9)
-	PIXELS.box(st, Vector3(-0.48, 3.26, 0.92), Vector3(0.78, 0.71, 0.75), 1, 9)
-	PIXELS.box(st, Vector3(0.89, 2.91, -0.41), Vector3(0.69, 0.66, 1.05), 2, 10)
+	PIXELS.box(st, Vector3(-0.27, 2.62, 0), Vector3(2.00, 0.95, 2.22), 10, 10, 3, tint)
+	PIXELS.box(st, Vector3(0.34, 3.10, 0.08), Vector3(2.65, 1.05, 2.50), 9, 10, 3, tint)
+	PIXELS.box(st, Vector3(-0.20, 3.72, 0.0), Vector3(2.26, 0.94, 2.20), 9, 9, 3, tint)
+	PIXELS.box(st, Vector3(0.05, 4.22, -0.12), Vector3(1.52, 0.76, 1.60), 1, 9, 3, tint)
+	PIXELS.box(st, Vector3(-0.48, 3.26, 0.92), Vector3(0.78, 0.71, 0.75), 1, 9, 3, tint)
+	PIXELS.box(st, Vector3(0.89, 2.91, -0.41), Vector3(0.69, 0.66, 1.05), 2, 10, 3, tint)
+	# Staggered canopy lobes break the simple rectangular silhouette with no
+	# extra MeshInstance3D nodes, retaining one mobile-friendly draw call.
+	PIXELS.box(st, Vector3(-1.09, 3.15, -0.42), Vector3(0.98, 0.66, 1.04), 9, 9, 3, tint)
+	PIXELS.box(st, Vector3(1.11, 3.53, 0.43), Vector3(1.04, 0.75, 0.90), 1, 9, 3, tint)
+	PIXELS.box(st, Vector3(-0.14, 4.57, 0.08), Vector3(1.05, 0.45, 1.11), 1, 9, 3, tint)
 	return PIXELS.as_instance(st, "VoxelTree")
 
-static func pine_tree() -> MeshInstance3D:
+static func pine_tree(tint: Color = Color.WHITE) -> MeshInstance3D:
 	# Sparse triangular steps, still entirely cubes (no smooth cones).
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -26,7 +31,7 @@ static func pine_tree() -> MeshInstance3D:
 	for layer in range(4):
 		var extent: float = 2.7 - float(layer) * 0.55
 		PIXELS.box(st, Vector3(0, 1.85 + float(layer) * 0.75, 0),
-			Vector3(extent, 0.82, extent), 10 if layer < 2 else 9, 10)
+			Vector3(extent, 0.82, extent), 10 if layer < 2 else 9, 10, 3, tint)
 	return PIXELS.as_instance(st, "VoxelPineTree")
 
 static func rock(kind: String = "stone") -> MeshInstance3D:
