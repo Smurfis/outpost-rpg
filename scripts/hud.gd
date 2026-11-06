@@ -352,6 +352,211 @@ func _ready() -> void:
 	_load_control_prefs()
 	_position_stick()
 
+func _toggle_wallet() -> void:
+	wallet_open = not wallet_open
+	_apply_wallet_layout()
+
+func _apply_wallet_layout() -> void:
+	wallet_coin.visible = wallet_open
+	wallet_resource_icon.visible = wallet_open
+	wallet_resource_count.visible = wallet_open
+	wallet_collapse.text = "‹" if wallet_open else "›"
+	_anchors(wallet_frame, 0.302, 0.018, 0.710 if wallet_open else 0.410, 0.087)
+	_anchors(wallet_bag, 0.638 if wallet_open else 0.349, 0.019, 0.699 if wallet_open else 0.405, 0.089)
+
+func _refresh_wallet(inventory: Dictionary) -> void:
+	if wallet_coin == null:
+		return
+	wallet_coin.text = "COINS  %d" % int(inventory.get("coins", 0))
+	for key in inventory:
+		var id: String = str(key)
+		if id == "coins" or id in ["torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
+			continue
+		var amount: int = int(inventory.get(id, 0))
+		var previous: int = int(last_inventory_snapshot.get(id, 0))
+		if amount > previous:
+			wallet_resource_id = id
+	var current_amount: int = int(inventory.get(wallet_resource_id, 0))
+	if current_amount == 0 and last_inventory_snapshot.is_empty():
+		for key in inventory:
+			var id: String = str(key)
+			if id not in ["coins", "torch"] and int(inventory.get(id, 0)) > 0:
+				wallet_resource_id = id
+				current_amount = int(inventory.get(id, 0))
+				break
+	wallet_resource_count.text = "%s ×%d" % [wallet_resource_id.capitalize(), current_amount]
+	var path: String = "res://assets/icons/" + wallet_resource_id + ".svg"
+	if ResourceLoader.exists(path):
+		wallet_resource_icon.texture = load(path) as Texture2D
+	last_inventory_snapshot = inventory.duplicate()
+
+func _menu_button_down() -> void:
+	top_menu_pressed = true
+	top_menu_hold_seconds = 0.0
+	top_menu_opened_by_hold = false
+
+func _menu_button_up() -> void:
+	top_menu_pressed = false
+
+func _menu_button_pressed() -> void:
+	if top_menu_opened_by_hold:
+		top_menu_opened_by_hold = false
+		return
+	_set_top_menu(not top_menu_open)
+
+func _set_top_menu(open_menu: bool) -> void:
+	top_menu_open = open_menu
+	top_menu_panel.visible = open_menu
+	for option in top_menu_actions:
+		option.visible = open_menu
+
+func _open_journal() -> void:
+	_set_top_menu(false)
+	if not quest_expanded:
+		_toggle_quest()
+
+func _build_skill_details() -> void:
+	skill_detail_panel = _panel(0.337, 0.245, 0.680, 0.650)
+	skill_detail_panel.name = "WeaponSkillDetails"
+	skill_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	skill_detail_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	skill_detail_panel.visible = false
+	var title: Label = _label("WEAPON MASTERY", 21, SKIN.GOLD, 0.363, 0.274, 0.643, 0.335)
+	title.name = "SkillDetailHeading"
+	skill_detail_panel.add_child(title)
+	root.remove_child(title)
+	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	title.offset_left = 16
+	title.offset_top = 13
+	title.offset_right = -16
+	title.offset_bottom = 58
+	skill_detail_text = Label.new()
+	skill_detail_text.name = "SkillDetailText"
+	skill_detail_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	skill_detail_text.add_theme_font_size_override("font_size", 17)
+	skill_detail_text.add_theme_color_override("font_color", SKIN.CREAM)
+	skill_detail_panel.add_child(skill_detail_text)
+	skill_detail_text.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	skill_detail_text.offset_left = 20
+	skill_detail_text.offset_top = 74
+	skill_detail_text.offset_right = -20
+	skill_detail_text.offset_bottom = -75
+	var close := Button.new()
+	close.name = "CloseSkills"
+	close.text = "CLOSE"
+	SKIN.apply_button(close, "wood")
+	skill_detail_panel.add_child(close)
+	close.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	close.offset_left = 20
+	close.offset_top = -58
+	close.offset_right = -20
+	close.offset_bottom = -14
+	close.pressed.connect(func() -> void: skill_detail_panel.visible = false)
+
+func _show_skill_details() -> void:
+	_set_top_menu(false)
+	if game == null:
+		return
+	control_settings_panel.visible = false
+	var weapon: String = game.current_weapon_id()
+	var rank: int = game.mastery_rank(weapon)
+	var mastery_xp: int = int(game.weapon_mastery_xp.get(weapon, 0))
+	var available: int = game.unlocked_skill_slots()
+	skill_detail_text.text = "%s\nRank %d  •  %d mastery XP\n\nUnlocked abilities: %d / 3\n\n1. Power Strike\n2. Cleave\n3. Sundering Blow\n\nUse the three combat buttons beside Interact to activate unlocked abilities." % [weapon.replace("_", " ").capitalize(), rank, mastery_xp, available]
+	skill_detail_panel.visible = true
+
+func _build_control_settings() -> void:
+	control_settings_panel = _panel(0.329, 0.226, 0.689, 0.731)
+	control_settings_panel.name = "InGameControlSettings"
+	control_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	control_settings_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	control_settings_panel.visible = false
+	var stack := VBoxContainer.new()
+	stack.name = "SettingsFields"
+	stack.add_theme_constant_override("separation", 12)
+	control_settings_panel.add_child(stack)
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.offset_left = 20
+	stack.offset_top = 18
+	stack.offset_right = -20
+	stack.offset_bottom = -18
+	var heading := Label.new()
+	heading.text = "OUTPOST  •  CONTROLS"
+	heading.add_theme_font_size_override("font_size", 21)
+	heading.add_theme_color_override("font_color", SKIN.GOLD)
+	stack.add_child(heading)
+	floating_mode_toggle = CheckButton.new()
+	floating_mode_toggle.name = "FloatingJoystickToggle"
+	floating_mode_toggle.text = "Floating movement joystick"
+	floating_mode_toggle.add_theme_font_size_override("font_size", 17)
+	floating_mode_toggle.toggled.connect(_set_floating_mode)
+	stack.add_child(floating_mode_toggle)
+	var note := Label.new()
+	note.text = "Off: joystick stays fixed. On: touch anywhere in the lower-left movement area; the ring follows your thumb."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", SKIN.CREAM)
+	stack.add_child(note)
+	var name_title := Label.new()
+	name_title.text = "Character display name (local)"
+	name_title.add_theme_color_override("font_color", SKIN.CREAM)
+	name_title.add_theme_font_size_override("font_size", 16)
+	stack.add_child(name_title)
+	name_edit = LineEdit.new()
+	name_edit.name = "CharacterDisplayNameInput"
+	name_edit.placeholder_text = "Adventurer"
+	name_edit.max_length = 18
+	name_edit.text_submitted.connect(func(_value: String) -> void: _save_character_name())
+	name_edit.focus_exited.connect(_save_character_name)
+	stack.add_child(name_edit)
+	var dismiss := Button.new()
+	dismiss.name = "CloseControlSettings"
+	dismiss.text = "CLOSE SETTINGS"
+	SKIN.apply_button(dismiss, "wood")
+	dismiss.custom_minimum_size = Vector2(0, 48)
+	dismiss.pressed.connect(func() -> void:
+		_save_character_name()
+		control_settings_panel.visible = false
+	)
+	stack.add_child(dismiss)
+
+func _show_control_settings() -> void:
+	_set_top_menu(false)
+	skill_detail_panel.visible = false
+	control_settings_panel.visible = not control_settings_panel.visible
+	_reset_touch()
+
+func _set_floating_mode(enabled: bool) -> void:
+	floating_joystick_enabled = enabled
+	_reset_touch()
+	_save_control_prefs()
+
+func _save_character_name() -> void:
+	if name_edit == null:
+		return
+	var chosen: String = name_edit.text.strip_edges()
+	player_display_name = chosen if not chosen.is_empty() else "Adventurer"
+	name_edit.text = player_display_name
+	if status != null:
+		status.text = player_display_name
+	_save_control_prefs()
+
+func _load_control_prefs() -> void:
+	var config := ConfigFile.new()
+	if config.load(CONTROL_PREFS) == OK:
+		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
+		player_display_name = str(config.get_value("profile", "display_name", "Adventurer")).strip_edges()
+		if player_display_name.is_empty():
+			player_display_name = "Adventurer"
+	floating_mode_toggle.set_pressed_no_signal(floating_joystick_enabled)
+	name_edit.text = player_display_name
+
+func _save_control_prefs() -> void:
+	var config := ConfigFile.new()
+	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
+	config.set_value("profile", "display_name", player_display_name)
+	config.save(CONTROL_PREFS)
+
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
 	meter.max_value = 100.0
