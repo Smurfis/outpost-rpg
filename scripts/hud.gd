@@ -632,7 +632,7 @@ func _layout_touch_hud() -> void:
 			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
 	var combat: Array[Vector3] = [
 		Vector3(267.0, 240.0, 40.0), # skill 1
-		Vector3(340.0, 195.0, 40.0), # skill 2
+		Vector3(355.0, 195.0, 40.0), # skill 2 (no square-hitbox overlap with skill 1)
 		Vector3(363.0, 110.0, 40.0), # skill 3
 		Vector3(264.0, 82.0, 32.0),  # food
 		Vector3(183.0, 82.0, 32.0)   # potion
