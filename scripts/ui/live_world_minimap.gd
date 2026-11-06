@@ -1,6 +1,7 @@
 extends Control
 ## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
 ## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
+const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
@@ -185,7 +186,8 @@ func _draw() -> void:
 			var offset: Vector2 = _world_to_map(relative) * (interior / MAP_RADIUS)
 			if offset.length_squared() >= (interior - 7.0) * (interior - 7.0):
 				continue
-			var tree_colour := Color("e68bb6") if posmod(roundi(tree.position.x) * 17 + roundi(tree.position.z) * 23, 3) == 0 else Color("78b75a")
+			var variety: int = PIXELS.foliage_variant_at(tree.global_position.x, tree.global_position.z, 64012)
+			var tree_colour: Color = Color("e68bb6") if variety <= 3 else Color("d1dc54") if variety <= 5 else Color("ab86d9") if variety == 6 else Color("59b2aa") if variety == 7 else Color("78b75a")
 			draw_circle(center + offset, 3.3, DARK_WOOD)
 			draw_circle(center + offset, 2.1, tree_colour)
 		# Fixed centre; arrow heading is relative to camera and world map.
