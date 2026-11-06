@@ -22,6 +22,8 @@ var selected_id: String = ""
 var loaded: Dictionary = {}
 var completed_id: String = ""
 var selected_bag_id: String = ""
+var bag_filter: String = "all"
+var craft_stage_strip: HBoxContainer
 var progress_bar: ProgressBar
 var work_counter: Label
 var work_label: Label
@@ -96,6 +98,12 @@ func _ready() -> void:
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	subtitle.clip_text = true
 	page.add_child(subtitle)
+	# A real workflow breadcrumb, not four fake buttons. Only the active stage
+	# is highlighted; transitions remain managed by the crafting service.
+	craft_stage_strip = HBoxContainer.new()
+	craft_stage_strip.name = "CraftWorkflowSteps"
+	craft_stage_strip.add_theme_constant_override("separation", 5)
+	page.add_child(craft_stage_strip)
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
 	page.add_child(station_tabs)
@@ -166,7 +174,7 @@ func _label(value: String, font_size: int = 18, tint: Color = Color.WHITE) -> La
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override("font_color", tint)
-	label.add_theme_font_size_override("font_size", maxi(19, font_size))
+	label.add_theme_font_size_override("font_size", maxi(16, font_size))
 	label.add_theme_color_override("font_outline_color", Color("1c1117"))
 	label.add_theme_constant_override("outline_size", 2)
 	return label
@@ -240,7 +248,10 @@ func open(page: String) -> void:
 			selected_station = station
 		if selected_id == "":
 			selected_id = _first_recipe(selected_station)
-	craft_step = "browse"
+	# Never throw an already-open Prepare step away when returning from another
+	# modal; only new sessions and explicit navigation reset the workflow.
+	if page == "craft" and game.crafting.is_empty() and completed_id == "":
+		craft_step = "browse"
 	refresh()
 
 func close_page() -> void:
@@ -284,6 +295,8 @@ func refresh() -> void:
 		if button != null:
 			SKIN.apply_button(button, "wood_selected" if current_page == str(page_key) else "wood")
 	_clear(station_tabs)
+	_clear(craft_stage_strip)
+	craft_stage_strip.visible = current_page == "craft"
 	_clear(recipes_list)
 	_clear(details)
 	if current_page == "bag":
@@ -337,15 +350,31 @@ func _render_bag() -> void:
 		SKIN.apply_button(claim, "green")
 		claim.pressed.connect(game.claim_overflow)
 		station_tabs.add_child(claim)
+	# Compact working bag tabs; these filter actual owned objects rather than
+	# moving data into invented storage categories.
+	var filters := HBoxContainer.new()
+	filters.name = "BagFilters"
+	filters.add_theme_constant_override("separation", 4)
+	recipes_list.add_child(filters)
+	for category in ["all", "material", "equipment", "consumable"]:
+		var tab := Button.new()
+		tab.name = "BagFilter_" + category
+		tab.text = {"all": "ALL", "material": "MATS", "equipment": "GEAR", "consumable": "FOOD"}[category]
+		tab.custom_minimum_size = Vector2(60, 42)
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		SKIN.apply_button(tab, "wood_selected" if bag_filter == category else "wood")
+		tab.add_theme_font_size_override("font_size", 15)
+		tab.pressed.connect(_set_bag_filter.bind(category))
+		filters.add_child(tab)
 	var owned_ids: Array[String] = []
 	for raw_id in item_ids:
 		var item: String = str(raw_id)
-		if int(game.inventory.get(item, 0)) > 0:
+		if int(game.inventory.get(item, 0)) > 0 and (bag_filter == "all" or _bag_type(item).to_lower() == bag_filter):
 			owned_ids.append(item)
 	if selected_bag_id == "" or int(game.inventory.get(selected_bag_id, 0)) <= 0:
 		selected_bag_id = owned_ids[0] if not owned_ids.is_empty() else ""
 	if owned_ids.is_empty():
-		recipes_list.add_child(_label("Your satchel is empty. Gather resources to begin.", 19, SKIN.INK))
+		recipes_list.add_child(_label("No items in this category." if bag_filter != "all" else "Your satchel is empty. Gather resources to begin.", 19, SKIN.INK))
 		details.add_child(_label("No items selected", 21, SKIN.INK))
 		return
 
@@ -363,7 +392,7 @@ func _render_bag() -> void:
 		slot.tooltip_text = item.replace("_", " ").capitalize() + " x%d" % qty
 		slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			slot.add_theme_stylebox_override(state, SKIN.box("wood_selected") if item == selected_bag_id else SKIN.box("item"))
+			slot.add_theme_stylebox_override(state, SKIN.box("parchment_light") if item == selected_bag_id else SKIN.box("item"))
 		slot.pressed.connect(_bag_select.bind(item))
 		grid.add_child(slot)
 		var art: TextureRect = _icon(item, 45)
@@ -388,6 +417,13 @@ func _render_bag() -> void:
 		count.anchor_top = 0.68
 		count.anchor_bottom = 0.96
 		slot.add_child(count)
+		if item == selected_bag_id:
+			var gold_outline := Panel.new()
+			gold_outline.name = "SelectedItemBorder"
+			gold_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			gold_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+			slot.add_child(gold_outline)
+			gold_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		if game.is_equipped(item):
 			var equipped := Label.new()
 			equipped.text = "◆"
@@ -447,6 +483,11 @@ func _assign_quick(slot: String, item_id: String) -> void:
 	if game.set_quick_consumable(slot, item_id):
 		refresh()
 
+func _set_bag_filter(category: String) -> void:
+	bag_filter = category
+	selected_bag_id = ""
+	refresh()
+
 func _bag_type(id: String) -> String:
 	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"] or CARRY.is_bag(id):
 		return "EQUIPMENT"
@@ -499,6 +540,7 @@ func _render_equipment() -> void:
 			var unequip := Button.new()
 			unequip.text = "OFF"
 			unequip.custom_minimum_size = Vector2(60, 44)
+			SKIN.apply_button(unequip, "red")
 			unequip.pressed.connect(_equip_click.bind(str(game.equipment[slot])))
 			row.add_child(unequip)
 		for item in possible[slot]:
@@ -509,6 +551,7 @@ func _render_equipment() -> void:
 			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize() + ("  %s" % "★".repeat(int(game.bag_quality.get(item_id, 0))) if CARRY.is_bag(item_id) else "")
 			option.custom_minimum_size = Vector2(0, 50)
 			option.disabled = game.is_equipped(item_id)
+			SKIN.apply_button(option, "wood_selected" if game.is_equipped(item_id) else "green")
 			option.pressed.connect(_equip_click.bind(item_id))
 			holder.add_child(option)
 	_render_preview()
@@ -567,6 +610,26 @@ func _use_food(id: String) -> void:
 		amount = 75.0
 	game.consume(id, amount)
 
+func _render_craft_steps() -> void:
+	var active: int = 0
+	if not game.crafting.is_empty():
+		active = 2
+	elif completed_id != "":
+		active = 3
+	elif craft_step == "prepare":
+		active = 1
+	for index in range(4):
+		var card := PanelContainer.new()
+		card.name = "CraftStage_%d" % (index + 1)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.add_theme_stylebox_override("panel", SKIN.box("wood_selected" if index == active else "wood"))
+		craft_stage_strip.add_child(card)
+		var text_label := _label(["1  SELECT", "2  PREPARE", "3  WORK", "4  COLLECT"][index], 15, SKIN.GOLD if index == active else SKIN.CREAM)
+		text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		text_label.custom_minimum_size = Vector2(0, 27)
+		card.add_child(text_label)
+
 func _render_craft() -> void:
 	title.text = "OUTPOST  ◆  HANDCRAFTING"
 	var nearby: String = game.closest_station()
@@ -579,6 +642,7 @@ func _render_craft() -> void:
 		stage_label = "2/4  PREPARE MATERIALS"
 	elif craft_step == "detail":
 		stage_label = "1/4  INSPECT ITEM"
+	_render_craft_steps()
 	subtitle.text = "%s    •    %s" % [stage_label, ("AT " + nearby.capitalize()) if nearby != "" else "BROWSE RECIPES FROM ANYWHERE"]
 	for station_id in ["workbench", "forge", "loom", "campfire", "enchanting"]:
 		var tab := Button.new()
@@ -636,7 +700,11 @@ func _render_craft() -> void:
 		name_label.anchor_bottom = 0.48
 		choose.add_child(name_label)
 		var material_label := Label.new()
-		material_label.text = "  •  ".join(requirements)
+		var affordable_count: int = 0
+		for requirement in ingredients:
+			if int(game.inventory.get(str(requirement), 0)) >= int(ingredients[requirement]):
+				affordable_count += 1
+		material_label.text = "MATERIALS  %d / %d AVAILABLE" % [affordable_count, ingredients.size()]
 		material_label.add_theme_font_size_override("font_size", 15)
 		material_label.add_theme_color_override("font_color", foreground)
 		material_label.clip_text = true
@@ -647,7 +715,7 @@ func _render_craft() -> void:
 		material_label.anchor_bottom = 0.85
 		choose.add_child(material_label)
 		var badge := Label.new()
-		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "OWNED" if owned_unique else "READY" if affordable else "NEEDS MATERIALS"
+		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "OWNED" if owned_unique else "READY" if affordable else "MISSING"
 		badge.add_theme_font_size_override("font_size", 13)
 		badge.add_theme_color_override("font_color", Color("#355b31") if affordable and not owned_unique else Color("#873b2c"))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -770,10 +838,9 @@ func _render_prepare() -> void:
 		var available: bool = owned >= needed
 		var slot := Button.new()
 		slot.custom_minimum_size = Vector2(0, 56)
-		SKIN.apply_button(slot, "parchment_light")
+		SKIN.apply_button(slot, "wood_selected" if loaded_now else "parchment_light")
 		slot.disabled = not available or game.owns_unique(product_id)
-		slot.text = ("LOADED   " if loaded_now else "TAP TO LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
-		slot.modulate = Color("b7e4b6") if loaded_now else Color.WHITE if available else Color("dba9a3")
+		slot.text = ("✓ LOADED   " if loaded_now else "LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
 		slot.pressed.connect(_toggle_ingredient.bind(id))
 		var row := HBoxContainer.new()
 		details.add_child(row)
