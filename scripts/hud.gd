@@ -35,6 +35,9 @@ var quest_toggle: Button
 var context_prompt_frame: Panel
 var context_is_actionable: bool = false
 var objective_is_complete: bool = false
+var gesture_hint_timeout: float = 8.0
+var tool_gesture_hint: Label
+var camera_gesture_hint: Label
 var quest_detail: Label
 var quest_detail_back: Panel
 var quest_expanded: bool = false
@@ -199,6 +202,20 @@ func _ready() -> void:
 	smart_button = _action("interact", "INTERACT", 0.895, 0.740, 0.986, 0.941, "round")
 	smart_button.name = "Action_interact"
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Always-visible tiny upward cue retains the slider affordance after
+	# temporary tutorial text disappears; never intercepts touch gestures.
+	var chevron := Label.new()
+	chevron.name = "ToolSwipeChevron"
+	chevron.text = "↑"
+	chevron.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chevron.add_theme_color_override("font_color", SKIN.GOLD)
+	chevron.add_theme_font_size_override("font_size", 17)
+	chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	smart_button.add_child(chevron)
+	chevron.anchor_left = 0.76
+	chevron.anchor_right = 0.97
+	chevron.anchor_top = 0.02
+	chevron.anchor_bottom = 0.26
 	var swipe_hint := Label.new()
 	swipe_hint.name = "QuickToolGestureHint"
 	swipe_hint.text = "HOLD ↑ TOOLS"
@@ -207,6 +224,7 @@ func _ready() -> void:
 	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
 	swipe_hint.add_theme_font_size_override("font_size", 13)
 	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tool_gesture_hint = swipe_hint
 	root.add_child(swipe_hint)
 	_anchors(swipe_hint, 0.890, 0.696, 0.990, 0.740)
 	_build_smart_tray()
@@ -388,6 +406,7 @@ func _make_camera_drag_hint() -> void:
 	var hint_label: Label = _label("HOLD WORLD → ORBIT", 14, Color("#f7dc9c"), 0.768, 0.307, 0.987, 0.348)
 	hint_label.name = "CameraDragHint"
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	camera_gesture_hint = hint_label
 
 func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
@@ -733,6 +752,13 @@ func _update_context_prompt(helper: String) -> void:
 	hint.visible = show_prompt
 
 func _process(delta: float) -> void:
+	if gesture_hint_timeout > 0.0:
+		gesture_hint_timeout = maxf(0.0, gesture_hint_timeout - delta)
+		if gesture_hint_timeout <= 0.0:
+			if tool_gesture_hint != null:
+				tool_gesture_hint.visible = false
+			if camera_gesture_hint != null:
+				camera_gesture_hint.visible = false
 	if (smart_hold_finger >= 0 or smart_hold_mouse) and not smart_tray_open:
 		smart_hold_seconds += delta
 		if smart_hold_seconds >= 0.34:
