@@ -128,11 +128,13 @@ func _make_screen() -> void:
 
 	_splash = SPLASH_SCENE.instantiate() as Label
 	_splash.name = "UpdateSplash"
+	# The standalone slogan scene had a 350px minimum width; remove it
+	# before its first size assignment so the yellow PNG stays aligned.
+	_splash.custom_minimum_size = Vector2.ZERO
+	_canvas.add_child(_splash)
 	_splash.position = Vector2(833, 73) if _approved_art else Vector2(850, 92)
 	_splash.size = Vector2(305, 171) if _approved_art else Vector2(365, 135)
 	_splash.pivot_offset = _splash.size * 0.5
-	_splash.custom_minimum_size = Vector2.ZERO
-	_canvas.add_child(_splash)
 	if _reduced_motion:
 		_splash.animate_bounce = false
 
