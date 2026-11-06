@@ -44,7 +44,7 @@ func _run() -> void:
 	_check(player.tool_mesh == null and player.sword_mesh.visible, "Switch back restores the sword")
 	_check(game.stations.has("forge"), "Forge remains a playable existing crafting station")
 	var forge: Node3D = game.stations["forge"] as Node3D
-	_check(forge != null and forge.effect != null, "Redesigned forge has emissive fire")
+	_check(forge != null and forge.get("effect") != null, "Redesigned forge has emissive fire")
 	var props = load("res://scripts/voxel/voxel_props.gd")
 	_check(props.tree().mesh != null and props.pine_tree().mesh != null, "Original voxel trees and pine variation mesh successfully")
 	game.queue_free()
