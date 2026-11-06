@@ -28,6 +28,13 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if game == null or not is_instance_valid(game):
 		return
+	# Until the unified dungeon-map pass, use the original room graph HUD
+	# during an instanced dungeon instead of drawing false ocean out of bounds.
+	var dungeon_manager: Node = game.get_node_or_null("Dungeons")
+	var in_dungeon: bool = dungeon_manager != null and dungeon_manager.get("active_instance") != null
+	visible = not in_dungeon
+	if in_dungeon:
+		return
 	var player: Node3D = game.get("hero") as Node3D
 	if player == null:
 		return
