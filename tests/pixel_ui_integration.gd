@@ -42,6 +42,16 @@ func _run() -> void:
 	var image: Texture2D = (test_button.get_theme_stylebox("pressed") as StyleBoxTexture).texture
 	verify(image != null and image.resource_path.ends_with("wood_pressed.png"), "Pressed state uses the separate pressed PNG")
 	test_button.queue_free()
+	var selected_tab := Button.new()
+	skin.apply_button(selected_tab, "wood_selected")
+	var selected_style: StyleBox = selected_tab.get_theme_stylebox("normal")
+	verify(selected_style is StyleBoxTexture, "Selected station tab now uses a real unique frame")
+	if selected_style is StyleBoxTexture:
+		verify((selected_style as StyleBoxTexture).texture.resource_path.ends_with("transparent_wood_frame.png"), "Selected state is visually distinct from plain wood")
+	selected_tab.queue_free()
+	for state_id in ["ingredient_ready", "ingredient_missing"]:
+		var state_asset: Texture2D = load("res://assets/ui/icons/" + state_id + ".svg") as Texture2D
+		verify(state_asset != null and state_asset.get_size() == Vector2(48, 48), "Ingredient availability includes individual original icon: " + state_id)
 	var game_scene: PackedScene = load("res://scenes/main.tscn")
 	verify(game_scene != null, "Game scene remains valid")
 	if game_scene == null:
@@ -83,6 +93,7 @@ func _run() -> void:
 	verify(game.menu.loaded.size() == 2, "Materials individually marked as loaded")
 	game.menu._start_craft()
 	verify(not game.crafting.is_empty(), "Prepare Materials starts existing manual crafting")
+	verify(game.menu.progress_bar != null and game.menu.progress_bar.get_theme_stylebox("fill") is StyleBoxFlat, "Craft progress has visible styled green fill")
 	verify(int(game.inventory.get("wood", 0)) == 7, "Starting production does not prematurely consume ingredients")
 	game._update_crafting(10.0)
 	verify(int(game.inventory.get("spear", 0)) == 0, "Timer cannot produce equipment without work actions")
