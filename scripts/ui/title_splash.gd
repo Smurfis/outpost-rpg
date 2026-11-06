@@ -45,6 +45,7 @@ func _ready() -> void:
 		_hero_texture = TextureRect.new()
 		_hero_texture.name = "HandLetteredHero"
 		_hero_texture.texture = load(HERO_ART) as Texture2D
+		_hero_texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_hero_texture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_hero_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hero_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
