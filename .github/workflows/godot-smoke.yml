@@ -165,6 +165,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/island_smart_action_camera_knockback.gd 2>&1 | tee island-ux.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ISLAND UX:' island-ux.log; then exit 1; fi
           grep -q "ISLAND UX RESULT: 0 failures" island-ux.log
+      - name: Verify smooth movement, independent hold-orbit, enchantment and unlocked skills
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/rpg_movement_enchant_abilities.gd 2>&1 | tee rpg-movement.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL RPG VERTICAL:' rpg-movement.log; then exit 1; fi
+          grep -q "RPG VERTICAL RESULT: 0 failures" rpg-movement.log
       - name: Verify actual beach elevation, sand atlas and sea-depth safety
         run: |
           set -o pipefail

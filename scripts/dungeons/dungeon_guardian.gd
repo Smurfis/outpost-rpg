@@ -1,4 +1,5 @@
 extends CharacterBody3D
+const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 ## Lightweight dungeon guardian; compatible with Outpost's existing melee targeting.
 const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 var hero: CharacterBody3D
@@ -10,6 +11,12 @@ var visual: Node3D
 var quality: int = 0
 var damage_multiplier: float = 1.0
 var display_name: String = "Crypt Guardian"
+@export var max_climb_height: float = 1.05
+@export var can_fly: bool = false
+@export var flight_height: float = 1.8
+var visual_step_offset: Vector3 = Vector3.ZERO
+var burn_left: float = 0.0
+var burn_tick: float = 0.0
 
 func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) -> void:
 	hero = player
@@ -77,6 +84,14 @@ func _piece(at: Vector3, size: Vector3, tint: Color) -> void:
 func _physics_process(delta: float) -> void:
 	if not alive or hero == null or not is_instance_valid(hero):
 		return
+	if burn_left > 0.0:
+		burn_left = maxf(0.0, burn_left - delta)
+		burn_tick += delta
+		if burn_tick >= 1.0:
+			burn_tick -= 1.0
+			receive_damage(3.0)
+			if not alive:
+				return
 	var to_player: Vector3 = hero.global_position - global_position
 	to_player.y = 0.0
 	var distance: float = to_player.length()
@@ -85,14 +100,30 @@ func _physics_process(delta: float) -> void:
 		direction = to_player.normalized()
 	velocity.x = direction.x * (2.0 + float(quality) * 0.24)
 	velocity.z = direction.z * (2.0 + float(quality) * 0.24)
-	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
+	var grounded: bool = is_on_floor()
+	if can_fly:
+		velocity.y = clampf((hero.global_position.y + flight_height - global_position.y) * 2.5, -4.0, 4.0)
+	else:
+		velocity.y = -0.1 if grounded else velocity.y - 18.0 * delta
 	move_and_slide()
+	if not can_fly and grounded and is_on_wall() and direction.length_squared() > 0.01:
+		var before: Vector3 = global_position
+		if VOXEL_STEP.try_step(self, direction * (2.0 + float(quality) * 0.24) * delta, max_climb_height) > 0.0:
+			visual_step_offset += before - global_position
+			visual_step_offset = visual_step_offset.limit_length(1.4)
+	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
+	visual.position = visual_step_offset
 	if direction.length() > 0.02:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
 	cooldown = maxf(0.0, cooldown - delta)
 	if distance < 1.75 and cooldown <= 0.0:
 		cooldown = 1.7
 		hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier)
+
+func ignite(seconds: float = 4.0) -> void:
+	if alive:
+		burn_left = maxf(burn_left, clampf(seconds, 0.0, 12.0))
+		burn_tick = 0.0
 
 func receive_damage(amount: float) -> void:
 	if not alive:

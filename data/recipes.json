@@ -305,5 +305,21 @@
       "linen": 3,
       "coal": 2
     }
+  },
+  {
+    "id": "fiery_weapon",
+    "name": "Fiery Weapon",
+    "result": "fiery_weapon",
+    "amount": 1,
+    "station": "enchanting",
+    "seconds": 3.2,
+    "strokes": 5,
+    "category": "Enchanting",
+    "desc": "Imbues your equipped spear or iron blade with burning strikes. Requires level 3, consumes 1 character level and materials.",
+    "ingredients": {
+      "coal": 3,
+      "iron_ingot": 2,
+      "herbs": 2
+    }
   }
 ]

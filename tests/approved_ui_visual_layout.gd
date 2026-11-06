@@ -42,12 +42,14 @@ func _run() -> void:
 	for key in ["bag", "craft", "gear"]:
 		verify(hud.get_node_or_null("Action_" + key) != null, "Hotbar real button " + key)
 	verify(hud.get_node_or_null("TorchQuickSlot") != null, "Offhand torch remains accessible")
-	for key in ["attack", "gather", "heal"]:
+	for key in ["skill_1", "skill_2", "skill_3", "potion", "consumable", "interact"]:
 		var action: Button = hud.get_node_or_null("Action_" + key) as Button
-		verify(action != null, "Touch action " + key)
+		verify(action != null, "New radial action " + key)
 		if action != null:
 			var shape: StyleBox = action.get_theme_stylebox("normal")
 			verify(shape is StyleBoxFlat and (shape as StyleBoxFlat).corner_radius_top_left >= 60, "Round framed " + key)
+	verify(hud.get_node_or_null("Action_attack") == null and hud.get_node_or_null("Action_gather") == null, "No redundant attack or gather tiles")
+	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character level XP bar spans lower screen")
 	var coop: Button = hud.get_node_or_null("CoopEntryButton") as Button
 	verify(coop != null and coop.pressed.is_connected(game.hud._open_coop), "Co-op remains usable")
 	game.hud.render_status(67.0, {"wood": 8, "stone": 5, "hide": 3, "coins": 12}, 52, 0, "spear", "Gather more wood", "Nearby: a tree")

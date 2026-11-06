@@ -8,6 +8,23 @@ var status: Label
 var health_numbers: Label
 var bag_weight_label: Label
 var camera_drag_finger: int = -1
+var camera_hold_seconds: float = 0.0
+var camera_hold_ready: bool = false
+var camera_hold_origin: Vector2 = Vector2.ZERO
+var xp_level_label: Label
+var quick_buttons: Dictionary = {}
+var quick_hold_finger: int = -1
+var quick_hold_mouse: bool = false
+var quick_hold_seconds: float = 0.0
+var quick_hold_kind: String = ""
+var quick_hold_origin: Vector2 = Vector2.ZERO
+var quick_tray: Panel
+var quick_tray_list: VBoxContainer
+var quick_tray_open: bool = false
+var quick_options: Array[String] = []
+var quick_selected: int = -1
+var quick_ignore_mouse_until: int = 0
+var quick_icon_cache: Dictionary = {}
 var hero_detail: Label
 var clock_label: Label
 var torch_button: Button
@@ -78,10 +95,13 @@ func _ready() -> void:
 	health_bar = _meter(0.105, 0.082, 0.252, 0.107, Color("#d74c43"))
 	health_numbers = _label("HP 100 / 100", 15, Color("#fff1db"), 0.117, 0.081, 0.244, 0.107)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Experience is an absolute total in gameplay, not a level meter.
-	# Keep the reference shape available but never show invented %100 progress.
-	xp_bar = _meter(0.105, 0.124, 0.252, 0.141, Color("#65b4e4"))
-	xp_bar.visible = false
+	# Level uses absolute experience, with persistent per-level progress.
+	# The long bottom bar follows MMO HUDs without stealing combat taps.
+	xp_bar = _meter(0.202, 0.966, 0.980, 0.995, Color("#a86ed7"))
+	xp_bar.name = "CharacterLevelXP"
+	xp_level_label = _label("LVL 1  •  XP 0 / 100", 15, Color("#fff2d1"), 0.211, 0.969, 0.972, 0.993)
+	xp_level_label.name = "CharacterLevelLabel"
+	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hero_detail = _label("XP 0  •  TRAINING BLADE", 15, Color("#edc98d"), 0.105, 0.121, 0.256, 0.164)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -150,41 +170,42 @@ func _ready() -> void:
 	_anchors(multiplayer_entry, 0.875, 0.033, 0.982, 0.100)
 	multiplayer_entry.pressed.connect(_open_coop)
 
-	# Live bottom hotbar. Every slot performs a real action, unlike a fake
-	# eight-slot inventory drawn behind the combat controls.
-	var hotbar: Panel = _panel(0.357, 0.819, 0.664, 0.959)
+	# Utility controls live above the playfield, not in a long bottom HUD.
+	var hotbar: Panel = _panel(0.711, 0.180, 0.988, 0.293)
 	hotbar.name = "FunctionalHotbar"
-	_action("bag", "BAG", 0.371, 0.835, 0.430, 0.940, "slot")
-	_action("craft", "CRAFT", 0.442, 0.835, 0.501, 0.940, "slot")
-	torch_button = _action("torch", "TORCH", 0.513, 0.835, 0.572, 0.940, "slot")
-	_action("gear", "GEAR", 0.584, 0.835, 0.643, 0.940, "slot")
-
-	# Thumb ergonomics: the large primary action is on the outer edge.
-	# Existing Attack/Gather buttons remain live secondary fallbacks.
-	_action("heal", "HEAL", 0.685, 0.835, 0.748, 0.940, "round")
-	_action("gather", "GATHER", 0.758, 0.797, 0.816, 0.923, "round")
-	_action("attack", "ATTACK", 0.820, 0.779, 0.887, 0.923, "round")
-	smart_button = _action("interact", "INTERACT", 0.895, 0.739, 0.986, 0.941, "round")
+	_action("bag", "BAGS", 0.720, 0.191, 0.779, 0.283, "slot")
+	_action("craft", "CRAFT", 0.785, 0.191, 0.844, 0.283, "slot")
+	torch_button = _action("torch", "TORCH", 0.850, 0.191, 0.909, 0.283, "slot")
+	_action("gear", "GEAR", 0.915, 0.191, 0.976, 0.283, "slot")
+	# The single context button replaces redundant ATTACK and GATHER tiles.
+	# Three real weapon-mastery skill holders arc around its upper-left side.
+	quick_buttons["skill_1"] = _action("skill_1", "POWER", 0.819, 0.600, 0.881, 0.712, "round")
+	quick_buttons["skill_2"] = _action("skill_2", "CLEAVE", 0.755, 0.667, 0.814, 0.779, "round")
+	quick_buttons["skill_3"] = _action("skill_3", "SUNDER", 0.705, 0.760, 0.764, 0.870, "round")
+	# Both utility radials start empty. Tap uses the equipped item; hold and
+	# slide upwards chooses among actually owned consumables.
+	quick_buttons["consumable"] = _action("consumable", "FOOD", 0.773, 0.852, 0.830, 0.947, "round")
+	quick_buttons["potion"] = _action("potion", "POTION", 0.835, 0.842, 0.894, 0.943, "round")
+	for key in ["consumable", "potion"]:
+		(quick_buttons[key] as Button).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	smart_button = _action("interact", "INTERACT", 0.895, 0.740, 0.986, 0.941, "round")
 	smart_button.name = "Action_interact"
-	# Handle hold/swipe with finger identity in _input; a normal Button
-	# release here would fire a second, unintended interaction.
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var swipe_hint := Label.new()
 	swipe_hint.name = "QuickToolGestureHint"
-	swipe_hint.text = "HOLD  ↑  TOOLS"
+	swipe_hint.text = "HOLD ↑ TOOLS"
 	swipe_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	swipe_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
-	swipe_hint.add_theme_color_override("font_outline_color", Color("#241619"))
-	swipe_hint.add_theme_constant_override("outline_size", 2)
-	swipe_hint.add_theme_font_size_override("font_size", 14)
+	swipe_hint.add_theme_font_size_override("font_size", 13)
 	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(swipe_hint)
-	_anchors(swipe_hint, 0.882, 0.694, 0.987, 0.737)
+	_anchors(swipe_hint, 0.890, 0.696, 0.990, 0.740)
 	_build_smart_tray()
-	var hint_frame: Panel = _panel(0.347, 0.747, 0.678, 0.807)
+	_build_quick_tray()
+	var hint_frame: Panel = _panel(0.344, 0.206, 0.695, 0.264)
 	hint_frame.name = "ContextPrompt"
-	hint = _label("Explore the forest", 16, SKIN.CREAM, 0.363, 0.753, 0.664, 0.800)
+	hint = _label("Explore the forest", 16, SKIN.CREAM, 0.358, 0.213, 0.681, 0.256)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hint.clip_text = true
@@ -299,7 +320,8 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	art_icon.name = "ActionIcon"
 	var icon_path: String = "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
-		icon_path = "res://assets/icons/" + ("shield" if key == "gear" else key) + ".svg"
+		var icon_id: String = "shield" if key == "gear" else "heart" if key == "potion" else "meal" if key == "consumable" else "attack" if key.begins_with("skill_") else key
+		icon_path = "res://assets/icons/" + icon_id + ".svg"
 	art_icon.texture = load(icon_path) as Texture2D
 	art_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	art_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -338,16 +360,18 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.pressed.connect(_bag)
 	elif key == "gear":
 		button.pressed.connect(_gear)
-	elif key == "interact":
-		pass # Dedicated short-tap / hold-and-slide gesture handler.
+	elif key.begins_with("skill_"):
+		button.pressed.connect(_use_skill.bind(int(key.trim_prefix("skill_")) - 1))
+	elif key in ["consumable", "potion", "interact"]:
+		pass # Dedicated slot / short-tap / hold-and-slide gesture handlers.
 	else:
-		button.pressed.connect(_heal)
+		pass
 	return button
 
 func _make_camera_drag_hint() -> void:
 	# Camera movement belongs to the player's free finger on empty world;
 	# the old rotated-arrow UI took important Android screen space.
-	var hint_label: Label = _label("DRAG WORLD TO ROTATE", 14, Color("#f7dc9c"), 0.790, 0.123, 0.985, 0.160)
+	var hint_label: Label = _label("HOLD WORLD → ORBIT", 14, Color("#f7dc9c"), 0.768, 0.307, 0.987, 0.348)
 	hint_label.name = "CameraDragHint"
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -355,8 +379,161 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	# Reserve joystick, hotbar, co-op, quest, top HUD and smart-action areas.
 	# Central visible world accepts drag even while movement uses finger 0.
-	return pos.x >= screen.x * 0.26 and pos.x <= screen.x * 0.80 and pos.y >= screen.y * 0.21 and pos.y <= screen.y * 0.70
+	return pos.x >= screen.x * 0.26 and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
 
+
+func _build_quick_tray() -> void:
+	quick_tray = Panel.new()
+	quick_tray.name = "ConsumableHoldSlider"
+	quick_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quick_tray.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	root.add_child(quick_tray)
+	_anchors(quick_tray, 0.650, 0.527, 0.888, 0.824)
+	quick_tray.visible = false
+	quick_tray_list = VBoxContainer.new()
+	quick_tray_list.name = "OwnedConsumableChoices"
+	quick_tray_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quick_tray.add_child(quick_tray_list)
+	quick_tray_list.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	quick_tray_list.offset_left = 6
+	quick_tray_list.offset_top = 6
+	quick_tray_list.offset_right = -6
+	quick_tray_list.offset_bottom = -6
+
+func _open_quick_tray() -> void:
+	if quick_tray_open or game == null or quick_hold_kind == "":
+		return
+	quick_options = game.available_quick_consumables(quick_hold_kind)
+	if quick_options.is_empty():
+		toast("Craft a %s first, then hold to assign it." % ("tonic" if quick_hold_kind == "potion" else "meal or stew"))
+		return
+	quick_selected = -1
+	for child in quick_tray_list.get_children():
+		quick_tray_list.remove_child(child)
+		child.queue_free()
+	for item in quick_options:
+		var choice := Label.new()
+		choice.text = "  " + item.capitalize() + "  ×" + str(int(game.inventory.get(item, 0)))
+		choice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		choice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		choice.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		choice.add_theme_font_size_override("font_size", 18)
+		choice.add_theme_color_override("font_color", SKIN.CREAM)
+		choice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		quick_tray_list.add_child(choice)
+	quick_tray_open = true
+	quick_tray.visible = true
+
+func _drag_quick_slider(pos: Vector2) -> void:
+	if not quick_tray_open and pos.y < quick_hold_origin.y - 28.0:
+		_open_quick_tray()
+	if quick_tray_open and not quick_options.is_empty() and pos.y < quick_hold_origin.y - 20.0:
+		var bounds: Rect2 = quick_tray.get_global_rect()
+		var fraction: float = clampf((pos.y - bounds.position.y) / maxf(1.0, bounds.size.y), 0.0, 0.999)
+		quick_selected = int(floorf(fraction * float(quick_options.size())))
+		for i in range(quick_tray_list.get_child_count()):
+			var label: Label = quick_tray_list.get_child(i) as Label
+			label.add_theme_color_override("font_color", SKIN.GOLD if i == quick_selected else SKIN.CREAM)
+
+func _finish_quick_hold() -> void:
+	var kind: String = quick_hold_kind
+	var selected: int = quick_selected
+	var options: Array[String] = quick_options.duplicate()
+	var was_tray: bool = quick_tray_open
+	_cancel_quick_hold()
+	if game == null:
+		return
+	if was_tray:
+		if selected >= 0 and selected < options.size() and game.set_quick_consumable(kind, options[selected]):
+			toast("Equipped %s to %s radial." % [options[selected].capitalize(), kind])
+	elif not game.use_quick_consumable(kind):
+		toast("Hold and drag upward to equip an owned %s." % kind)
+	_refresh_quick_radials()
+
+func _cancel_quick_hold() -> void:
+	quick_hold_finger = -1
+	quick_hold_mouse = false
+	quick_hold_kind = ""
+	quick_hold_seconds = 0.0
+	quick_tray_open = false
+	quick_selected = -1
+	if quick_tray != null:
+		quick_tray.visible = false
+
+func _handle_quick_input(event: InputEvent) -> bool:
+	if game == null or quick_buttons.is_empty():
+		return false
+	if (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible):
+		_cancel_quick_hold()
+		return false
+	if event is InputEventScreenTouch:
+		if event.pressed and quick_hold_finger < 0:
+			for key in ["potion", "consumable"]:
+				var button: Button = quick_buttons[key] as Button
+				if button.get_global_rect().grow(4.0).has_point(event.position):
+					quick_hold_finger = event.index
+					quick_hold_kind = key
+					quick_hold_origin = event.position
+					quick_hold_seconds = 0.0
+					return true
+		if not event.pressed and event.index == quick_hold_finger:
+			quick_ignore_mouse_until = Time.get_ticks_msec() + 220
+			_finish_quick_hold()
+			return true
+	elif event is InputEventScreenDrag and event.index == quick_hold_finger:
+		_drag_quick_slider(event.position)
+		return true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < quick_ignore_mouse_until:
+			return false
+		if event.pressed and quick_hold_finger < 0 and not quick_hold_mouse:
+			for key in ["potion", "consumable"]:
+				if (quick_buttons[key] as Button).get_global_rect().grow(4.0).has_point(event.position):
+					quick_hold_mouse = true
+					quick_hold_kind = key
+					quick_hold_origin = event.position
+					quick_hold_seconds = 0.0
+					return true
+		if not event.pressed and quick_hold_mouse:
+			_finish_quick_hold()
+			return true
+	elif event is InputEventMouseMotion and quick_hold_mouse:
+		_drag_quick_slider(event.position)
+		return true
+	return false
+
+func _refresh_quick_radials() -> void:
+	if game == null:
+		return
+	for i in range(3):
+		var key: String = "skill_%d" % (i + 1)
+		var button: Button = quick_buttons.get(key) as Button
+		if button == null:
+			continue
+		var unlocked: bool = i < game.unlocked_skill_slots()
+		var skill: String = ["power_strike", "cleave", "sundering_blow"][i]
+		var time_left: float = float(game.skill_cooldowns.get(skill, 0.0))
+		button.disabled = not unlocked or time_left > 0.0
+		var label: Label = button.get_node_or_null("ActionLabel") as Label
+		if label != null:
+			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["POWER", "CLEAVE", "SUNDER"][i] if unlocked else "LOCK"
+	for kind in ["potion", "consumable"]:
+		var button: Button = quick_buttons.get(kind) as Button
+		if button == null:
+			continue
+		var item: String = str(game.quick_slots.get(kind, ""))
+		if int(game.inventory.get(item, 0)) <= 0:
+			item = ""
+		var label: Label = button.get_node_or_null("ActionLabel") as Label
+		if label != null:
+			label.text = "EMPTY" if item == "" else item.to_upper()
+		button.modulate = Color("#b9afae") if item == "" else Color.WHITE
+		if quick_icon_cache.get(kind, "-") != item:
+			quick_icon_cache[kind] = item
+			var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
+			if art != null:
+				var icon_id: String = item if item != "" else "heart" if kind == "potion" else "meal"
+				art.texture = load("res://assets/icons/" + icon_id + ".svg") as Texture2D
 
 func _build_smart_tray() -> void:
 	smart_tray = Panel.new()
@@ -525,6 +702,14 @@ func _process(delta: float) -> void:
 		smart_hold_seconds += delta
 		if smart_hold_seconds >= 0.34:
 			_open_smart_tray()
+	if camera_drag_finger >= 0 and not camera_hold_ready:
+		camera_hold_seconds += delta
+		if camera_hold_seconds >= 0.82:
+			camera_hold_ready = true
+	if (quick_hold_finger >= 0 or quick_hold_mouse) and not quick_tray_open:
+		quick_hold_seconds += delta
+		if quick_hold_seconds >= 0.36:
+			_open_quick_tray()
 	_position_stick()
 	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0
 	if toast_time > 0.0:
@@ -547,15 +732,27 @@ func _input(event: InputEvent) -> void:
 	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
 		_reset_touch()
 		return
+	if _handle_quick_input(event):
+		return
 	if event is InputEventScreenTouch and game != null:
 		if event.pressed and camera_drag_finger < 0 and event.index != finger and _can_start_camera_drag(event.position):
 			camera_drag_finger = event.index
+			camera_hold_seconds = 0.0
+			camera_hold_ready = false
+			camera_hold_origin = event.position
 			return
 		elif not event.pressed and event.index == camera_drag_finger:
 			camera_drag_finger = -1
+			camera_hold_seconds = 0.0
+			camera_hold_ready = false
 			return
 	elif event is InputEventScreenDrag and event.index == camera_drag_finger and game != null:
-		game.drag_camera(event.screen_relative.x)
+		if camera_hold_ready:
+			game.drag_camera(event.screen_relative.x)
+		elif event.position.distance_to(camera_hold_origin) > 26.0:
+			# Early movement is not an orbit; this prevents accidental
+			# camera turns while interacting with the world.
+			camera_drag_finger = -1
 		return
 	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):
@@ -581,7 +778,10 @@ func _input(event: InputEvent) -> void:
 
 func _reset_touch() -> void:
 	_cancel_smart_hold()
+	_cancel_quick_hold()
 	camera_drag_finger = -1
+	camera_hold_seconds = 0.0
+	camera_hold_ready = false
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
@@ -599,10 +799,13 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 	if bag_weight_label != null and game != null:
 		bag_weight_label.text = "BAG  %.1f / %.1f  %s" % [game.bag_load(), game.bag_capacity(), "★".repeat(game.equipped_bag_stars())]
 		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if game.bag_load() >= game.bag_capacity() else Color("#e3b75d"))
-	hero_detail.text = "XP %d  •  %s" % [xp, weapon.replace("_", " ").to_upper()]
+	hero_detail.text = "MASTERY %d  •  %s" % [game.mastery_rank(weapon), weapon.replace("_", " ").to_upper()] if game != null else weapon
+	if game != null and xp_level_label != null:
+		var level_data: Dictionary = game.level_state()
+		xp_bar.value = float(level_data.get("current", 0)) * 100.0 / float(level_data.get("required", 100))
+		xp_level_label.text = "LEVEL %d     %d / %d XP" % [int(level_data.get("level", 1)), int(level_data.get("current", 0)), int(level_data.get("required", 100))]
+		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
-	if heal_button != null:
-		heal_button.disabled = int(inventory.get("meal", 0)) <= 0
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:
@@ -654,5 +857,6 @@ func _bag() -> void:
 	game.show_inventory()
 func _gear() -> void:
 	game.show_equipment()
-func _heal() -> void:
-	game.use_meal()
+func _use_skill(index: int) -> void:
+	if game != null:
+		game.use_weapon_skill(index)

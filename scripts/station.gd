@@ -35,6 +35,9 @@ func _block(size: Vector3, at: Vector3, tint: Color) -> MeshInstance3D:
 				side_tile = 12
 				if tint.v < 0.40:
 					top_tile = 15
+			"enchanting":
+				top_tile = 13
+				side_tile = 12
 			"loom":
 				top_tile = 11
 				side_tile = 8
@@ -107,6 +110,15 @@ func _build() -> void:
 				_block(Vector3(0.038, 1.3, 0.045), Vector3(-1.03 + float(i) * 0.17, 1.28, 0.05), Color("d8d1b2"))
 			effect = _block(Vector3(1.92, 0.52, 0.12), Vector3(0, 1.04, 0.2), Color("7b9e88"))
 			_label("WEAVING LOOM | [CRAFT]", Color("d9dfb4"))
+		"enchanting":
+			_block(Vector3(2.55, 0.36, 1.8), Vector3(0, 0.87, 0), Color("#535075"))
+			for x in [-0.97, 0.97]:
+				for z in [-0.59, 0.59]:
+					_block(Vector3(0.28, 0.78, 0.28), Vector3(x, 0.4, z), Color("#474256"))
+			effect = _block(Vector3(0.76, 0.18, 0.76), Vector3(0, 1.20, 0), Color("#ba82df"))
+			for x in [-0.83, 0.83]:
+				_block(Vector3(0.26, 0.76, 0.25), Vector3(x, 1.41, 0), Color("#e2b661"))
+			_label("ENCHANTING BENCH | [CRAFT]", Color("#e9b9fe"))
 		"campfire":
 			for i in range(8):
 				var a: float = TAU * float(i) / 8.0
@@ -136,7 +148,7 @@ func _process(delta: float) -> void:
 		var world: Node = get_parent()
 		var adventurer: Node3D = world.get("hero") as Node3D if world != null else null
 		station_label.visible = adventurer != null and Vector2(adventurer.global_position.x - global_position.x, adventurer.global_position.z - global_position.z).length_squared() < STATION_LABEL_RADIUS * STATION_LABEL_RADIUS
-	if effect != null and station_id in ["forge", "campfire"]:
+	if effect != null and station_id in ["forge", "campfire", "enchanting"]:
 		effect.scale.x = 1.0 + 0.06 * sin(time * 6.0)
 		effect.scale.z = 1.0 + 0.06 * sin(time * 6.0)
 	if activity > 0.0 and effect != null:

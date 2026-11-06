@@ -57,14 +57,15 @@ func _run() -> void:
 	verify(game.hud != null and game.menu != null, "HUD and crafting interface both initialise")
 	verify(game.hud.root.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Game HUD samples PNG pixels without smoothing")
 	verify(game.menu.shell.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Craft UI samples panels without smoothing")
-	var attack: Button = game.hud.root.get_node_or_null("Action_attack") as Button
-	verify(attack != null, "Attack touch button exists")
-	if attack != null:
-		var attack_skin: StyleBox = attack.get_theme_stylebox("normal")
-		verify(attack_skin is StyleBoxFlat and (attack_skin as StyleBoxFlat).corner_radius_top_left >= 60, "Attack action uses the approved circular gold-ring holder")
-		var icon: TextureRect = attack.get_child(0) as TextureRect
-		verify(icon != null and icon.texture != null and icon.texture.resource_path.ends_with("attack.png"), "Attack action shows original PNG icon")
-		verify(attack.size.x >= 85 and attack.size.y >= 85, "Attack button is large enough to tap at 1280x720")
+	var interact: Button = game.hud.root.get_node_or_null("Action_interact") as Button
+	verify(interact != null, "Single large smart-interaction touch button exists")
+	if interact != null:
+		var interact_skin: StyleBox = interact.get_theme_stylebox("normal")
+		verify(interact_skin is StyleBoxFlat and (interact_skin as StyleBoxFlat).corner_radius_top_left >= 60, "Smart action keeps circular gold-ring holder")
+		var icon: TextureRect = interact.get_child(0) as TextureRect
+		verify(icon != null and icon.texture != null, "Smart-interact button displays graphic icon")
+		verify(interact.size.x >= 85 and interact.size.y >= 85, "Smart interaction is finger-sized")
+	verify(game.hud.root.get_node_or_null("Action_attack") == null, "Redundant attack tile removed")
 	var start_mode: String = str(game.menu.craft_step)
 	verify(start_mode == "browse", "Crafting begins on recipe browser")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)

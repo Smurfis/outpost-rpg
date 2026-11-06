@@ -27,6 +27,11 @@ var combat_phase: float = 0.0
 var gather_phase: float = 0.0
 var walking_phase: float = 0.0
 var walk_amount: float = 0.0
+# Collision reaches the next solid tile immediately, but the visible model
+# catches up over subsequent frames instead of popping one voxel at a time.
+var visual_step_offset: Vector3 = Vector3.ZERO
+var step_hop_remaining: float = 0.0
+const STEP_HOP_DURATION: float = 0.28
 var last_gather: String = ""
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
@@ -251,11 +256,18 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if auto_step_enabled and not modal_open and grounded_before_motion and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
+	# Interpolate the avatar rig separately from the physics capsule. The
+	# capsule must not tunnel through a ledge and the camera stays independent.
+	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-11.0 * delta))
+	step_hop_remaining = maxf(0.0, step_hop_remaining - delta)
+	var hop: float = 0.0
+	if step_hop_remaining > 0.0:
+		hop = sin((1.0 - step_hop_remaining / STEP_HOP_DURATION) * PI) * 0.20
 	walk_amount = move_toward(walk_amount, direction.length(), delta * 8.0)
 	if direction.length() > 0.05:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
 		walking_phase += delta * 10.6
-	visual.position.y = absf(sin(walking_phase)) * 0.06 * walk_amount
+	visual.position = visual_step_offset + Vector3.UP * (absf(sin(walking_phase)) * 0.06 * walk_amount + hop)
 	var step: float = sin(walking_phase) * 0.58 * walk_amount
 	left_leg.rotation.x = step
 	right_leg.rotation.x = -step
@@ -321,9 +333,16 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	var landing: Transform3D = original.translated(Vector3.UP * (rise + STEP_LANDING_TOLERANCE))
 	if test_move(landing, probe_motion):
 		return false
+	var previous: Vector3 = global_position
 	global_position = candidate + Vector3.UP * (rise + STEP_LANDING_TOLERANCE)
 	velocity.y = 0.0
 	apply_floor_snap()
+	# Preserve prior render-space pose; bridge the movement over several
+	# frames. Smaller half-height ledges get a brief stepping hop.
+	visual_step_offset += previous - global_position
+	visual_step_offset = visual_step_offset.limit_length(1.65)
+	if rise >= 0.24 and rise <= 0.68:
+		step_hop_remaining = STEP_HOP_DURATION
 	return true
 
 func apply_knockback(source: Vector3, force: float = 6.0) -> void:
