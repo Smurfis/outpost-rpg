@@ -195,6 +195,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/approved_ui_visual_layout.gd 2>&1 | tee approved-ui.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED UI:' approved-ui.log; then exit 1; fi
           grep -q "APPROVED UI RESULT: 0 failures" approved-ui.log
+      - name: Verify real Android HUD hitboxes, map and responsive menu spacing
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_hud_reflow.gd 2>&1 | tee hud-reflow.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD REFLOW:' hud-reflow.log; then exit 1; fi
+          grep -q "HUD REFLOW RESULT: 0 failures" hud-reflow.log
       - name: Verify imported PNG textures and complete crafting UI journey
         run: |
           set -o pipefail
