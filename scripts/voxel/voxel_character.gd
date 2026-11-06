@@ -15,6 +15,11 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 0.91, 0), Vector3(0.96, 0.18, 0.62), 8, 8)
 			PIXELS.box(st, Vector3(0, 0.91, -0.33), Vector3(0.18, 0.16, 0.05), 5, 5)
 			PIXELS.box(st, Vector3(0, 1.34, -0.29), Vector3(0.21, 0.30, 0.07), 11, 11)
+			# Raised shoulders and a square leather satchel strap add a readable
+			# adventurer silhouette at phone-camera distances.
+			PIXELS.box(st, Vector3(-0.52, 1.52, -0.01), Vector3(0.26, 0.26, 0.58), 11, 8)
+			PIXELS.box(st, Vector3(0.52, 1.52, -0.01), Vector3(0.26, 0.26, 0.58), 11, 8)
+			PIXELS.box(st, Vector3(-0.26, 1.35, -0.315), Vector3(0.13, 0.60, 0.055), 8, 8)
 		"adventurer_head":
 			# Pixel-sculpted face, dark hair and two square dark eyes (faces -Z).
 			PIXELS.box(st, Vector3(0, 0, 0), Vector3(0.61, 0.58, 0.56), 5, 5)
@@ -22,6 +27,13 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 0.22, -0.28), Vector3(0.60, 0.10, 0.10), 8, 8)
 			PIXELS.box(st, Vector3(-0.13, 0.01, -0.31), Vector3(0.10, 0.11, 0.05), 15, 15)
 			PIXELS.box(st, Vector3(0.13, 0.01, -0.31), Vector3(0.10, 0.11, 0.05), 15, 15)
+			# Irregular stepped fringe and small rosy cheeks make the face
+			# expressive while remaining a single simple voxel mesh.
+			PIXELS.box(st, Vector3(-0.20, 0.28, -0.23), Vector3(0.22, 0.13, 0.17), 8, 8)
+			PIXELS.box(st, Vector3(0.11, 0.31, -0.28), Vector3(0.29, 0.12, 0.15), 8, 8)
+			PIXELS.box(st, Vector3(-0.27, -0.07, -0.315), Vector3(0.08, 0.07, 0.035), 14, 14)
+			PIXELS.box(st, Vector3(0.27, -0.07, -0.315), Vector3(0.08, 0.07, 0.035), 14, 14)
+			PIXELS.box(st, Vector3(0.0, -0.12, -0.319), Vector3(0.06, 0.05, 0.045), 8, 8)
 		"adventurer_arm":
 			PIXELS.box(st, Vector3(0, -0.28, 0), Vector3(0.42, 0.61, 0.42), 2, 10)
 			PIXELS.box(st, Vector3(0, -0.12, 0), Vector3(0.49, 0.16, 0.48), 10, 10)
@@ -29,11 +41,14 @@ static func create_part(part_name: String) -> MeshInstance3D:
 		"adventurer_leg":
 			PIXELS.box(st, Vector3(0, -0.33, 0), Vector3(0.39, 0.73, 0.42), 10, 10)
 			PIXELS.box(st, Vector3(0, -0.69, -0.03), Vector3(0.42, 0.22, 0.49), 8, 8)
+			PIXELS.box(st, Vector3(0, -0.56, -0.14), Vector3(0.43, 0.11, 0.30), 11, 8)
 		"steel_sword":
 			# Matching pixel-atlas blade, gold crossguard and leather-wrapped grip.
 			# Blade points +Y locally; WeaponGrip aims it down/forward in-game.
 			PIXELS.box(st, Vector3(0, 0.74, 0), Vector3(0.20, 1.05, 0.12), 6, 4)
 			PIXELS.box(st, Vector3(0, 1.29, 0), Vector3(0.13, 0.20, 0.10), 4, 6)
+			PIXELS.box(st, Vector3(0, 0.80, -0.076), Vector3(0.065, 0.84, 0.035), 7, 7) # Steel fuller.
+			PIXELS.box(st, Vector3(0, 1.42, 0), Vector3(0.10, 0.10, 0.08), 6, 6) # Tiered tip.
 			PIXELS.box(st, Vector3(0, 0.18, 0), Vector3(0.62, 0.13, 0.20), 5, 8)
 			PIXELS.box(st, Vector3(0, -0.06, 0), Vector3(0.13, 0.41, 0.13), 8, 8)
 			PIXELS.box(st, Vector3(0, -0.29, 0), Vector3(0.25, 0.13, 0.22), 5, 8)
@@ -41,6 +56,9 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			# Chunky higher-tier blade with wider spine and brass guard.
 			PIXELS.box(st, Vector3(0, 0.75, 0), Vector3(0.29, 1.13, 0.14), 4, 6)
 			PIXELS.box(st, Vector3(0, 1.31, 0), Vector3(0.16, 0.16, 0.12), 6, 4)
+			PIXELS.box(st, Vector3(0, 0.72, -0.09), Vector3(0.085, 0.91, 0.045), 6, 6)
+			PIXELS.box(st, Vector3(-0.15, 1.04, 0), Vector3(0.08, 0.44, 0.13), 7, 4)
+			PIXELS.box(st, Vector3(0.15, 1.04, 0), Vector3(0.08, 0.44, 0.13), 7, 4)
 			PIXELS.box(st, Vector3(0, 0.17, 0), Vector3(0.74, 0.14, 0.22), 5, 8)
 			PIXELS.box(st, Vector3(0, -0.06, 0), Vector3(0.15, 0.41, 0.14), 8, 8)
 			PIXELS.box(st, Vector3(0, -0.30, 0), Vector3(0.25, 0.14, 0.24), 5, 8)
@@ -49,6 +67,8 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 0.63, 0), Vector3(0.13, 1.79, 0.13), 8, 8)
 			PIXELS.box(st, Vector3(0, 1.44, 0), Vector3(0.30, 0.40, 0.17), 6, 4)
 			PIXELS.box(st, Vector3(0, 1.68, 0), Vector3(0.17, 0.21, 0.14), 4, 6)
+			PIXELS.box(st, Vector3(-0.16, 1.37, 0), Vector3(0.11, 0.22, 0.15), 4, 7)
+			PIXELS.box(st, Vector3(0.16, 1.37, 0), Vector3(0.11, 0.22, 0.15), 4, 7)
 			PIXELS.box(st, Vector3(0, 0.26, 0), Vector3(0.42, 0.12, 0.19), 5, 8)
 		"hand_axe":
 			# Tool points along local +Y just like the sword; wooden grip and
