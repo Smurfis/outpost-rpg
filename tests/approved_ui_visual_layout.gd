@@ -83,6 +83,8 @@ func _run() -> void:
 	game.inventory["stone"] = 5
 	game.show_inventory()
 	verify(game.menu.current_page == "bag", "Bag opens from old gameplay API")
+	var bag_meter: ProgressBar = game.menu.station_tabs.find_child("BagCapacityMeter", true, false) as ProgressBar
+	verify(bag_meter != null and bag_meter.get_theme_stylebox("fill") is StyleBoxFlat, "Carry-weight meter uses a visible solid fill instead of transparent frame")
 	var grid: GridContainer = game.menu.recipes_list.get_node_or_null("BagItemGrid") as GridContainer
 	verify(grid != null and grid.columns == 4, "Bag uses compact 4-column sprite inventory")
 	if grid != null:
@@ -102,14 +104,18 @@ func _run() -> void:
 		verify(crafting.size.x <= 880.0 and crafting.size.y <= 600.0, "Craft modal pixel dimensions capped on wide phones")
 		verify(crafting.size.x < game.menu.shell.size.x * 0.75, "Craft leaves landscape visible on Android")
 	verify(game.menu.craft_step == "browse", "Craft stage begins on full-width recipe cards")
+	verify(game.menu.subtitle.text.contains("CHOOSE RECIPE"), "Workshop has concise staged navigation")
 	verify(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Single pane recipe browse")
 	var spear: Button = game.menu.recipes_list.get_node_or_null("Recipe_spear") as Button
 	verify(spear != null, "Forest Spear is a real item card")
 	if spear != null:
+		var name_text: Label = spear.get_child(1) as Label
+		verify(name_text != null and name_text.get_theme_color("font_color") == Color("#342416"), "Recipe names use dark ink against light parchment cards")
 		spear.pressed.emit()
 	verify(game.menu.craft_step == "detail" and not game.menu.left_scroll.visible, "Tap a card to inspect item")
 	game.menu._begin_prepare()
 	verify(game.menu.craft_step == "prepare", "Prepare step preserves real crafting state")
+	verify(game.menu.subtitle.text.contains("PREPARE MATERIALS"), "Preparation page communicates stage and purpose")
 	game.menu.close_page()
 	verify(not game.menu.visible, "Close returns to gameplay without modifying inventory")
 	game.queue_free()

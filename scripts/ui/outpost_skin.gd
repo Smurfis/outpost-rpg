@@ -133,6 +133,19 @@ static func apply_button(button: Button, kind: String = "wood") -> void:
 			(pressed as StyleBoxTexture).modulate_color = Color(0.86, 0.82, 0.73)
 		button.add_theme_stylebox_override("pressed", pressed)
 		button.add_theme_stylebox_override("disabled", _button_texture("wood", "disabled"))
+	elif kind == "wood_selected":
+		# The source art contains a transparent center and an outlined golden
+		# frame. Previous code silently used the ordinary wood button instead.
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			var selected_style: StyleBox = box("wood_selected")
+			if selected_style is StyleBoxTexture:
+				if state == "hover":
+					(selected_style as StyleBoxTexture).modulate_color = Color(1.0, 0.96, 0.72)
+				elif state == "pressed":
+					(selected_style as StyleBoxTexture).modulate_color = Color(0.86, 0.79, 0.60)
+				elif state == "disabled":
+					(selected_style as StyleBoxTexture).modulate_color = Color(0.55, 0.51, 0.44, 0.78)
+			button.add_theme_stylebox_override(state, selected_style)
 	else:
 		for state in ["normal", "hover", "pressed", "disabled"]:
 			button.add_theme_stylebox_override(state, _button_texture(textured_kind, state))
