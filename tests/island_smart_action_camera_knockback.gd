@@ -74,7 +74,11 @@ func _run() -> void:
 	orbit_drag.relative = Vector2(75.0, 0.0)
 	orbit_drag.screen_relative = Vector2(75.0, 0.0)
 	game.hud._input(orbit_drag)
-	verify(absf(game.camera_angle_target - angle_before) > 0.2, "Actual Android drag rotates camera continuously")
+	verify(is_equal_approx(game.camera_angle_target, angle_before), "Accidental immediate drag does not rotate before long hold")
+	game.hud._process(0.88)
+	verify(game.hud.camera_hold_ready, "Holding the world for 0.82 seconds enables camera orbit")
+	game.hud._input(orbit_drag)
+	verify(absf(game.camera_angle_target - angle_before) > 0.2, "Android long-hold then drag rotates camera continuously")
 	var release := InputEventScreenTouch.new()
 	release.index = 12
 	release.pressed = false
