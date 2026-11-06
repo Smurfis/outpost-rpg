@@ -17,7 +17,7 @@ func _seed() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 90210
 	# Design-space pixel origins: distant campfire on the left + logo's fire.
-	var origins: Array[Vector2] = [Vector2(407, 521), Vector2(714, 151)]
+	var origins: Array[Vector2] = [Vector2(365, 526), Vector2(714, 151)]
 	for origin_index in range(origins.size()):
 		var amount: int = 12 if origin_index == 0 else 8
 		for index in range(amount):
