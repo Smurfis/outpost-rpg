@@ -28,7 +28,7 @@ func _run() -> void:
 		quit(1)
 		return
 	var entry: Button = hud.get_node_or_null("OutpostHUD/ExitDoorMenuButton") as Button
-	_check(entry != null and entry.icon != null, "Six-slot menu contains actual pixel-art door icon")
+	_check(entry != null and entry.get_node_or_null("ExitDoorIcon") is TextureRect, "Six-slot menu contains a centred pixel-art door icon")
 	_check((hud.get("top_menu_actions") as Array).size() == 6, "No extra HUD slots overlap combat controls")
 	var popup: PanelContainer = hud.get_node_or_null("OutpostHUD/LeaveGamePanel") as PanelContainer
 	var shade: ColorRect = hud.get_node_or_null("OutpostHUD/LeaveGameShade") as ColorRect
