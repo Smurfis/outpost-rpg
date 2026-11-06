@@ -777,13 +777,21 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	caption.add_theme_color_override("font_color", Color("#ffedc5"))
 	caption.add_theme_color_override("font_outline_color", Color("#261a18"))
 	caption.add_theme_constant_override("outline_size", 2)
-	caption.add_theme_font_size_override("font_size", 15)
+	caption.add_theme_font_size_override("font_size", 14 if kind == "round" else 15)
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(caption)
 	caption.anchor_left = 0.0
 	caption.anchor_right = 1.0
 	caption.anchor_top = 0.68
 	caption.anchor_bottom = 0.98
+	if kind == "round":
+		# Leave the gilded ring and label unobstructed on small touch targets.
+		art_icon.anchor_left = 0.20
+		art_icon.anchor_right = 0.80
+		art_icon.anchor_top = 0.075
+		art_icon.anchor_bottom = 0.63
+		caption.anchor_top = 0.66
+		caption.anchor_bottom = 0.92
 	if key == "torch":
 		torch_label = caption
 		button.pressed.connect(_toggle_torch)
@@ -1363,6 +1371,7 @@ func _toggle_torch() -> void:
 		game.toggle_torch()
 
 func _open_coop() -> void:
+	_set_top_menu(false)
 	if game != null and game.coop != null and game.coop.ui != null:
 		game.coop.ui.open()
 
@@ -1371,10 +1380,12 @@ func _gather() -> void:
 func _attack() -> void:
 	game.attack()
 func _craft() -> void:
+	_set_top_menu(false)
 	game.craft()
 func _bag() -> void:
 	game.show_inventory()
 func _gear() -> void:
+	_set_top_menu(false)
 	game.show_equipment()
 func _use_skill(index: int) -> void:
 	if game != null:
