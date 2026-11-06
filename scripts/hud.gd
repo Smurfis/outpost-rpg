@@ -700,6 +700,8 @@ func _toggle_quest() -> void:
 func _process(delta: float) -> void:
 	if (smart_hold_finger >= 0 or smart_hold_mouse) and not smart_tray_open:
 		smart_hold_seconds += delta
+		if smart_hold_seconds >= 0.34:
+			_open_smart_tray()
 	if camera_drag_finger >= 0 and not camera_hold_ready:
 		camera_hold_seconds += delta
 		if camera_hold_seconds >= 0.82:
@@ -708,8 +710,6 @@ func _process(delta: float) -> void:
 		quick_hold_seconds += delta
 		if quick_hold_seconds >= 0.36:
 			_open_quick_tray()
-		if smart_hold_seconds >= 0.34:
-			_open_smart_tray()
 	_position_stick()
 	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0
 	if toast_time > 0.0:
