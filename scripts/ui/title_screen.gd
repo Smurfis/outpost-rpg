@@ -130,6 +130,16 @@ func _layout_for_size(available: Vector2) -> void:
 	# Convert physical spare width back into 1280x720 design-space units.
 	var half_extra: float = maxf(0.0, (available.x / fit - DESIGN.x) * 0.5)
 	var is_wide: bool = half_extra > 0.5
+	# The Android screenshot's lower-right grey area was the expanded edge
+	# of the painted background. Anchor the actual version plaque to the
+	# RIGHT of the full ultrawide view, instead of leaving it beside that area.
+	# On 16:9 displays half_extra == 0, so the approved position is kept.
+	var version_plaque: TextureRect = _canvas.get_node_or_null("VersionPlaque") as TextureRect
+	var version_label: Label = _canvas.get_node_or_null("Version") as Label
+	if version_plaque != null:
+		version_plaque.position = Vector2(1058.0 + half_extra, 642.0)
+	if version_label != null:
+		version_label.position = Vector2(1068.0 + half_extra, 652.0)
 	_approved_backdrop.visible = not is_wide
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
@@ -246,18 +256,9 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
-	# The extracted badge's baked font and surrounding patch were misaligned on
-	# wide Android screens. Keep the decorative plaque, use ONE centred live label.
+	# A single live version label over a matching textless PNG plaque.
+	# _layout_for_size moves both to the actual ultrawide right edge.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	# A small carved wood corner plate conceals the damaged grey background
-	# cleanup around the old baked-in version patch on ultrawide phones.
-	var corner := Panel.new()
-	corner.name = "VersionCornerWood"
-	corner.position = Vector2(1045, 625)
-	corner.size = Vector2(235, 94)
-	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	corner.add_theme_stylebox_override("panel", SKIN.box("wood"))
-	_canvas.add_child(corner)
 	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
 	var version := Label.new()
 	version.name = "Version"
