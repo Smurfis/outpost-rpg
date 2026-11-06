@@ -1,0 +1,264 @@
+name: Export Outpost Alpha Android APK
+
+on:
+  push:
+    branches: [alpha]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17 for Godot Android exporter
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK without obsolete SDK tools package
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - name: Install Android platform and signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'build-tools;35.0.0' 'platforms;android-35'
+      - name: Fetch exact Godot editor and Android debug templates (4.7.2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
+          curl --fail --location --retry 3 -o godot.zip "$base/Godot_v4.7.2-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+          template_dir="$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          mkdir -p "$template_dir"
+          curl --fail --location --retry 3 -o "$template_dir/android_debug.apk" "$base/Godot_v4.7.2-stable_android_debug.perfetto.apk"
+          curl --fail --location --retry 3 -o "$template_dir/android_release.apk" "$base/Godot_v4.7.2-stable_android_release.perfetto.apk"
+          printf '4.7.2.stable\n' > "$template_dir/version.txt"
+      - name: Generate tent launcher PNGs from checked-in artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .launcher-venv
+          .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
+          .launcher-venv/bin/python tools/generate_android_launcher_icons.py
+      - name: Configure permanent Android signing identity and version
+        shell: bash
+        env:
+          OUTPOST_KEYSTORE_B64: ${{ secrets.OUTPOST_ANDROID_KEYSTORE_B64 }}
+          OUTPOST_KEY_ALIAS: ${{ secrets.OUTPOST_ANDROID_KEY_ALIAS }}
+          OUTPOST_KEY_PASSWORD: ${{ secrets.OUTPOST_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Reuse the permanent signing identity: installed Alpha apps require the
+          # same signing identity for an in-place Alpha update.
+          if [[ -z "$OUTPOST_KEYSTORE_B64" || -z "$OUTPOST_KEY_ALIAS" || -z "$OUTPOST_KEY_PASSWORD" ]]; then
+            echo "::error::Set permanent OUTPOST_ANDROID_KEYSTORE_B64, OUTPOST_ANDROID_KEY_ALIAS and OUTPOST_ANDROID_KEY_PASSWORD in GitHub Actions secrets. See docs/ANDROID_UPDATER_SETUP.md."
+            exit 1
+          fi
+          mkdir -p "$HOME/.android" "$HOME/.config/godot" build
+          printf '%s' "$OUTPOST_KEYSTORE_B64" | base64 --decode > "$HOME/.android/outpost-update-signing.jks"
+          chmod 600 "$HOME/.android/outpost-update-signing.jks"
+          keytool -list -keystore "$HOME/.android/outpost-update-signing.jks" \
+            -storepass "$OUTPOST_KEY_PASSWORD" -alias "$OUTPOST_KEY_ALIAS" >/dev/null
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/outpost-update-signing.jks" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=$OUTPOST_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$OUTPOST_KEY_PASSWORD" >> "$GITHUB_ENV"
+          # Monotonic within this Alpha export workflow. Android package is distinct
+          # from Stable, so the two version-code sequences are independent.
+          OUTPOST_BUILD_CODE="$((1000 + GITHUB_RUN_NUMBER))"
+          echo "OUTPOST_BUILD_CODE=$OUTPOST_BUILD_CODE" >> "$GITHUB_ENV"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          EOF
+          cat > export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Android Alpha"
+          platform="Android"
+          runnable=true
+          advanced_options=false
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/Outpost-Alpha-Android.apk"
+          patches=PackedStringArray()
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          seed=0
+          encrypt_pck=false
+          encrypt_directory=false
+          script_export_mode=2
+
+          [preset.0.options]
+
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          architectures/armeabi-v7a=false
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          version/code=__OUTPOST_BUILD_CODE__
+          version/name="0.5.0-alpha"
+          package/unique_name="com.fivestarinteractive.outpost.alpha"
+          package/name="Outpost Alpha"
+          package/signed=true
+          ; Explicit main + adaptive + themed launcher images prevent fallback to the Godot logo.
+          launcher_icons/main_192x192="res://assets/branding/generated/outpost_main_192.png"
+          launcher_icons/adaptive_foreground_432x432="res://assets/branding/generated/outpost_adaptive_foreground_432.png"
+          launcher_icons/adaptive_background_432x432="res://assets/branding/generated/outpost_adaptive_background_432.png"
+          launcher_icons/adaptive_monochrome_432x432="res://assets/branding/generated/outpost_adaptive_monochrome_432.png"
+          permissions/internet=true
+          permissions/access_network_state=true
+          EOF
+          sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
+          grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg
+      - name: Import project and export installable Alpha APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Linux import needs Android ETC2/ASTC texture variants enabled.
+          sed -i "s/^config\/android_build_code=.*/config\/android_build_code=$OUTPOST_BUILD_CODE/" project.godot
+          sed -i 's/^config\/name=.*/config\/name="Outpost Alpha"/' project.godot
+          sed -i '/^config\/android_build_code=/a config/build_channel="alpha"' project.godot
+          grep -q '^config/build_channel="alpha"
+          grep -q "^config/android_build_code=$OUTPOST_BUILD_CODE$" project.godot
+          sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
+            --export-debug "Android Alpha" build/Outpost-Alpha-Android.apk
+          test -s build/Outpost-Alpha-Android.apk
+          unzip -t build/Outpost-Alpha-Android.apk >/dev/null
+          cp build/Outpost-Alpha-Android.apk "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+          ls -lh "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+      - name: Verify actual Android package contains the custom launcher icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          .launcher-venv/bin/python - <<'PY'
+          import io, zipfile, pathlib
+          from PIL import Image, ImageChops, ImageStat
+          apk = pathlib.Path('build/Outpost-Alpha-Android.apk')
+          baseline = pathlib.Path('assets/branding/generated')
+          required = (
+              ('res/mipmap-xxxhdpi-v4/icon.webp', 'outpost_main_192.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_foreground.webp', 'outpost_adaptive_foreground_432.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_background.webp', 'outpost_adaptive_background_432.png'),
+          )
+          with zipfile.ZipFile(apk) as bundle:
+              names = set(bundle.namelist())
+              for resource, expected in required:
+                  assert resource in names, 'Missing launcher icon in APK: ' + resource
+                  inside = Image.open(io.BytesIO(bundle.read(resource))).convert('RGBA')
+                  original = Image.open(baseline / expected).convert('RGBA')
+                  assert inside.size == original.size, (resource, inside.size, original.size)
+                  # Godot's Android exporter re-encodes to WebP, so check image
+                  # similarity rather than byte equality.
+                  difference = ImageStat.Stat(ImageChops.difference(inside, original)).mean
+                  assert max(difference) < 23.0, (resource, difference)
+                  print('APK icon verified:', resource, 'pixel-channel mean delta:', difference)
+          PY
+      - name: Upload Alpha APK for Android phone testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-alpha-${{ github.run_number }}-apk
+          path: build/Outpost-Android-v*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish separately installable Alpha APK on GitHub prereleases
+        if: github.ref == 'refs/heads/alpha'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="outpost-alpha-v$OUTPOST_BUILD_CODE"
+          apk="build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$apk" \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Outpost Alpha 0.5.0-alpha - build $OUTPOST_BUILD_CODE" \
+              --notes "OUTPOST_ALPHA_BUILD_CODE=$OUTPOST_BUILD_CODE. Alpha is a separate Android package (com.fivestarinteractive.outpost.alpha) from Outpost Stable, so both install side by side with independent saves. This is a prerelease. Android requires confirmation to install." \
+              --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url'
+ project.godot
+          grep -q "^config/android_build_code=$OUTPOST_BUILD_CODE$" project.godot
+          sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
+            --export-debug "Android Alpha" build/Outpost-Alpha-Android.apk
+          test -s build/Outpost-Alpha-Android.apk
+          unzip -t build/Outpost-Alpha-Android.apk >/dev/null
+          cp build/Outpost-Alpha-Android.apk "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+          ls -lh "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+      - name: Verify actual Android package contains the custom launcher icons
+        shell: bash
+        run: |
+          set -euo pipefail
+          .launcher-venv/bin/python - <<'PY'
+          import io, zipfile, pathlib
+          from PIL import Image, ImageChops, ImageStat
+          apk = pathlib.Path('build/Outpost-Alpha-Android.apk')
+          baseline = pathlib.Path('assets/branding/generated')
+          required = (
+              ('res/mipmap-xxxhdpi-v4/icon.webp', 'outpost_main_192.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_foreground.webp', 'outpost_adaptive_foreground_432.png'),
+              ('res/mipmap-xxxhdpi-v4/icon_background.webp', 'outpost_adaptive_background_432.png'),
+          )
+          with zipfile.ZipFile(apk) as bundle:
+              names = set(bundle.namelist())
+              for resource, expected in required:
+                  assert resource in names, 'Missing launcher icon in APK: ' + resource
+                  inside = Image.open(io.BytesIO(bundle.read(resource))).convert('RGBA')
+                  original = Image.open(baseline / expected).convert('RGBA')
+                  assert inside.size == original.size, (resource, inside.size, original.size)
+                  # Godot's Android exporter re-encodes to WebP, so check image
+                  # similarity rather than byte equality.
+                  difference = ImageStat.Stat(ImageChops.difference(inside, original)).mean
+                  assert max(difference) < 23.0, (resource, difference)
+                  print('APK icon verified:', resource, 'pixel-channel mean delta:', difference)
+          PY
+      - name: Upload APK for Android phone testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: outpost-alpha-${{ github.run_number }}-apk
+          path: build/Outpost-Android-v*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish updateable APK from main on GitHub Releases
+        if: github.ref == 'refs/heads/alpha'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="outpost-alpha-v$OUTPOST_BUILD_CODE"
+          apk="build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$apk" \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Outpost Alpha 0.5.0-alpha - build $OUTPOST_BUILD_CODE" \
+              --notes "OUTPOST_ANDROID_VERSION_CODE=$OUTPOST_BUILD_CODE. Signed with Outpost's persistent Android test key. Compatible with in-place updates for subsequent APKs signed with the same identity. First upgrade from older preview key may require a final uninstall; Android requires confirmation to install." \
+              --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url --jq '.url'
