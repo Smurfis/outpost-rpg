@@ -294,12 +294,26 @@ func _ready() -> void:
 	# available inside its menu without a permanent extra HUD button.
 	var exit_entry := Button.new()
 	exit_entry.name = "ExitDoorMenuButton"
-	exit_entry.text = "EXIT"
+	exit_entry.text = ""
+	exit_entry.tooltip_text = "Save / leave Outpost"
 	SKIN.apply_button(exit_entry, "wood")
+	# The icon lives inside the Button instead of contributing to its minimum
+	# width, keeping all six slots inside the menu on narrower phones.
 	var door_path: String = "res://assets/ui/icons/exit_door.svg"
 	if ResourceLoader.exists(door_path):
-		exit_entry.icon = load(door_path) as Texture2D
-		exit_entry.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var door_icon := TextureRect.new()
+		door_icon.name = "ExitDoorIcon"
+		door_icon.texture = load(door_path) as Texture2D
+		door_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		door_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		door_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		door_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		exit_entry.add_child(door_icon)
+		door_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		door_icon.offset_left = 5
+		door_icon.offset_top = 4
+		door_icon.offset_right = -5
+		door_icon.offset_bottom = -4
 	root.add_child(exit_entry)
 	_anchors(exit_entry, 0.895, 0.500, 0.984, 0.575)
 	exit_entry.pressed.connect(_open_leave_menu)
