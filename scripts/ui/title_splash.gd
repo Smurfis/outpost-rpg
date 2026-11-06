@@ -5,10 +5,16 @@ extends Label
 ## All other phrases remain editable Godot Labels, with matching colors and outline.
 @export var messages: PackedStringArray = PackedStringArray([
 	"Now with deeper\\ndungeons!",
+	"Craft your own legend!",
+	"Pixel by pixel!",
 	"Adventure awaits!",
-	"Craft your legend!",
+	"Don't forget your torch!",
+	"The Fields are calling!",
+	"A world worth exploring!",
 	"The depths are calling!",
-	"Bring a friend!"
+	"Bring a friend!",
+	"Build your Outpost!",
+	"Every camp needs a hero!"
 ])
 @export var rotation_angle: float = -10.0
 @export var cycle_seconds: float = 8.0
