@@ -86,8 +86,11 @@ func _run() -> void:
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0.0, 0.35, 0.0)
 	game.menu.close_page()
 	game.show_crafting()
+	await process_frame
 	var crafting: Control = game.menu.shell.get_child(1) as Control
 	verify(crafting != null, "Craft modal exists")
+	if crafting != null:
+		print("UI POPUP ACTUAL: %s screen=%s" % [crafting.size, game.menu.get_viewport().get_visible_rect().size])
 	if crafting != null:
 		verify(crafting.size.x <= 880.0 and crafting.size.y <= 600.0, "Craft modal pixel dimensions capped on wide phones")
 		verify(crafting.size.x < game.menu.shell.size.x * 0.75, "Craft leaves landscape visible on Android")
