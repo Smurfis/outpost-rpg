@@ -2,11 +2,13 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const INVENTORY_WINDOW = preload("res://scripts/ui/albion_inventory_window.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
 var shell: Control
 var popup_frame: PanelContainer
+var inventory_window: Control
 var dismiss_button: Button
 var title: Label
 var subtitle: Label
@@ -143,6 +145,11 @@ func _ready() -> void:
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details.add_theme_constant_override("separation", 7)
 	right_scroll.add_child(details)
+	inventory_window = INVENTORY_WINDOW.new()
+	inventory_window.setup(game, self)
+	add_child(inventory_window)
+	inventory_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	inventory_window.visible = false
 	visible = false
 
 func _layout_popup() -> void:
@@ -226,17 +233,13 @@ func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	return column
 
 func _switch_bag() -> void:
-	current_page = "bag"
-	refresh()
+	open("bag")
 
 func _switch_craft() -> void:
-	current_page = "craft"
-	craft_step = "browse"
-	refresh()
+	open("craft")
 
 func _switch_equipment() -> void:
-	current_page = "equipment"
-	refresh()
+	open("equipment")
 
 func open(page: String) -> void:
 	if visible and current_page == page:
@@ -248,6 +251,12 @@ func open(page: String) -> void:
 	visible = true
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
+	if page == "bag" or page == "equipment":
+		shell.visible = false
+		inventory_window.open_page(page)
+		return
+	shell.visible = true
+	inventory_window.close_page()
 	if page == "craft" and game.crafting.is_empty():
 		var station: String = game.closest_station()
 		if station != "":
@@ -262,6 +271,9 @@ func open(page: String) -> void:
 
 func close_page() -> void:
 	visible = false
+	shell.visible = true
+	if inventory_window != null:
+		inventory_window.close_page()
 
 func _dismiss_from_shade(event: InputEvent) -> void:
 	if not visible:
@@ -303,6 +315,9 @@ func _recipe_change(id: String) -> void:
 
 func refresh() -> void:
 	if not visible:
+		return
+	if current_page == "bag" or current_page == "equipment":
+		inventory_window.refresh()
 		return
 	progress_bar = null
 	work_counter = null

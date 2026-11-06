@@ -115,7 +115,7 @@ func _test_game() -> void:
 	check(game.menu.visible and game.menu.current_page == "bag", "Inventory tab opens")
 	game.show_equipment()
 	check(game.menu.visible and game.menu.current_page == "equipment", "Equipment screen opens")
-	check(game.menu.preview_rig != null and game.menu.preview_rig.get_child_count() > 0, "3D character preview exists")
+	check(game.menu.inventory_window.preview_rig != null and game.menu.inventory_window.preview_rig.get_child_count() > 0, "3D character preview exists in the new inventory window")
 	game.inventory["shield"] = 1
 	check(game.equip_item("shield"), "Owned shield can be equipped")
 	check(game.is_equipped("shield"), "Defence gear occupies offhand slot")

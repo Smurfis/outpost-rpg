@@ -95,8 +95,8 @@ func _verify() -> void:
 	game.drag_camera(80.0)
 	verify(absf(game.camera_angle_target - current_yaw) > 0.25, "Dragging camera steers continuous isometric orbit")
 	game.show_inventory()
-	verify(game.menu.recipes_list.get_node_or_null("BagItemGrid") != null, "Bag screen preserves the functional item grid")
-	verify(game.menu.station_tabs.get_node_or_null("RecoverStoredLoot") != null, "Full-bag loot recovery appears in inventory")
+	verify(game.menu.inventory_window.inventory_grid != null and game.menu.inventory_window.visible, "Bag opens responsive inventory window with functional grid")
+	verify(game.menu.inventory_window.overflow_button != null and game.menu.inventory_window.overflow_button.visible, "Full-bag loot recovery appears in inventory")
 	game.menu.close_page()
 	game.queue_free()
 	await process_frame
