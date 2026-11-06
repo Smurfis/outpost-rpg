@@ -134,16 +134,19 @@ func _ready() -> void:
 	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
 	mana_numbers = _label("MP —", 13, Color("#d8e6ff"), 0.070, 0.089, 0.230, 0.110)
 	mana_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	xp_bar = _meter(0.111, 0.955, 0.979, 0.990, Color("#a86ed7"))
+	# Mana is not implemented yet: never dedicate a visible line to "MP —".
+	mana_bar.visible = false
+	mana_numbers.visible = false
+	xp_bar = _meter(0.170, 0.974, 0.801, 0.990, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
-	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.028, 0.951, 0.111, 0.993)
+	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.032, 0.960, 0.131, 0.993)
 	xp_level_badge.name = "CharacterLevelBadge"
 	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	xp_level_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	xp_level_label = _label("0 / 100 XP", 15, Color("#fff2d1"), 0.142, 0.957, 0.954, 0.988)
+	xp_level_label = _label("0 / 100 XP", 14, Color("#fff2d1"), 0.192, 0.965, 0.783, 0.992)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.110, 0.236, 0.131)
+	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.091, 0.236, 0.121)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
@@ -181,32 +184,32 @@ func _ready() -> void:
 		items[key] = count
 	# Overload notification appears only when load needs attention; the bag
 	# itself shows the full capacity meter and bonus information.
-	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.183, 0.247, 0.208)
+	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.132, 0.310, 0.157)
 	bag_weight_label.name = "CarryWeightLabel"
 	bag_weight_label.visible = false
 
 	# The persistent quest ribbon is single-line and ellipsis-safe; on
 	# completion it collapses to a small journal button instead of endlessly
 	# announcing the finished starter quest.
-	quest_frame = _panel(0.018, 0.213, 0.316, 0.283)
+	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
 	SKIN.apply_button(quest_toggle, "wood")
 	root.add_child(quest_toggle)
-	_anchors(quest_toggle, 0.028, 0.220, 0.113, 0.277)
+	_anchors(quest_toggle, 0.028, 0.174, 0.117, 0.222)
 	quest_toggle.pressed.connect(_toggle_quest)
-	quest = _label("Gather wood and stone", 16, Color("#ffe6bb"), 0.124, 0.222, 0.304, 0.275)
+	quest = _label("Gather wood and stone", 16, Color("#ffe6bb"), 0.127, 0.173, 0.334, 0.224)
 	quest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest.autowrap_mode = TextServer.AUTOWRAP_OFF
 	quest.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	quest.clip_text = true
-	quest_detail_back = _panel(0.021, 0.292, 0.320, 0.463)
+	quest_detail_back = _panel(0.021, 0.236, 0.354, 0.444)
 	quest_detail_back.name = "QuestJournal"
 	quest_detail_back.add_theme_stylebox_override("panel", SKIN.box("parchment"))
 	quest_detail_back.visible = false
-	quest_detail = _label("", 16, SKIN.INK, 0.038, 0.309, 0.300, 0.446)
+	quest_detail = _label("", 16, SKIN.INK, 0.039, 0.250, 0.334, 0.428)
 	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quest_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -243,9 +246,9 @@ func _ready() -> void:
 	menu_button.button_down.connect(_menu_button_down)
 	menu_button.button_up.connect(_menu_button_up)
 	menu_button.pressed.connect(_menu_button_pressed)
-	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "round")
+	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "slot")
 	top_menu_actions.append(craft_button)
-	top_menu_actions.append(_action("gear", "GEAR", 0.796, 0.405, 0.888, 0.482, "round"))
+	top_menu_actions.append(_action("gear", "GEAR", 0.796, 0.405, 0.888, 0.482, "slot"))
 	var multiplayer_entry := Button.new()
 	multiplayer_entry.name = "CoopEntryButton"
 	multiplayer_entry.text = "CO-OP"
@@ -365,6 +368,10 @@ func _ready() -> void:
 	_build_skill_details()
 	_load_control_prefs()
 	_position_stick()
+	# Recalculate real touch sizes and menu placement on phone rotation,
+	# ultrawide aspect ratios, and Android window/safe-area changes.
+	get_viewport().size_changed.connect(_layout_touch_hud)
+	_layout_touch_hud()
 
 func _toggle_wallet() -> void:
 	wallet_open = not wallet_open
@@ -573,6 +580,91 @@ func _save_control_prefs() -> void:
 	config.set_value("profile", "display_name", player_display_name)
 	config.save(CONTROL_PREFS)
 
+func _place_px(control: Control, screen: Vector2, region: Rect2) -> void:
+	# Keep touch targets square in pixels instead of stretching circles into
+	# ovals as aspect ratios change; anchors still follow viewport resizing.
+	_anchors(control, region.position.x / screen.x, region.position.y / screen.y,
+			region.end.x / screen.x, region.end.y / screen.y)
+
+func _radial_px(button: Control, screen: Vector2, center: Vector2, radius: float) -> void:
+	_place_px(button, screen, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0))
+
+func _layout_touch_hud() -> void:
+	if root == null or minimap == null or smart_button == null:
+		return
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	if screen.x <= 0.0 or screen.y <= 0.0:
+		return
+	var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
+	var edge: float = 18.0 * scale
+	# The live minimap stays a real square instead of becoming an oval on
+	# phones with wider aspect ratios. Footer and menu sit directly below it.
+	var map_side: float = minf(screen.y * 0.285, minf(228.0 * scale, screen.x * 0.23))
+	var map_top: float = edge
+	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
+	var map_bottom: float = map_top + map_side
+	var toggle_side: float = 52.0 * scale
+	_radial_px(menu_button, screen,
+			Vector2(screen.x - edge - toggle_side * 0.5, map_bottom + 37.0 * scale),
+			toggle_side * 0.5)
+	_place_px(clock_label, screen, Rect2(screen.x - edge - 205.0 * scale,
+			map_bottom + 12.0 * scale, 139.0 * scale, 44.0 * scale))
+	# Three columns, two rows, one logical menu group. Buttons are modest
+	# rectangles rather than distorted ovals and do not cover the ability arc.
+	var menu_width: float = 314.0 * scale
+	var menu_top: float = map_bottom + 73.0 * scale
+	var menu_height: float = 114.0 * scale
+	var menu_left: float = screen.x - edge - menu_width
+	_place_px(top_menu_panel, screen, Rect2(menu_left, menu_top, menu_width, menu_height))
+	var gap: float = 6.0 * scale
+	var col_width: float = (menu_width - gap * 4.0) / 3.0
+	var row_height: float = (menu_height - gap * 3.0) / 2.0
+	for index in range(top_menu_actions.size()):
+		var column: int = index % 3
+		var row_index: int = index / 3
+		_place_px(top_menu_actions[index], screen, Rect2(
+				menu_left + gap + float(column) * (col_width + gap),
+				menu_top + gap + float(row_index) * (row_height + gap),
+				col_width, row_height))
+	# Every circular holder is actually square; the centre-to-centre gaps
+	# leave distinct hit targets even with two fingers on a small phone.
+	_radial_px(smart_button, screen,
+			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
+	var combat: Array[Vector3] = [
+		Vector3(267.0, 240.0, 40.0), # skill 1
+		Vector3(355.0, 195.0, 40.0), # skill 2 (no square-hitbox overlap with skill 1)
+		Vector3(363.0, 110.0, 40.0), # skill 3
+		Vector3(264.0, 82.0, 32.0),  # food
+		Vector3(183.0, 82.0, 32.0)   # potion
+	]
+	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
+	for index in range(keys.size()):
+		var spec: Vector3 = combat[index]
+		_radial_px(quick_buttons[keys[index]], screen,
+				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
+	_radial_px(torch_button, screen,
+			Vector2(screen.x - 449.0 * scale, screen.y - 82.0 * scale), 32.0 * scale)
+	# Follow the action target without obscuring the on-screen controls.
+	if tool_gesture_hint != null:
+		_place_px(tool_gesture_hint, screen, Rect2(
+				screen.x - 158.0 * scale, screen.y - 257.0 * scale,
+				133.0 * scale, 27.0 * scale))
+	# Hold-and-slide trays are transient and remain below the map and
+	# clear of the viewport edge, with rows large enough to select.
+	var tool_width: float = 205.0 * scale
+	var tool_height: float = 238.0 * scale
+	_place_px(smart_tray, screen, Rect2(
+			screen.x - edge - tool_width,
+			screen.y - 168.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
+			tool_width, tool_height))
+	# Keep XP readable but reduce the enormous opaque bottom ribbon.
+	_place_px(xp_bar, screen, Rect2(screen.x * 0.17,
+			screen.y - 23.0 * scale, screen.x * 0.61, 13.0 * scale))
+	_place_px(xp_level_label, screen, Rect2(screen.x * 0.20,
+			screen.y - 29.0 * scale, screen.x * 0.55, 22.0 * scale))
+	_place_px(xp_level_badge, screen, Rect2(edge,
+			screen.y - 31.0 * scale, 105.0 * scale, 24.0 * scale))
+
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
 	meter.max_value = 100.0
@@ -654,7 +746,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.add_theme_stylebox_override("disabled", disabled)
 	else:
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			button.add_theme_stylebox_override(state, SKIN.box("wood_selected") if state != "disabled" else SKIN.box("item"))
+			button.add_theme_stylebox_override(state, SKIN.box("wood_selected") if state in ["hover", "pressed"] else SKIN.box("item") if state == "disabled" else SKIN.box("wood"))
 	root.add_child(button)
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
@@ -685,13 +777,21 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	caption.add_theme_color_override("font_color", Color("#ffedc5"))
 	caption.add_theme_color_override("font_outline_color", Color("#261a18"))
 	caption.add_theme_constant_override("outline_size", 2)
-	caption.add_theme_font_size_override("font_size", 15)
+	caption.add_theme_font_size_override("font_size", 14 if kind == "round" else 15)
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(caption)
 	caption.anchor_left = 0.0
 	caption.anchor_right = 1.0
 	caption.anchor_top = 0.68
 	caption.anchor_bottom = 0.98
+	if kind == "round":
+		# Leave the gilded ring and label unobstructed on small touch targets.
+		art_icon.anchor_left = 0.20
+		art_icon.anchor_right = 0.80
+		art_icon.anchor_top = 0.075
+		art_icon.anchor_bottom = 0.63
+		caption.anchor_top = 0.66
+		caption.anchor_bottom = 0.92
 	if key == "torch":
 		torch_label = caption
 		button.pressed.connect(_toggle_torch)
@@ -1043,6 +1143,17 @@ func _toggle_quest() -> void:
 	quest_detail.visible = quest_expanded
 	quest_toggle.text = "CLOSE ▴" if quest_expanded else "✓ QUESTS" if objective_is_complete else "QUESTS ▾"
 
+func _quest_headline(objective: String) -> String:
+	# The journal holds the complete objective. The playfield needs only
+	# the first actionable clause (no permanently clipped prose).
+	var headline: String = objective.strip_edges()
+	for separator in [", then ", ",", " then ", ";"]:
+		var position: int = headline.find(separator)
+		if position > 0:
+			headline = headline.substr(0, position).strip_edges()
+			break
+	return headline
+
 func _update_quest_tracker(objective: String) -> void:
 	var text_value: String = objective.strip_edges()
 	var lower: String = text_value.to_lower()
@@ -1050,7 +1161,7 @@ func _update_quest_tracker(objective: String) -> void:
 	var should_show: bool = not objective_is_complete and text_value != ""
 	quest_frame.visible = should_show
 	quest.visible = should_show
-	quest.text = text_value
+	quest.text = _quest_headline(text_value)
 	quest_detail.text = text_value if text_value != "" else "No active quest."
 	quest_toggle.text = "CLOSE ▴" if quest_expanded else "✓ QUESTS" if objective_is_complete else "QUESTS ▾"
 
@@ -1260,6 +1371,7 @@ func _toggle_torch() -> void:
 		game.toggle_torch()
 
 func _open_coop() -> void:
+	_set_top_menu(false)
 	if game != null and game.coop != null and game.coop.ui != null:
 		game.coop.ui.open()
 
@@ -1268,10 +1380,12 @@ func _gather() -> void:
 func _attack() -> void:
 	game.attack()
 func _craft() -> void:
+	_set_top_menu(false)
 	game.craft()
 func _bag() -> void:
 	game.show_inventory()
 func _gear() -> void:
+	_set_top_menu(false)
 	game.show_equipment()
 func _use_skill(index: int) -> void:
 	if game != null:
