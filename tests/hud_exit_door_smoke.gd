@@ -37,6 +37,8 @@ func _run() -> void:
 	_check(popup != null and popup.visible and shade != null and shade.visible, "Door opens touch-blocking wood/pixel exit overlay")
 	var return_button: Button = popup.find_child("ReturnToTitle", true, false) as Button if popup != null else null
 	_check(return_button != null and return_button.text.contains("RETURN"), "Exit menu has deliberate save-and-return action")
+	var version_button: Button = popup.find_child("OpenVersionChannels", true, false) as Button if popup != null else null
+	_check(version_button != null and version_button.pressed.is_connected(hud._return_to_version_channels), "In-game version shortcut saves and opens title Settings")
 	_check(game.has_method("save_and_return_to_title"), "Return flow saves game and disconnects existing LAN")
 	hud.call("_close_leave_menu")
 	_check(popup != null and not popup.visible and shade != null and not shade.visible, "Resume dismisses the modal")

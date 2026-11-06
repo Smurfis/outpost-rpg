@@ -132,6 +132,28 @@ func _run() -> void:
 	verify(game.menu.subtitle.text.contains("PREPARE MATERIALS"), "Preparation page communicates stage and purpose")
 	game.menu.close_page()
 	verify(not game.menu.visible, "Close returns to gameplay without modifying inventory")
+	game.show_crafting()
+	game.menu._station_change("enchanting")
+	verify(game.menu.visible and game.menu.selected_station == "enchanting", "Enchanting station is navigable")
+	var enchant_tabs: HBoxContainer = game.menu.station_tabs
+	var other_tabs_enabled: bool = true
+	for tab in enchant_tabs.get_children():
+		if tab is Button and (tab as Button).text != "ENCHANT":
+			other_tabs_enabled = other_tabs_enabled and not (tab as Button).disabled
+	verify(other_tabs_enabled, "Enchanting does not disable other station tabs when no active craft")
+	var close_crafting: Button = game.menu.dismiss_button
+	verify(close_crafting != null and not close_crafting.disabled and close_crafting.pressed.is_connected(game.menu.close_page), "Dedicated close button always works on Enchanting")
+	var outside_tap := InputEventScreenTouch.new()
+	outside_tap.pressed = true
+	game.menu._dismiss_from_shade(outside_tap)
+	verify(not game.menu.visible, "Tapping outside Enchanting safely dismisses modal")
+	game.show_crafting()
+	game.menu._station_change("enchanting")
+	var android_back := InputEventAction.new()
+	android_back.action = "ui_cancel"
+	android_back.pressed = true
+	game.menu._input(android_back)
+	verify(not game.menu.visible, "Android Back/Escape closes Enchanting without trapping player")
 	game.queue_free()
 	await process_frame
 	print("APPROVED UI RESULT: %d failures" % failures)

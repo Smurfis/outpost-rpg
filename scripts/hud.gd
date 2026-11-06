@@ -642,7 +642,7 @@ func _build_leave_menu() -> void:
 	leave_menu_info.add_theme_color_override("font_color", SKIN.CREAM)
 	leave_menu_info.add_theme_font_size_override("font_size", 17)
 	stack.add_child(leave_menu_info)
-	for caption in ["RESUME ADVENTURE", "CONTROLS", "SAVE & RETURN TO TITLE"]:
+	for caption in ["RESUME ADVENTURE", "CONTROLS", "VERSIONS / UPDATES", "SAVE & RETURN TO TITLE"]:
 		var action := Button.new()
 		action.text = caption
 		action.custom_minimum_size = Vector2(0, 52)
@@ -654,6 +654,9 @@ func _build_leave_menu() -> void:
 				_close_leave_menu()
 				_show_control_settings()
 			)
+		elif caption == "VERSIONS / UPDATES":
+			action.name = "OpenVersionChannels"
+			action.pressed.connect(_return_to_version_channels)
 		else:
 			leave_menu_confirm = action
 			action.name = "ReturnToTitle"
@@ -684,6 +687,11 @@ func _close_leave_menu() -> void:
 		leave_menu_panel.visible = false
 	if leave_menu_shade != null:
 		leave_menu_shade.visible = false
+
+func _return_to_version_channels() -> void:
+	# Finish the current session/save before changing or installing an APK.
+	get_tree().root.set_meta("outpost_open_settings", true)
+	_return_to_title()
 
 func _return_to_title() -> void:
 	if game != null and game.has_method("save_and_return_to_title"):

@@ -81,6 +81,9 @@ var _selected_channel: String = ""
 var _channel_stable_button: Button
 var _channel_alpha_button: Button
 var _channel_note: Label
+var _changelog_button: Button
+var _changelog_panel: PanelContainer
+var _selection_glow: TextureRect
 var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
@@ -107,6 +110,12 @@ func _ready() -> void:
 	_tip_index = randi_range(0, TIPS.size() - 1)
 	_make_screen()
 	_layout()
+	# The in-game exit panel can return straight here after saving.
+	if bool(get_tree().root.get_meta("outpost_open_settings", false)):
+		get_tree().root.remove_meta("outpost_open_settings")
+		if _settings_panel != null:
+			_settings_panel.visible = true
+			_settings_panel.move_to_front()
 	get_viewport().size_changed.connect(_layout)
 	if OS.has_feature("Android") and _updater != null:
 		# Passive, single startup check; only display a banner if there's
@@ -144,6 +153,10 @@ func _layout_for_size(available: Vector2) -> void:
 		version_plaque.position = Vector2(1058.0 + half_extra, 642.0)
 	if version_label != null:
 		version_label.position = Vector2(1068.0 + half_extra, 652.0)
+	if _changelog_button != null:
+		_changelog_button.position.x = 1164.0 + half_extra
+	if _changelog_panel != null:
+		_changelog_panel.position.x = 800.0 + half_extra
 	_approved_backdrop.visible = not is_wide
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
@@ -225,6 +238,15 @@ func _make_screen() -> void:
 	if _reduced_motion:
 		_splash.animate_bounce = false
 
+	# A single independently authored soft gold glow moves between menu buttons.
+	_selection_glow = TextureRect.new()
+	_selection_glow.name = "SelectedTitleButtonGlow"
+	_selection_glow.texture = load("res://assets/ui/title/button_selected_glow.svg") as Texture2D
+	_selection_glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_selection_glow.stretch_mode = TextureRect.STRETCH_SCALE
+	_selection_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_selection_glow.visible = false
+	_canvas.add_child(_selection_glow)
 	# Cutout positions use the source image's 1280x720 pixel coordinates.
 	# These are REAL Button nodes: touch/focus, signals and disabled state survive.
 	var approved_rects: Dictionary = {
@@ -247,6 +269,9 @@ func _make_screen() -> void:
 		b.position = placement.position
 		b.size = placement.size
 		b.custom_minimum_size = placement.size
+		b.focus_entered.connect(_set_title_button_glow.bind(b))
+		b.mouse_entered.connect(_set_title_button_glow.bind(b))
+		b.focus_exited.connect(_hide_title_glow_if_idle)
 		match kind:
 			"play":
 				b.pressed.connect(_on_play)
@@ -295,6 +320,7 @@ func _make_screen() -> void:
 
 	_build_settings()
 	_build_adventure_panel()
+	_build_changelog_scroll()
 	_update_notice = Button.new()
 	_update_notice.name = "UpdateAvailable"
 	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
@@ -478,6 +504,17 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 	stack.add_child(_menu_label(title_value, 31))
 	return {"frame": frame, "stack": stack}
 
+func _set_title_button_glow(selected_button: Button) -> void:
+	if _selection_glow == null or selected_button.disabled:
+		return
+	_selection_glow.position = selected_button.position - Vector2(44, 24)
+	_selection_glow.size = selected_button.size + Vector2(88, 48)
+	_selection_glow.visible = true
+
+func _hide_title_glow_if_idle() -> void:
+	if _selection_glow != null:
+		_selection_glow.visible = false
+
 func _build_settings() -> void:
 	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 590.0)
 	_settings_panel = parts["frame"] as PanelContainer
@@ -588,6 +625,64 @@ func _build_settings() -> void:
 	stack.add_child(_update_status)
 	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
 	_settings_panel.visible = false
+
+func _build_changelog_scroll() -> void:
+	# A separate original transparent icon, not another opaque baked title crop.
+	_changelog_button = Button.new()
+	_changelog_button.name = "ChangelogScrollButton"
+	_changelog_button.position = Vector2(1164, 266)
+	_changelog_button.size = Vector2(62, 70)
+	_changelog_button.tooltip_text = "Read the latest Outpost changes"
+	_changelog_button.icon = load("res://assets/ui/title/changelog_scroll.svg") as Texture2D
+	_changelog_button.expand_icon = true
+	_changelog_button.focus_mode = Control.FOCUS_ALL
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		_changelog_button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	_changelog_button.pressed.connect(_toggle_changelog)
+	_canvas.add_child(_changelog_button)
+	_changelog_panel = PanelContainer.new()
+	_changelog_panel.name = "ChangelogPanel"
+	_changelog_panel.position = Vector2(800, 257)
+	_changelog_panel.size = Vector2(358, 346)
+	_changelog_panel.custom_minimum_size = Vector2(358, 346)
+	_changelog_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	_changelog_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_canvas.add_child(_changelog_panel)
+	var margins := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 14)
+	_changelog_panel.add_child(margins)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 9)
+	margins.add_child(stack)
+	stack.add_child(_menu_label("OUTPOST  ◆  WHAT'S NEW", 23))
+	var scroll := ScrollContainer.new()
+	scroll.name = "ChangelogScrollList"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	stack.add_child(scroll)
+	var details := _menu_label("LATEST ALPHA TEST\\n\\n• Stable / Alpha version selection in Settings\\n• Mainline title and world-loading updates\\n• New hero portrait, radial XP jewel and crafting flow\\n• Escape and outside-tap controls for crafting\\n\\nTESTING NEXT\\nTitle button cutouts, moving glow, HUD icon artwork, camera and minimap layout.", 17)
+	details.name = "ChangelogBody"
+	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	details.text = details.text.replace("\\n", "\n")
+	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(details)
+	stack.add_child(_menu_button("CLOSE SCROLL", _toggle_changelog, "parchment"))
+	_changelog_panel.visible = false
+
+func _toggle_changelog() -> void:
+	if _changelog_panel == null:
+		return
+	if _changelog_panel.visible:
+		_changelog_panel.visible = false
+		return
+	if _settings_panel != null:
+		_settings_panel.visible = false
+	if _adventure_panel != null and _adventure_panel.visible:
+		_close_adventure_panel()
+	_changelog_panel.visible = true
+	_changelog_panel.move_to_front()
 
 func _apply_volume() -> void:
 	var master: int = AudioServer.get_bus_index("Master")
@@ -705,6 +800,8 @@ func _on_update_found(download_url: String, version_code: int, _release_url: Str
 	_on_update_status("%s build %d available. Tap Download, then approve Android install. Different channels have separate saves." % [_selected_channel.capitalize(), version_code])
 
 func _toggle_settings() -> void:
+	if _changelog_panel != null:
+		_changelog_panel.visible = false
 	if _adventure_panel != null and _adventure_panel.visible:
 		_close_adventure_panel()
 	_settings_panel.visible = not _settings_panel.visible
@@ -713,7 +810,10 @@ func _toggle_settings() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if _adventure_panel != null and _adventure_panel.visible:
+		if _changelog_panel != null and _changelog_panel.visible:
+			_toggle_changelog()
+			get_viewport().set_input_as_handled()
+		elif _adventure_panel != null and _adventure_panel.visible:
 			_close_adventure_panel()
 			get_viewport().set_input_as_handled()
 		elif _settings_panel != null and _settings_panel.visible:

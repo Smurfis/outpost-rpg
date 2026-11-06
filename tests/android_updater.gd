@@ -53,6 +53,23 @@ func _run() -> void:
 		await process_frame
 		var panel: Control = screen.get_node_or_null("Artboard/SettingsPanel") as Control
 		check(panel != null, "Title screen has settings panel")
+		var scroll_button: Button = screen.get("_changelog_button") as Button
+		var scroll_panel: PanelContainer = screen.get("_changelog_panel") as PanelContainer
+		check(scroll_button != null and scroll_button.icon != null, "Small independent parchment changelog scroll exists")
+		check(scroll_panel != null and not scroll_panel.visible, "Changelog scroll starts collapsed")
+		screen._toggle_changelog()
+		check(scroll_panel != null and scroll_panel.visible and scroll_panel.find_child("ChangelogBody", true, false) != null, "Changelog opens a scrollable reading panel")
+		screen._toggle_changelog()
+		check(scroll_panel != null and not scroll_panel.visible, "Changelog can be dismissed")
+		var selected_glow: TextureRect = screen.get_node_or_null("Artboard/SelectedTitleButtonGlow") as TextureRect
+		var settings_action: Button = screen.get_node_or_null("Artboard/SettingsButton") as Button
+		check(selected_glow != null and selected_glow.texture != null, "All title buttons share one separate movable gold glow asset")
+		if selected_glow != null and settings_action != null:
+			screen._set_title_button_glow(settings_action)
+			check(selected_glow.visible and is_equal_approx(selected_glow.position.x, settings_action.position.x - 44.0), "Selected glow follows Settings instead of remaining behind Play")
+			screen._hide_title_glow_if_idle()
+			check(not selected_glow.visible, "Old selected glow hides when focus moves elsewhere")
+
 		check(screen.get("_updater") != null, "In-app updater service is connected")
 		var button: Button = screen.get("_update_button") as Button
 		check(button != null and button.text == "CHECK FOR UPDATES", "Visible and deliberate update-check action")

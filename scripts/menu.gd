@@ -7,6 +7,7 @@ const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 var game
 var shell: Control
 var popup_frame: PanelContainer
+var dismiss_button: Button
 var title: Label
 var subtitle: Label
 var header_buttons: Dictionary = {}
@@ -49,6 +50,7 @@ func _ready() -> void:
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.01, 0.01, 0.22)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	shade.gui_input.connect(_dismiss_from_shade)
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
@@ -91,7 +93,11 @@ func _ready() -> void:
 	close.text = "X"
 	close.custom_minimum_size = Vector2(48, 48)
 	SKIN.apply_button(close, "red")
+	close.name = "CraftModalClose"
+	close.tooltip_text = "Close crafting and return to the world"
+	close.focus_mode = Control.FOCUS_ALL
 	close.pressed.connect(close_page)
+	dismiss_button = close
 	header.add_child(close)
 	subtitle = _label("", 16, Color("f4d9a6"))
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -256,6 +262,19 @@ func open(page: String) -> void:
 
 func close_page() -> void:
 	visible = false
+
+func _dismiss_from_shade(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		close_page()
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		close_page()
+
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		close_page()
+		get_viewport().set_input_as_handled()
 
 func _first_recipe(station: String) -> String:
 	for recipe in game.recipes:
