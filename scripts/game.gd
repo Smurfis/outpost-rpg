@@ -996,7 +996,11 @@ func use_weapon_skill(slot: int) -> bool:
 	return true
 
 func available_quick_consumables(slot: String) -> Array[String]:
-	var pool: Array[String] = ["tonic"] if slot == "potion" else ["meal", "stew"] if slot == "consumable" else []
+	var pool: Array[String] = []
+	if slot == "potion":
+		pool.append("tonic")
+	elif slot == "consumable":
+		pool.append_array(PackedStringArray(["meal", "stew"]))
 	var available: Array[String] = []
 	for item in pool:
 		if int(inventory.get(item, 0)) > 0:
