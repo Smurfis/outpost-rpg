@@ -1,10 +1,12 @@
 # Outpost title screen — shipped baseline and future TODO
 
-**Release baseline:** Godot 4.7.2 home-screen flow: Five Star Interactive → Outpost title → Play / Continue / Settings / Quit. The runtime version badge must follow project configuration (currently `v0.5.0-dev`).
+**Release baseline:** Godot 4.7.2 home-screen flow: Five Star Interactive → Outpost title → Play / Continue / Settings / Quit. The approved painted title has now been imported as original PNG layers; SVGs remain as fallbacks. The runtime version badge must follow project configuration (currently `v0.5.0-dev`).
 
 **Original concept:** approved layered pixel-art sunset/outpost screenshot with tent-and-campfire wordmark, woodland, watchtower, waterfall, purple dungeon portal and carved menu plaques. The concept screenshot is a visual reference **not** a flattened interactive UI.
 
 ## Included with this integration
+
+- **New approved PNGs (6 November 2026):** `title_background.png`, `outpost_logo.png`, `splash_deeper_dungeons.png`, four `btn_*.png`, `version_badge_original.png` and `version_badge_textless.png`, all checked into `assets/ui/title/` and rendered at reference-measured 1280×720 positions. See [TITLE_APPROVED_PNG_IMPLEMENTATION.md](TITLE_APPROVED_PNG_IMPLEMENTATION.md). These are real Godot assets, not chat download links.
 
 - Source assets in `assets/ui/title/`, including detailed, original 1280×720 `title_backdrop.svg` and transparent `outpost_logo_vector.svg`. Neither requires a ZIP download or external network at runtime.
 - Standalone company splash, illustrated title screen, reusable menu button scenes and icon SVGs, editable tip/rotating update text, live version text, Android-scaled 1280×720 layout.
@@ -16,7 +18,8 @@
 - [ ] **P0 Android visual sign-off:** capture a landscape screenshot on target device; test device aspect ratios and notch/safe-area behaviour; check touch targets, text contrast, Play/Continue and settings. Headless CI is not visual approval.
 - [ ] **P0 integration with newer world loader:** an existing downstream Android branch has `world_loading.tscn` for large streaming terrain. When that branch is integrated, preserve the working loading transition in `scripts/ui/title_screen.gd::_launch_game()` rather than reverting to immediate gameplay change. Keep the New Adventure/Continue one-shot flag.
 - [ ] **P0 save protection:** regression-test invalid/corrupt save file, saved session vs new session, exit during loading and Continue across newer save versions; avoid accidental progress loss.
-- [ ] **P1 actual concept-quality pixel art:** replace the SVG approximation with final **clean textless background PNG** and **independent truly transparent** tent logo, button plaques, icons and banners. No screenshot with baked buttons/text, no fake alpha checkerboard. Review edge halos, contrast, resolution and composition.
+- [x] **P1 concept-art fidelity pass:** source-approved pixel-art PNG backdrop, logo, four clickable plaque cutouts, slogan and version assets committed, wired, and import/layout regression-tested.
+- [ ] **P1 editable independent art masters:** replace extracted crest/button art and filled regions under them with a genuinely UI-free background, true transparent hand-painted crest, and **textless** plaque sprites plus pixel font for localization/animation. Current cutouts reproduce the approved static composition but contain some original painted background or lettering.
 - [ ] **P1 Five Star Interactive ident:** replace shipped vector fallback with the final transparent studio mark and review fade/skip accessibility.
 - [ ] **P1 configurable input:** ensure Android Back / Escape behaviour, controller D-pad focus and a mobile-appropriate Quit behaviour (may be hidden or converted to return-to-OS depending on platform).
 - [ ] **P1 align UI style:** coordinate with the independent in-game UI agent on fonts, colours, frames and pixel density, without replacing their gameplay HUD/inventory.
@@ -32,4 +35,4 @@
 - Asset paths expected by the title screens are under `assets/ui/title/`; fallback scenes stay operational even if optional approved PNGs are not yet present.
 - The main agent should run complete Godot 4.7.2 import/startup/gameplay/title tests and build a real Android APK after any later conflict resolution.
 
-**Status:** SVG art is an integration-ready approximation; the original approved rendered concept is not yet reproduced pixel-perfect in the shipped branch.
+**Status (6 November 2026):** The approved rendered composition is now closely recreated with real, shipped PNG layers and interactive Godot buttons; older SVGs are only fallback art. The static picture is substantially closer to the reference, but physical Android sign-off and genuinely fully separate/editable final assets are still TODO.
