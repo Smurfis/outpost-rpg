@@ -6,6 +6,9 @@ const MAIN_GAME := "res://scenes/main.tscn"
 const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
+const APPROVED_RASTER := "res://assets/ui/title/title_background.png"
+const APPROVED_LOGO := "res://assets/ui/title/outpost_logo.png"
+const BAKED_VERSION_ART := "res://assets/ui/title/version_badge_original.png"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
 const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
@@ -46,6 +49,7 @@ var _splash: Label
 var _tip_text: Label
 var _tip_plaque: TextureRect
 var _light_layer: TextureRect
+var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
 var _updater: Node
@@ -61,7 +65,13 @@ const TIP_CYCLE_SECONDS: float = 9.0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_approved_art = ResourceLoader.exists(APPROVED_RASTER) and ResourceLoader.exists(APPROVED_LOGO)
+	var had_preferences: bool = FileAccess.file_exists(UI_PREFS)
 	_read_prefs()
+	# The approved composition intentionally has no bottom tip plaque.
+	# Keep tips fully available in Settings, but default them off on first launch.
+	if _approved_art and not had_preferences:
+		_show_tips = false
 	# Pick a different opening tip each session; every tip remains in the rotation.
 	_tip_index = randi_range(0, TIPS.size() - 1)
 	_make_screen()
@@ -99,33 +109,49 @@ func _make_screen() -> void:
 	_add_image("TitleFrame", "title_frame.png", "title_frame.svg", Vector2.ZERO, DESIGN)
 	_add_image("LeftBanner", "banner_star.png", "banner_star.svg", Vector2(51, 17), Vector2(90, 115))
 	_add_image("RightBanner", "banner_star.png", "banner_star.svg", Vector2(1140, 17), Vector2(90, 115))
+	if _approved_art:
+		# The PNG already has its wood/stone border and star banners; hiding
+		# duplicate legacy SVG layers keeps the approved pixels intact.
+		for decorative in ["TitleLights", "TitleFrame", "LeftBanner", "RightBanner"]:
+			var old_overlay: Control = _canvas.get_node_or_null(decorative) as Control
+			if old_overlay != null:
+				old_overlay.visible = false
 	
 	var logo: Control = LOGO_SCENE.instantiate() as Control
 	logo.name = "OutpostLogo"
-	logo.position = Vector2(392, 8)
-	logo.size = Vector2(496, 330)
+	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
+	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
 	logo.custom_minimum_size = Vector2.ZERO
 	_canvas.add_child(logo)
 
 	_splash = SPLASH_SCENE.instantiate() as Label
 	_splash.name = "UpdateSplash"
-	_splash.position = Vector2(850, 92)
-	_splash.size = Vector2(365, 135)
-	_splash.pivot_offset = Vector2(182, 67)
+	_splash.position = Vector2(833, 73) if _approved_art else Vector2(850, 92)
+	_splash.size = Vector2(305, 171) if _approved_art else Vector2(365, 135)
+	_splash.pivot_offset = _splash.size * 0.5
 	_splash.custom_minimum_size = Vector2.ZERO
 	_canvas.add_child(_splash)
 	if _reduced_motion:
 		_splash.animate_bounce = false
 
+	# Cutout positions use the source image's 1280x720 pixel coordinates.
+	# These are REAL Button nodes: touch/focus, signals and disabled state survive.
+	var approved_rects: Dictionary = {
+		"play": Rect2(427, 344, 422, 92),
+		"continue": Rect2(459, 430, 360, 79),
+		"settings": Rect2(474, 504, 336, 76),
+		"quit": Rect2(497, 575, 296, 76)
+	}
 	for i in range(4):
 		var kind: String = ["play", "continue", "settings", "quit"][i]
 		var b: Button = BUTTON_SCENE.instantiate() as Button
 		b.name = kind.capitalize() + "Button"
 		b.set("button_kind", kind)
-		b.position = Vector2(425, 342 + 79 * i)
-		b.size = Vector2(430, 72)
+		var placement: Rect2 = approved_rects[kind] if _approved_art else Rect2(425, 342 + 79 * i, 430, 72)
+		b.position = placement.position
+		b.size = placement.size
 		_canvas.add_child(b)
-		b.custom_minimum_size = Vector2(430, 72)
+		b.custom_minimum_size = placement.size
 		match kind:
 			"play":
 				b.pressed.connect(_on_play)
@@ -139,13 +165,22 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
-	# Only use a textless PNG plaque. The reference art's v0.1.0-dev must not show behind the actual version.
-	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
+	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
+	# Use the original hand-lettered version only for its exact matching build.
+	# Future version changes fall back to the textless badge + live Label.
+	var painted_version: bool = _approved_art and live_version == "v0.5.0-dev" and ResourceLoader.exists(BAKED_VERSION_ART)
+	if painted_version:
+		_add_image("VersionPlaque", "version_badge_original.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
+	elif _approved_art:
+		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
+	else:
+		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
 	var version := Label.new()
 	version.name = "Version"
-	version.text = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	version.position = Vector2(1077, 670)
-	version.size = Vector2(174, 30)
+	version.text = live_version
+	version.position = Vector2(1094, 652) if _approved_art else Vector2(1077, 670)
+	version.size = Vector2(146, 39) if _approved_art else Vector2(174, 30)
+	version.modulate.a = 0.0 if painted_version else 1.0
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_label_style(version, 20, Color("fff1d5"), Color("2b1e25"))
@@ -209,7 +244,7 @@ func _add_image(node_name: String, png: String, svg: String, where: Vector2, how
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_SCALE
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if node_name in ["Backdrop", "TitleLights"]:
+	if texture.resource_path.get_extension().to_lower() == "png" or node_name in ["Backdrop", "TitleLights"]:
 		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(image)
 
