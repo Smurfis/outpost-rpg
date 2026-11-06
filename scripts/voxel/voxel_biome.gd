@@ -481,21 +481,27 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
 	var placed: int = 0
-	for i in range(13):
+	for i in range(18):
 		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
 		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
 		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
 			continue
 		placed += 1
 		var y: float = surface_y_at(x, z)
-		if i == 0 and maxf(absf(x), absf(z)) > 28.0:
-			PIXELS.box(st, Vector3(x, y + 0.73, z), Vector3(0.42, 1.42, 0.46), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.68, z), Vector3(1.4, 0.96, 1.44), 9, 10)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(0.92, 0.66, 0.95), 1, 9)
+		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
+			# Original hand-stacked trees; no new scene nodes/draw calls.
+			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
+			var crown_height: float = 1.66 + float(i % 2) * 0.27
+			PIXELS.box(st, Vector3(x, y + 0.80, z), Vector3(0.42, 1.60, 0.46), 8, 8)
+			PIXELS.box(st, Vector3(x, y + crown_height, z), Vector3(1.72, 0.91, 1.55), 9, 10, 3, tint)
+			PIXELS.box(st, Vector3(x + 0.33, y + crown_height + 0.59, z - 0.16), Vector3(1.23, 0.71, 1.26), 1, 9, 3, tint)
+			PIXELS.box(st, Vector3(x - 0.44, y + crown_height + 0.26, z + 0.43), Vector3(0.81, 0.61, 0.93), 9, 9, 3, tint)
 		elif i % 3 == 0:
-			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10)
+			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10, 3, PIXELS.foliage_tint_at(x, z, world_seed))
 		else:
 			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
+			if i % 5 == 0:
+				PIXELS.box(st, Vector3(x + 0.15, y + 0.20, z - 0.1), Vector3(0.14, 0.12, 0.14), 14, 14)
 	if placed == 0:
 		return null
 	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
@@ -649,9 +655,11 @@ func _make_fields_scenery() -> void:
 			continue
 		var y: float = surface_y_at(x, z)
 		if i % 4 == 0:
+			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
 			PIXELS.box(st, Vector3(x, y + 0.75, z), Vector3(0.45, 1.45, 0.48), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), 9, 10)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), 1, 9)
+			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), 9, 10, 3, tint)
+			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), 1, 9, 3, tint)
+			PIXELS.box(st, Vector3(x - 0.52, y + 1.91, z + 0.54), Vector3(0.95, 0.64, 0.85), 9, 9, 3, tint)
 		elif i % 4 == 1:
 			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
 			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
