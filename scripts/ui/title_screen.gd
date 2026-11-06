@@ -246,25 +246,19 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
+	# The extracted badge's baked font and surrounding patch were misaligned on
+	# wide Android screens. Keep the decorative plaque, use ONE centred live label.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	# Use the original hand-lettered version only for its exact matching build.
-	# Future version changes fall back to the textless badge + live Label.
-	var painted_version: bool = _approved_art and live_version == "v0.5.0-dev" and ResourceLoader.exists(BAKED_VERSION_ART)
-	if painted_version:
-		_add_image("VersionPlaque", "version_badge_original.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
-	elif _approved_art:
-		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
-	else:
-		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
+	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
 	var version := Label.new()
 	version.name = "Version"
-	version.text = live_version
-	version.position = Vector2(1094, 652) if _approved_art else Vector2(1077, 670)
-	version.size = Vector2(146, 39) if _approved_art else Vector2(174, 30)
-	version.modulate.a = 0.0 if painted_version else 1.0
+	version.text = "%s  •  %d" % [live_version, int(ProjectSettings.get_setting("application/config/android_build_code", 11))]
+	version.position = Vector2(1068, 652)
+	version.size = Vector2(183, 40)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_label_style(version, 20, Color("fff1d5"), Color("2b1e25"))
+	_label_style(version, 18, Color("fff1d5"), Color("2b1e25"))
+	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(version)
 
 	_add_image("TipPlaque", "tip_panel.png", "tip_panel.svg", Vector2(247, 656), Vector2(785, 53))
@@ -374,22 +368,18 @@ func _has_valid_save() -> bool:
 	return int(data.get("version", 0)) in [2, 3, 4, 5]
 
 func _on_play() -> void:
-	if _has_valid_save():
-		var warning := ConfirmationDialog.new()
-		warning.title = "Start a new adventure?"
-		warning.dialog_text = "Your existing save will be replaced when the new adventure saves.\nSelect Continue to keep your current progress."
-		_canvas.add_child(warning)
-		warning.confirmed.connect(func() -> void: _launch_game(true))
-		warning.popup_centered(Vector2i(560, 210))
-	else:
-		_launch_game(true)
+	_open_adventure_panel(true)
 
 func _begin_continue() -> void:
 	if _has_valid_save():
-		_launch_game(false)
+		_open_adventure_panel(false)
 
-func _launch_game(new_adventure: bool) -> void:
+func _launch_game(new_adventure: bool, lan_mode: String = "solo", address: String = "", preferred_name: String = "Adventurer") -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
+	# The main game owns ENet and starts it only AFTER the player/avatar exists.
+	get_tree().root.set_meta("outpost_lan_mode", lan_mode)
+	get_tree().root.set_meta("outpost_lan_ip", address)
+	get_tree().root.set_meta("outpost_lan_name", preferred_name)
 	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
@@ -644,19 +634,27 @@ func _on_update_status(message: String) -> void:
 
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
 	_update_download_url = download_url
-	_update_button.text = "DOWNLOAD ANDROID UPDATE"
+	if _download_button != null:
+		_download_button.disabled = false
+		_download_button.text = "DOWNLOAD BUILD %d" % version_code
 	if _update_notice != null:
 		_update_notice.text = "UPDATE AVAILABLE  •  BUILD %d" % version_code
 		_update_notice.visible = true
 	_on_update_status("New Outpost build %d available. Tap Download, then approve Android's install prompt." % version_code)
 
 func _toggle_settings() -> void:
+	if _adventure_panel != null and _adventure_panel.visible:
+		_close_adventure_panel()
 	_settings_panel.visible = not _settings_panel.visible
-	_settings_panel.move_to_front()
+	if _settings_panel.visible:
+		_settings_panel.move_to_front()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _settings_panel != null and _settings_panel.visible:
-		if event.is_action_pressed("ui_cancel"):
+	if event.is_action_pressed("ui_cancel"):
+		if _adventure_panel != null and _adventure_panel.visible:
+			_close_adventure_panel()
+			get_viewport().set_input_as_handled()
+		elif _settings_panel != null and _settings_panel.visible:
 			_toggle_settings()
 			get_viewport().set_input_as_handled()
 
@@ -665,9 +663,11 @@ func _read_prefs() -> void:
 	if prefs.load(UI_PREFS) == OK:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
 		_show_tips = bool(prefs.get_value("title", "show_tips", true))
+		_volume = clampf(float(prefs.get_value("title", "volume", 0.85)), 0.0, 1.0)
 
 func _write_prefs() -> void:
 	var prefs := ConfigFile.new()
 	prefs.set_value("title", "reduced_motion", _reduced_motion)
 	prefs.set_value("title", "show_tips", _show_tips)
+	prefs.set_value("title", "volume", _volume)
 	prefs.save(UI_PREFS)
