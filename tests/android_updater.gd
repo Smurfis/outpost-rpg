@@ -62,20 +62,6 @@ func _run() -> void:
 		check(download != null and not download.disabled and download.text.contains("15"), "Dedicated download button enables for the discovered build")
 		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action opens only the trusted update URL")
 		check(button.text == "CHECK FOR UPDATES", "Checking for newer updates remains available")
-		# Alpha and stable can be installed side by side, but must never
-		# accidentally advertise an APK from the other release channel.
-		var alpha_url: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v23/Outpost-Alpha-v23.apk"
-		var alpha_release: Dictionary = {
-			"tag_name": "outpost-alpha-v23",
-			"draft": false,
-			"html_url": "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-alpha-v23",
-			"assets": [{"name": "Outpost-Alpha-v23.apk", "browser_download_url": alpha_url}]
-		}
-		var alpha_results: Array = [alpha_release, _release(99, "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v99/Outpost-Android-v99.apk")]
-		check(updater_script.find_newest_release(alpha_results, 22, "outpost-alpha-v").get("download_url", "") == alpha_url, "Alpha selects only same-channel builds")
-		check(updater_script.find_newest_release([alpha_release], 22).is_empty(), "Stable never offers Alpha APK")
-		check(updater_script.find_newest_release([_release(99, newer)], 22, "outpost-alpha-v").is_empty(), "Alpha never offers Stable APK")
-
 		screen.queue_free()
 		await process_frame
 	print("ANDROID UPDATER RESULT: %d failures" % failures)

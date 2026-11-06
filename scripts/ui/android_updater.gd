@@ -7,8 +7,6 @@ signal update_found(download_url: String, version_code: int, release_url: String
 
 const API: String = "https://api.github.com/repos/Smurfis/outpost-rpg/releases?per_page=20"
 const TAG_PREFIX: String = "outpost-android-v"
-const ALPHA_TAG_PREFIX: String = "outpost-alpha-v"
-const CHANNEL_KEY: String = "application/config/build_channel"
 const DOWNLOAD_PREFIX: String = "https://github.com/Smurfis/outpost-rpg/releases/download/"
 const PROJECT_VERSION_KEY: String = "application/config/android_build_code"
 const DEFAULT_VERSION_CODE: int = 11
@@ -47,9 +45,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		status_changed.emit("Could not read the update information.")
 		return
 	var current_code: int = installed_version_code()
-	var channel: String = str(ProjectSettings.get_setting(CHANNEL_KEY, "stable"))
-	var tag_prefix: String = ALPHA_TAG_PREFIX if channel == "alpha" else TAG_PREFIX
-	var latest: Dictionary = find_newest_release(json as Array, current_code, tag_prefix)
+	var latest: Dictionary = find_newest_release(json as Array, current_code)
 	if latest.is_empty():
 		status_changed.emit("Outpost is up to date (build %d)." % current_code)
 	else:
@@ -61,7 +57,7 @@ func _finish_request() -> void:
 		_request = null
 		old.queue_free()
 
-static func find_newest_release(releases: Array, installed_code: int, tag_prefix: String = TAG_PREFIX) -> Dictionary:
+static func find_newest_release(releases: Array, installed_code: int) -> Dictionary:
 	# Only GitHub assets from OUR repo and tags with monotonically increasing
 	# integer build codes. No arbitrary URL redirects, webview or code execution.
 	var latest: Dictionary = {}
@@ -73,9 +69,9 @@ static func find_newest_release(releases: Array, installed_code: int, tag_prefix
 		if bool(item.get("draft", false)):
 			continue
 		var tag: String = str(item.get("tag_name", ""))
-		if not tag.begins_with(tag_prefix):
+		if not tag.begins_with(TAG_PREFIX):
 			continue
-		var number: String = tag.trim_prefix(tag_prefix)
+		var number: String = tag.trim_prefix(TAG_PREFIX)
 		if not number.is_valid_int():
 			continue
 		var code: int = int(number)
