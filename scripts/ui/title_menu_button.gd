@@ -7,6 +7,8 @@ extends Button
 
 const ASSET_BASE := "res://assets/ui/title/"
 const CAPTIONS := {"play": "Play", "continue": "Continue", "settings": "Settings", "quit": "Quit"}
+var _pointer_hovered: bool = false
+var _spark_elapsed: float = 0.0
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(430, 76)
@@ -14,6 +16,13 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_apply_appearance()
+	focus_entered.connect(_refresh_highlight)
+	focus_exited.connect(_refresh_highlight)
+	mouse_entered.connect(_on_pointer_entered)
+	mouse_exited.connect(_on_pointer_exited)
+	button_down.connect(_refresh_highlight)
+	button_up.connect(_refresh_highlight)
+	set_process(true)
 
 func _apply_appearance() -> void:
 	var kind: String = button_kind if CAPTIONS.has(button_kind) else "play"
@@ -41,7 +50,9 @@ func _apply_appearance() -> void:
 			add_theme_stylebox_override(state, art_style)
 		var art_focus := StyleBoxFlat.new()
 		art_focus.bg_color = Color.TRANSPARENT
-		art_focus.border_color = Color.TRANSPARENT
+		art_focus.border_color = Color("f9c55e", 0.88)
+		art_focus.set_border_width_all(3)
+		art_focus.set_corner_radius_all(18)
 		add_theme_stylebox_override("focus", art_focus)
 		return
 	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
@@ -71,6 +82,55 @@ func _apply_appearance() -> void:
 	focus_style.set_border_width_all(2)
 	focus_style.set_corner_radius_all(16)
 	add_theme_stylebox_override("focus", focus_style)
+
+## Gold glints are drawn OUTSIDE the art plaque, so baked text/icons remain sharp.
+## Focus follows gamepad/keyboard and a finger tap; hover follows the mouse.
+func is_title_highlighted() -> bool:
+	return not disabled and (has_focus() or _pointer_hovered)
+
+func _on_pointer_entered() -> void:
+	_pointer_hovered = true
+	if not disabled:
+		grab_focus()
+	_refresh_highlight()
+
+func _on_pointer_exited() -> void:
+	_pointer_hovered = false
+	_refresh_highlight()
+
+func _gui_input(event: InputEvent) -> void:
+	if disabled:
+		return
+	if event is InputEventScreenTouch:
+		if (event as InputEventScreenTouch).pressed:
+			grab_focus()
+	elif event is InputEventMouseButton:
+		if (event as InputEventMouseButton).pressed:
+			grab_focus()
+
+func _refresh_highlight() -> void:
+	queue_redraw()
+
+func _process(delta: float) -> void:
+	if not is_title_highlighted():
+		return
+	_spark_elapsed = fposmod(_spark_elapsed + delta, TAU)
+	queue_redraw()
+
+func _draw() -> void:
+	if not is_title_highlighted():
+		return
+	var alpha: float = 0.84 + 0.14 * sin(_spark_elapsed * 2.0)
+	var gold := Color(1.0, 0.77, 0.26, alpha)
+	var pale := Color(1.0, 0.94, 0.68, alpha)
+	var mid: float = roundf(size.y * 0.5)
+	for side in [-1, 1]:
+		var x: float = -12.0 if side == -1 else size.x + 12.0
+		draw_line(Vector2(x, mid - 16.0), Vector2(x, mid - 6.0), gold, 3.0)
+		draw_line(Vector2(x, mid + 6.0), Vector2(x, mid + 16.0), gold, 3.0)
+		draw_line(Vector2(x - 15.0, mid), Vector2(x - 5.0, mid), pale, 3.0)
+		draw_line(Vector2(x + 5.0, mid), Vector2(x + 15.0, mid), pale, 3.0)
+		draw_rect(Rect2(Vector2(x - 3, mid - 3), Vector2(6, 6)), pale)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	var style := StyleBoxTexture.new()
