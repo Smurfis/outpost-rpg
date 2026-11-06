@@ -1,4 +1,5 @@
 extends CharacterBody3D
+const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 ## Simple boar with pursuit, melee range damage and respawn.
 const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
@@ -12,6 +13,12 @@ var spawn_pos := Vector3.ZERO
 var visual: Node3D
 var knockback_velocity: Vector3 = Vector3.ZERO
 var hit_lift: float = 0.0
+@export var max_climb_height: float = 0.62
+@export var can_fly: bool = false
+@export var flight_height: float = 1.5
+var visual_step_offset: Vector3 = Vector3.ZERO
+var burn_left: float = 0.0
+var burn_tick: float = 0.0
 
 func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	game = game_ref
@@ -84,9 +91,21 @@ func _physics_process(delta: float) -> void:
 			visible = true
 			knockback_velocity = Vector3.ZERO
 			hit_lift = 0.0
+			burn_left = 0.0
+			burn_tick = 0.0
+			visual_step_offset = Vector3.ZERO
 			collision_layer = 2
 			collision_mask = 1
 		return
+	# Fire continues to damage the creature without extending combat cooldown.
+	if burn_left > 0.0:
+		burn_left = maxf(0.0, burn_left - delta)
+		burn_tick += delta
+		if burn_tick >= 1.0:
+			burn_tick -= 1.0
+			receive_damage(3.0, false)
+			if not alive:
+				return
 	var direction: Vector3 = hero.global_position - global_position
 	direction.y = 0
 	var dist := direction.length()
@@ -97,11 +116,24 @@ func _physics_process(delta: float) -> void:
 	velocity.x = pursuit.x * 2.0 + knockback_velocity.x
 	velocity.z = pursuit.z * 2.0 + knockback_velocity.z
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 12.0)
-	velocity.y = -0.1 if is_on_floor() else velocity.y - 18.0 * delta
-	if hit_lift > 0.0:
-		velocity.y = hit_lift
-		hit_lift = 0.0
+	var grounded: bool = is_on_floor()
+	if can_fly:
+		var target_y: float = hero.global_position.y + flight_height
+		velocity.y = clampf((target_y - global_position.y) * 2.5, -4.0, 4.0)
+	else:
+		velocity.y = -0.1 if grounded else velocity.y - 18.0 * delta
+		if hit_lift > 0.0:
+			velocity.y = hit_lift
+			hit_lift = 0.0
 	move_and_slide()
+	if not can_fly and grounded and is_on_wall() and pursuit.length_squared() > 0.01:
+		var before: Vector3 = global_position
+		var step_rise: float = VOXEL_STEP.try_step(self, pursuit * 2.0 * delta, max_climb_height)
+		if step_rise > 0.0:
+			visual_step_offset += before - global_position
+			visual_step_offset = visual_step_offset.limit_length(1.0)
+	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
+	visual.position = visual_step_offset
 	if pursuit.length() > 0.1:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-pursuit.x, -pursuit.z), minf(delta * 10.0, 1.0))
 	cooldown -= delta
@@ -117,12 +149,17 @@ func apply_knockback(source: Vector3, strength: float = 6.8) -> void:
 	knockback_velocity = push.normalized() * clampf(strength, 0.0, 10.0)
 	hit_lift = 1.7
 
-func receive_damage(amount: float) -> void:
+func ignite(seconds: float = 4.0) -> void:
+	if alive:
+		burn_left = maxf(burn_left, clampf(seconds, 0.0, 12.0))
+		burn_tick = 0.0
+
+func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 	if not alive:
 		return
 	var dealt: float = minf(hp, maxf(0.0, amount))
 	hp -= amount
-	if hp > 0.0 and is_instance_valid(hero):
+	if trigger_recoil and hp > 0.0 and is_instance_valid(hero):
 		apply_knockback(hero.global_position)
 	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0)
 	if hp <= 0.0:
