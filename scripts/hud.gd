@@ -30,6 +30,14 @@ var clock_label: Label
 var torch_button: Button
 var torch_label: Label
 var quest: Label
+var quest_frame: Panel
+var quest_toggle: Button
+var context_prompt_frame: Panel
+var context_is_actionable: bool = false
+var objective_is_complete: bool = false
+var gesture_hint_timeout: float = 8.0
+var tool_gesture_hint: Label
+var camera_gesture_hint: Label
 var quest_detail: Label
 var quest_detail_back: Panel
 var quest_expanded: bool = false
@@ -74,40 +82,36 @@ func _ready() -> void:
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	# Upper-left character identity. Health and XP have enough height for
-	# real, readable values; don't draw tiny multi-line text over the bars.
-	var status_frame: Panel = _panel(0.015, 0.021, 0.265, 0.176)
+	# Small live status strip. No generic, permanently fixed cartoon portrait:
+	# the gold sigil is an independent icon; equipment retains the real 3D avatar.
+	var status_frame: Panel = _panel(0.018, 0.019, 0.247, 0.127)
 	status_frame.name = "HeroStatusFrame"
-	var portrait_frame: Panel = _panel(0.023, 0.036, 0.092, 0.156)
-	portrait_frame.name = "PortraitMedallion"
-	portrait_frame.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
-	var portrait := TextureRect.new()
-	portrait.name = "HeroPortrait"
-	portrait.texture = load("res://assets/ui/icons/adventurer_portrait.svg") as Texture2D
-	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(portrait)
-	_anchors(portrait, 0.028, 0.040, 0.088, 0.150)
-	status = _label("OUTPOST", 19, Color("#fff1c7"), 0.103, 0.033, 0.254, 0.074)
+	var sigil := TextureRect.new()
+	sigil.name = "OutpostSigil"
+	sigil.texture = load("res://assets/ui/icons/outpost_sigil.svg") as Texture2D
+	sigil.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sigil.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sigil.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sigil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(sigil)
+	_anchors(sigil, 0.024, 0.036, 0.057, 0.103)
+	status = _label("OUTPOST", 16, Color("#fff1c7"), 0.063, 0.026, 0.236, 0.058)
 	status.clip_text = true
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
-	health_bar = _meter(0.105, 0.082, 0.252, 0.107, Color("#d74c43"))
-	health_numbers = _label("HP 100 / 100", 15, Color("#fff1db"), 0.117, 0.081, 0.244, 0.107)
+	health_bar = _meter(0.065, 0.061, 0.235, 0.083, Color("#d74c43"))
+	health_numbers = _label("100 / 100 HP", 14, Color("#fff1db"), 0.068, 0.061, 0.232, 0.083)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Level uses absolute experience, with persistent per-level progress.
-	# The long bottom bar follows MMO HUDs without stealing combat taps.
 	xp_bar = _meter(0.202, 0.966, 0.980, 0.995, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
-	xp_level_label = _label("LVL 1  •  XP 0 / 100", 15, Color("#fff2d1"), 0.211, 0.969, 0.972, 0.993)
+	xp_level_label = _label("LV 1  •  0 / 100 XP", 15, Color("#fff2d1"), 0.211, 0.969, 0.972, 0.993)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_detail = _label("XP 0  •  TRAINING BLADE", 15, Color("#edc98d"), 0.105, 0.121, 0.256, 0.164)
+	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.090, 0.236, 0.119)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
-	# Actual inventory counts, not fictitious currency/carry capacity.
-	var resource_frame: Panel = _panel(0.015, 0.180, 0.265, 0.226)
+	# Only the four live resources get their own tiny strip.
+	var resource_frame: Panel = _panel(0.018, 0.137, 0.247, 0.179)
 	resource_frame.name = "ResourceQuickChips"
 	var start_x: float = 0.024
 	for key in ["wood", "stone", "hide", "coins"]:
@@ -118,43 +122,50 @@ func _ready() -> void:
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(icon)
-		_anchors(icon, start_x, 0.188, start_x + 0.024, 0.219)
-		var amount: Label = _label("0", 16, Color("#ffe5b5"), start_x + 0.027, 0.187, start_x + 0.056, 0.221)
+		_anchors(icon, start_x, 0.143, start_x + 0.023, 0.174)
+		var amount: Label = _label("0", 14, Color("#ffe5b5"), start_x + 0.024, 0.142, start_x + 0.053, 0.175)
 		amount.clip_text = true
 		items[key] = amount
-		start_x += 0.060
-	bag_weight_label = _label("BAG  0 / 36", 15, Color("#e3b75d"), 0.022, 0.232, 0.252, 0.269)
+		start_x += 0.056
+	# Overload notification appears only when load needs attention; the bag
+	# itself shows the full capacity meter and bonus information.
+	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.184, 0.245, 0.213)
 	bag_weight_label.name = "CarryWeightLabel"
+	bag_weight_label.visible = false
 
-	# A slim interactive quest ribbon; expand for long objectives on demand.
-	var quest_frame: Panel = _panel(0.348, 0.021, 0.710, 0.095)
+	# The persistent quest ribbon is single-line and ellipsis-safe; on
+	# completion it collapses to a small journal button instead of endlessly
+	# announcing the finished starter quest.
+	quest_frame = _panel(0.325, 0.021, 0.715, 0.090)
 	quest_frame.name = "QuestBanner"
-	var quest_toggle := Button.new()
+	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
-	quest_toggle.text = "QUEST"
+	quest_toggle.text = "QUESTS ▾"
 	SKIN.apply_button(quest_toggle, "wood")
 	root.add_child(quest_toggle)
-	_anchors(quest_toggle, 0.359, 0.033, 0.433, 0.084)
+	_anchors(quest_toggle, 0.337, 0.031, 0.424, 0.082)
 	quest_toggle.pressed.connect(_toggle_quest)
-	quest = _label("Gather wood and stone, then craft a spear", 18, Color("#ffe6bb"), 0.444, 0.029, 0.697, 0.085)
+	quest = _label("Gather wood and stone", 17, Color("#ffe6bb"), 0.432, 0.027, 0.701, 0.083)
 	quest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	quest.autowrap_mode = TextServer.AUTOWRAP_OFF
+	quest.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	quest.clip_text = true
-	var detail_back: Panel = _panel(0.352, 0.100, 0.706, 0.185)
-	detail_back.name = "QuestJournal"
-	detail_back.add_theme_stylebox_override("panel", SKIN.box("parchment"))
-	detail_back.visible = false
-	quest_detail_back = detail_back
-	quest_detail = _label("", 18, SKIN.INK, 0.373, 0.109, 0.683, 0.179)
+	quest_detail_back = _panel(0.333, 0.099, 0.707, 0.218)
+	quest_detail_back.name = "QuestJournal"
+	quest_detail_back.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	quest_detail_back.visible = false
+	quest_detail = _label("", 16, SKIN.INK, 0.353, 0.118, 0.690, 0.207)
 	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quest_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	quest_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quest_detail.visible = false
 
-	# Loot/craft status is one parchment notification, never a stack.
-	toast_panel = _panel(0.359, 0.110, 0.699, 0.194)
+	# Centered below the journal, not overlapping quest text. One notice at a time.
+	toast_panel = _panel(0.355, 0.225, 0.682, 0.295)
 	toast_panel.name = "LootQuestToast"
 	toast_panel.add_theme_stylebox_override("panel", SKIN.box("toast"))
 	toast_panel.visible = false
-	toast_label = _label("", 18, SKIN.INK, 0.375, 0.118, 0.685, 0.183)
+	toast_label = _label("", 16, SKIN.INK, 0.371, 0.228, 0.665, 0.290)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast_label.visible = false
@@ -191,6 +202,20 @@ func _ready() -> void:
 	smart_button = _action("interact", "INTERACT", 0.895, 0.740, 0.986, 0.941, "round")
 	smart_button.name = "Action_interact"
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Always-visible tiny upward cue retains the slider affordance after
+	# temporary tutorial text disappears; never intercepts touch gestures.
+	var chevron := Label.new()
+	chevron.name = "ToolSwipeChevron"
+	chevron.text = "↑"
+	chevron.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chevron.add_theme_color_override("font_color", SKIN.GOLD)
+	chevron.add_theme_font_size_override("font_size", 17)
+	chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	smart_button.add_child(chevron)
+	chevron.anchor_left = 0.76
+	chevron.anchor_right = 0.97
+	chevron.anchor_top = 0.02
+	chevron.anchor_bottom = 0.26
 	var swipe_hint := Label.new()
 	swipe_hint.name = "QuickToolGestureHint"
 	swipe_hint.text = "HOLD ↑ TOOLS"
@@ -199,16 +224,23 @@ func _ready() -> void:
 	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
 	swipe_hint.add_theme_font_size_override("font_size", 13)
 	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tool_gesture_hint = swipe_hint
 	root.add_child(swipe_hint)
 	_anchors(swipe_hint, 0.890, 0.696, 0.990, 0.740)
 	_build_smart_tray()
 	_build_quick_tray()
-	var hint_frame: Panel = _panel(0.344, 0.206, 0.695, 0.264)
-	hint_frame.name = "ContextPrompt"
-	hint = _label("Explore the forest", 16, SKIN.CREAM, 0.358, 0.213, 0.681, 0.256)
+	# Context prompts live near the bottom center, only when something
+	# is actually usable. Generic explore prose never occupies the playfield.
+	context_prompt_frame = _panel(0.343, 0.856, 0.694, 0.918)
+	context_prompt_frame.name = "ContextPrompt"
+	hint = _label("", 16, SKIN.CREAM, 0.362, 0.861, 0.676, 0.914)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_OFF
+	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	hint.clip_text = true
+	context_prompt_frame.visible = false
+	hint.visible = false
 
 	joystick = Panel.new()
 	joystick.name = "MovementStick"
@@ -374,6 +406,7 @@ func _make_camera_drag_hint() -> void:
 	var hint_label: Label = _label("HOLD WORLD → ORBIT", 14, Color("#f7dc9c"), 0.768, 0.307, 0.987, 0.348)
 	hint_label.name = "CameraDragHint"
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	camera_gesture_hint = hint_label
 
 func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
@@ -695,9 +728,37 @@ func _toggle_quest() -> void:
 	quest_expanded = not quest_expanded
 	quest_detail_back.visible = quest_expanded
 	quest_detail.visible = quest_expanded
-	quest_detail.text = quest.text
+	quest_toggle.text = "CLOSE ▴" if quest_expanded else "✓ QUESTS" if objective_is_complete else "QUESTS ▾"
+
+func _update_quest_tracker(objective: String) -> void:
+	var text_value: String = objective.strip_edges()
+	var lower: String = text_value.to_lower()
+	objective_is_complete = lower.contains("quest finished") or lower.contains("quest complete") or lower.contains("quest completed")
+	var should_show: bool = not objective_is_complete and text_value != ""
+	quest_frame.visible = should_show
+	quest.visible = should_show
+	quest.text = text_value
+	quest_detail.text = text_value if text_value != "" else "No active quest."
+	quest_toggle.text = "CLOSE ▴" if quest_expanded else "✓ QUESTS" if objective_is_complete else "QUESTS ▾"
+
+func _update_context_prompt(helper: String) -> void:
+	var text_value: String = helper.strip_edges()
+	var lower: String = text_value.to_lower()
+	var generic: bool = text_value.is_empty() or lower.begins_with("explore") or lower.begins_with("wander") or lower.begins_with("starter quest finished")
+	var show_prompt: bool = context_is_actionable and not generic
+	hint.text = text_value
+	if context_prompt_frame != null:
+		context_prompt_frame.visible = show_prompt
+	hint.visible = show_prompt
 
 func _process(delta: float) -> void:
+	if gesture_hint_timeout > 0.0:
+		gesture_hint_timeout = maxf(0.0, gesture_hint_timeout - delta)
+		if gesture_hint_timeout <= 0.0:
+			if tool_gesture_hint != null:
+				tool_gesture_hint.visible = false
+			if camera_gesture_hint != null:
+				camera_gesture_hint.visible = false
 	if (smart_hold_finger >= 0 or smart_hold_mouse) and not smart_tray_open:
 		smart_hold_seconds += delta
 		if smart_hold_seconds >= 0.34:
@@ -797,25 +858,32 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 	status.text = "OUTPOST"
 	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
 	if bag_weight_label != null and game != null:
-		bag_weight_label.text = "BAG  %.1f / %.1f  %s" % [game.bag_load(), game.bag_capacity(), "★".repeat(game.equipped_bag_stars())]
-		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if game.bag_load() >= game.bag_capacity() else Color("#e3b75d"))
-	hero_detail.text = "MASTERY %d  •  %s" % [game.mastery_rank(weapon), weapon.replace("_", " ").to_upper()] if game != null else weapon
+		var max_load: float = maxf(1.0, game.bag_capacity())
+		var current_load: float = game.bag_load()
+		bag_weight_label.text = "BAG NEAR LIMIT  %.0f / %.0f" % [current_load, max_load]
+		bag_weight_label.visible = current_load >= max_load * 0.85
+		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load >= max_load else Color("#e3b75d"))
+	hero_detail.text = "%s  •  M%d" % [weapon.replace("_", " ").capitalize(), game.mastery_rank(weapon)] if game != null else weapon
 	if game != null and xp_level_label != null:
 		var level_data: Dictionary = game.level_state()
-		xp_bar.value = float(level_data.get("current", 0)) * 100.0 / float(level_data.get("required", 100))
-		xp_level_label.text = "LEVEL %d     %d / %d XP" % [int(level_data.get("level", 1)), int(level_data.get("current", 0)), int(level_data.get("required", 100))]
+		var rank: int = int(level_data.get("level", 1))
+		var required: float = maxf(1.0, float(level_data.get("required", 100)))
+		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
+		xp_level_label.text = "LEVEL %d     %d / %d XP" % [rank, int(level_data.get("current", 0)), int(required)]
+		status.text = "OUTPOST  •  LV %d" % rank
 		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
-	quest.text = objective
-	if quest_expanded:
-		quest_detail.text = objective
-	hint.text = helper
+	_update_quest_tracker(objective)
+	_update_context_prompt(helper)
 
 func update_context(has_resource: bool, has_enemy: bool, at_bench: bool) -> void:
+	context_is_actionable = has_resource or has_enemy or at_bench
+	if hint != null:
+		_update_context_prompt(hint.text)
 	if gather_button != null:
 		gather_button.disabled = not has_resource
 	if attack_button != null:

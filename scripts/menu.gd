@@ -6,6 +6,7 @@ const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
 var shell: Control
+var popup_frame: PanelContainer
 var title: Label
 var subtitle: Label
 var station_tabs: HBoxContainer
@@ -48,14 +49,14 @@ func _ready() -> void:
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
-	frame.anchor_left = 0.186
-	frame.anchor_right = 0.814
-	frame.anchor_top = 0.116
-	frame.anchor_bottom = 0.884
+	frame.name = "CompactMenuFrame"
 	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
 	shell.add_child(frame)
+	popup_frame = frame
+	_layout_popup()
+	get_viewport().size_changed.connect(_layout_popup)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 8)
+	page.add_theme_constant_override("separation", 6)
 	frame.add_child(page)
 	var header := HBoxContainer.new()
 	page.add_child(header)
@@ -87,12 +88,15 @@ func _ready() -> void:
 	close.pressed.connect(close_page)
 	header.add_child(close)
 	subtitle = _label("", 16, Color("f4d9a6"))
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_OFF
+	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	subtitle.clip_text = true
 	page.add_child(subtitle)
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
 	page.add_child(station_tabs)
 	var panes := HBoxContainer.new()
-	panes.add_theme_constant_override("separation", 12)
+	panes.add_theme_constant_override("separation", 8)
 	panes.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var surface := PanelContainer.new()
 	surface.add_theme_stylebox_override("panel", SKIN.box("parchment"))
@@ -119,9 +123,29 @@ func _ready() -> void:
 	panes.add_child(right_scroll)
 	details = VBoxContainer.new()
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	details.add_theme_constant_override("separation", 10)
+	details.add_theme_constant_override("separation", 7)
 	right_scroll.add_child(details)
 	visible = false
+
+func _layout_popup() -> void:
+	# Stable *pixel* dimensions rather than a huge percentage of ultra-wide
+	# mobile screens. Leave the game visible around the frame, but keep
+	# sufficient space for five station tabs and large thumb targets.
+	if popup_frame == null:
+		return
+	var bounds: Vector2 = get_viewport().get_visible_rect().size
+	var max_width: float = maxf(300.0, bounds.x - 30.0)
+	var max_height: float = maxf(320.0, bounds.y - 34.0)
+	var width_px: float = minf(clampf(bounds.x * 0.60, 620.0, 880.0), max_width)
+	var height_px: float = minf(clampf(bounds.y * 0.73, 450.0, 600.0), max_height)
+	popup_frame.anchor_left = 0.5
+	popup_frame.anchor_right = 0.5
+	popup_frame.anchor_top = 0.5
+	popup_frame.anchor_bottom = 0.5
+	popup_frame.offset_left = -width_px * 0.5
+	popup_frame.offset_right = width_px * 0.5
+	popup_frame.offset_top = -height_px * 0.5
+	popup_frame.offset_bottom = height_px * 0.5
 
 func _style(background: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -163,7 +187,9 @@ func _clear(parent: Node) -> void:
 
 func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	var container := PanelContainer.new()
-	container.add_theme_stylebox_override("panel", SKIN.box("inset"))
+	# Text in these nested detail cards is cream/gold, so use dark carved
+	# wood instead of a light item-card surface with unreadable cream text.
+	container.add_theme_stylebox_override("panel", SKIN.box("frame"))
 	target.add_child(container)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
