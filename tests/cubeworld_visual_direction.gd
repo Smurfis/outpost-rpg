@@ -55,7 +55,12 @@ func _run() -> void:
 	await process_frame
 	var head: MeshInstance3D = game.hero.visual.get_node_or_null("adventurer_head") as MeshInstance3D
 	verify(head != null and head.scale.x >= 1.30, "Adventurer keeps enlarged expressive voxel head")
-	verify(game.hero.get_node_or_null("CollisionShape3D") != null, "Existing movement collision preserved")
+	var has_collision: bool = false
+	for child in game.hero.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape != null:
+			has_collision = true
+			break
+	verify(has_collision, "Existing movement collision preserved")
 	var map: Control = game.hud.root.get_node_or_null("LiveWorldMinimap") as Control
 	verify(map != null and map.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Circular minimap does not steal camera touch input")
 	if map != null:
