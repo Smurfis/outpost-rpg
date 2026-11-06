@@ -360,7 +360,7 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 		var prop: MeshInstance3D
 		match id:
 			"oak_tree":
-				prop = VOXEL_PROPS.tree(VOXEL_PALETTE.foliage_tint_at(where.x, where.z, 64012))
+				prop = VOXEL_PROPS.tree(VOXEL_PALETTE.foliage_tint_at(where.x, where.z, 64012), VOXEL_PALETTE.foliage_tile_at(where.x, where.z, 64012))
 			"rock_deposit":
 				prop = VOXEL_PROPS.rock()
 			"supply_crate":
