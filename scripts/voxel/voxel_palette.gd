@@ -141,16 +141,31 @@ static func foliage_variant_at(x: float, z: float, seed: int = 64012) -> int:
 	var cz: int = floori(z / 14.0)
 	return posmod(cx * 71 + cz * 101 + seed * 13 + cx * cz * 7, 11)
 
+# Draw variant crowns from already-loaded atlas cells, not just a
+# multiplication of dark green pixels: cherry/purple foliage must stay vivid.
+# No new textures; all variants still use the same 64x64 atlas.
+static func foliage_tile_at(x: float, z: float, seed: int = 64012) -> int:
+	var kind: int = foliage_variant_at(x, z, seed)
+	if kind in [0, 1, 2, 3]:
+		return 14 # Original vibrant berry-red tile doubles as pink blossom.
+	if kind in [4, 5]:
+		return 1 # Sunlit lime tile.
+	if kind == 6:
+		return 13 # Violet floral tile.
+	if kind == 7:
+		return 7 # Teal-moss tile.
+	return 9 # Evergreen leaves.
+
 static func foliage_tint_at(x: float, z: float, seed: int = 64012) -> Color:
 	var kind: int = foliage_variant_at(x, z, seed)
 	if kind in [0, 1, 2, 3]:
-		return Color(2.30, 0.33, 1.80) # Cherry pink.
+		return Color(1.0, 0.82, 1.0) # Cherry blossom red-pink.
 	if kind in [4, 5]:
-		return Color(2.05, 1.60, 0.28) # Sunlit chartreuse.
+		return Color(1.0, 1.0, 0.52) # Sunlit chartreuse.
 	if kind == 6:
-		return Color(1.72, 0.42, 2.32) # Violet blossom.
+		return Color(1.0, 0.79, 1.0) # Violet floral crown.
 	if kind == 7:
-		return Color(0.70, 1.05, 1.95) # Teal fantasy canopy.
+		return Color(0.52, 0.95, 1.0) # Cool jade canopy.
 	return Color.WHITE # Forest green, preserving the original source art.
 
 static func create_mesh(st: SurfaceTool) -> ArrayMesh:
