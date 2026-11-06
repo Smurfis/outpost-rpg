@@ -183,6 +183,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_opaque_terrain_water.gd 2>&1 | tee opaque-terrain.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL OPAQUE TERRAIN:' opaque-terrain.log; then exit 1; fi
           grep -q "OPAQUE TERRAIN RESULT: 0 failure(s)" opaque-terrain.log
+      - name: Verify compact wallet, menu hold, three skills and floating movement joystick
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/mobile_hud_wallet_floating_joystick.gd 2>&1 | tee wallet-float-hud.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MOBILE HUD:' wallet-float-hud.log; then exit 1; fi
+          grep -q "MOBILE HUD RESULT: 0 failures" wallet-float-hud.log
       - name: Verify approved portrait HUD, working hotbar and compact inventory/crafting
         run: |
           set -o pipefail
