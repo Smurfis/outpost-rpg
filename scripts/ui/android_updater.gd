@@ -14,6 +14,18 @@ const PROJECT_VERSION_KEY: String = "application/config/android_build_code"
 const DEFAULT_VERSION_CODE: int = 11
 
 var _request: HTTPRequest
+var target_channel: String = ""
+
+func installed_channel() -> String:
+	return "alpha" if str(ProjectSettings.get_setting(CHANNEL_KEY, "stable")) == "alpha" else "stable"
+
+func selected_channel() -> String:
+	return target_channel if target_channel in ["stable", "alpha"] else installed_channel()
+
+func set_target_channel(channel: String) -> void:
+	if channel in ["stable", "alpha"]:
+		target_channel = channel
+
 
 func installed_version_code() -> int:
 	return int(ProjectSettings.get_setting(PROJECT_VERSION_KEY, DEFAULT_VERSION_CODE))
@@ -46,12 +58,12 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	if not (json is Array):
 		status_changed.emit("Could not read the update information.")
 		return
-	var current_code: int = installed_version_code()
-	var channel: String = str(ProjectSettings.get_setting(CHANNEL_KEY, "stable"))
+	var channel: String = selected_channel()
+	var current_code: int = installed_version_code() if channel == installed_channel() else 0
 	var tag_prefix: String = ALPHA_TAG_PREFIX if channel == "alpha" else TAG_PREFIX
 	var latest: Dictionary = find_newest_release(json as Array, current_code, tag_prefix)
 	if latest.is_empty():
-		status_changed.emit("Outpost is up to date (build %d)." % current_code)
+		status_changed.emit("No newer %s APK found (installed build %d)." % [channel.capitalize(), installed_version_code()] if channel == installed_channel() else "No published %s APK available yet." % channel.capitalize())
 	else:
 		update_found.emit(str(latest["download_url"]), int(latest["version_code"]), str(latest["release_url"]))
 
@@ -73,7 +85,7 @@ static func find_newest_release(releases: Array, installed_code: int, tag_prefix
 		if bool(item.get("draft", false)):
 			continue
 		var tag: String = str(item.get("tag_name", ""))
-		if not tag.begins_with(tag_prefix):
+		if tag_prefix not in [TAG_PREFIX, ALPHA_TAG_PREFIX] or not tag.begins_with(tag_prefix):
 			continue
 		var number: String = tag.trim_prefix(tag_prefix)
 		if not number.is_valid_int():
@@ -89,7 +101,8 @@ static func find_newest_release(releases: Array, installed_code: int, tag_prefix
 				continue
 			var asset: Dictionary = value
 			var url: String = str(asset.get("browser_download_url", ""))
-			if not str(asset.get("name", "")).ends_with(".apk") or not url.begins_with(DOWNLOAD_PREFIX):
+			var expected_name: String = ("Outpost-Alpha-v" if tag_prefix == ALPHA_TAG_PREFIX else "Outpost-Android-v") + number + ".apk"
+			if str(asset.get("name", "")) != expected_name or not url.begins_with(DOWNLOAD_PREFIX):
 				continue
 			if not url.contains("/" + tag + "/"):
 				continue

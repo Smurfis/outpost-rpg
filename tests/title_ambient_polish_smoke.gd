@@ -26,7 +26,7 @@ func _run() -> void:
 	_check(splash != null, "Rotating slogan exists")
 	if splash != null:
 		_check(splash.text == "Bring a torch!", "Torch slogan opens the title")
-		_check(splash.autowrap_mode == TextServer.AUTOWRAP_OFF and splash.clip_text, "Slogan is one line with clipped overflow, not double-wrapped")
+		_check(splash.autowrap_mode == TextServer.AUTOWRAP_OFF and not splash.clip_text, "Rotating slogan uses manual line breaks without opaque clipping")
 		splash.call("set_message", "Pixel by pixel!")
 		_check(splash.text == "Pixel by pixel!", "Rotating text is precise and contains no extra glyph")
 		var hero: TextureRect = splash.get_node_or_null("HandLetteredHero") as TextureRect

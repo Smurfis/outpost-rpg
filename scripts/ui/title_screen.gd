@@ -77,6 +77,10 @@ var _update_button: Button
 var _update_status: Label
 var _update_notice: Button
 var _update_download_url: String = ""
+var _selected_channel: String = ""
+var _channel_stable_button: Button
+var _channel_alpha_button: Button
+var _channel_note: Label
 var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
@@ -130,6 +134,16 @@ func _layout_for_size(available: Vector2) -> void:
 	# Convert physical spare width back into 1280x720 design-space units.
 	var half_extra: float = maxf(0.0, (available.x / fit - DESIGN.x) * 0.5)
 	var is_wide: bool = half_extra > 0.5
+	# The Android screenshot's lower-right grey area was the expanded edge
+	# of the painted background. Anchor the actual version plaque to the
+	# RIGHT of the full ultrawide view, instead of leaving it beside that area.
+	# On 16:9 displays half_extra == 0, so the approved position is kept.
+	var version_plaque: TextureRect = _canvas.get_node_or_null("VersionPlaque") as TextureRect
+	var version_label: Label = _canvas.get_node_or_null("Version") as Label
+	if version_plaque != null:
+		version_plaque.position = Vector2(1058.0 + half_extra, 642.0)
+	if version_label != null:
+		version_label.position = Vector2(1068.0 + half_extra, 652.0)
 	_approved_backdrop.visible = not is_wide
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
@@ -246,18 +260,9 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
-	# The extracted badge's baked font and surrounding patch were misaligned on
-	# wide Android screens. Keep the decorative plaque, use ONE centred live label.
+	# A single live version label over a matching textless PNG plaque.
+	# _layout_for_size moves both to the actual ultrawide right edge.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	# A small carved wood corner plate conceals the damaged grey background
-	# cleanup around the old baked-in version patch on ultrawide phones.
-	var corner := Panel.new()
-	corner.name = "VersionCornerWood"
-	corner.position = Vector2(1045, 625)
-	corner.size = Vector2(235, 94)
-	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	corner.add_theme_stylebox_override("panel", SKIN.box("wood"))
-	_canvas.add_child(corner)
 	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
 	var version := Label.new()
 	version.name = "Version"
@@ -380,8 +385,10 @@ func _on_play() -> void:
 	_open_adventure_panel(true)
 
 func _begin_continue() -> void:
+	# Continue is one action, not a second adventure-selection menu.
+	# The existing save is loaded by the world scene after streaming finishes.
 	if _has_valid_save():
-		_open_adventure_panel(false)
+		_launch_game(false)
 
 func _launch_game(new_adventure: bool, lan_mode: String = "solo", address: String = "", preferred_name: String = "Adventurer") -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
@@ -472,7 +479,7 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 	return {"frame": frame, "stack": stack}
 
 func _build_settings() -> void:
-	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 510.0)
+	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 590.0)
 	_settings_panel = parts["frame"] as PanelContainer
 	_settings_panel.name = "SettingsPanel"
 	var stack: VBoxContainer = parts["stack"] as VBoxContainer
@@ -536,12 +543,33 @@ func _build_settings() -> void:
 		_write_prefs()
 	)
 	stack.add_child(tips)
-	stack.add_child(_menu_label("ANDROID UPDATES", 22))
+	stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 22))
+	var channels := HBoxContainer.new()
+	channels.name = "BuildChannelSelector"
+	channels.add_theme_constant_override("separation", 9)
+	stack.add_child(channels)
+	_channel_stable_button = _menu_button("STABLE", _select_update_channel.bind("stable"))
+	_channel_stable_button.name = "StableChannel"
+	_channel_stable_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	channels.add_child(_channel_stable_button)
+	_channel_alpha_button = _menu_button("ALPHA TEST", _select_update_channel.bind("alpha"))
+	_channel_alpha_button.name = "AlphaChannel"
+	_channel_alpha_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	channels.add_child(_channel_alpha_button)
+	_channel_note = _menu_label("", 16)
+	_channel_note.name = "BuildChannelDescription"
+	_channel_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_channel_note.custom_minimum_size = Vector2(0, 28)
+	stack.add_child(_channel_note)
 	_updater = ANDROID_UPDATER.new()
 	_updater.name = "AndroidUpdater"
 	add_child(_updater)
 	_updater.status_changed.connect(_on_update_status)
 	_updater.update_found.connect(_on_update_found)
+	if _selected_channel not in ["stable", "alpha"]:
+		_selected_channel = _updater.installed_channel()
+	_updater.set_target_channel(_selected_channel)
+	_refresh_channel_buttons()
 	var update_row := HBoxContainer.new()
 	update_row.add_theme_constant_override("separation", 10)
 	stack.add_child(update_row)
@@ -565,6 +593,31 @@ func _apply_volume() -> void:
 	var master: int = AudioServer.get_bus_index("Master")
 	if master >= 0:
 		AudioServer.set_bus_volume_db(master, linear_to_db(maxf(0.001, _volume)))
+
+func _select_update_channel(channel: String) -> void:
+	if channel not in ["stable", "alpha"]:
+		return
+	_selected_channel = channel
+	if _updater != null:
+		_updater.set_target_channel(channel)
+	_update_download_url = ""
+	if _download_button != null:
+		_download_button.disabled = true
+		_download_button.text = "DOWNLOAD APK"
+	if _update_notice != null:
+		_update_notice.visible = false
+	_refresh_channel_buttons()
+	_on_update_status("Selected %s. Tap CHECK FOR UPDATES to find its APK." % channel.capitalize())
+	_write_prefs()
+
+func _refresh_channel_buttons() -> void:
+	if _channel_stable_button != null:
+		SKIN.apply_button(_channel_stable_button, "wood_selected" if _selected_channel == "stable" else "wood")
+	if _channel_alpha_button != null:
+		SKIN.apply_button(_channel_alpha_button, "wood_selected" if _selected_channel == "alpha" else "wood")
+	if _channel_note != null:
+		var current: String = _updater.installed_channel() if _updater != null else "stable"
+		_channel_note.text = "INSTALLED: %s  •  INSTALLS SIDE BY SIDE, SAVES STAY SEPARATE." % current.to_upper()
 
 func _check_updates_only() -> void:
 	if _updater != null:
@@ -647,9 +700,9 @@ func _on_update_found(download_url: String, version_code: int, _release_url: Str
 		_download_button.disabled = false
 		_download_button.text = "DOWNLOAD BUILD %d" % version_code
 	if _update_notice != null:
-		_update_notice.text = "UPDATE AVAILABLE  •  BUILD %d" % version_code
+		_update_notice.text = "%s APK  •  BUILD %d" % [_selected_channel.to_upper(), version_code]
 		_update_notice.visible = true
-	_on_update_status("New Outpost build %d available. Tap Download, then approve Android's install prompt." % version_code)
+	_on_update_status("%s build %d available. Tap Download, then approve Android install. Different channels have separate saves." % [_selected_channel.capitalize(), version_code])
 
 func _toggle_settings() -> void:
 	if _adventure_panel != null and _adventure_panel.visible:
@@ -673,10 +726,12 @@ func _read_prefs() -> void:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
 		_show_tips = bool(prefs.get_value("title", "show_tips", true))
 		_volume = clampf(float(prefs.get_value("title", "volume", 0.85)), 0.0, 1.0)
+		_selected_channel = str(prefs.get_value("title", "build_channel", ""))
 
 func _write_prefs() -> void:
 	var prefs := ConfigFile.new()
 	prefs.set_value("title", "reduced_motion", _reduced_motion)
 	prefs.set_value("title", "show_tips", _show_tips)
 	prefs.set_value("title", "volume", _volume)
+	prefs.set_value("title", "build_channel", _selected_channel)
 	prefs.save(UI_PREFS)
