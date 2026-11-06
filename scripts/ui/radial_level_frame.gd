@@ -32,9 +32,12 @@ func update_level(next_level: int, fraction: float) -> void:
 
 func _draw() -> void:
 	var center: Vector2 = size * 0.5
-	var radius: float = minf(size.x, size.y) * 0.352
+	# The original decorative frame uses an opaque painted inner disc:
+	# render that artwork FIRST so the actual live purple radial arc stays
+	# visible between the inner disc and the silver/gold outer ornaments.
+	var radius: float = minf(size.x, size.y) * 0.31
 	var start: float = -PI * 0.5
-	draw_arc(center, radius, start, start + TAU, 88, Color("#32203d"), 8.0, true)
-	if fill_amount > 0.0:
-		draw_arc(center, radius, start, start + TAU * fill_amount, 88, Color("#bb83f1"), 7.0, true)
 	draw_texture_rect(ART, Rect2(Vector2.ZERO, size), false)
+	draw_arc(center, radius, start, start + TAU, 88, Color("#32203d"), 5.5, true)
+	if fill_amount > 0.0:
+		draw_arc(center, radius, start, start + TAU * fill_amount, 88, Color("#bb83f1"), 5.0, true)
