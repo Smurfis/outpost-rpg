@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Outpost mobile HUD: compact live panels, gold-ringed touch actions and a
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -27,6 +28,7 @@ var quick_selected: int = -1
 var quick_ignore_mouse_until: int = 0
 var quick_icon_cache: Dictionary = {}
 var hero_detail: Label
+var minimap: Control
 var clock_label: Label
 var torch_button: Button
 var torch_label: Label
@@ -220,9 +222,12 @@ func _ready() -> void:
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast_label.visible = false
 
-	# Reserve the upper-right corner for a future *real-data* minimap.
-	# Keep the clock and menu under that map without moving the combat radials.
-	# No fake map is rendered by this HUD.
+	# Sample the actual streamed terrain, with the player and crafting stations.
+	# Keep the circular map ABOVE the existing clock/menu footprint, not over abilities.
+	minimap = LIVE_MINIMAP.new()
+	minimap.setup(game)
+	root.add_child(minimap)
+	_anchors(minimap, 0.811, 0.019, 0.980, 0.309)
 	clock_label = _label("DAY 09:07", 17, Color("#fff0c5"), 0.810, 0.329, 0.927, 0.391)
 	clock_label.name = "MinimapFooterClock"
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
