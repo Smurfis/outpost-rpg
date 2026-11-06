@@ -41,7 +41,8 @@ func _run() -> void:
 			continue
 		_check(button.has_method("is_title_highlighted"), name + " implements gold selection")
 		var focus_style: StyleBoxFlat = button.get_theme_stylebox("focus") as StyleBoxFlat
-		_check(focus_style != null and focus_style.border_color.a > 0.4, name + " has visible gold focus border")
+		_check(focus_style != null and focus_style.border_color.a < 0.01, name + " has no rectangular focus box")
+		_check(button.material is ShaderMaterial, name + " swaps selected artwork through pixel shader")
 		button.call("_on_pointer_entered")
 		_check(bool(button.call("is_title_highlighted")) == not button.disabled, name + " highlights only while enabled")
 		button.call("_on_pointer_exited")
@@ -54,8 +55,8 @@ func _run() -> void:
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
 	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
 	title.call("_process", 0.4)
-	_check(backdrop != null and backdrop.modulate.r < 1.0, "Dusk tint affects original painted landscape")
-	_check(wide != null and wide.modulate.r < 1.0, "Dusk tint also affects ultrawide landscape")
+	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Approved background no longer receives mismatched opacity tint")
+	_check(wide != null and wide.modulate == Color.WHITE, "Ultrawide landscape also preserves original tones")
 	title.queue_free()
 	await process_frame
 
