@@ -4,10 +4,12 @@ extends Node3D
 signal session_changed()
 signal roster_changed()
 signal private_run_changed()
+signal join_approval_requested(peer_id: int, nickname: String)
 
 const REGISTRY = preload("res://scripts/network/party_registry.gd")
 const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const UI = preload("res://scripts/network/coop_ui.gd")
+const JOIN_APPROVAL = preload("res://scripts/network/coop_join_approval.gd")
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const ENCOUNTER = preload("res://scripts/network/coop_encounter.gd")
 const LOOT = preload("res://scripts/dungeons/dungeon_loot.gd")
@@ -30,6 +32,8 @@ var return_position: Vector3 = Vector3.ZERO
 var has_return_point: bool = false
 var peer: ENetMultiplayerPeer
 var ui: CanvasLayer
+var join_approval: CanvasLayer
+var pending_peer_names: Dictionary = {}
 var tick_elapsed: float = 0.0
 var host_encounters: Dictionary = {}
 var host_session_id: String = ""
@@ -49,6 +53,9 @@ func _ready() -> void:
 	ui = UI.new()
 	ui.setup(self)
 	add_child(ui)
+	join_approval = JOIN_APPROVAL.new()
+	join_approval.setup(self)
+	add_child(join_approval)
 
 func in_party_dungeon() -> bool:
 	return online() and not preview_descriptor.is_empty()
@@ -74,6 +81,7 @@ func host_lan(preferred_name: String) -> int:
 	mode = "hosting"
 	host_session_id = "%d-%d" % [Time.get_ticks_usec(), randi()]
 	registry = REGISTRY.new()
+	pending_peer_names.clear()
 	registry.create_party(1)
 	players = {1: {"name": display_name, "position": game.hero.global_position, "yaw": 0.0}}
 	_broadcast_snapshot()
@@ -114,6 +122,7 @@ func disconnect_session() -> void:
 	mode = "solo"
 	status_message = "Offline — solo adventure"
 	registry = REGISTRY.new()
+	pending_peer_names.clear()
 	players.clear()
 	roster.clear()
 	party_snapshot = {"parties": []}
@@ -252,6 +261,9 @@ func _peer_disconnected(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	players.erase(peer_id)
+	pending_peer_names.erase(peer_id)
+	if join_approval != null:
+		join_approval.dismiss_peer(peer_id)
 	registry.remove_peer(peer_id)
 	_broadcast_snapshot()
 
@@ -279,14 +291,32 @@ func _introduce(requested_name: String) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender <= 1 or not multiplayer.get_peers().has(sender):
 		return
-	var name_value: String = _safe_name(requested_name)
-	players[sender] = {"name": name_value, "position": Vector3(0, 0.35, 0), "yaw": 0.0}
-	if registry.party_of(sender) == 0:
+	if players.has(sender) or pending_peer_names.has(sender):
+		return
+	# A remote peer may connect to ENet but is NOT added to the roster or
+	# party/dungeons until the host explicitly approves this name.
+	var safe: String = _safe_name(requested_name)
+	pending_peer_names[sender] = safe
+	join_approval_requested.emit(sender, safe)
+
+func respond_to_join(peer_id: int, accepted: bool) -> void:
+	if not multiplayer.is_server() or not pending_peer_names.has(peer_id):
+		return
+	var safe_name: String = str(pending_peer_names[peer_id])
+	pending_peer_names.erase(peer_id)
+	if not multiplayer.get_peers().has(peer_id):
+		return
+	if not accepted:
+		if peer != null:
+			peer.disconnect_peer(peer_id)
+		return
+	players[peer_id] = {"name": safe_name, "position": Vector3(0, 0.35, 0), "yaw": 0.0}
+	if registry.party_of(peer_id) == 0:
 		var lobby_party: int = registry.party_of(1)
-		if lobby_party != 0 and not registry.join_party(sender, lobby_party):
-			_make_party(sender)
+		if lobby_party != 0 and not registry.join_party(peer_id, lobby_party):
+			_make_party(peer_id)
 		elif lobby_party == 0:
-			_make_party(sender)
+			_make_party(peer_id)
 	_broadcast_snapshot()
 
 func _make_party(peer_id: int) -> void:

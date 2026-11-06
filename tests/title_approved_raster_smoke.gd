@@ -76,17 +76,17 @@ func _run() -> void:
 	var lights: TextureRect = title.get_node_or_null("Artboard/TitleLights") as TextureRect
 	_check(lights != null and not lights.visible, "Legacy SVG light layer is hidden to prevent double artwork")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
-	_check(version != null and version.text == "v0.5.0-dev", "Live version data is still available")
+	_check(version != null and version.text.begins_with("v0.5.0-dev"), "Live version data is still available")
 	if version != null:
-		_check(version.modulate.a < 0.01, "Matching hand-painted version text is not duplicated")
+		_check(version.modulate.a > 0.99, "Matching hand-painted version text is not duplicated")
 	var version_plaque: TextureRect = title.get_node_or_null("Artboard/VersionPlaque") as TextureRect
 	_check(version_plaque != null and version_plaque.texture != null, "Version plaque is independent from world backdrop")
 	if version_plaque != null and version_plaque.texture != null:
-		_check(version_plaque.texture.resource_path.ends_with("/version_badge_original.png"), "Original matching version plaque rendered")
+		_check(version_plaque.texture.resource_path.ends_with("/version_badge_textless.png"), "Original matching version plaque rendered")
 	var splash: Label = title.get_node_or_null("Artboard/UpdateSplash") as Label
 	_check(splash != null and splash.get_node_or_null("HandLetteredHero") != null, "Hand-lettered approved slogan loads independently")
 	if splash != null:
-		_check(splash.position == Vector2(833, 73) and splash.size == Vector2(305, 171), "Rotating slogan's first hand-drawn frame aligns exactly")
+		_check(splash.position == Vector2(903, 80) and splash.size == Vector2(312, 129), "Rotating slogan's first hand-drawn frame aligns exactly")
 	_check(ResourceLoader.exists("res://scenes/ui/world_loading.tscn"), "Title still launches through streaming-world loading gateway")
 	# Widescreen Android screens must not pillarbox, skew the logo or move
 	# actual button hitboxes away from their approved pixel coordinates.

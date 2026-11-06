@@ -35,6 +35,13 @@ func _run() -> void:
 	root.add_child(game)
 	await frames(3)
 	if is_host:
+		# The real game requires consent. For this automated ENet pair test the
+		# host explicitly approves the guest as soon as a prompt is received.
+		game.coop.join_approval_requested.connect(func(peer_id: int, _name: String) -> void:
+			game.coop.respond_to_join(peer_id, true)
+			if game.coop.join_approval != null:
+				game.coop.join_approval.dismiss_peer(peer_id)
+		)
 		check(game.coop.host_lan("LAN Host") == OK, "Host listens on UDP 30115")
 	else:
 		check(game.coop.join_lan("127.0.0.1", "LAN Guest") == OK, "Client attempts localhost UDP")

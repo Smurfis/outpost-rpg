@@ -7,6 +7,9 @@ extends Button
 
 const ASSET_BASE := "res://assets/ui/title/"
 const CAPTIONS := {"play": "Play", "continue": "Continue", "settings": "Settings", "quit": "Quit"}
+const GOLD_SHADER := preload("res://assets/ui/title/button_selection.gdshader")
+var _selection_material: ShaderMaterial
+
 var _pointer_hovered: bool = false
 var _spark_elapsed: float = 0.0
 @export var reduced_motion: bool = false
@@ -51,9 +54,14 @@ func _apply_appearance() -> void:
 			add_theme_stylebox_override(state, art_style)
 		var art_focus := StyleBoxFlat.new()
 		art_focus.bg_color = Color.TRANSPARENT
-		art_focus.border_color = Color(0.98, 0.77, 0.37, 0.88)
-		art_focus.set_border_width_all(3)
-		art_focus.set_corner_radius_all(18)
+		art_focus.border_color = Color.TRANSPARENT
+		art_focus.set_border_width_all(0)
+		# Gold is painted into the selected artwork, never a focus rectangle.
+		_selection_material = ShaderMaterial.new()
+		_selection_material.shader = GOLD_SHADER
+		_selection_material.set_shader_parameter("originally_gold", kind == "play")
+		material = _selection_material
+		_update_active_art()
 		add_theme_stylebox_override("focus", art_focus)
 		return
 	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
@@ -110,7 +118,12 @@ func _gui_input(event: InputEvent) -> void:
 			grab_focus()
 
 func _refresh_highlight() -> void:
+	_update_active_art()
 	queue_redraw()
+
+func _update_active_art() -> void:
+	if _selection_material != null:
+		_selection_material.set_shader_parameter("selected", is_title_highlighted())
 
 func _process(delta: float) -> void:
 	if reduced_motion or not is_title_highlighted():
@@ -121,17 +134,23 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if not is_title_highlighted():
 		return
-	var alpha: float = 0.92 if reduced_motion else 0.84 + 0.14 * sin(_spark_elapsed * 2.0)
-	var gold := Color(1.0, 0.77, 0.26, alpha)
-	var pale := Color(1.0, 0.94, 0.68, alpha)
-	var mid: float = roundf(size.y * 0.5)
+	# Four short golden rays on each side reproduce the original Play sparkles.
+	# No rectangular selection borders or grey side boxes.
+	var pulse: float = 1.0 if reduced_motion else 0.89 + 0.11 * sin(_spark_elapsed * 3.0)
+	var gold := Color(1.0, 0.70, 0.17, pulse)
+	var bright := Color(1.0, 0.94, 0.58, pulse)
+	var outline := Color(0.38, 0.19, 0.10, pulse)
+	var middle: float = roundf(size.y * 0.5)
 	for side in [-1, 1]:
-		var x: float = -12.0 if side == -1 else size.x + 12.0
-		draw_line(Vector2(x, mid - 16.0), Vector2(x, mid - 6.0), gold, 3.0)
-		draw_line(Vector2(x, mid + 6.0), Vector2(x, mid + 16.0), gold, 3.0)
-		draw_line(Vector2(x - 15.0, mid), Vector2(x - 5.0, mid), pale, 3.0)
-		draw_line(Vector2(x + 5.0, mid), Vector2(x + 15.0, mid), pale, 3.0)
-		draw_rect(Rect2(Vector2(x - 3, mid - 3), Vector2(6, 6)), pale)
+		var sign: float = float(side)
+		var edge: float = 2.0 if side == -1 else size.x - 2.0
+		for bend in [-1, 0, 1]:
+			var offset_y: float = float(bend) * 19.0
+			var root := Vector2(edge + sign * 10.0, middle + offset_y * 0.28)
+			var tip := Vector2(edge + sign * (35.0 if bend == 0 else 31.0), middle + offset_y)
+			draw_line(root, tip, outline, 9.0)
+			draw_line(root, tip, gold, 6.0)
+			draw_line(root, tip, bright, 2.0)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	var style := StyleBoxTexture.new()

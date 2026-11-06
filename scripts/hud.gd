@@ -256,7 +256,20 @@ func _ready() -> void:
 	root.add_child(multiplayer_entry)
 	_anchors(multiplayer_entry, 0.895, 0.405, 0.984, 0.482)
 	multiplayer_entry.pressed.connect(_open_coop)
-	top_menu_actions.append(multiplayer_entry)
+	# Retained by name for older scripts, but deliberately never shown.
+	# Play/Continue -> Host/Join replaces the intrusive in-game CO-OP tile.
+	multiplayer_entry.visible = false
+	var bag_entry := Button.new()
+	bag_entry.name = "BagMenuButton"
+	bag_entry.text = "BAG"
+	SKIN.apply_button(bag_entry, "wood")
+	root.add_child(bag_entry)
+	_anchors(bag_entry, 0.895, 0.405, 0.984, 0.482)
+	bag_entry.pressed.connect(func() -> void:
+		_set_top_menu(false)
+		_bag()
+	)
+	top_menu_actions.append(bag_entry)
 	var skill_entry := Button.new()
 	skill_entry.name = "SkillMenuButton"
 	skill_entry.text = "SKILLS"

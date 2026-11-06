@@ -49,16 +49,19 @@ func _run() -> void:
 		check(panel != null, "Title screen has settings panel")
 		check(screen.get("_updater") != null, "In-app updater service is connected")
 		var button: Button = screen.get("_update_button") as Button
-		check(button != null and button.text == "CHECK FOR ANDROID UPDATES", "Visible and deliberate update-check action")
+		check(button != null and button.text == "CHECK FOR UPDATES", "Visible and deliberate update-check action")
 		var label: Label = screen.get("_update_status") as Label
 		check(label != null and label.text.contains("build"), "Settings display installed Android build code")
 		if button != null:
-			check(button.pressed.is_connected(screen._check_or_download_update), "Update button has a working callback")
+			check(button.pressed.is_connected(screen._check_updates_only), "Update button has a working callback")
 		var notice: Button = screen.get("_update_notice") as Button
 		check(notice != null and not notice.visible, "Update banner stays hidden until a newer build is found")
 		screen._on_update_found(newer, 15, "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-android-v15")
 		check(notice != null and notice.visible and notice.text.contains("BUILD 15"), "New release shows visible title-screen update notice")
-		check(button.text == "DOWNLOAD ANDROID UPDATE", "Settings button switches from Check to Download")
+		var download: Button = screen.get("_download_button") as Button
+		check(download != null and not download.disabled and download.text.contains("15"), "Dedicated download button enables for the discovered build")
+		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action opens only the trusted update URL")
+		check(button.text == "CHECK FOR UPDATES", "Checking for newer updates remains available")
 		screen.queue_free()
 		await process_frame
 	print("ANDROID UPDATER RESULT: %d failures" % failures)

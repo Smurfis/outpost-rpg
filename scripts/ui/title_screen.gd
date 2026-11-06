@@ -17,6 +17,8 @@ const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
+const SKIN := preload("res://scripts/ui/outpost_skin.gd")
+const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
 	"Tip: Equipped tools increase your harvest from the right resources.",
@@ -61,6 +63,15 @@ var _ambient_elapsed: float = 0.0
 var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
+var _adventure_panel: PanelContainer
+var _adventure_dim: ColorRect
+var _adventure_name: LineEdit
+var _adventure_ip: LineEdit
+var _adventure_feedback: Label
+var _adventure_heading: Label
+var _new_adventure_pending: bool = true
+var _volume: float = 0.85
+var _download_button: Button
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
@@ -83,6 +94,7 @@ func _ready() -> void:
 		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	var had_preferences: bool = FileAccess.file_exists(UI_PREFS)
 	_read_prefs()
+	_apply_volume()
 	# The approved composition intentionally has no bottom tip plaque.
 	# Keep tips fully available in Settings, but default them off on first launch.
 	if _approved_art and not had_preferences:
@@ -173,6 +185,10 @@ func _make_screen() -> void:
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
 	if _approved_art:
+		var edge_material := ShaderMaterial.new()
+		edge_material.shader = CREST_BLEND
+		logo.material = edge_material
+	if _approved_art:
 		# Cheap 2D ember glints over the real campsite and crest campfires.
 		# Particles ignore mouse/touch and leave the button art untouched.
 		_embers = EMBER_SCRIPT.new()
@@ -188,8 +204,9 @@ func _make_screen() -> void:
 	# before its first size assignment so the yellow PNG stays aligned.
 	_splash.custom_minimum_size = Vector2.ZERO
 	_canvas.add_child(_splash)
-	_splash.position = Vector2(833, 73) if _approved_art else Vector2(850, 92)
-	_splash.size = Vector2(305, 171) if _approved_art else Vector2(365, 135)
+	# Keep rotating text entirely to the right of the painted crest.
+	_splash.position = Vector2(903, 80) if _approved_art else Vector2(870, 92)
+	_splash.size = Vector2(312, 129) if _approved_art else Vector2(365, 135)
 	_splash.pivot_offset = _splash.size * 0.5
 	if _reduced_motion:
 		_splash.animate_bounce = false
@@ -229,25 +246,28 @@ func _make_screen() -> void:
 				b.pressed.connect(func() -> void: get_tree().quit())
 	_continue_button.disabled = not _has_valid_save()
 
+	# The extracted badge's baked font and surrounding patch were misaligned on
+	# wide Android screens. Keep the decorative plaque, use ONE centred live label.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	# Use the original hand-lettered version only for its exact matching build.
-	# Future version changes fall back to the textless badge + live Label.
-	var painted_version: bool = _approved_art and live_version == "v0.5.0-dev" and ResourceLoader.exists(BAKED_VERSION_ART)
-	if painted_version:
-		_add_image("VersionPlaque", "version_badge_original.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
-	elif _approved_art:
-		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1077, 646), Vector2(177, 57))
-	else:
-		_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1069, 661), Vector2(190, 47))
+	# A small carved wood corner plate conceals the damaged grey background
+	# cleanup around the old baked-in version patch on ultrawide phones.
+	var corner := Panel.new()
+	corner.name = "VersionCornerWood"
+	corner.position = Vector2(1045, 625)
+	corner.size = Vector2(235, 94)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	corner.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	_canvas.add_child(corner)
+	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
 	var version := Label.new()
 	version.name = "Version"
-	version.text = live_version
-	version.position = Vector2(1094, 652) if _approved_art else Vector2(1077, 670)
-	version.size = Vector2(146, 39) if _approved_art else Vector2(174, 30)
-	version.modulate.a = 0.0 if painted_version else 1.0
+	version.text = "%s  •  %d" % [live_version, int(ProjectSettings.get_setting("application/config/android_build_code", 11))]
+	version.position = Vector2(1068, 652)
+	version.size = Vector2(183, 40)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_label_style(version, 20, Color("fff1d5"), Color("2b1e25"))
+	_label_style(version, 18, Color("fff1d5"), Color("2b1e25"))
+	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(version)
 
 	_add_image("TipPlaque", "tip_panel.png", "tip_panel.svg", Vector2(247, 656), Vector2(785, 53))
@@ -269,6 +289,7 @@ func _make_screen() -> void:
 	_tip_text.visible = _show_tips
 
 	_build_settings()
+	_build_adventure_panel()
 	_update_notice = Button.new()
 	_update_notice.name = "UpdateAvailable"
 	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
@@ -356,36 +377,29 @@ func _has_valid_save() -> bool:
 	return int(data.get("version", 0)) in [2, 3, 4, 5]
 
 func _on_play() -> void:
-	if _has_valid_save():
-		var warning := ConfirmationDialog.new()
-		warning.title = "Start a new adventure?"
-		warning.dialog_text = "Your existing save will be replaced when the new adventure saves.\nSelect Continue to keep your current progress."
-		_canvas.add_child(warning)
-		warning.confirmed.connect(func() -> void: _launch_game(true))
-		warning.popup_centered(Vector2i(560, 210))
-	else:
-		_launch_game(true)
+	_open_adventure_panel(true)
 
 func _begin_continue() -> void:
 	if _has_valid_save():
-		_launch_game(false)
+		_open_adventure_panel(false)
 
-func _launch_game(new_adventure: bool) -> void:
+func _launch_game(new_adventure: bool, lan_mode: String = "solo", address: String = "", preferred_name: String = "Adventurer") -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
+	# The main game owns ENet and starts it only AFTER the player/avatar exists.
+	get_tree().root.set_meta("outpost_lan_mode", lan_mode)
+	get_tree().root.set_meta("outpost_lan_ip", address)
+	get_tree().root.set_meta("outpost_lan_name", preferred_name)
 	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
-	# A restrained dusk cycle tints only the distant landscape, NOT the
-	# logo, lettering, buttons or version plaque. The sun stays painted:
-	# a proper moon needs its own night-background master in a later pass.
+	# Do not tint just the painted background: the approved crest is a
+	# separate screenshot-derived cutout, and mixed opacity made seams visible.
+	# A matching full-frame night master will reintroduce day/night later.
 	if _approved_art:
-		_ambient_elapsed += delta
-		var dusk_amount: float = 0.40 if _reduced_motion else 0.25 + 0.55 * (0.5 - 0.5 * cos(_ambient_elapsed * 0.07))
-		var landscape_tint: Color = Color.WHITE.lerp(Color(0.77, 0.82, 0.94), dusk_amount)
 		if _approved_backdrop != null:
-			_approved_backdrop.modulate = landscape_tint
+			_approved_backdrop.modulate = Color.WHITE
 		if _wide_backdrop != null:
-			_wide_backdrop.modulate = landscape_tint
+			_wide_backdrop.modulate = Color.WHITE
 	# Legacy SVG light pass remains available as an optional fallback.
 	if _light_layer != null:
 		_light_layer.modulate.a = 0.79 if _reduced_motion else 0.78 + 0.14 * sin(float(Time.get_ticks_msec()) * 0.0017)
@@ -406,31 +420,92 @@ func _advance_tip() -> void:
 	fade.tween_callback(func() -> void: _tip_text.text = TIPS[_tip_index])
 	fade.tween_property(_tip_text, "modulate:a", 1.0, 0.26)
 
-func _build_settings() -> void:
-	_settings_panel = PanelContainer.new()
-	_settings_panel.name = "SettingsPanel"
-	_settings_panel.position = Vector2(340, 169)
-	_settings_panel.size = Vector2(600, 405)
-	_settings_panel.visible = false
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("25243b")
-	style.border_color = Color("dfb47b")
-	style.set_border_width_all(5)
-	style.set_corner_radius_all(12)
-	style.set_content_margin_all(22)
-	_settings_panel.add_theme_stylebox_override("panel", style)
-	_canvas.add_child(_settings_panel)
+func _menu_label(value: String, font_px: int = 23) -> Label:
+	var output := Label.new()
+	output.text = value
+	output.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	output.add_theme_font_size_override("font_size", font_px)
+	output.add_theme_color_override("font_color", Color("fff0d0"))
+	output.add_theme_color_override("font_outline_color", Color("302019"))
+	output.add_theme_constant_override("outline_size", 2)
+	output.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return output
+
+func _menu_button(caption: String, action: Callable, kind: String = "wood") -> Button:
+	var output := Button.new()
+	output.text = caption
+	output.custom_minimum_size = Vector2(0, 50)
+	SKIN.apply_button(output, kind)
+	output.focus_mode = Control.FOCUS_ALL
+	output.add_theme_stylebox_override("focus", SKIN.box("wood_selected"))
+	output.pressed.connect(action)
+	return output
+
+func _menu_field(placeholder: String, starting: String = "") -> LineEdit:
+	var output := LineEdit.new()
+	output.placeholder_text = placeholder
+	output.text = starting
+	output.custom_minimum_size = Vector2(0, 47)
+	output.add_theme_stylebox_override("normal", SKIN.box("parchment"))
+	output.add_theme_stylebox_override("focus", SKIN.box("parchment_light"))
+	output.add_theme_color_override("font_color", Color("3e281d"))
+	output.add_theme_color_override("font_placeholder_color", Color("836c54"))
+	output.add_theme_font_size_override("font_size", 19)
+	return output
+
+func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dictionary:
+	var frame := PanelContainer.new()
+	frame.position = (DESIGN - Vector2(width_px, height_px)) * 0.5
+	frame.size = Vector2(width_px, height_px)
+	frame.custom_minimum_size = Vector2(width_px, height_px)
+	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_canvas.add_child(frame)
+	var margins := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 24)
+	frame.add_child(margins)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 16)
-	_settings_panel.add_child(stack)
-	var heading := Label.new()
-	heading.text = "Outpost Settings"
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label_style(heading, 32, Color("ffe1a0"), Color("40242c"))
-	stack.add_child(heading)
+	stack.add_theme_constant_override("separation", 10)
+	margins.add_child(stack)
+	stack.add_child(_menu_label(title_value, 31))
+	return {"frame": frame, "stack": stack}
+
+func _build_settings() -> void:
+	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 510.0)
+	_settings_panel = parts["frame"] as PanelContainer
+	_settings_panel.name = "SettingsPanel"
+	var stack: VBoxContainer = parts["stack"] as VBoxContainer
+	stack.add_child(_menu_label("Sound and accessibility", 18))
+	var volume_row := HBoxContainer.new()
+	volume_row.add_theme_constant_override("separation", 12)
+	stack.add_child(volume_row)
+	var volume_label := _menu_label("MASTER VOLUME", 18)
+	volume_label.custom_minimum_size = Vector2(184, 36)
+	volume_row.add_child(volume_label)
+	var volume_slider := HSlider.new()
+	volume_slider.name = "MasterVolumeSlider"
+	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volume_slider.custom_minimum_size = Vector2(260, 43)
+	volume_slider.min_value = 0.0
+	volume_slider.max_value = 100.0
+	volume_slider.step = 1.0
+	volume_slider.value = _volume * 100.0
+	volume_slider.add_theme_stylebox_override("slider", SKIN.flat("inset"))
+	volume_slider.add_theme_stylebox_override("grabber_area", SKIN.flat("wood_selected"))
+	volume_slider.add_theme_stylebox_override("grabber_area_highlight", SKIN.flat("wood_selected"))
+	volume_slider.value_changed.connect(func(value: float) -> void:
+		_volume = clampf(value / 100.0, 0.0, 1.0)
+		_apply_volume()
+		_write_prefs()
+	)
+	volume_row.add_child(volume_slider)
 	var motion := CheckButton.new()
-	motion.text = "Reduce menu animation"
+	motion.name = "ReduceMotionToggle"
+	motion.text = "Reduce menu animation and embers"
 	motion.button_pressed = _reduced_motion
+	motion.add_theme_color_override("font_color", Color("fff0d0"))
+	motion.add_theme_font_size_override("font_size", 20)
 	motion.toggled.connect(func(enabled: bool) -> void:
 		_reduced_motion = enabled
 		_splash.animate_bounce = not enabled
@@ -438,18 +513,21 @@ func _build_settings() -> void:
 			_embers.set("reduced_motion", enabled)
 			_embers.queue_redraw()
 		for kind in ["Play", "Continue", "Settings", "Quit"]:
-			var button: Button = _canvas.get_node_or_null(kind + "Button") as Button
-			if button != null:
-				button.set("reduced_motion", enabled)
-				button.queue_redraw()
+			var btn: Button = _canvas.get_node_or_null(kind + "Button") as Button
+			if btn != null:
+				btn.set("reduced_motion", enabled)
+				btn.queue_redraw()
 		if enabled:
 			_splash.scale = Vector2.ONE
 		_write_prefs()
 	)
 	stack.add_child(motion)
 	var tips := CheckButton.new()
+	tips.name = "AdventureTipsToggle"
 	tips.text = "Show adventure tips"
 	tips.button_pressed = _show_tips
+	tips.add_theme_color_override("font_color", Color("fff0d0"))
+	tips.add_theme_font_size_override("font_size", 20)
 	tips.toggled.connect(func(enabled: bool) -> void:
 		_show_tips = enabled
 		_tip_text.visible = enabled
@@ -458,32 +536,95 @@ func _build_settings() -> void:
 		_write_prefs()
 	)
 	stack.add_child(tips)
-
-	# Update checking belongs in the existing title settings; no gameplay modal
-	# and no background traffic until the player asks for an update.
+	stack.add_child(_menu_label("ANDROID UPDATES", 22))
 	_updater = ANDROID_UPDATER.new()
 	_updater.name = "AndroidUpdater"
 	add_child(_updater)
 	_updater.status_changed.connect(_on_update_status)
 	_updater.update_found.connect(_on_update_found)
-	_update_button = Button.new()
+	var update_row := HBoxContainer.new()
+	update_row.add_theme_constant_override("separation", 10)
+	stack.add_child(update_row)
+	_update_button = _menu_button("CHECK FOR UPDATES", _check_updates_only)
 	_update_button.name = "CheckForUpdates"
-	_update_button.text = "CHECK FOR ANDROID UPDATES"
-	_update_button.custom_minimum_size = Vector2(0, 55)
-	_update_button.pressed.connect(_check_or_download_update)
-	stack.add_child(_update_button)
-	_update_status = Label.new()
+	_update_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	update_row.add_child(_update_button)
+	_download_button = _menu_button("DOWNLOAD APK", _check_or_download_update, "wood_selected")
+	_download_button.name = "DownloadUpdate"
+	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_download_button.disabled = true
+	update_row.add_child(_download_button)
+	_update_status = _menu_label("Android build %d • Downloads open in your browser." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
-	_update_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_update_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_update_status.text = "Android build %d • Updates keep saves with the same signing key" % int(ProjectSettings.get_setting("application/config/android_build_code", 11))
-	_label_style(_update_status, 16, Color("fff1d5"), Color("2b1e25"))
+	_update_status.custom_minimum_size = Vector2(0, 42)
 	stack.add_child(_update_status)
-	var back := Button.new()
-	back.text = "Back"
-	back.custom_minimum_size = Vector2(0, 54)
-	back.pressed.connect(_toggle_settings)
-	stack.add_child(back)
+	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
+	_settings_panel.visible = false
+
+func _apply_volume() -> void:
+	var master: int = AudioServer.get_bus_index("Master")
+	if master >= 0:
+		AudioServer.set_bus_volume_db(master, linear_to_db(maxf(0.001, _volume)))
+
+func _check_updates_only() -> void:
+	if _updater != null:
+		_updater.check_for_updates()
+
+func _build_adventure_panel() -> void:
+	_adventure_dim = ColorRect.new()
+	_adventure_dim.name = "AdventureShade"
+	_adventure_dim.color = Color(0.03, 0.02, 0.05, 0.47)
+	_adventure_dim.size = DESIGN
+	_adventure_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_canvas.add_child(_adventure_dim)
+	var parts: Dictionary = _menu_frame("ADVENTURE  •  OUTPOST", 700.0, 525.0)
+	_adventure_panel = parts["frame"] as PanelContainer
+	_adventure_panel.name = "AdventurePanel"
+	var stack: VBoxContainer = parts["stack"] as VBoxContainer
+	_adventure_heading = _menu_label("Choose how to begin your adventure", 20)
+	stack.add_child(_adventure_heading)
+	stack.add_child(_menu_button("SOLO  •  ENTER OUTPOST", func() -> void: _launch_game(_new_adventure_pending)))
+	stack.add_child(_menu_button("HOST LAN  •  FRIENDS MAY REQUEST TO JOIN", func() -> void:
+		_launch_game(_new_adventure_pending, "host")
+	))
+	stack.add_child(_menu_label("JOIN A FRIEND ON THE SAME WI-FI", 18))
+	var inputs := HBoxContainer.new()
+	inputs.add_theme_constant_override("separation", 9)
+	stack.add_child(inputs)
+	_adventure_name = _menu_field("Adventurer name", "Adventurer")
+	_adventure_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inputs.add_child(_adventure_name)
+	_adventure_ip = _menu_field("Host LAN IPv4")
+	_adventure_ip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inputs.add_child(_adventure_ip)
+	stack.add_child(_menu_button("JOIN FRIEND'S OUTPOST", _join_friend))
+	_adventure_feedback = _menu_label("", 16)
+	stack.add_child(_adventure_feedback)
+	stack.add_child(_menu_button("BACK", _close_adventure_panel, "parchment"))
+	_adventure_dim.visible = false
+	_adventure_panel.visible = false
+
+func _open_adventure_panel(new_game: bool) -> void:
+	_new_adventure_pending = new_game
+	if _settings_panel != null:
+		_settings_panel.visible = false
+	_adventure_heading.text = "Starting fresh replaces the save when you next save." if new_game and _has_valid_save() else ("Begin a new adventure" if new_game else "Resume your saved adventure")
+	_adventure_feedback.text = ""
+	_adventure_dim.visible = true
+	_adventure_panel.visible = true
+	_adventure_dim.move_to_front()
+	_adventure_panel.move_to_front()
+
+func _close_adventure_panel() -> void:
+	_adventure_panel.visible = false
+	_adventure_dim.visible = false
+
+func _join_friend() -> void:
+	var address: String = _adventure_ip.text.strip_edges()
+	if not address.is_valid_ip_address() or address.contains(":"):
+		_adventure_feedback.text = "Enter a valid IPv4 address on your local network."
+		return
+	_launch_game(_new_adventure_pending, "join", address, _adventure_name.text)
 
 func _check_or_download_update() -> void:
 	if not _update_download_url.is_empty():
@@ -502,19 +643,27 @@ func _on_update_status(message: String) -> void:
 
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
 	_update_download_url = download_url
-	_update_button.text = "DOWNLOAD ANDROID UPDATE"
+	if _download_button != null:
+		_download_button.disabled = false
+		_download_button.text = "DOWNLOAD BUILD %d" % version_code
 	if _update_notice != null:
 		_update_notice.text = "UPDATE AVAILABLE  •  BUILD %d" % version_code
 		_update_notice.visible = true
 	_on_update_status("New Outpost build %d available. Tap Download, then approve Android's install prompt." % version_code)
 
 func _toggle_settings() -> void:
+	if _adventure_panel != null and _adventure_panel.visible:
+		_close_adventure_panel()
 	_settings_panel.visible = not _settings_panel.visible
-	_settings_panel.move_to_front()
+	if _settings_panel.visible:
+		_settings_panel.move_to_front()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _settings_panel != null and _settings_panel.visible:
-		if event.is_action_pressed("ui_cancel"):
+	if event.is_action_pressed("ui_cancel"):
+		if _adventure_panel != null and _adventure_panel.visible:
+			_close_adventure_panel()
+			get_viewport().set_input_as_handled()
+		elif _settings_panel != null and _settings_panel.visible:
 			_toggle_settings()
 			get_viewport().set_input_as_handled()
 
@@ -523,9 +672,11 @@ func _read_prefs() -> void:
 	if prefs.load(UI_PREFS) == OK:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
 		_show_tips = bool(prefs.get_value("title", "show_tips", true))
+		_volume = clampf(float(prefs.get_value("title", "volume", 0.85)), 0.0, 1.0)
 
 func _write_prefs() -> void:
 	var prefs := ConfigFile.new()
 	prefs.set_value("title", "reduced_motion", _reduced_motion)
 	prefs.set_value("title", "show_tips", _show_tips)
+	prefs.set_value("title", "volume", _volume)
 	prefs.save(UI_PREFS)

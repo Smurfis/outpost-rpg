@@ -89,6 +89,18 @@ func _ready() -> void:
 		day_night.night_started.connect(_on_first_night)
 	coop = COOP.new()
 	add_child(coop)
+	# Co-op is chosen in the title's adventure panel. LAN requests then pop
+	# up during gameplay for the host; there is no persistent Co-op HUD tile.
+	var requested_lan: String = str(get_tree().root.get_meta("outpost_lan_mode", "solo"))
+	var lan_ip: String = str(get_tree().root.get_meta("outpost_lan_ip", ""))
+	var lan_name: String = str(get_tree().root.get_meta("outpost_lan_name", "Adventurer"))
+	for key in ["outpost_lan_mode", "outpost_lan_ip", "outpost_lan_name"]:
+		if get_tree().root.has_meta(key):
+			get_tree().root.remove_meta(key)
+	if requested_lan == "host":
+		coop.host_lan(lan_name)
+	elif requested_lan == "join":
+		coop.join_lan(lan_ip, lan_name)
 	_camera(1.0)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
