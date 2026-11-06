@@ -209,7 +209,7 @@ func _add_image(node_name: String, png: String, svg: String, where: Vector2, how
 	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	image.stretch_mode = TextureRect.STRETCH_SCALE
 	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if node_name == "Backdrop":
+	if node_name in ["Backdrop", "TitleLights"]:
 		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(image)
 
