@@ -26,10 +26,15 @@ func _run() -> void:
 
 	var hud: Control = game.hud.root
 	verify(hud != null, "HUD is live and attached to gameplay")
-	verify(hud.get_node_or_null("HeroStatusFrame") != null, "Compact player card")
-	verify(hud.get_node_or_null("PortraitMedallion") != null, "Hero portrait frame")
-	var portrait: TextureRect = hud.get_node_or_null("HeroPortrait") as TextureRect
-	verify(portrait != null and portrait.texture != null, "Independent imported adventurer portrait art")
+	var status_box: Panel = hud.get_node_or_null("HeroStatusFrame") as Panel
+	verify(status_box != null, "Compact player card")
+	var crest: TextureRect = hud.get_node_or_null("OutpostSigil") as TextureRect
+	verify(crest != null and crest.texture != null, "Original small crest replaces blocky fixed face")
+	verify(hud.get_node_or_null("HeroPortrait") == null, "Generic hero portrait removed from gameplay HUD")
+	if status_box != null:
+		var screen: Vector2 = game.hud.get_viewport().get_visible_rect().size
+		verify(status_box.size.y <= screen.y * 0.135, "Top-left identity uses at most 13.5% of screen height")
+		verify(status_box.size.x <= screen.x * 0.26, "Status card leaves space for real world view")
 	verify(hud.get_node_or_null("ResourceQuickChips") != null, "Actual inventory resource chips")
 	verify(hud.get_node_or_null("QuestBanner") != null, "One slim quest banner")
 	var toggle: Button = hud.get_node_or_null("QuestToggle") as Button
@@ -37,6 +42,7 @@ func _run() -> void:
 	if toggle != null:
 		toggle.pressed.emit()
 	verify(game.hud.quest_detail.visible and game.hud.quest_detail_back.visible, "Quest expands without changing game state")
+	verify(game.hud.quest.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "Single-line quest truncates safely instead of overflowing")
 	var hotbar: Panel = hud.get_node_or_null("FunctionalHotbar") as Panel
 	verify(hotbar != null, "Dedicated framed hotbar")
 	for key in ["bag", "craft", "gear"]:
@@ -55,6 +61,16 @@ func _run() -> void:
 	game.hud.render_status(67.0, {"wood": 8, "stone": 5, "hide": 3, "coins": 12}, 52, 0, "spear", "Gather more wood", "Nearby: a tree")
 	verify(game.hud.health_numbers.text.contains("67"), "Health is a true live value")
 	verify(game.hud.items["wood"].text == "8", "Resource chip reflects inventory")
+	game.hud._toggle_quest()
+	game.hud.render_status(67.0, {"wood": 8}, 52, 0, "spear", "Starter quest finished: craft new gear, explore and survive", "Explore: iron, coal and clay")
+	verify(not game.hud.quest_frame.visible and not game.hud.quest.visible, "Completed starter objective no longer wastes top screen space")
+	verify(game.hud.quest_toggle.visible, "Compact journal button remains after completion")
+	verify(not game.hud.hint.visible, "Generic explore message does not occupy bottom center")
+	game.hud.update_context(true, false, false)
+	game.hud.render_status(67.0, {"wood": 8}, 52, 0, "spear", "Gather 5 wood", "Nearby: Tree, 2 hits")
+	verify(game.hud.quest_frame.visible and game.hud.hint.visible, "Real objective and nearby action remain visible")
+	game.hud.update_context(false, false, false)
+	verify(not game.hud.hint.visible, "Context label disappears out of range")
 
 	game.inventory["wood"] = 8
 	game.inventory["stone"] = 5
@@ -71,7 +87,10 @@ func _run() -> void:
 	game.menu.close_page()
 	game.show_crafting()
 	var crafting: Control = game.menu.shell.get_child(1) as Control
-	verify(crafting != null and crafting.anchor_right - crafting.anchor_left < 0.68, "Craft modal leaves landscape visible")
+	verify(crafting != null, "Craft modal exists")
+	if crafting != null:
+		verify(crafting.size.x <= 880.0 and crafting.size.y <= 600.0, "Craft modal pixel dimensions capped on wide phones")
+		verify(crafting.size.x < game.menu.shell.size.x * 0.75, "Craft leaves landscape visible on Android")
 	verify(game.menu.craft_step == "browse", "Craft stage begins on full-width recipe cards")
 	verify(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Single pane recipe browse")
 	var spear: Button = game.menu.recipes_list.get_node_or_null("Recipe_spear") as Button
