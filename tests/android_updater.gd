@@ -49,6 +49,12 @@ func _run() -> void:
 	check(updater_script.find_newest_release([_release(14, "https://evil.example/Outpost.apk")], 11).is_empty(), "Rejects arbitrary download websites")
 	check(updater_script.find_newest_release([_release(99, newer, true)], 11).is_empty(), "Never publishes draft GitHub release")
 	check(updater_script.find_newest_release([{"tag_name":"outpost-android-v5x","assets":[{"name":"Outpost-Android-v5x.apk","browser_download_url":newer}]}], 11).is_empty(), "Rejects nonnumeric version tags")
+	var alpha_url: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1005/Outpost-Alpha-v1005.apk"
+	var alpha_release: Dictionary = {"tag_name":"outpost-alpha-v1005", "draft":false, "assets":[{"name":"Outpost-Alpha-v1005.apk", "browser_download_url":alpha_url}]}
+	check(updater_script.find_newest_release([alpha_release], 0, "outpost-alpha-v").get("download_url", "") == alpha_url, "Alpha channel finds its own published APK")
+	check(updater_script.find_newest_release([alpha_release], 0).is_empty(), "Stable channel never advertises Alpha APKs")
+	check(updater_script.find_newest_release(inputs, 0, "outpost-alpha-v").is_empty(), "Alpha channel never advertises Stable APKs")
+	check(updater_script.find_newest_release([{"tag_name":"outpost-alpha-v1005", "assets":[{"name":"Outpost-Android-v1005.apk", "browser_download_url":alpha_url}]}], 0, "outpost-alpha-v").is_empty(), "Mismatched channel APK filenames rejected")
 	var title: PackedScene = load("res://scenes/ui/title_screen.tscn")
 	check(title != null, "Title scene imports with updater")
 	if title != null:
@@ -72,6 +78,18 @@ func _run() -> void:
 		check(download != null and not download.disabled and download.text.contains("15"), "Dedicated download button enables for the discovered build")
 		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action opens only the trusted update URL")
 		check(button.text == "CHECK FOR UPDATES", "Checking for newer updates remains available")
+		var stable: Button = screen.get("_channel_stable_button") as Button
+		var alpha: Button = screen.get("_channel_alpha_button") as Button
+		check(stable != null and alpha != null and alpha.pressed.is_connected(screen._select_update_channel.bind("alpha")), "Stable and Alpha Test channel buttons are actionable")
+		screen._select_update_channel("alpha")
+		check(screen.get("_update_download_url") == "" and (screen.get("_download_button") as Button).disabled, "Switching to Alpha clears old Stable download")
+		check(screen.get("_updater").selected_channel() == "alpha", "Main Settings actually targets Alpha releases")
+		screen._on_update_found(alpha_url, 1005, "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-alpha-v1005")
+		check(screen.get("_update_download_url") == alpha_url, "Alpha release URL is offered for Download APK")
+		screen._select_update_channel("stable")
+		check(screen.get("_updater").selected_channel() == "stable", "Switching back to Stable selects Stable releases")
+		check(screen.get("_update_download_url") == "" and (screen.get("_download_button") as Button).disabled, "Switching to Stable clears old Alpha download")
+		check(str(screen.get("_selected_channel")) == "stable", "Selected channel persists as a settings choice")
 		screen.queue_free()
 		await process_frame
 	print("ANDROID UPDATER RESULT: %d failures" % failures)
