@@ -44,6 +44,26 @@ func _run() -> void:
 	verify(hud.wallet_open and hud.wallet_resource_count.visible, "Wallet restores the contents")
 	var top_menu: Button = hud_root.get_node_or_null("TopRightMenuButton") as Button
 	verify(top_menu != null, "One top-right menu replaces button row")
+	var clock: Label = hud_root.get_node_or_null("MinimapFooterClock") as Label
+	verify(clock != null, "Day/night display has a dedicated location beneath future minimap")
+	if clock != null and top_menu != null:
+		verify(clock.anchor_top >= 0.32 and top_menu.anchor_top >= 0.32, "Clock and menu sit below reserved minimap footprint")
+		verify(clock.anchor_bottom < 0.40 and top_menu.anchor_bottom < 0.40, "Clock and menu remain compact above tool radials")
+	verify(not game.menu.visible, "Bag and Gear modal panels stay hidden while playing")
+	verify(hud.top_menu_panel.anchor_top >= 0.39 and hud.top_menu_panel.anchor_bottom <= 0.59, "Expanded menu stays between minimap footer and abilities")
+	for slot in ["skill_1", "skill_2", "skill_3"]:
+		var skill_button: Button = hud.quick_buttons[slot] as Button
+		verify(hud.top_menu_panel.anchor_bottom < skill_button.anchor_top, "Expanded menu never obscures radial " + slot)
+	var stick_before: Vector2 = hud.joystick.position
+	var skill_before: Vector2 = (hud.quick_buttons["skill_1"] as Button).position
+	hud._bag()
+	verify(game.menu.visible and game.menu.current_page == "bag", "Bag opens only on demand as an independent modal")
+	game.menu.close_page()
+	hud._gear()
+	verify(game.menu.visible and game.menu.current_page == "equipment", "Gear opens only on demand as an independent modal")
+	game.menu.close_page()
+	verify(hud.joystick.position == stick_before and (hud.quick_buttons["skill_1"] as Button).position == skill_before, "Opening Bag and Gear never nudges movement or skills")
+
 	verify(not hud.top_menu_open, "Extra options are collapsed by default")
 	hud._menu_button_down()
 	hud._process(0.38)
