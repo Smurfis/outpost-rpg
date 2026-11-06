@@ -17,6 +17,8 @@ const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
+const SKIN := preload("res://scripts/ui/outpost_skin.gd")
+const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
 	"Tip: Equipped tools increase your harvest from the right resources.",
@@ -61,6 +63,15 @@ var _ambient_elapsed: float = 0.0
 var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
+var _adventure_panel: PanelContainer
+var _adventure_dim: ColorRect
+var _adventure_name: LineEdit
+var _adventure_ip: LineEdit
+var _adventure_feedback: Label
+var _adventure_heading: Label
+var _new_adventure_pending: bool = true
+var _volume: float = 0.85
+var _download_button: Button
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
@@ -83,6 +94,7 @@ func _ready() -> void:
 		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	var had_preferences: bool = FileAccess.file_exists(UI_PREFS)
 	_read_prefs()
+	_apply_volume()
 	# The approved composition intentionally has no bottom tip plaque.
 	# Keep tips fully available in Settings, but default them off on first launch.
 	if _approved_art and not had_preferences:
@@ -173,6 +185,10 @@ func _make_screen() -> void:
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
 	if _approved_art:
+		var edge_material := ShaderMaterial.new()
+		edge_material.shader = CREST_BLEND
+		logo.material = edge_material
+	if _approved_art:
 		# Cheap 2D ember glints over the real campsite and crest campfires.
 		# Particles ignore mouse/touch and leave the button art untouched.
 		_embers = EMBER_SCRIPT.new()
@@ -188,8 +204,9 @@ func _make_screen() -> void:
 	# before its first size assignment so the yellow PNG stays aligned.
 	_splash.custom_minimum_size = Vector2.ZERO
 	_canvas.add_child(_splash)
-	_splash.position = Vector2(833, 73) if _approved_art else Vector2(850, 92)
-	_splash.size = Vector2(305, 171) if _approved_art else Vector2(365, 135)
+	# Keep rotating text entirely to the right of the painted crest.
+	_splash.position = Vector2(903, 80) if _approved_art else Vector2(870, 92)
+	_splash.size = Vector2(312, 129) if _approved_art else Vector2(365, 135)
 	_splash.pivot_offset = _splash.size * 0.5
 	if _reduced_motion:
 		_splash.animate_bounce = false
@@ -269,6 +286,7 @@ func _make_screen() -> void:
 	_tip_text.visible = _show_tips
 
 	_build_settings()
+	_build_adventure_panel()
 	_update_notice = Button.new()
 	_update_notice.name = "UpdateAvailable"
 	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
@@ -375,17 +393,14 @@ func _launch_game(new_adventure: bool) -> void:
 	get_tree().change_scene_to_file(WORLD_LOADING)
 
 func _process(delta: float) -> void:
-	# A restrained dusk cycle tints only the distant landscape, NOT the
-	# logo, lettering, buttons or version plaque. The sun stays painted:
-	# a proper moon needs its own night-background master in a later pass.
+	# Do not tint just the painted background: the approved crest is a
+	# separate screenshot-derived cutout, and mixed opacity made seams visible.
+	# A matching full-frame night master will reintroduce day/night later.
 	if _approved_art:
-		_ambient_elapsed += delta
-		var dusk_amount: float = 0.40 if _reduced_motion else 0.25 + 0.55 * (0.5 - 0.5 * cos(_ambient_elapsed * 0.07))
-		var landscape_tint: Color = Color.WHITE.lerp(Color(0.77, 0.82, 0.94), dusk_amount)
 		if _approved_backdrop != null:
-			_approved_backdrop.modulate = landscape_tint
+			_approved_backdrop.modulate = Color.WHITE
 		if _wide_backdrop != null:
-			_wide_backdrop.modulate = landscape_tint
+			_wide_backdrop.modulate = Color.WHITE
 	# Legacy SVG light pass remains available as an optional fallback.
 	if _light_layer != null:
 		_light_layer.modulate.a = 0.79 if _reduced_motion else 0.78 + 0.14 * sin(float(Time.get_ticks_msec()) * 0.0017)
