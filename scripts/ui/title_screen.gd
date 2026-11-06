@@ -380,8 +380,10 @@ func _on_play() -> void:
 	_open_adventure_panel(true)
 
 func _begin_continue() -> void:
+	# Continue is one action, not a second adventure-selection menu.
+	# The existing save is loaded by the world scene after streaming finishes.
 	if _has_valid_save():
-		_open_adventure_panel(false)
+		_launch_game(false)
 
 func _launch_game(new_adventure: bool, lan_mode: String = "solo", address: String = "", preferred_name: String = "Adventurer") -> void:
 	get_tree().root.set_meta("outpost_new_adventure", new_adventure)
