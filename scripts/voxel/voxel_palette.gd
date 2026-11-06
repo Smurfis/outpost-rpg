@@ -132,10 +132,9 @@ static func box(st: SurfaceTool, center: Vector3, full_size: Vector3, top_tile: 
 	quad(st, Vector3(r, b, n), Vector3(l, b, n), Vector3(l, t, n), Vector3(r, t, n), side_tile, tint)
 	quad(st, Vector3(l, b, n), Vector3(l, b, f), Vector3(l, t, f), Vector3(l, t, n), side_tile, tint)
 
-# A deterministic cluster-based seasonal tint: sunny lime, cherry blossom,
-# deep green and magical lavender read from the isometric camera. The values
-# deliberately exceed 1.0 in some channels to recolour existing green leaves
-# without increasing the 64x64 source atlas or introducing extra draw calls.
+# Deterministic cluster-based seasonal tint: sunny lime, cherry blossom,
+# deep green and magical lavender. Combined with existing coloured atlas
+# cells, this avoids extra texture memory and Android draw calls.
 static func foliage_variant_at(x: float, z: float, seed: int = 64012) -> int:
 	var cx: int = floori(x / 14.0)
 	var cz: int = floori(z / 14.0)
