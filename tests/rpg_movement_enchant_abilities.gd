@@ -30,7 +30,12 @@ func _run() -> void:
 	verify(game.character_level() == 1, "Fresh character starts level 1")
 	verify(game.unlocked_skill_slots() == 1, "First skill holder starts unlocked")
 	var hotbar: Panel = game.hud.root.get_node_or_null("FunctionalHotbar") as Panel
-	verify(hotbar != null and hotbar.anchor_top < 0.3, "Bag Craft Torch Gear are at top")
+	var menu_button: Button = game.hud.root.get_node_or_null("TopRightMenuButton") as Button
+	var attached_bag: Button = game.hud.root.get_node_or_null("Action_bag") as Button
+	verify(hotbar != null and hotbar.anchor_top >= 0.39 and hotbar.anchor_bottom <= 0.59, "Collapsed six-option menu stays below minimap and above abilities")
+	verify(menu_button != null and menu_button.anchor_top >= 0.32, "Top menu toggle is parked beneath minimap")
+	verify(attached_bag != null and attached_bag.anchor_top < 0.10, "Bag is attached to collapsible wallet, not a permanent bar")
+	verify(game.hud.torch_button != null and game.hud.torch_button.anchor_top > 0.80, "Offhand torch remains separate from menu flyout")
 	verify(game.hud.root.get_node_or_null("Action_attack") == null and game.hud.root.get_node_or_null("Action_gather") == null, "Obsolete combat tiles removed")
 	for key in ["skill_1", "skill_2", "skill_3", "potion", "consumable", "interact"]:
 		verify(game.hud.root.get_node_or_null("Action_" + key) != null, "Usable radial " + key)

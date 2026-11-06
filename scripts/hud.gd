@@ -220,27 +220,33 @@ func _ready() -> void:
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast_label.visible = false
 
-	clock_label = _label("DAY 09:07", 17, Color("#fff0c5"), 0.785, 0.033, 0.921, 0.098)
+	# Reserve the upper-right corner for a future *real-data* minimap.
+	# Keep the clock and menu under that map without moving the combat radials.
+	# No fake map is rendered by this HUD.
+	clock_label = _label("DAY 09:07", 17, Color("#fff0c5"), 0.810, 0.329, 0.927, 0.391)
+	clock_label.name = "MinimapFooterClock"
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# A single top-right menu opens the other controls on demand.
-	top_menu_panel = _panel(0.710, 0.122, 0.989, 0.391)
+	# Top-right flyout is a compact 3 × 2 grid immediately *below* the
+	# reserved minimap footprint (right 17% of screen, top 31%). All three
+	# combat ability radials start at y=0.600 or lower: never cover them.
+	top_menu_panel = _panel(0.681, 0.399, 0.990, 0.584)
 	top_menu_panel.name = "FunctionalHotbar"
 	top_menu_panel.visible = false
-	menu_button = _action("menu", "MENU", 0.925, 0.018, 0.986, 0.111, "round")
+	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
 	menu_button.button_down.connect(_menu_button_down)
 	menu_button.button_up.connect(_menu_button_up)
 	menu_button.pressed.connect(_menu_button_pressed)
-	craft_button = _action("craft", "CRAFT", 0.729, 0.148, 0.804, 0.254, "round")
+	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "round")
 	top_menu_actions.append(craft_button)
-	top_menu_actions.append(_action("gear", "GEAR", 0.816, 0.148, 0.891, 0.254, "round"))
+	top_menu_actions.append(_action("gear", "GEAR", 0.796, 0.405, 0.888, 0.482, "round"))
 	var multiplayer_entry := Button.new()
 	multiplayer_entry.name = "CoopEntryButton"
 	multiplayer_entry.text = "CO-OP"
 	SKIN.apply_button(multiplayer_entry, "wood")
 	root.add_child(multiplayer_entry)
-	_anchors(multiplayer_entry, 0.901, 0.148, 0.982, 0.254)
+	_anchors(multiplayer_entry, 0.895, 0.405, 0.984, 0.482)
 	multiplayer_entry.pressed.connect(_open_coop)
 	top_menu_actions.append(multiplayer_entry)
 	var skill_entry := Button.new()
@@ -248,7 +254,7 @@ func _ready() -> void:
 	skill_entry.text = "SKILLS"
 	SKIN.apply_button(skill_entry, "wood")
 	root.add_child(skill_entry)
-	_anchors(skill_entry, 0.729, 0.270, 0.804, 0.374)
+	_anchors(skill_entry, 0.695, 0.500, 0.787, 0.575)
 	skill_entry.pressed.connect(_show_skill_details)
 	top_menu_actions.append(skill_entry)
 	var journal_entry := Button.new()
@@ -256,7 +262,7 @@ func _ready() -> void:
 	journal_entry.text = "JOURNAL"
 	SKIN.apply_button(journal_entry, "wood")
 	root.add_child(journal_entry)
-	_anchors(journal_entry, 0.816, 0.270, 0.891, 0.374)
+	_anchors(journal_entry, 0.796, 0.500, 0.888, 0.575)
 	journal_entry.pressed.connect(_open_journal)
 	top_menu_actions.append(journal_entry)
 	var settings_entry := Button.new()
@@ -264,11 +270,14 @@ func _ready() -> void:
 	settings_entry.text = "SETTINGS"
 	SKIN.apply_button(settings_entry, "wood")
 	root.add_child(settings_entry)
-	_anchors(settings_entry, 0.901, 0.270, 0.982, 0.374)
+	_anchors(settings_entry, 0.895, 0.500, 0.984, 0.575)
 	settings_entry.pressed.connect(_show_control_settings)
 	top_menu_actions.append(settings_entry)
 	for option in top_menu_actions:
 		option.visible = false
+	# The world HUD never shows a giant permanent Gear or Bag panel.
+	# Their existing separate modal pages open only when explicitly requested,
+	# leaving joystick / smart-Interact / 3 skill buttons in their own positions.
 	# Offhand torch remains available without interfering with three ability slots.
 	torch_button = _action("torch", "TORCH", 0.700, 0.844, 0.757, 0.934, "round")
 
