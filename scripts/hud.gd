@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Outpost mobile HUD: compact live panels, gold-ringed touch actions and a
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
 var status: Label
@@ -70,6 +71,32 @@ var smart_tray_open: bool = false
 var smart_icon_id: String = ""
 var smart_ignore_mouse_until: int = 0
 var toast_time := 0.0
+var mana_bar: ProgressBar
+var mana_numbers: Label
+var xp_level_badge: Label
+var wallet_frame: Panel
+var wallet_collapse: Button
+var wallet_open: bool = true
+var wallet_bag: Button
+var wallet_coin: Label
+var wallet_resource_icon: TextureRect
+var wallet_resource_count: Label
+var wallet_resource_id: String = "wood"
+var last_inventory_snapshot: Dictionary = {}
+var menu_button: Button
+var top_menu_panel: Panel
+var top_menu_actions: Array[Button] = []
+var top_menu_open: bool = false
+var top_menu_pressed: bool = false
+var top_menu_hold_seconds: float = 0.0
+var top_menu_opened_by_hold: bool = false
+var floating_joystick_enabled: bool = false
+var player_display_name: String = "Adventurer"
+var control_settings_panel: Panel
+var floating_mode_toggle: CheckButton
+var name_edit: LineEdit
+var skill_detail_panel: Panel
+var skill_detail_text: Label
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -95,66 +122,89 @@ func _ready() -> void:
 	sigil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(sigil)
 	_anchors(sigil, 0.024, 0.036, 0.057, 0.103)
-	status = _label("OUTPOST", 16, Color("#fff1c7"), 0.063, 0.026, 0.236, 0.058)
+	status = _label("Adventurer", 16, Color("#fff1c7"), 0.063, 0.026, 0.236, 0.058)
 	status.clip_text = true
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	health_bar = _meter(0.065, 0.061, 0.235, 0.083, Color("#d74c43"))
 	health_numbers = _label("100 / 100 HP", 14, Color("#fff1db"), 0.068, 0.061, 0.232, 0.083)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	xp_bar = _meter(0.202, 0.966, 0.980, 0.995, Color("#a86ed7"))
+	mana_bar = _meter(0.065, 0.089, 0.235, 0.110, Color("#417cdb"))
+	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
+	mana_numbers = _label("MP —", 13, Color("#d8e6ff"), 0.070, 0.089, 0.230, 0.110)
+	mana_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_bar = _meter(0.111, 0.955, 0.979, 0.990, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
-	xp_level_label = _label("LV 1  •  0 / 100 XP", 15, Color("#fff2d1"), 0.211, 0.969, 0.972, 0.993)
+	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.028, 0.951, 0.111, 0.993)
+	xp_level_badge.name = "CharacterLevelBadge"
+	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_level_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	xp_level_label = _label("0 / 100 XP", 15, Color("#fff2d1"), 0.142, 0.957, 0.954, 0.988)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.090, 0.236, 0.119)
+	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.110, 0.236, 0.131)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
-	# Only the four live resources get their own tiny strip.
-	var resource_frame: Panel = _panel(0.018, 0.137, 0.247, 0.179)
-	resource_frame.name = "ResourceQuickChips"
-	var start_x: float = 0.024
+	# Small wallet shows only real coin balance and the last tracked material.
+	# Other holdings and carry weight live in the bag, not in a permanent HUD.
+	wallet_frame = _panel(0.302, 0.018, 0.710, 0.087)
+	wallet_frame.name = "ResourceQuickChips"
+	wallet_collapse = Button.new()
+	wallet_collapse.name = "WalletCollapse"
+	wallet_collapse.text = "‹"
+	SKIN.apply_button(wallet_collapse, "wood")
+	root.add_child(wallet_collapse)
+	_anchors(wallet_collapse, 0.304, 0.023, 0.340, 0.082)
+	wallet_collapse.pressed.connect(_toggle_wallet)
+	wallet_coin = _label("◈ 0", 17, SKIN.GOLD, 0.364, 0.029, 0.460, 0.079)
+	wallet_coin.name = "WalletCoinCount"
+	wallet_resource_icon = TextureRect.new()
+	wallet_resource_icon.name = "LastTrackedResourceIcon"
+	wallet_resource_icon.texture = load("res://assets/icons/wood.svg") as Texture2D
+	wallet_resource_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	wallet_resource_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	wallet_resource_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(wallet_resource_icon)
+	_anchors(wallet_resource_icon, 0.472, 0.029, 0.499, 0.074)
+	wallet_resource_count = _label("Wood ×0", 15, SKIN.CREAM, 0.501, 0.029, 0.628, 0.079)
+	wallet_resource_count.name = "LastTrackedResourceCount"
+	wallet_resource_count.clip_text = true
+	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
+	wallet_bag.name = "Action_bag"
+	# Retain stable public dictionary keys for existing gameplay/test callers.
 	for key in ["wood", "stone", "hide", "coins"]:
-		var icon := TextureRect.new()
-		icon.name = "ResourceIcon_" + key
-		icon.texture = load("res://assets/icons/" + key + ".svg") as Texture2D
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		root.add_child(icon)
-		_anchors(icon, start_x, 0.143, start_x + 0.023, 0.174)
-		var amount: Label = _label("0", 14, Color("#ffe5b5"), start_x + 0.024, 0.142, start_x + 0.053, 0.175)
-		amount.clip_text = true
-		items[key] = amount
-		start_x += 0.056
+		var count := _label("0", 12, SKIN.CREAM, 0.0, 0.0, 0.01, 0.01)
+		count.name = "HiddenResource_" + key
+		count.visible = false
+		items[key] = count
 	# Overload notification appears only when load needs attention; the bag
 	# itself shows the full capacity meter and bonus information.
-	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.184, 0.245, 0.213)
+	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.183, 0.247, 0.208)
 	bag_weight_label.name = "CarryWeightLabel"
 	bag_weight_label.visible = false
 
 	# The persistent quest ribbon is single-line and ellipsis-safe; on
 	# completion it collapses to a small journal button instead of endlessly
 	# announcing the finished starter quest.
-	quest_frame = _panel(0.325, 0.021, 0.715, 0.090)
+	quest_frame = _panel(0.018, 0.213, 0.316, 0.283)
 	quest_frame.name = "QuestBanner"
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
 	SKIN.apply_button(quest_toggle, "wood")
 	root.add_child(quest_toggle)
-	_anchors(quest_toggle, 0.337, 0.031, 0.424, 0.082)
+	_anchors(quest_toggle, 0.028, 0.220, 0.113, 0.277)
 	quest_toggle.pressed.connect(_toggle_quest)
-	quest = _label("Gather wood and stone", 17, Color("#ffe6bb"), 0.432, 0.027, 0.701, 0.083)
+	quest = _label("Gather wood and stone", 16, Color("#ffe6bb"), 0.124, 0.222, 0.304, 0.275)
 	quest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest.autowrap_mode = TextServer.AUTOWRAP_OFF
 	quest.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	quest.clip_text = true
-	quest_detail_back = _panel(0.333, 0.099, 0.707, 0.218)
+	quest_detail_back = _panel(0.021, 0.292, 0.320, 0.463)
 	quest_detail_back.name = "QuestJournal"
 	quest_detail_back.add_theme_stylebox_override("panel", SKIN.box("parchment"))
 	quest_detail_back.visible = false
-	quest_detail = _label("", 16, SKIN.INK, 0.353, 0.118, 0.690, 0.207)
+	quest_detail = _label("", 16, SKIN.INK, 0.038, 0.309, 0.300, 0.446)
 	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quest_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -170,24 +220,58 @@ func _ready() -> void:
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	toast_label.visible = false
 
-	clock_label = _label("DAY 09:07", 18, Color("#fff0c5"), 0.768, 0.034, 0.871, 0.093)
+	clock_label = _label("DAY 09:07", 17, Color("#fff0c5"), 0.785, 0.033, 0.921, 0.098)
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# A single top-right menu opens the other controls on demand.
+	top_menu_panel = _panel(0.710, 0.122, 0.989, 0.391)
+	top_menu_panel.name = "FunctionalHotbar"
+	top_menu_panel.visible = false
+	menu_button = _action("menu", "MENU", 0.925, 0.018, 0.986, 0.111, "round")
+	menu_button.name = "TopRightMenuButton"
+	menu_button.button_down.connect(_menu_button_down)
+	menu_button.button_up.connect(_menu_button_up)
+	menu_button.pressed.connect(_menu_button_pressed)
+	craft_button = _action("craft", "CRAFT", 0.729, 0.148, 0.804, 0.254, "round")
+	top_menu_actions.append(craft_button)
+	top_menu_actions.append(_action("gear", "GEAR", 0.816, 0.148, 0.891, 0.254, "round"))
 	var multiplayer_entry := Button.new()
 	multiplayer_entry.name = "CoopEntryButton"
 	multiplayer_entry.text = "CO-OP"
 	SKIN.apply_button(multiplayer_entry, "wood")
 	root.add_child(multiplayer_entry)
-	_anchors(multiplayer_entry, 0.875, 0.033, 0.982, 0.100)
+	_anchors(multiplayer_entry, 0.901, 0.148, 0.982, 0.254)
 	multiplayer_entry.pressed.connect(_open_coop)
+	top_menu_actions.append(multiplayer_entry)
+	var skill_entry := Button.new()
+	skill_entry.name = "SkillMenuButton"
+	skill_entry.text = "SKILLS"
+	SKIN.apply_button(skill_entry, "wood")
+	root.add_child(skill_entry)
+	_anchors(skill_entry, 0.729, 0.270, 0.804, 0.374)
+	skill_entry.pressed.connect(_show_skill_details)
+	top_menu_actions.append(skill_entry)
+	var journal_entry := Button.new()
+	journal_entry.name = "JournalMenuButton"
+	journal_entry.text = "JOURNAL"
+	SKIN.apply_button(journal_entry, "wood")
+	root.add_child(journal_entry)
+	_anchors(journal_entry, 0.816, 0.270, 0.891, 0.374)
+	journal_entry.pressed.connect(_open_journal)
+	top_menu_actions.append(journal_entry)
+	var settings_entry := Button.new()
+	settings_entry.name = "InGameSettingsButton"
+	settings_entry.text = "SETTINGS"
+	SKIN.apply_button(settings_entry, "wood")
+	root.add_child(settings_entry)
+	_anchors(settings_entry, 0.901, 0.270, 0.982, 0.374)
+	settings_entry.pressed.connect(_show_control_settings)
+	top_menu_actions.append(settings_entry)
+	for option in top_menu_actions:
+		option.visible = false
+	# Offhand torch remains available without interfering with three ability slots.
+	torch_button = _action("torch", "TORCH", 0.700, 0.844, 0.757, 0.934, "round")
 
-	# Utility controls live above the playfield, not in a long bottom HUD.
-	var hotbar: Panel = _panel(0.711, 0.180, 0.988, 0.293)
-	hotbar.name = "FunctionalHotbar"
-	_action("bag", "BAGS", 0.720, 0.191, 0.779, 0.283, "slot")
-	_action("craft", "CRAFT", 0.785, 0.191, 0.844, 0.283, "slot")
-	torch_button = _action("torch", "TORCH", 0.850, 0.191, 0.909, 0.283, "slot")
-	_action("gear", "GEAR", 0.915, 0.191, 0.976, 0.283, "slot")
 	# The single context button replaces redundant ATTACK and GATHER tiles.
 	# Three real weapon-mastery skill holders arc around its upper-left side.
 	quick_buttons["skill_1"] = _action("skill_1", "POWER", 0.819, 0.600, 0.881, 0.712, "round")
@@ -263,6 +347,10 @@ func _ready() -> void:
 	knob.size = Vector2(55, 55)
 	_position_stick()
 	_make_camera_drag_hint()
+	_build_control_settings()
+	_build_skill_details()
+	_load_control_prefs()
+	_position_stick()
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -352,8 +440,12 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	art_icon.name = "ActionIcon"
 	var icon_path: String = "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
-		var icon_id: String = "shield" if key == "gear" else "heart" if key == "potion" else "meal" if key == "consumable" else "attack" if key.begins_with("skill_") else key
-		icon_path = "res://assets/icons/" + icon_id + ".svg"
+		var ui_icon: String = "res://assets/ui/icons/" + key + ".svg"
+		if ResourceLoader.exists(ui_icon):
+			icon_path = ui_icon
+		else:
+			var icon_id: String = "shield" if key == "gear" else "heart" if key == "potion" else "meal" if key == "consumable" else "attack" if key.begins_with("skill_") else key
+			icon_path = "res://assets/icons/" + icon_id + ".svg"
 	art_icon.texture = load(icon_path) as Texture2D
 	art_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	art_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -412,7 +504,7 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	# Reserve joystick, hotbar, co-op, quest, top HUD and smart-action areas.
 	# Central visible world accepts drag even while movement uses finger 0.
-	return pos.x >= screen.x * 0.26 and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
+	return pos.x >= screen.x * (0.38 if floating_joystick_enabled else 0.26) and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
 
 
 func _build_quick_tray() -> void:
@@ -752,6 +844,11 @@ func _update_context_prompt(helper: String) -> void:
 	hint.visible = show_prompt
 
 func _process(delta: float) -> void:
+	if top_menu_pressed and not top_menu_opened_by_hold:
+		top_menu_hold_seconds += delta
+		if top_menu_hold_seconds >= 0.34:
+			top_menu_opened_by_hold = true
+			_set_top_menu(true)
 	if gesture_hint_timeout > 0.0:
 		gesture_hint_timeout = maxf(0.0, gesture_hint_timeout - delta)
 		if gesture_hint_timeout <= 0.0:
@@ -782,13 +879,30 @@ func _process(delta: float) -> void:
 
 func _position_stick() -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
+	if floating_joystick_enabled:
+		joystick.visible = finger >= 0 or mouse_stick
+		return
+	joystick.visible = true
 	joystick.position = Vector2(26.0, screen.y - 177.0)
+
+func _floating_zone(pos: Vector2) -> bool:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	return pos.x >= 8.0 and pos.x <= screen.x * 0.35 and pos.y >= screen.y * 0.35 and pos.y <= screen.y * 0.92
+
+func _start_floating_stick(pos: Vector2) -> void:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var center: Vector2 = Vector2(clampf(pos.x, 74.0, screen.x * 0.35 - 48.0), clampf(pos.y, screen.y * 0.38, screen.y - 83.0))
+	joystick.position = center - joystick.size * 0.5
+	joystick.visible = true
 
 func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
 	if _handle_smart_input(event):
+		return
+	if (control_settings_panel != null and control_settings_panel.visible) or (skill_detail_panel != null and skill_detail_panel.visible):
+		_reset_touch()
 		return
 	if game != null and ((game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible)):
 		_reset_touch()
@@ -820,17 +934,21 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.relative.x)
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 104.0:
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and event.position.distance_to(_center()) < 104.0)):
 			finger = event.index
 			mouse_stick = false
+			if floating_joystick_enabled:
+				_start_floating_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
 			_reset_touch()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and finger == -1 and event.position.distance_to(_center()) < 104.0:
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and event.position.distance_to(_center()) < 104.0)):
 			mouse_stick = true
+			if floating_joystick_enabled:
+				_start_floating_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and mouse_stick and finger == -1:
 			_reset_touch()
@@ -846,16 +964,21 @@ func _reset_touch() -> void:
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
+	_position_stick()
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		_reset_touch()
 
 func _stick(pos: Vector2) -> void:
+	if floating_joystick_enabled:
+		var travel: Vector2 = pos - _center()
+		if travel.length() > 55.0:
+			joystick.position += travel.normalized() * (travel.length() - 55.0)
 	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
 
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
-	status.text = "OUTPOST"
+	status.text = player_display_name
 	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
 	if bag_weight_label != null and game != null:
 		var max_load: float = maxf(1.0, game.bag_capacity())
@@ -869,14 +992,16 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		var rank: int = int(level_data.get("level", 1))
 		var required: float = maxf(1.0, float(level_data.get("required", 100)))
 		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
-		xp_level_label.text = "LEVEL %d     %d / %d XP" % [rank, int(level_data.get("current", 0)), int(required)]
-		status.text = "OUTPOST  •  LV %d" % rank
+		xp_level_label.text = "%d / %d XP" % [int(level_data.get("current", 0)), int(required)]
+		xp_level_badge.text = "Lv. %d" % rank
+		status.text = player_display_name
 		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:
 		items[key].text = str(inventory.get(key, 0))
+	_refresh_wallet(inventory)
 	_update_quest_tracker(objective)
 	_update_context_prompt(helper)
 
