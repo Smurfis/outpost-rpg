@@ -3,6 +3,7 @@ extends CanvasLayer
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
+const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -28,6 +29,7 @@ var quick_selected: int = -1
 var quick_ignore_mouse_until: int = 0
 var quick_icon_cache: Dictionary = {}
 var hero_detail: Label
+var radial_level: Control
 var minimap: Control
 var clock_label: Label
 var torch_button: Button
@@ -113,7 +115,7 @@ func _ready() -> void:
 
 	# Small live status strip. No generic, permanently fixed cartoon portrait:
 	# the gold sigil is an independent icon; equipment retains the real 3D avatar.
-	var status_frame: Panel = _panel(0.018, 0.019, 0.247, 0.127)
+	var status_frame: Panel = _panel(0.018, 0.019, 0.279, 0.139)
 	status_frame.name = "HeroStatusFrame"
 	var sigil := TextureRect.new()
 	sigil.name = "OutpostSigil"
@@ -123,12 +125,27 @@ func _ready() -> void:
 	sigil.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	sigil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(sigil)
-	_anchors(sigil, 0.024, 0.036, 0.057, 0.103)
-	status = _label("Adventurer", 16, Color("#fff1c7"), 0.063, 0.026, 0.236, 0.058)
+	_anchors(sigil, 0.074, 0.105, 0.092, 0.138)
+	# Player portrait is a live independent artwork layer; the small Outpost
+	# emblem remains in the corner as a crest, not a substitute for the hero.
+	var portrait_back: Panel = _panel(0.022, 0.027, 0.089, 0.131)
+	portrait_back.name = "HeroPortraitFrame"
+	portrait_back.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+	var hero_portrait := TextureRect.new()
+	hero_portrait.name = "HeroPortrait"
+	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v2.svg") as Texture2D
+	hero_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	hero_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hero_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hero_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hero_portrait)
+	_anchors(hero_portrait, 0.026, 0.031, 0.085, 0.126)
+	root.move_child(sigil, root.get_child_count() - 1)
+	status = _label("Adventurer", 18, Color("#fff1c7"), 0.094, 0.026, 0.269, 0.058)
 	status.clip_text = true
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
-	health_bar = _meter(0.065, 0.061, 0.235, 0.083, Color("#d74c43"))
-	health_numbers = _label("100 / 100 HP", 14, Color("#fff1db"), 0.068, 0.061, 0.232, 0.083)
+	health_bar = _meter(0.094, 0.061, 0.269, 0.090, Color("#d74c43"))
+	health_numbers = _label("100 / 100 HP", 15, Color("#fff1db"), 0.095, 0.062, 0.267, 0.087)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mana_bar = _meter(0.065, 0.089, 0.235, 0.110, Color("#417cdb"))
 	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
@@ -141,12 +158,15 @@ func _ready() -> void:
 	xp_bar.name = "CharacterLevelXP"
 	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.032, 0.960, 0.131, 0.993)
 	xp_level_badge.name = "CharacterLevelBadge"
+	xp_level_badge.visible = false  # Level appears inside the separate ornate radial frame.
 	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	xp_level_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	radial_level = RADIAL_LEVEL.new()
+	root.add_child(radial_level)
 	xp_level_label = _label("0 / 100 XP", 14, Color("#fff2d1"), 0.192, 0.965, 0.783, 0.992)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.091, 0.236, 0.121)
+	hero_detail = _label("Training Blade  •  M1", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
@@ -677,6 +697,11 @@ func _layout_touch_hud() -> void:
 			screen.y - 29.0 * scale, screen.x * 0.55, 22.0 * scale))
 	_place_px(xp_level_badge, screen, Rect2(edge,
 			screen.y - 31.0 * scale, 105.0 * scale, 24.0 * scale))
+	# The separate ornate level jewel attaches to the BOTTOM XP bar.
+	# Keep it clear of the joystick (fixed x=26..174 at native landscape).
+	if radial_level != null:
+		_place_px(radial_level, screen, Rect2(maxf(182.0, 186.0 * scale),
+				screen.y - 86.0 * scale, 83.0 * scale, 83.0 * scale))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -1341,6 +1366,8 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
 		xp_level_label.text = "%d / %d XP" % [int(level_data.get("current", 0)), int(required)]
 		xp_level_badge.text = "Lv. %d" % rank
+		if radial_level != null:
+			radial_level.call("update_level", rank, xp_bar.value / 100.0)
 		status.text = player_display_name
 		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
