@@ -41,6 +41,28 @@
 <path d="M171 282 L184 251 L201 279 L187 295Z"/>
 <path d="M603 294 L616 261 L633 289 L619 309Z"/>
 </g>
+<!-- Compact campfire and stony campground inspired by the original approved crest. -->
+<circle cx="637" cy="258" r="56" fill="url(#flare)" opacity=".70"/>
+<g stroke="#42313a" stroke-width="5" stroke-linejoin="round">
+ <path d="M601 292 L624 276 L646 286 L666 270 L692 291Z" fill="#817984"/>
+ <path d="M611 277 L629 265 L640 275 L651 261 L671 279Z" fill="#a49aa0"/>
+</g>
+<path d="M620 280 L646 208 L654 254 L668 233 L677 280Z" fill="#ec853d" stroke="#794335" stroke-width="6" stroke-linejoin="round"/>
+<path d="M632 281 L651 232 L653 264 L663 253 L667 281Z" fill="#ffe18d"/>
+<path d="M608 290 L663 279 M619 279 L672 293" stroke="#6d432f" stroke-width="12" stroke-linecap="round"/>
+<path d="M615 290 L659 278" stroke="#bd8651" stroke-width="4"/>
+<!-- Small square leaves and tent patching make the crest read as pixel-fantasy art. -->
+<g fill="#8fb74e" stroke="#456839" stroke-width="2">
+ <path d="M144 301 l15 -18 14 8 -12 19Z"/><path d="M166 297 l17 -25 12 13 -13 22Z"/>
+ <path d="M661 308 l18 -20 12 10 -12 21Z"/><path d="M682 304 l17 -16 13 10 -10 18Z"/>
+</g>
+<g fill="#c25b4b" stroke="#854d46" stroke-width="4">
+ <path d="M278 222 l36 -16 18 35 -34 14Z"/>
+</g>
+<g fill="none" stroke="#e4b67a" stroke-width="8" stroke-linecap="round">
+ <path d="M161 317 q-17 12 -3 27 q-8 12 4 18"/>
+ <path d="M655 314 q20 13 4 27 q11 13 -2 22"/>
+</g>
 <!-- Stone crest and lower banner -->
 <path d="M356 398 L438 398 L428 428 L398 416 L371 428Z" fill="#953d40" stroke="#402a33" stroke-width="8"/>
 <path d="M389 405 L404 405 L399 418Z" fill="#f9d08a"/>
