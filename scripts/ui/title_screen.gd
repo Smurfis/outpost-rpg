@@ -207,6 +207,7 @@ func _make_screen() -> void:
 		var b: Button = BUTTON_SCENE.instantiate() as Button
 		b.name = kind.capitalize() + "Button"
 		b.set("button_kind", kind)
+		b.set("reduced_motion", _reduced_motion)
 		var placement: Rect2 = approved_rects[kind] if _approved_art else Rect2(425, 342 + 79 * i, 430, 72)
 		_canvas.add_child(b)
 		# Button._ready() restores legacy 430×76 minimum; reset it before
@@ -436,6 +437,11 @@ func _build_settings() -> void:
 		if _embers != null:
 			_embers.set("reduced_motion", enabled)
 			_embers.queue_redraw()
+		for kind in ["Play", "Continue", "Settings", "Quit"]:
+			var button: Button = _canvas.get_node_or_null(kind + "Button") as Button
+			if button != null:
+				button.set("reduced_motion", enabled)
+				button.queue_redraw()
 		if enabled:
 			_splash.scale = Vector2.ONE
 		_write_prefs()
