@@ -227,3 +227,10 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_approved_raster_smoke.gd 2>&1 | tee approved-title.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED TITLE:' approved-title.log; then exit 1; fi
           grep -q "APPROVED TITLE RESULT: 0 failures" approved-title.log
+
+      - name: Validate live forest minimap, voxel stations, character scale and held tools
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/visual_world_minimap.gd 2>&1 | tee visual-world.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|VISUAL FAIL:' visual-world.log; then exit 1; fi
+          grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual-world.log

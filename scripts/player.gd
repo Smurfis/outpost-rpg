@@ -22,6 +22,7 @@ var torch_mesh: MeshInstance3D
 var torch_light: OmniLight3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
+var tool_mesh: MeshInstance3D
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
@@ -68,8 +69,13 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	visual = Node3D.new()
 	visual.name = "VisualRig"
 	add_child(visual)
+	# Smaller, rounder silhouette without changing collision or save data.
+	if bool(game.get("voxel_art_enabled")):
+		visual.scale = Vector3(0.88, 0.85, 0.88)
 	_model("adventurer_torso", visual, Vector3.ZERO)
-	_model("adventurer_head", visual, Vector3(0, 1.89, -0.035))
+	var head: MeshInstance3D = _model("adventurer_head", visual, Vector3(0, 1.89, -0.035))
+	if bool(game.get("voxel_art_enabled")):
+		head.scale = Vector3.ONE * 1.19
 	left_arm = _pivot("LeftArm", Vector3(-0.54, 1.51, 0.02))
 	right_arm = _pivot("RightArm", Vector3(0.54, 1.51, 0.02))
 	left_leg = _pivot("LeftLeg", Vector3(-0.205, 0.78, 0.0))
@@ -147,6 +153,25 @@ func set_weapon(id: String) -> void:
 	else:
 		sword_mesh.scale = Vector3(0.76, 0.76, 0.76)
 		sword_mesh.material_override = _material(Color("b2b6a9"))
+
+## Swaps the visible grip item, leaving the actual weapon slot and combat
+## statistics unchanged. A selected pickaxe or axe is visibly held.
+func set_held_tool(tool_id: String) -> void:
+	if sword_mesh == null or weapon_grip == null:
+		return
+	if tool_mesh != null and is_instance_valid(tool_mesh):
+		weapon_grip.remove_child(tool_mesh)
+		tool_mesh.queue_free()
+		tool_mesh = null
+	sword_mesh.visible = tool_id not in ["axe", "pickaxe"]
+	if tool_id in ["axe", "pickaxe"] and game != null and bool(game.get("voxel_art_enabled")):
+		tool_mesh = VOXEL_CHARACTER.create_part("hand_axe" if tool_id == "axe" else "hand_pickaxe")
+		if tool_mesh != null:
+			tool_mesh.name = "Held" + tool_id.capitalize()
+			tool_mesh.scale = Vector3.ONE * 0.82
+			weapon_grip.add_child(tool_mesh)
+	else:
+		sword_mesh.visible = true
 
 func set_spear(equipped: bool) -> void:
 	set_weapon("spear" if equipped else "training_blade")
@@ -252,7 +277,10 @@ func _physics_process(delta: float) -> void:
 	velocity.z = direction.z * speed + knockback_velocity.z
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 13.0)
 	var grounded_before_motion: bool = is_on_floor()
-	velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
+	if grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
+		velocity.y = 5.1
+	else:
+		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
 	if auto_step_enabled and not modal_open and grounded_before_motion and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
@@ -273,6 +301,12 @@ func _physics_process(delta: float) -> void:
 	right_leg.rotation.x = -step
 	left_arm.rotation.x = -step * 0.55
 	right_arm.rotation.x = step * 0.55
+	# Small tuck in midair; attack/gather takes precedence below.
+	if not is_on_floor():
+		left_leg.rotation.x = 0.28
+		right_leg.rotation.x = -0.28
+		left_arm.rotation.x = -0.20
+		right_arm.rotation.x = -0.20
 	combat_phase = maxf(0.0, combat_phase - delta * 2.8)
 	gather_phase = maxf(0.0, gather_phase - delta * 2.3)
 	if combat_phase > 0.0:

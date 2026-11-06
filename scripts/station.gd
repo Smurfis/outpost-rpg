@@ -59,6 +59,20 @@ func _block(size: Vector3, at: Vector3, tint: Color) -> MeshInstance3D:
 	shape.size = size
 	return _part(shape, at, tint)
 
+func _glow_block(size: Vector3, at: Vector3, tint: Color) -> MeshInstance3D:
+	# Emissive pixel-shaped fire without a shadowed mobile point light.
+	var shape := BoxMesh.new()
+	shape.size = size
+	var flame: MeshInstance3D = _part(shape, at, tint)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = tint
+	material.emission_enabled = true
+	material.emission = tint
+	material.emission_energy_multiplier = 2.2
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flame.material_override = material
+	return flame
+
 func _rod(bottom: float, top: float, height: float, at: Vector3, tint: Color) -> MeshInstance3D:
 	var shape := CylinderMesh.new()
 	shape.bottom_radius = bottom
@@ -84,22 +98,37 @@ func _label(message: String, tint: Color) -> void:
 func _build() -> void:
 	match station_id:
 		"workbench":
-			_block(Vector3(3.0, 0.2, 1.6), Vector3(0, 0.88, 0), Color("9f7446"))
-			for x in [-1.13, 1.13]:
-				for z in [-0.51, 0.51]:
-					_block(Vector3(0.19, 0.86, 0.19), Vector3(x, 0.43, z), Color("5e402f"))
-			for i in range(5):
-				_block(Vector3(0.15, 0.08, 1.5), Vector3(-1.19 + float(i) * 0.59, 1.05, 0), Color("d0a165"))
-			effect = _block(Vector3(0.42, 0.14, 0.28), Vector3(0.10, 1.20, 0), Color("d5d9cb"))
-			_label("WOODWORK | [CRAFT]", Color("f3dc9e"))
+			# Layered walnut work surface, chunky joinery, shelf and rear tool rack.
+			_block(Vector3(2.78, 0.19, 1.57), Vector3(0, 0.90, 0), Color("9f7446"))
+			_block(Vector3(2.90, 0.12, 1.65), Vector3(0, 1.04, 0), Color("c39557"))
+			for x in [-1.10, 1.10]:
+				for z in [-0.50, 0.50]:
+					_block(Vector3(0.25, 0.87, 0.25), Vector3(x, 0.43, z), Color("5e402f"))
+			_block(Vector3(2.22, 0.13, 1.10), Vector3(0, 0.24, 0), Color("865d37"))
+			_block(Vector3(2.55, 0.54, 0.17), Vector3(0, 1.44, 0.69), Color("a97947"))
+			for i in range(4):
+				_block(Vector3(0.13, 0.08, 1.45), Vector3(-0.90 + float(i) * 0.59, 1.13, 0), Color("d0a165"))
+			# Two upright hanging implements (recognisable crafting silhouette).
+			_block(Vector3(0.12, 0.48, 0.10), Vector3(-0.78, 1.51, 0.53), Color("8a603c"))
+			_block(Vector3(0.39, 0.15, 0.14), Vector3(-0.78, 1.77, 0.53), Color("b6b9ad"))
+			_block(Vector3(0.10, 0.44, 0.10), Vector3(0.70, 1.55, 0.53), Color("8a603c"))
+			_block(Vector3(0.31, 0.11, 0.17), Vector3(0.70, 1.77, 0.53), Color("aaa9a0"))
+			effect = _block(Vector3(0.50, 0.12, 0.31), Vector3(0.08, 1.24, -0.11), Color("cad0c7"))
+			_label("WORKBENCH | [CRAFT]", Color("f3dc9e"))
 		"forge":
-			_block(Vector3(3.2, 0.35, 2.5), Vector3(0, 0.18, 0), Color("6b6660"))
-			for x in [-1.14, 1.14]:
-				_block(Vector3(0.32, 1.1, 2.0), Vector3(x, 0.73, 0), Color("777a75"))
-			_block(Vector3(2.1, 0.23, 1.65), Vector3(0, 0.55, 0), Color("3a3934"))
-			effect = _rod(0.54, 0.26, 0.6, Vector3(0, 0.92, 0), Color("f3a34b"))
-			_block(Vector3(1.1, 0.18, 0.85), Vector3(0, 1.04, 1.15), Color("7f979b"))
-			_rod(0.40, 0.35, 1.6, Vector3(-0.91, 1.0, -0.78), Color("81776e"))
+			# Tiered cobblestone and dark hearth; tall chimney reads from iso view.
+			_block(Vector3(2.96, 0.39, 2.35), Vector3(0, 0.19, 0), Color("6b6660"))
+			for x in [-1.10, 1.10]:
+				_block(Vector3(0.46, 1.17, 2.14), Vector3(x, 0.75, 0), Color("777a75"))
+			_block(Vector3(2.0, 0.24, 1.62), Vector3(0, 0.56, 0), Color("34312c"))
+			_block(Vector3(2.0, 0.31, 0.43), Vector3(0, 1.28, 0.87), Color("9c9082"))
+			_block(Vector3(0.95, 2.08, 0.76), Vector3(0, 1.82, 0.92), Color("756f68"))
+			_block(Vector3(1.12, 0.22, 0.94), Vector3(0, 2.91, 0.92), Color("aaa29a"))
+			_glow_block(Vector3(1.47, 0.15, 1.00), Vector3(0, 0.75, -0.12), Color("eb6a2b"))
+			effect = _glow_block(Vector3(0.61, 0.49, 0.44), Vector3(0, 1.02, -0.20), Color("ffb24d"))
+			_block(Vector3(0.89, 0.55, 0.64), Vector3(0, 0.30, -1.65), Color("67645f"))
+			_block(Vector3(1.35, 0.21, 0.71), Vector3(0, 0.71, -1.65), Color("88929a"))
+			_block(Vector3(0.40, 0.17, 0.34), Vector3(0, 0.87, -1.65), Color("a9b2b6"))
 			_label("FORGE | [CRAFT]", Color("f7b56e"))
 		"loom":
 			for x in [-1.18, 1.18]:
