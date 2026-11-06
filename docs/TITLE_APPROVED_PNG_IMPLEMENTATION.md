@@ -68,6 +68,18 @@ and should be inspected on an Android phone. Tests in
 `tests/title_approved_raster_smoke.gd` validate normal 16:9 and 2400×1080
 (20:9) output geometry. This does not claim physical-phone visual sign-off.
 
+## November 6 menu/intro atmosphere polish
+
+- The dynamic slogan now opens with **Bring a torch!**; other phrases (including the approved hand-lettered deeper-dungeons PNG) rotate through as independent frames. Live text is single-line, narrower and clipped to its own bounds to prevent the left-edge stray glyph visible on wide Android phones.
+- All four **native** PNG-backed buttons now use the same golden focus, hover and finger-tap glints (including visible keyboard/gamepad focus). Disabled Continue remains muted and cannot highlight without a valid save.
+- Two tiny CPU-drawn pixel-ember emitters float above the scenery's campsite fire and the campfire on the title crest. They are deterministic, draw at ~20 fps, ignore touches and turn off under the existing reduced-motion preference.
+- A very slow **dusk colour** cycle tints only the landscape (both 16:9 background and ultrawide slices). No logos or live button artwork is tinted. Reduced motion uses a stationary gentle tint.
+- The Five Star Interactive intro now has pixel star twinkles, softer outlines, dark indigo backing and short fade timing. Touch/keyboard skip and automatic title transition remain intact.
+- Full moon replacement is **not** included: painting a moon directly over the original rendered sunset would compromise the approved source. A genuinely clean nighttime background and optional flying silhouette belong in a future art pass.
+- The gameplay/HUD, Android updater, world-loading gateway and save format are untouched.
+
+A dedicated Godot 4.7.2 test checks the readable rotating slogans, PNG hero fallback, button states, reduced-motion embers, fullscreen background tint and short studio intro. **Physical-device screenshot review** is still necessary to sign off exact pixel positioning and the night mood.
+
 ## Future TODO
 
 - [ ] Real-device visual sign-off: safe areas, tap targets, FPS and input focus.
