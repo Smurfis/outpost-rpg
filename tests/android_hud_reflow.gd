@@ -60,7 +60,7 @@ func _run() -> void:
 		right_buttons.append(smart)
 	for i in range(right_buttons.size()):
 		for j in range(i + 1, right_buttons.size()):
-			_does_not_overlap(right_buttons[i], right_buttons[j], "Skill, torch and consumable hitboxes remain distinct")
+			_does_not_overlap(right_buttons[i], right_buttons[j], "Separate hitboxes: %s / %s" % [right_buttons[i].name, right_buttons[j].name])
 
 	if mini != null and toggle != null:
 		_does_not_overlap(mini, toggle, "Minimap is clear of its menu toggle")
