@@ -274,3 +274,10 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/visual_world_minimap.gd 2>&1 | tee visual-world.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|VISUAL FAIL:' visual-world.log; then exit 1; fi
           grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual-world.log
+
+      - name: Verify Cube World-inspired terrain palette, avatar and radial map
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/cubeworld_visual_direction.gd 2>&1 | tee cube-style.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CUBE STYLE:' cube-style.log; then exit 1; fi
+          grep -q "CUBE STYLE RESULT: 0 failures" cube-style.log
