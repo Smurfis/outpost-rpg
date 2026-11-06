@@ -249,6 +249,15 @@ func _make_screen() -> void:
 	# The extracted badge's baked font and surrounding patch were misaligned on
 	# wide Android screens. Keep the decorative plaque, use ONE centred live label.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
+	# A small carved wood corner plate conceals the damaged grey background
+	# cleanup around the old baked-in version patch on ultrawide phones.
+	var corner := Panel.new()
+	corner.name = "VersionCornerWood"
+	corner.position = Vector2(1045, 625)
+	corner.size = Vector2(235, 94)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	corner.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	_canvas.add_child(corner)
 	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
 	var version := Label.new()
 	version.name = "Version"
