@@ -253,7 +253,9 @@ func _ready() -> void:
 	root.add_child(multiplayer_entry)
 	_anchors(multiplayer_entry, 0.895, 0.405, 0.984, 0.482)
 	multiplayer_entry.pressed.connect(_open_coop)
-	top_menu_actions.append(multiplayer_entry)
+	# Retained by name for older scripts, but deliberately never shown.
+	# Play/Continue -> Host/Join replaces the intrusive in-game CO-OP tile.
+	multiplayer_entry.visible = false
 	var skill_entry := Button.new()
 	skill_entry.name = "SkillMenuButton"
 	skill_entry.text = "SKILLS"
