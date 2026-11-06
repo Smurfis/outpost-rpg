@@ -1132,6 +1132,14 @@ func _on_first_night() -> void:
 		hud.toast("I don't care how dark the world gets. You are its light.")
 	_save()
 
+func save_and_return_to_title() -> void:
+	# Single exit path for solo and LAN. Dismantle active sessions before saving
+	# so the next title visit starts offline and no ghost avatars remain.
+	if coop != null:
+		coop.disconnect_session()
+	_save()
+	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
+
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
