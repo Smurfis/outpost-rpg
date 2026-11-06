@@ -34,6 +34,22 @@ func _run() -> void:
 		var texture: ImageTexture = mini.get("_texture") as ImageTexture
 		_check(texture != null and texture.get_size() == Vector2(48, 48), "Minimap builds low-cost sampled terrain texture")
 		_check(mini.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Minimap never blocks touch controls")
+		# Camera orbit should rotate the map, markers and compass together.
+		# The minimap always samples the player's actual current world position.
+		var player_position: Vector3 = game.hero.global_position
+		game.hero.global_position = player_position + Vector3(5.0, 0.0, -4.0)
+		game.camera_angle = PI * 0.5
+		mini._process(0.02)
+		_check((mini.get("_center") as Vector3).distance_to(game.hero.global_position) < 0.01, "Minimap is centred on player immediately after moving")
+		_check(is_equal_approx(float(mini.get("_sample_angle")), PI * 0.5), "Minimap uses current smoothed camera angle")
+		var north_pixel: Vector2 = mini._world_to_map(Vector2(0.0, -1.0))
+		_check(north_pixel.distance_to(Vector2(1.0, 0.0)) < 0.01, "Camera quarter-turn rotates world north to the right")
+		var upper_world: Vector2 = mini._map_to_world(Vector2(0.0, -1.0))
+		_check(upper_world.distance_to(Vector2(-1.0, 0.0)) < 0.01, "Top of minimap aligns with camera-forward world direction")
+		game.camera_angle = PI
+		mini._process(0.02)
+		_check(mini._world_to_map(Vector2(0.0, -1.0)).distance_to(Vector2(0.0, 1.0)) < 0.01, "Second camera rotation also updates compass and map")
+
 	var player = game.hero
 	_check(player.visual.scale.x < 1.0, "Voxel character uses smaller proportions")
 	_check(player.visual.get_node_or_null("adventurer_head") != null, "Character head remains modular for future race swaps")
