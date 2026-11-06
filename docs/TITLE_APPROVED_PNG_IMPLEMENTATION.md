@@ -47,6 +47,27 @@ The artwork was aligned directly against the approved 1280×720 reference. Objec
 
 **Do not ship a new Android APK claiming visual approval until it has been inspected on the target physical phone.** The frame is optimized for 16:9; very wide device aspects will letterbox. Use screenshots to inspect input hit area, text sharpness, image seams, title tip panel when toggled, and startup transitions.
 
+## Widescreen Android phone layout
+
+The approved 1280×720 composition remains pixel-for-pixel unchanged on 16:9 displays.
+When the title opens, `Window.content_scale_aspect` temporarily switches from
+Godot's 16:9 pillarbox behaviour to `CONTENT_SCALE_ASPECT_EXPAND`. The original
+scale setting is restored when the title closes, so this feature does not silently
+change the 3D gameplay, HUD, or world-loading layout.
+
+On 18:9, 19.5:9, 20:9 and ultrawide landscape displays, the centre section
+of the approved background (x=320..1120) retains its original undistorted pixels
+and position relative to the tent logo, real Play/Continue/Settings/Quit hitboxes,
+and main art cutouts. Only left/right outer scenic regions are horizontally
+extended with Godot AtlasTexture slices to cover the extra screen width.
+
+This avoids black side bars and leaves the tent wordmark, plaques, lettering,
+button interactions, loading gateway and saves at their approved proportions.
+The edge landscape (including some outer decorations) intentionally expands
+and should be inspected on an Android phone. Tests in
+`tests/title_approved_raster_smoke.gd` validate normal 16:9 and 2400×1080
+(20:9) output geometry. This does not claim physical-phone visual sign-off.
+
 ## Future TODO
 
 - [ ] Real-device visual sign-off: safe areas, tap targets, FPS and input focus.

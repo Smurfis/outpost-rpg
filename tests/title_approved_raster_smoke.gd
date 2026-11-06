@@ -88,6 +88,30 @@ func _run() -> void:
 	if splash != null:
 		_check(splash.position == Vector2(833, 73) and splash.size == Vector2(305, 171), "Rotating slogan's first hand-drawn frame aligns exactly")
 	_check(ResourceLoader.exists("res://scenes/ui/world_loading.tscn"), "Title still launches through streaming-world loading gateway")
+	# Widescreen Android screens must not pillarbox, skew the logo or move
+	# actual button hitboxes away from their approved pixel coordinates.
+	_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Title expands viewport instead of using 16:9 black sidebars")
+	var artboard: Control = title.get_node_or_null("Artboard") as Control
+	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
+	_check(wide != null, "Approved background has three aspect-safe widescreen slices")
+	if wide != null and artboard != null and backdrop != null:
+		title.call("_layout_for_size", Vector2(2400.0, 1080.0)) # 20:9 Android
+		var left: TextureRect = wide.get_node_or_null("WideLeft") as TextureRect
+		var center: TextureRect = wide.get_node_or_null("WideCenter") as TextureRect
+		var right: TextureRect = wide.get_node_or_null("WideRight") as TextureRect
+		_check(wide.visible and not backdrop.visible, "20:9 uses extended scenery instead of 16:9 backdrop")
+		_check(artboard.scale.is_equal_approx(Vector2(1.5, 1.5)), "Foreground uniformly scales without stretching the logo or buttons")
+		_check(left != null and center != null and right != null, "All three background slices present")
+		if left != null and center != null and right != null:
+			_check(is_equal_approx(artboard.position.x + left.position.x * artboard.scale.x, 0.0), "Background reaches left screen edge")
+			_check(is_equal_approx(artboard.position.x + (right.position.x + right.size.x) * artboard.scale.x, 2400.0), "Background reaches right screen edge")
+			_check(center.position.is_equal_approx(Vector2(320, 0)) and center.size.is_equal_approx(Vector2(800, 720)), "Original centre preserves cutout alignment")
+			var atlas: AtlasTexture = center.texture as AtlasTexture
+			_check(atlas != null and atlas.region == Rect2(320, 0, 800, 720), "Centre samples original approved PNG without distortion")
+		var play: Button = title.get_node_or_null("Artboard/PlayButton") as Button
+		_check(play != null and play.position == Vector2(427, 344) and play.size == Vector2(422, 92), "Widescreen preserves Play hitbox and art geometry")
+		title.call("_layout_for_size", Vector2(1280.0, 720.0))
+		_check(not wide.visible and backdrop.visible and artboard.position.is_equal_approx(Vector2.ZERO), "16:9 remains pixel-identical to approved composition")
 	title.queue_free()
 	await process_frame
 	print("APPROVED TITLE RESULT: %d failures" % failures)

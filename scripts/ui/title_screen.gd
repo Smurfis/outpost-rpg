@@ -2,6 +2,9 @@ extends Control
 ## Fully standalone Outpost title menu (Godot 4.7.x / Android landscape).
 ## The PNG artwork is optional until final art sign-off; transparent SVG placeholders render without it.
 const DESIGN := Vector2(1280.0, 720.0)
+# Preserve the hand-painted middle of the image; stretch only scenery at the edges.
+const WIDE_LEFT_CUT := 320.0
+const WIDE_RIGHT_CUT := 1120.0
 const MAIN_GAME := "res://scenes/main.tscn"
 const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
@@ -45,6 +48,9 @@ const TIPS := [
 	"Tip: Keep the campfire burning — Chloe and Iyla need a safe outpost after dark."
 ]
 var _canvas: Control
+var _approved_backdrop: TextureRect
+var _wide_backdrop: Control
+var _previous_window_aspect: int = -1
 var _splash: Label
 var _tip_text: Label
 var _tip_plaque: TextureRect
@@ -66,6 +72,12 @@ const TIP_CYCLE_SECONDS: float = 9.0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_approved_art = ResourceLoader.exists(APPROVED_RASTER) and ResourceLoader.exists(APPROVED_LOGO)
+	if _approved_art:
+		# Godot defaults to 16:9 pillarboxing. Expand ONLY while the title is open:
+		# gameplay/world-loading/HUD retain their previous aspect behaviour.
+		var window: Window = get_window()
+		_previous_window_aspect = window.content_scale_aspect
+		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	var had_preferences: bool = FileAccess.file_exists(UI_PREFS)
 	_read_prefs()
 	# The approved composition intentionally has no bottom tip plaque.
@@ -83,13 +95,42 @@ func _ready() -> void:
 		_updater.check_for_updates.call_deferred()
 	set_process(true)
 
+func _exit_tree() -> void:
+	# Scope aspect expansion to the title so the 3D game/HUD does not change.
+	if _previous_window_aspect >= 0:
+		get_window().content_scale_aspect = _previous_window_aspect
+
 func _layout() -> void:
-	if _canvas == null:
+	_layout_for_size(get_viewport_rect().size)
+
+func _layout_for_size(available: Vector2) -> void:
+	# Public-sized seam for headless 16:9 and ultrawide layout regression tests.
+	if _canvas == null or available.x <= 0.0 or available.y <= 0.0:
 		return
-	var available: Vector2 = get_viewport_rect().size
 	var fit: float = minf(available.x / DESIGN.x, available.y / DESIGN.y)
 	_canvas.scale = Vector2.ONE * fit
 	_canvas.position = (available - DESIGN * fit) * 0.5
+	if _wide_backdrop == null or _approved_backdrop == null:
+		return
+	# Convert physical spare width back into 1280x720 design-space units.
+	var half_extra: float = maxf(0.0, (available.x / fit - DESIGN.x) * 0.5)
+	var is_wide: bool = half_extra > 0.5
+	_approved_backdrop.visible = not is_wide
+	_wide_backdrop.visible = is_wide
+	if not is_wide:
+		return
+	# Keep central x=320..1120 pixels exactly as approved so the tent logo,
+	# all four button cutouts and their painted surroundings remain aligned.
+	# Only side scenery expands into the additional phone-screen width.
+	var left: TextureRect = _wide_backdrop.get_node("WideLeft") as TextureRect
+	var center: TextureRect = _wide_backdrop.get_node("WideCenter") as TextureRect
+	var right: TextureRect = _wide_backdrop.get_node("WideRight") as TextureRect
+	left.position = Vector2(-half_extra, 0.0)
+	left.size = Vector2(WIDE_LEFT_CUT + half_extra, DESIGN.y)
+	center.position = Vector2(WIDE_LEFT_CUT, 0.0)
+	center.size = Vector2(WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y)
+	right.position = Vector2(WIDE_RIGHT_CUT, 0.0)
+	right.size = Vector2(DESIGN.x - WIDE_RIGHT_CUT + half_extra, DESIGN.y)
 
 func _make_screen() -> void:
 	var curtain := ColorRect.new()
@@ -103,6 +144,9 @@ func _make_screen() -> void:
 	_canvas.size = DESIGN
 	add_child(_canvas)
 	_add_image("Backdrop", "title_background.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
+	_approved_backdrop = _canvas.get_node_or_null("Backdrop") as TextureRect
+	if _approved_art and _approved_backdrop != null:
+		_make_wide_background()
 	# Independent light pass: campsite lanterns, fire, distant portal and waterfall.
 	_add_image("TitleLights", "title_lights.png", "title_lights.svg", Vector2.ZERO, DESIGN)
 	_light_layer = _canvas.get_node_or_null("TitleLights") as TextureRect
@@ -228,6 +272,33 @@ func _make_screen() -> void:
 	_update_notice.add_theme_stylebox_override("normal", update_frame)
 	_update_notice.pressed.connect(_check_or_download_update)
 	_canvas.add_child(_update_notice)
+
+func _make_wide_background() -> void:
+	# Atlas slices use the SAME PNG as the approved screen, rather than a
+	# duplicate image/blur that would break the source-matched art cutouts.
+	_wide_backdrop = Control.new()
+	_wide_backdrop.name = "WideBackdrop"
+	_wide_backdrop.size = DESIGN
+	_wide_backdrop.visible = false
+	_wide_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_canvas.add_child(_wide_backdrop)
+	var regions: Dictionary = {
+		"WideLeft": Rect2(0.0, 0.0, WIDE_LEFT_CUT, DESIGN.y),
+		"WideCenter": Rect2(WIDE_LEFT_CUT, 0.0, WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y),
+		"WideRight": Rect2(WIDE_RIGHT_CUT, 0.0, DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
+	}
+	for part_name in ["WideLeft", "WideCenter", "WideRight"]:
+		var atlas: AtlasTexture = AtlasTexture.new()
+		atlas.atlas = _approved_backdrop.texture
+		atlas.region = regions[part_name]
+		var part: TextureRect = TextureRect.new()
+		part.name = part_name
+		part.texture = atlas
+		part.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		part.stretch_mode = TextureRect.STRETCH_SCALE
+		part.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		part.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_wide_backdrop.add_child(part)
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	# The screenshot/mock-up is not one flattened UI. Every asset stays a
