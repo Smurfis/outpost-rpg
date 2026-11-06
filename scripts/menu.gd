@@ -27,9 +27,9 @@ var action_button: Button
 var action_art: TextureRect
 var preview_rig: Node3D
 var preview_angle: float = 0.0
-var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE"}
-var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2"]
+var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE", "enchanting":"ENCHANT"}
+var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR", "enchanting":"IMBUE"}
+var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2", "fiery_weapon"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -366,6 +366,13 @@ func _render_bag() -> void:
 			break
 	detail.add_child(_label(description, 17, SKIN.CREAM))
 	if focused in ["meal", "tonic", "stew"]:
+		var slot: String = "potion" if focused == "tonic" else "consumable"
+		var assign := Button.new()
+		assign.text = "ASSIGN TO " + slot.to_upper() + " RADIAL"
+		assign.custom_minimum_size = Vector2(0, 48)
+		SKIN.apply_button(assign, "wood")
+		assign.pressed.connect(_assign_quick.bind(slot, focused))
+		detail.add_child(assign)
 		var use_button := Button.new()
 		use_button.text = "USE " + focused.replace("_", " ").to_upper()
 		use_button.custom_minimum_size = Vector2(0, 54)
@@ -385,6 +392,10 @@ func _render_bag() -> void:
 	SKIN.apply_button(gear_button, "wood")
 	gear_button.pressed.connect(_switch_equipment)
 	detail.add_child(gear_button)
+
+func _assign_quick(slot: String, item_id: String) -> void:
+	if game.set_quick_consumable(slot, item_id):
+		refresh()
 
 func _bag_type(id: String) -> String:
 	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"] or CARRY.is_bag(id):
@@ -510,7 +521,7 @@ func _render_craft() -> void:
 	title.text = "OUTPOST  ◆  HANDCRAFTING"
 	var nearby: String = game.closest_station()
 	subtitle.text = "STATION  •  %s    |    Select a recipe, prepare materials, then work" % (nearby.capitalize() if nearby != "" else "remote browsing")
-	for station_id in ["workbench", "forge", "loom", "campfire"]:
+	for station_id in ["workbench", "forge", "loom", "campfire", "enchanting"]:
 		var tab := Button.new()
 		tab.text = str(station_names[station_id])
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -631,6 +642,9 @@ func _render_recipe() -> void:
 	if CARRY.is_bag(product_id):
 		info.add_child(_label("QUALITY   %s    •    RECRAFT TO IMPROVE" % "★".repeat(int(game.bag_quality.get(product_id, 0))), 16, SKIN.GOLD))
 	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("f3dfbb")))
+	if selected_id == "fiery_weapon":
+		info.add_child(_label("CHARACTER LEVEL %d / 3   •   COST: ONE LEVEL" % game.character_level(), 17, SKIN.GOLD))
+		info.add_child(_label("TARGET: %s" % game.current_weapon_id().replace("_", " ").capitalize(), 17, SKIN.CREAM))
 	details.add_child(_label("REQUIRED MATERIALS", 18, SKIN.INK))
 	var ingredients: Dictionary = recipe.get("ingredients", {})
 	for key in ingredients:
@@ -645,13 +659,15 @@ func _render_recipe() -> void:
 	next.text = "ENHANCE  ◆  PREPARE" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "NEXT  ◆  PREPARE ITEM"
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
-	next.disabled = game.owns_unique(product_id) or (CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3)
+	next.disabled = game.owns_unique(product_id) or (CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3) or (selected_id == "fiery_weapon" and game.character_level() < 3)
 	next.pressed.connect(_begin_prepare)
 	details.add_child(next)
 	if game.owns_unique(product_id):
 		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
 	elif CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3:
 		details.add_child(_label("Maximum 3 stars. Select a different bag or tier.", 15, SKIN.GOLD))
+	elif selected_id == "fiery_weapon" and game.character_level() < 3:
+		details.add_child(_label("Gain character levels before using this bench.", 15, SKIN.GOLD))
 	elif not game.near_station(selected_station):
 		details.add_child(_label("You can browse anywhere. Craft beside the matching station.", 14, Color("ffe2a6")))
 
@@ -673,6 +689,8 @@ func _render_prepare() -> void:
 	info.add_child(_label("Output x%d     •     %s" % [int(recipe.get("amount", 1)), str(station_names[selected_station])], 17))
 	if CARRY.is_bag(product_id):
 		info.add_child(_label("Improves star quality, not duplicate stock." if int(game.inventory.get(product_id, 0)) > 0 else "Equips automatically after crafting.", 16, SKIN.CREAM))
+	if selected_id == "fiery_weapon":
+		info.add_child(_label("Fiery Weapon  •  Costs 1 level at completion.", 16, SKIN.GOLD))
 	details.add_child(_label("STEP 2  •  LOAD MATERIALS", 18, SKIN.INK))
 	var ingredients: Dictionary = recipe.get("ingredients", {})
 	for key in ingredients:
