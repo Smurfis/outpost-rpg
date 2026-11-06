@@ -11,6 +11,7 @@ const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const LEVELS = preload("res://scripts/progression/character_levels.gd")
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
@@ -37,8 +38,12 @@ var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
 var stations: Dictionary = {}
-var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8)}
+var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
+var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+var skill_cooldowns: Dictionary = {} # Runtime only.
+var weapon_enchants: Dictionary = {} # Owned weapon-id -> fire.
+var quick_slots: Dictionary = {"potion":"", "consumable":""}
 var kills: int = 0
 var spear_crafted: bool = false
 var attack_delay: float = 0.0
@@ -120,6 +125,8 @@ func _process(delta: float) -> void:
 	_update_crafting(delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
+	for id in skill_cooldowns:
+		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
 	world_time += delta
 	_camera(delta)
 	if day_night != null and hud != null:
@@ -546,7 +553,7 @@ func gather() -> void:
 		hud.toast("Bag full — gathering stopped.")
 		return
 	_show_gather_pickup(resource.global_position, item)
-	experience += 2 * amount
+	gain_experience(2 * amount)
 	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
 	_save()
 	_refresh_menu()
@@ -724,6 +731,8 @@ func _craft_fits(recipe: Dictionary) -> bool:
 		var key: String = str(raw_key)
 		staged[key] = int(staged.get(key, 0)) - int(ingredients[raw_key])
 	var result_id: String = str(recipe.get("result", ""))
+	if str(recipe.get("id", "")) == "fiery_weapon":
+		return CARRY.used(staged, equipped_bag_id(), equipped_bag_stars()) <= bag_capacity() + 0.0001
 	var new_bag: bool = CARRY.is_bag(result_id)
 	var already_owned: bool = int(staged.get(result_id, 0)) > 0
 	if not new_bag or not already_owned:
@@ -739,6 +748,14 @@ func craft_block_reason(id: String) -> String:
 	if not crafting.is_empty():
 		return "Finish your current crafting job first."
 	var result: String = str(recipe.get("result", ""))
+	if id == "fiery_weapon":
+		var current_weapon: String = str(equipment.get("weapon", "training_blade"))
+		if current_weapon not in ["spear", "iron_blade"]:
+			return "Equip a crafted spear or iron blade to enchant."
+		if str(weapon_enchants.get(current_weapon, "")) == "fire":
+			return "This weapon already has Fiery Weapon."
+		if character_level() < 3:
+			return "Requires character level 3 and consumes one level."
 	if owns_unique(result):
 		return "You already own this unique item."
 	if CARRY.is_bag(result) and int(inventory.get(result, 0)) > 0 and int(bag_quality.get(result, 0)) >= 3:
@@ -868,6 +885,21 @@ func _try_finish_craft() -> void:
 		hud.toast("Craft cancelled: not enough free bag capacity.")
 		_refresh_menu()
 		return
+	if str(recipe.get("id", "")) == "fiery_weapon":
+		var chosen_weapon: String = str(equipment.get("weapon", "training_blade"))
+		if chosen_weapon not in ["spear", "iron_blade"] or weapon_enchants.get(chosen_weapon, "") == "fire" or character_level() < 3:
+			hud.toast("Enchant cancelled: equip a valid weapon at level 3+.")
+			return
+		for ingredient in ingredients:
+			inventory[str(ingredient)] = int(inventory.get(str(ingredient), 0)) - int(ingredients[ingredient])
+		experience = LEVELS.spend_level(experience, 1)
+		weapon_enchants[chosen_weapon] = "fire"
+		hud.toast("Fiery Weapon! Your %s now burns enemies." % chosen_weapon.replace("_", " "))
+		_save()
+		if menu != null:
+			menu.on_craft_completed("fiery_weapon")
+		_refresh_menu()
+		return
 	for ingredient in ingredients:
 		inventory[str(ingredient)] = int(inventory.get(str(ingredient), 0)) - int(ingredients[ingredient])
 	var result: String = str(recipe.get("result", ""))
@@ -886,7 +918,7 @@ func _try_finish_craft() -> void:
 	if slot != "":
 		equipment[slot] = result
 		_apply_equipment()
-	experience += 8
+	gain_experience(8)
 	hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
 	_save()
 	if menu != null:
@@ -901,6 +933,99 @@ func cancel_craft() -> void:
 	if stations.has(station_id):
 		stations[station_id].set_activity(0.0)
 	_refresh_menu()
+
+func character_level() -> int:
+	return LEVELS.level_for(experience)
+
+func level_state() -> Dictionary:
+	return LEVELS.level_state(experience)
+
+func gain_experience(amount: int) -> void:
+	if amount <= 0:
+		return
+	var before: int = character_level()
+	experience += amount
+	if character_level() > before and hud != null:
+		hud.toast("LEVEL UP! Level %d — enchanting and skills grow stronger." % character_level())
+
+func current_weapon_id() -> String:
+	return str(equipment.get("weapon", "training_blade"))
+
+func mastery_rank(weapon_id: String = "") -> int:
+	var id: String = current_weapon_id() if weapon_id == "" else weapon_id
+	return LEVELS.mastery_rank(int(weapon_mastery_xp.get(id, 0)))
+
+func unlocked_skill_slots() -> int:
+	return LEVELS.available_skill_slots(int(weapon_mastery_xp.get(current_weapon_id(), 0)))
+
+func gain_weapon_mastery(weapon_id: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	var previous: int = LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0)))
+	weapon_mastery_xp[weapon_id] = int(weapon_mastery_xp.get(weapon_id, 0)) + amount
+	if LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0))) > previous and hud != null:
+		hud.toast("Weapon mastery! New ability slot available.")
+
+func use_weapon_skill(slot: int) -> bool:
+	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
+		return false
+	# LAN dungeon combat remains host-authoritative; never apply local
+	# skill damage that could desynchronise an encounter.
+	if coop != null and coop.in_party_dungeon():
+		if hud != null:
+			hud.toast("Skills in co-op dungeons require host combat support.")
+		return false
+	var skill: String = LEVELS.skill_for_slot(slot)
+	if float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
+		return false
+	var target = _nearest_enemy()
+	if target == null:
+		return false
+	var weapon: String = current_weapon_id()
+	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
+	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
+	attack_delay = 0.55
+	hero.swing()
+	target.receive_damage(dealt)
+	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
+		target.ignite(4.0)
+	gain_weapon_mastery(weapon, 18)
+	gain_experience(3)
+	_save()
+	return true
+
+func available_quick_consumables(slot: String) -> Array[String]:
+	var pool: Array[String] = ["tonic"] if slot == "potion" else ["meal", "stew"] if slot == "consumable" else []
+	var available: Array[String] = []
+	for item in pool:
+		if int(inventory.get(item, 0)) > 0:
+			available.append(item)
+	return available
+
+func set_quick_consumable(slot: String, item_id: String) -> bool:
+	if slot not in ["potion", "consumable"]:
+		return false
+	if item_id != "" and item_id not in available_quick_consumables(slot):
+		return false
+	quick_slots[slot] = item_id
+	_save()
+	return true
+
+func use_quick_consumable(slot: String) -> bool:
+	if slot not in ["potion", "consumable"]:
+		return false
+	var item: String = str(quick_slots.get(slot, ""))
+	if item == "" or int(inventory.get(item, 0)) <= 0:
+		return false
+	if hero == null or hero.health >= 99.9:
+		return false
+	var amount: float = 65.0 if item == "tonic" else 75.0 if item == "stew" else 40.0
+	consume(item, amount)
+	if int(inventory.get(item, 0)) <= 0:
+		quick_slots[slot] = ""
+		_save()
+	return true
 
 func consume(item_id: String, heal: float) -> void:
 	if int(inventory.get(item_id, 0)) <= 0 or hero.health >= 99.9:
@@ -933,6 +1058,9 @@ func attack() -> void:
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage)
+	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
+		target.ignite(4.0)
+	gain_weapon_mastery(weapon, 12)
 	if target.alive:
 		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
 
@@ -940,7 +1068,7 @@ func on_enemy_killed() -> void:
 	kills += 1
 	grant_item("hide", 1, true)
 	grant_item("coins", 3, true)
-	experience += 12
+	gain_experience(12)
 	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()
@@ -953,7 +1081,7 @@ func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
 		return false
 	coop_reward_receipts[receipt] = true
 	grant_item("coins", maxi(0, int(reward.get("coins", 0))), true)
-	experience += maxi(0, int(reward.get("xp", 0)))
+	gain_experience(maxi(0, int(reward.get("xp", 0))))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
 		var key: String = str(item_id)
@@ -985,7 +1113,7 @@ func _on_first_night() -> void:
 	_save()
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -1001,6 +1129,17 @@ func _load() -> void:
 	if version not in [2, 3, 4, 5]:
 		return
 	night_quote_seen = bool(data.get("night_quote_seen", false))
+	if data.get("weapon_mastery_xp", {}) is Dictionary:
+		for key in data.get("weapon_mastery_xp", {}):
+			weapon_mastery_xp[str(key)] = maxi(0, int(data["weapon_mastery_xp"][key]))
+	if data.get("weapon_enchants", {}) is Dictionary:
+		for key in data.get("weapon_enchants", {}):
+			if str(key) in ["spear", "iron_blade"] and str(data["weapon_enchants"][key]) == "fire":
+				weapon_enchants[str(key)] = "fire"
+	if data.get("quick_slots", {}) is Dictionary:
+		for slot in ["potion", "consumable"]:
+			var chosen: String = str(data["quick_slots"].get(slot, ""))
+			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else ["meal", "stew"]) else ""
 	if data.get("bag_quality", {}) is Dictionary:
 		for bag_id in data.get("bag_quality", {}):
 			var key: String = str(bag_id)
