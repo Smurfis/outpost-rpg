@@ -1000,7 +1000,8 @@ func available_quick_consumables(slot: String) -> Array[String]:
 	if slot == "potion":
 		pool.append("tonic")
 	elif slot == "consumable":
-		pool.append_array(PackedStringArray(["meal", "stew"]))
+		pool.append("meal")
+		pool.append("stew")
 	var available: Array[String] = []
 	for item in pool:
 		if int(inventory.get(item, 0)) > 0:
