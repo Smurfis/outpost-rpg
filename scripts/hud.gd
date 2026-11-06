@@ -134,6 +134,9 @@ func _ready() -> void:
 	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
 	mana_numbers = _label("MP —", 13, Color("#d8e6ff"), 0.070, 0.089, 0.230, 0.110)
 	mana_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Mana is not implemented yet: never dedicate a visible line to "MP —".
+	mana_bar.visible = false
+	mana_numbers.visible = false
 	xp_bar = _meter(0.170, 0.974, 0.801, 0.990, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
 	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.032, 0.960, 0.131, 0.993)
@@ -143,7 +146,7 @@ func _ready() -> void:
 	xp_level_label = _label("0 / 100 XP", 14, Color("#fff2d1"), 0.192, 0.965, 0.783, 0.992)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.110, 0.236, 0.131)
+	hero_detail = _label("Training Blade  •  M1", 13, Color("#edc98d"), 0.063, 0.091, 0.236, 0.121)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 
