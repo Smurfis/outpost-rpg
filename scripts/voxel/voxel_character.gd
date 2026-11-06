@@ -50,6 +50,17 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(0, 1.44, 0), Vector3(0.30, 0.40, 0.17), 6, 4)
 			PIXELS.box(st, Vector3(0, 1.68, 0), Vector3(0.17, 0.21, 0.14), 4, 6)
 			PIXELS.box(st, Vector3(0, 0.26, 0), Vector3(0.42, 0.12, 0.19), 5, 8)
+		"hand_axe":
+			# Tool points along local +Y just like the sword; wooden grip and
+			# asymmetrical steel head read clearly at phone-sized camera distance.
+			PIXELS.box(st, Vector3(0, 0.24, 0), Vector3(0.14, 1.18, 0.14), 8, 8)
+			PIXELS.box(st, Vector3(-0.26, 0.76, 0), Vector3(0.66, 0.40, 0.23), 4, 6)
+			PIXELS.box(st, Vector3(-0.55, 0.78, 0), Vector3(0.16, 0.53, 0.20), 6, 4)
+		"hand_pickaxe":
+			PIXELS.box(st, Vector3(0, 0.20, 0), Vector3(0.14, 1.28, 0.14), 8, 8)
+			PIXELS.box(st, Vector3(0, 0.74, 0), Vector3(1.12, 0.19, 0.25), 4, 6)
+			PIXELS.box(st, Vector3(-0.60, 0.70, 0), Vector3(0.17, 0.32, 0.19), 4, 4)
+			PIXELS.box(st, Vector3(0.58, 0.70, 0), Vector3(0.15, 0.28, 0.19), 6, 6)
 		"torch":
 			PIXELS.box(st, Vector3(0, 0.0, 0), Vector3(0.18, 0.85, 0.20), 8, 8)
 			PIXELS.box(st, Vector3(0, 0.43, 0), Vector3(0.30, 0.13, 0.29), 5, 8)
