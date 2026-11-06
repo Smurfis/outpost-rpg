@@ -1343,6 +1343,12 @@ func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
+	# A modal must block gameplay touch, camera orbit, tools and joystick.
+	if leave_menu_panel != null and leave_menu_panel.visible:
+		if event.is_action_pressed("ui_cancel"):
+			_close_leave_menu()
+			get_viewport().set_input_as_handled()
+		return
 	if _handle_smart_input(event):
 		return
 	if (control_settings_panel != null and control_settings_panel.visible) or (skill_detail_panel != null and skill_detail_panel.visible):
