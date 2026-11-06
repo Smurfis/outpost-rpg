@@ -9,6 +9,7 @@ const ASSET_BASE := "res://assets/ui/title/"
 const CAPTIONS := {"play": "Play", "continue": "Continue", "settings": "Settings", "quit": "Quit"}
 var _pointer_hovered: bool = false
 var _spark_elapsed: float = 0.0
+@export var reduced_motion: bool = false
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(430, 76)
@@ -112,7 +113,7 @@ func _refresh_highlight() -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
-	if not is_title_highlighted():
+	if reduced_motion or not is_title_highlighted():
 		return
 	_spark_elapsed = fposmod(_spark_elapsed + delta, TAU)
 	queue_redraw()
@@ -120,7 +121,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if not is_title_highlighted():
 		return
-	var alpha: float = 0.84 + 0.14 * sin(_spark_elapsed * 2.0)
+	var alpha: float = 0.92 if reduced_motion else 0.84 + 0.14 * sin(_spark_elapsed * 2.0)
 	var gold := Color(1.0, 0.77, 0.26, alpha)
 	var pale := Color(1.0, 0.94, 0.68, alpha)
 	var mid: float = roundf(size.y * 0.5)
