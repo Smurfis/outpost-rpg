@@ -17,6 +17,7 @@ const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
+const EXTERNAL_BROWSER := preload("res://scripts/ui/android_external_browser.gd")
 const SKIN := preload("res://scripts/ui/outpost_skin.gd")
 const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
@@ -557,7 +558,7 @@ func _build_settings() -> void:
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
-	_update_status = _menu_label("Android build %d • Downloads open in your browser." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
+	_update_status = _menu_label("Android build %d • APK opens in Chrome (browser fallback)." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
 	_update_status.custom_minimum_size = Vector2(0, 42)
 	stack.add_child(_update_status)
@@ -631,11 +632,13 @@ func _join_friend() -> void:
 
 func _check_or_download_update() -> void:
 	if not _update_download_url.is_empty():
-		# The Android installer always needs the user's approval. A browser
-		# download avoids unsafe file:// URI / FileProvider workarounds.
-		var error: Error = OS.shell_open(_update_download_url)
+		# Prefer a full Chrome browser activity, not a Custom Tab or an app extension.
+		# If Chrome is unavailable, open via Android's default browser instead.
+		var error: Error = EXTERNAL_BROWSER.open_apk_in_browser(_update_download_url)
 		if error != OK:
-			_on_update_status("Couldn't open your browser; use the GitHub Releases page.")
+			_on_update_status("Couldn't open Chrome or your browser. Use the GitHub Releases page.")
+		else:
+			_on_update_status("Opening the APK in Chrome (or your default browser)...")
 		return
 	if _updater != null:
 		_updater.check_for_updates()
