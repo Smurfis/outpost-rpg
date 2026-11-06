@@ -107,6 +107,12 @@ func _ready() -> void:
 	_tip_index = randi_range(0, TIPS.size() - 1)
 	_make_screen()
 	_layout()
+	# The in-game exit panel can return straight here after saving.
+	if bool(get_tree().root.get_meta("outpost_open_settings", false)):
+		get_tree().root.remove_meta("outpost_open_settings")
+		if _settings_panel != null:
+			_settings_panel.visible = true
+			_settings_panel.move_to_front()
 	get_viewport().size_changed.connect(_layout)
 	if OS.has_feature("Android") and _updater != null:
 		# Passive, single startup check; only display a banner if there's
