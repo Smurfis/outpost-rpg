@@ -153,6 +153,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/portals_pixel_integration.gd 2>&1 | tee portals-pixel.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTAL:' portals-pixel.log; then exit 1; fi
           grep -q "PORTAL INTEGRATION RESULT: 0 failure(s)." portals-pixel.log
+      - name: Verify Albion-style inventory and equipment interaction
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/albion_inventory_window.gd 2>&1 | tee albion-inventory.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL INVENTORY:' albion-inventory.log; then exit 1; fi
+          grep -q "INVENTORY RESULT: 0 failures" albion-inventory.log
       - name: Verify carry limits, specialist bags, star crafting and touch camera smoothing
         run: |
           set -o pipefail
