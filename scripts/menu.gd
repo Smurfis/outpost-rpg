@@ -9,6 +9,7 @@ var shell: Control
 var popup_frame: PanelContainer
 var title: Label
 var subtitle: Label
+var header_buttons: Dictionary = {}
 var station_tabs: HBoxContainer
 var recipes_list: VBoxContainer
 var details: VBoxContainer
@@ -68,18 +69,21 @@ func _ready() -> void:
 	bag.custom_minimum_size = Vector2(66, 48)
 	SKIN.apply_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
+	header_buttons["bag"] = bag
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
 	gear.custom_minimum_size = Vector2(67, 48)
 	SKIN.apply_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
+	header_buttons["equipment"] = gear
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
 	craft.custom_minimum_size = Vector2(74, 48)
 	SKIN.apply_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
+	header_buttons["craft"] = craft
 	header.add_child(craft)
 	var close := Button.new()
 	close.text = "X"
@@ -180,6 +184,17 @@ func _icon(id: String, size: float = 58.0) -> TextureRect:
 	image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return image
 
+func _ingredient_state_icon(available: bool) -> TextureRect:
+	var icon := TextureRect.new()
+	icon.name = "IngredientAvailability"
+	icon.texture = load("res://assets/ui/icons/ingredient_ready.svg" if available else "res://assets/ui/icons/ingredient_missing.svg") as Texture2D
+	icon.custom_minimum_size = Vector2(24, 24)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return icon
+
 func _clear(parent: Node) -> void:
 	for child in parent.get_children():
 		parent.remove_child(child)
@@ -264,6 +279,10 @@ func refresh() -> void:
 	work_label = null
 	action_button = null
 	action_art = null
+	for page_key in header_buttons:
+		var button: Button = header_buttons[page_key] as Button
+		if button != null:
+			SKIN.apply_button(button, "wood_selected" if current_page == str(page_key) else "wood")
 	_clear(station_tabs)
 	_clear(recipes_list)
 	_clear(details)
@@ -297,8 +316,13 @@ func _render_bag() -> void:
 	meter.value = minf(game.bag_load(), game.bag_capacity())
 	meter.show_percentage = false
 	meter.custom_minimum_size = Vector2(0, 16)
-	meter.add_theme_stylebox_override("background", SKIN.box("inset"))
-	meter.add_theme_stylebox_override("fill", SKIN.box("wood_selected"))
+	var bag_background: StyleBoxFlat = SKIN.flat("inset")
+	bag_background.set_corner_radius_all(3)
+	var bag_fill: StyleBoxFlat = SKIN.flat("green")
+	bag_fill.set_border_width_all(0)
+	bag_fill.set_corner_radius_all(3)
+	meter.add_theme_stylebox_override("background", bag_background)
+	meter.add_theme_stylebox_override("fill", bag_fill)
 	carry_column.add_child(meter)
 	if game.bag_load() > game.bag_capacity():
 		carry_column.add_child(_label("OVERLOADED — equip a larger bag or unload items.", 15, Color("#ffb29a")))
@@ -355,7 +379,7 @@ func _render_bag() -> void:
 		count.text = str(qty)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		count.add_theme_font_size_override("font_size", 16)
-		count.add_theme_color_override("font_color", SKIN.CREAM)
+		count.add_theme_color_override("font_color", SKIN.INK)
 		count.add_theme_color_override("font_outline_color", Color("#241619"))
 		count.add_theme_constant_override("outline_size", 2)
 		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -546,7 +570,16 @@ func _use_food(id: String) -> void:
 func _render_craft() -> void:
 	title.text = "OUTPOST  ◆  HANDCRAFTING"
 	var nearby: String = game.closest_station()
-	subtitle.text = "STATION  •  %s    |    Select a recipe, prepare materials, then work" % (nearby.capitalize() if nearby != "" else "remote browsing")
+	var stage_label: String = "1/4  CHOOSE RECIPE"
+	if not game.crafting.is_empty():
+		stage_label = "3/4  WORK STATION"
+	elif completed_id != "":
+		stage_label = "4/4  COMPLETE"
+	elif craft_step == "prepare":
+		stage_label = "2/4  PREPARE MATERIALS"
+	elif craft_step == "detail":
+		stage_label = "1/4  INSPECT ITEM"
+	subtitle.text = "%s    •    %s" % [stage_label, ("AT " + nearby.capitalize()) if nearby != "" else "BROWSE RECIPES FROM ANYWHERE"]
 	for station_id in ["workbench", "forge", "loom", "campfire", "enchanting"]:
 		var tab := Button.new()
 		tab.text = str(station_names[station_id])
@@ -589,7 +622,9 @@ func _render_craft() -> void:
 		art.anchor_top = 0.12
 		art.anchor_bottom = 0.88
 		choose.add_child(art)
-		var foreground: Color = SKIN.INK if selected_id == id else SKIN.CREAM
+		# The item-card texture is light parchment. Dark ink stays legible in
+		# both selected and unselected states (the old cream text vanished).
+		var foreground: Color = SKIN.INK
 		var name_label := Label.new()
 		name_label.text = str(recipe.get("name", id))
 		name_label.add_theme_font_size_override("font_size", 19)
@@ -614,7 +649,7 @@ func _render_craft() -> void:
 		var badge := Label.new()
 		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "OWNED" if owned_unique else "READY" if affordable else "NEEDS MATERIALS"
 		badge.add_theme_font_size_override("font_size", 13)
-		badge.add_theme_color_override("font_color", Color("#38653d") if affordable and not owned_unique and selected_id == id else Color("#ffe1a2") if affordable else Color("#edb597"))
+		badge.add_theme_color_override("font_color", Color("#355b31") if affordable and not owned_unique else Color("#873b2c"))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		badge.anchor_left = 0.72
@@ -622,6 +657,13 @@ func _render_craft() -> void:
 		badge.anchor_top = 0.10
 		badge.anchor_bottom = 0.42
 		choose.add_child(badge)
+		if selected_id == id:
+			var selection_outline := Panel.new()
+			selection_outline.name = "SelectedRecipeBorder"
+			selection_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			selection_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+			choose.add_child(selection_outline)
+			selection_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not game.crafting.is_empty():
 		_render_work()
 	elif completed_id != "":
@@ -680,7 +722,8 @@ func _render_recipe() -> void:
 		var row := HBoxContainer.new()
 		details.add_child(row)
 		row.add_child(_icon(id, 38))
-		row.add_child(_label("%s    %d / %d   %s" % [id.capitalize(), own, need, "✓" if own >= need else "!"], 18, Color("#32542c") if own >= need else Color("#88422d")))
+		row.add_child(_ingredient_state_icon(own >= need))
+		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
 	next.text = "ENHANCE  ◆  PREPARE" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "NEXT  ◆  PREPARE ITEM"
 	next.custom_minimum_size = Vector2(0, 56)
@@ -735,6 +778,7 @@ func _render_prepare() -> void:
 		var row := HBoxContainer.new()
 		details.add_child(row)
 		row.add_child(_icon(id, 54))
+		row.add_child(_ingredient_state_icon(loaded_now or available))
 		slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(slot)
 	var loaded_count: int = 0
@@ -795,6 +839,13 @@ func _render_work() -> void:
 	progress_bar.max_value = 100.0
 	progress_bar.custom_minimum_size = Vector2(0, 26)
 	progress_bar.show_percentage = false
+	var craft_background: StyleBoxFlat = SKIN.flat("inset")
+	craft_background.set_corner_radius_all(3)
+	var craft_fill: StyleBoxFlat = SKIN.flat("green")
+	craft_fill.set_border_width_all(0)
+	craft_fill.set_corner_radius_all(3)
+	progress_bar.add_theme_stylebox_override("background", craft_background)
+	progress_bar.add_theme_stylebox_override("fill", craft_fill)
 	stage.add_child(progress_bar)
 	work_counter = _label("", 18)
 	stage.add_child(work_counter)
