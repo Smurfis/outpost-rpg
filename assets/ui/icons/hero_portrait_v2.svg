@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64" shape-rendering="crispEdges">
+<!-- Original Outpost player portrait: dimensional voxel/pixel adventurer in green, not a generic face tile. -->
+<path d="M3 2H61V62H3Z" fill="#281d21"/>
+<path d="M6 4H58V60H6Z" fill="#b28246"/>
+<path d="M8 6H56V58H8Z" fill="#3c2928"/>
+<path d="M10 8H54V56H10Z" fill="#203f43"/>
+<path d="M12 9H53V32H12Z" fill="#34555b"/>
+<path d="M13 13H18V18H13Z M46 12H52V18H46Z" fill="#44666a"/>
+<path d="M15 44H50V55H15Z" fill="#1d2b2e"/>
+<!-- Upper shoulder silhouette and split deep-green ranger cloak. -->
+<path d="M13 55V44L19 41H28L33 45L38 41H48L54 45V55Z" fill="#172824"/>
+<path d="M14 52L18 44L26 42L32 47L29 56H14Z" fill="#345c42"/>
+<path d="M35 47L41 42L49 44L52 55H34Z" fill="#47714d"/>
+<path d="M17 46L21 44L26 46L25 54H19Z" fill="#456d4d"/>
+<path d="M46 45H48L51 54H47Z M14 53H19V56H14Z" fill="#8a663e"/>
+<path d="M29 45H36V56H29Z" fill="#a9844b"/>
+<path d="M30 47H35V54H30Z" fill="#e2bc72"/>
+<path d="M31 48H34V53H31Z" fill="#4d6954"/>
+<!-- Angled neck. -->
+<path d="M25 37H39V45H25Z" fill="#a36c43"/>
+<path d="M28 38H38V44H28Z" fill="#c68a59"/>
+<path d="M25 40H31V43H25Z" fill="#794d35"/>
+<!-- Shadowed hair silhouette, non-symmetric layered bangs. -->
+<path d="M19 19H22V15H27V12H43V15H47V21H49V33H45V38H41V39H23V35H20V31H18V24H19Z" fill="#261e23"/>
+<path d="M22 18H26V14H40V16H45V21H47V30H44V35H25V33H22Z" fill="#47332d"/>
+<path d="M25 20H42V34H39V38H26V35H23V25Z" fill="#a46b45"/>
+<path d="M28 21H42V34H39V37H31V34H28Z" fill="#d49a63"/>
+<path d="M24 23H29V35H25V33H23V27Z" fill="#86543a"/>
+<path d="M40 24H44V31H42V34H39V31Z" fill="#e8b17a"/>
+<!-- Asymmetrical swept hair and forehead. -->
+<path d="M21 18H26V16H42V20H37V22H31V25H27V23H22V27H19V22H21Z" fill="#292328"/>
+<path d="M25 19H36V21H30V23H24Z" fill="#5b3f34"/>
+<path d="M39 19H44V25H41V22H38Z" fill="#34282b"/>
+<path d="M44 26H47V32H44Z" fill="#9c6746"/>
+<!-- Eyes, brows, soft nose shape, light side, and trimmed beard. -->
+<path d="M26 27H31V29H26Z M35 26H40V28H35Z" fill="#624432"/>
+<path d="M27 29H31V31H27Z M36 28H40V30H36Z" fill="#f1dbb7"/>
+<path d="M29 29H31V31H29Z M37 28H39V30H37Z" fill="#2c3230"/>
+<path d="M29 30H30V31H29Z M37 29H38V30H37Z" fill="#a8c3a2"/>
+<path d="M33 29H35V34H38V35H34V33H33Z" fill="#b67951"/>
+<path d="M27 36H30V39H37V38H40V35H42V40H39V43H29V41H25V38H27Z" fill="#57352f"/>
+<path d="M29 38H34V39H38V40H30Z" fill="#815038"/>
+<path d="M32 37H37V38H32Z" fill="#9f5d47"/>
+<!-- Emblem and metal rivets. -->
+<path d="M21 50H24V53H21Z M43 49H46V52H43Z" fill="#d7ad60"/>
+<path d="M10 10H16V12H12V16H10Z M48 10H54V16H52V12H48Z M10 48H12V54H17V56H10Z M48 54H52V49H54V56H48Z" fill="#dfbb72"/>
+<path d="M12 12H14V14H12Z M50 12H52V14H50Z M12 52H14V54H12Z M50 52H52V54H50Z" fill="#ffe0a0"/>
+</svg>
