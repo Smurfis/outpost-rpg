@@ -85,6 +85,8 @@ func _run() -> void:
 		_check(version_plaque.texture.resource_path.ends_with("/version_badge_original.png"), "Original matching version plaque rendered")
 	var splash: Label = title.get_node_or_null("Artboard/UpdateSplash") as Label
 	_check(splash != null and splash.get_node_or_null("HandLetteredHero") != null, "Hand-lettered approved slogan loads independently")
+	if splash != null:
+		_check(splash.position == Vector2(833, 73) and splash.size == Vector2(305, 171), "Rotating slogan's first hand-drawn frame aligns exactly")
 	_check(ResourceLoader.exists("res://scenes/ui/world_loading.tscn"), "Title still launches through streaming-world loading gateway")
 	title.queue_free()
 	await process_frame
