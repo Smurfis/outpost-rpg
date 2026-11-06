@@ -40,7 +40,7 @@ func _ready() -> void:
 	style.font_color = Color("ffda46")
 	style.outline_color = Color("372132")
 	style.outline_size = 4
-	style.shadow_color = Color("291828", 0.75)
+	style.shadow_color = Color(0.16, 0.09, 0.16, 0.75)
 	style.shadow_offset = Vector2i(2, 3)
 	label_settings = style
 	if ResourceLoader.exists(HERO_ART):
