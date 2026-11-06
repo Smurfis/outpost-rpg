@@ -20,3 +20,10 @@ The helper accepts matching Stable and Alpha release filename/tag pairs but reje
 - A previously published APK (for example `Outpost-Android-v1047.apk`) cannot change retroactively. Merge the fix into `main` and use its next signed release.
 - The JNI/Android runtime path cannot be exercised by headless Linux CI. The offline updater test covers validated URLs and trusted Chrome package; a **physical Android test** is still required to verify that Chrome opens as a separate task on the player's device and that the GitHub download completes.
 - If the target phone doesn't have Chrome installed or enabled, fallback behaviour depends on the device's default browser settings.
+
+## Stable/Alpha Test selector now included in main
+- Main Settings now exposes **ANDROID BUILDS → STABLE / ALPHA TEST** from the existing proven alpha branch.
+- Selecting a channel resets any previous download link, prevents downloading the wrong channel, and persists in `user://outpost_ui.cfg`.
+- **CHECK FOR UPDATES** checks only official releases for that channel; **DOWNLOAD APK** uses the external Chrome intent above.
+- The alpha APK installs as `com.fivestarinteractive.outpost.alpha` and stable as `com.fivestarinteractive.outpost.preview`; their installed versions and save directories are independent.
+- On Stable, an Alpha APK is offered even if its build number is smaller than Stable's: the updater compares version codes only within the currently installed channel.
