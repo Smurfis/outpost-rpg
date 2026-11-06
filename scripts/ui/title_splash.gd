@@ -1,6 +1,6 @@
 @tool
 extends Label
-## Small, single-line splash: no word wrap, duplicate glyphs, or loose overflow.
+## Pixel-art slogan; long messages are deliberately laid out in two lines.
 ## The original hand-lettered hero PNG is retained as a separate optional frame.
 @export var messages: PackedStringArray = PackedStringArray([
 	"Bring a torch!",
@@ -33,10 +33,10 @@ func _ready() -> void:
 	# A wrapped/rotated Label used to produce a stray vertical glyph at the
 	# left of phrases such as "Pixel by pixel!" on widescreen Android phones.
 	autowrap_mode = TextServer.AUTOWRAP_OFF
-	clip_text = true
+	clip_text = false
 	pivot_offset = size * 0.5
 	var style := LabelSettings.new()
-	style.font_size = 31
+	style.font_size = 27
 	style.font_color = Color("ffda46")
 	style.outline_color = Color("372132")
 	style.outline_size = 4
@@ -62,8 +62,20 @@ func set_message(message: String) -> void:
 	var use_illustration: bool = _hero_texture != null and resolved == HERO_LINE
 	if _hero_texture != null:
 		_hero_texture.visible = use_illustration
-	text = "" if use_illustration else resolved
-	# The PNG is already hand-angled; only single-line live text rotates.
+	# Keep all glyphs inside the sky to the RIGHT of the tent. The previous
+	# 31px single-line label clipped off its own edge and overlapped the crest.
+	var two_lines: Dictionary = {
+		"Craft your own legend!": "Craft your own\\nlegend!",
+		"The Fields are calling!": "The Fields are\\ncalling!",
+		"Don't forget your torch!": "Don't forget\\nyour torch!",
+		"Every camp needs a hero!": "Every camp needs\\na hero!",
+		"Build your Outpost!": "Build your\\nOutpost!"
+	}
+	var display_text: String = str(two_lines.get(resolved, resolved)).replace("\\n", "\n")
+	text = "" if use_illustration else display_text
+	if label_settings != null:
+		label_settings.font_size = 26 if "\n" in display_text else 27
+	# The illustrated phrase is pre-angled; rotate only actual live text.
 	rotation_degrees = 0.0 if use_illustration else rotation_angle
 	pivot_offset = size * 0.5
 	queue_redraw()

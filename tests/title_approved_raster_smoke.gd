@@ -83,6 +83,7 @@ func _run() -> void:
 	_check(version_plaque != null and version_plaque.texture != null, "Version plaque is independent from world backdrop")
 	if version_plaque != null and version_plaque.texture != null:
 		_check(version_plaque.texture.resource_path.ends_with("/version_badge_textless.png"), "Original matching version plaque rendered")
+	_check(title.get_node_or_null("Artboard/VersionCornerWood") == null, "No oversized opaque wood/grey patch is drawn around version badge")
 	var splash: Label = title.get_node_or_null("Artboard/UpdateSplash") as Label
 	_check(splash != null and splash.get_node_or_null("HandLetteredHero") != null, "Hand-lettered approved slogan loads independently")
 	if splash != null:
@@ -96,6 +97,11 @@ func _run() -> void:
 	_check(wide != null, "Approved background has three aspect-safe widescreen slices")
 	if wide != null and artboard != null and backdrop != null:
 		title.call("_layout_for_size", Vector2(2400.0, 1080.0)) # 20:9 Android
+		if version_plaque != null and version != null:
+			_check(version_plaque.position == Vector2(1218, 642), "On 20:9, actual version plaque occupies expanded right-hand area")
+			_check(version.position == Vector2(1228, 652), "Version label travels with plaque onto phone's far right")
+			var right_gap: float = 2400.0 - (artboard.position.x + (version_plaque.position.x + version_plaque.size.x) * artboard.scale.x)
+			_check(right_gap > 15.0 and right_gap < 50.0, "Version sits neatly near physical right screen edge")
 		var left: TextureRect = wide.get_node_or_null("WideLeft") as TextureRect
 		var center: TextureRect = wide.get_node_or_null("WideCenter") as TextureRect
 		var right: TextureRect = wide.get_node_or_null("WideRight") as TextureRect
@@ -111,6 +117,8 @@ func _run() -> void:
 		var play: Button = title.get_node_or_null("Artboard/PlayButton") as Button
 		_check(play != null and play.position == Vector2(427, 344) and play.size == Vector2(422, 92), "Widescreen preserves Play hitbox and art geometry")
 		title.call("_layout_for_size", Vector2(1280.0, 720.0))
+		if version_plaque != null and version != null:
+			_check(version_plaque.position == Vector2(1058, 642) and version.position == Vector2(1068, 652), "16:9 version uses original badge coordinates")
 		_check(not wide.visible and backdrop.visible and artboard.position.is_equal_approx(Vector2.ZERO), "16:9 remains pixel-identical to approved composition")
 	title.queue_free()
 	await process_frame

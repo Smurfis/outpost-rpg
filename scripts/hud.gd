@@ -95,6 +95,10 @@ var top_menu_opened_by_hold: bool = false
 var floating_joystick_enabled: bool = false
 var player_display_name: String = "Adventurer"
 var control_settings_panel: Panel
+var leave_menu_shade: ColorRect
+var leave_menu_panel: PanelContainer
+var leave_menu_info: Label
+var leave_menu_confirm: Button
 var floating_mode_toggle: CheckButton
 var name_edit: LineEdit
 var skill_detail_panel: Panel
@@ -286,14 +290,34 @@ func _ready() -> void:
 	_anchors(journal_entry, 0.796, 0.500, 0.888, 0.575)
 	journal_entry.pressed.connect(_open_journal)
 	top_menu_actions.append(journal_entry)
-	var settings_entry := Button.new()
-	settings_entry.name = "InGameSettingsButton"
-	settings_entry.text = "SETTINGS"
-	SKIN.apply_button(settings_entry, "wood")
-	root.add_child(settings_entry)
-	_anchors(settings_entry, 0.895, 0.500, 0.984, 0.575)
-	settings_entry.pressed.connect(_show_control_settings)
-	top_menu_actions.append(settings_entry)
+	# The sixth flyout action is the small exit door; control settings remain
+	# available inside its menu without a permanent extra HUD button.
+	var exit_entry := Button.new()
+	exit_entry.name = "ExitDoorMenuButton"
+	exit_entry.text = ""
+	exit_entry.tooltip_text = "Save / leave Outpost"
+	SKIN.apply_button(exit_entry, "wood")
+	# The icon lives inside the Button instead of contributing to its minimum
+	# width, keeping all six slots inside the menu on narrower phones.
+	var door_path: String = "res://assets/ui/icons/exit_door.svg"
+	if ResourceLoader.exists(door_path):
+		var door_icon := TextureRect.new()
+		door_icon.name = "ExitDoorIcon"
+		door_icon.texture = load(door_path) as Texture2D
+		door_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		door_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		door_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		door_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		exit_entry.add_child(door_icon)
+		door_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		door_icon.offset_left = 5
+		door_icon.offset_top = 4
+		door_icon.offset_right = -5
+		door_icon.offset_bottom = -4
+	root.add_child(exit_entry)
+	_anchors(exit_entry, 0.895, 0.500, 0.984, 0.575)
+	exit_entry.pressed.connect(_open_leave_menu)
+	top_menu_actions.append(exit_entry)
 	for option in top_menu_actions:
 		option.visible = false
 	# The world HUD never shows a giant permanent Gear or Bag panel.
@@ -379,6 +403,7 @@ func _ready() -> void:
 	_make_camera_drag_hint()
 	_build_control_settings()
 	_build_skill_details()
+	_build_leave_menu()
 	_load_control_prefs()
 	_position_stick()
 	# Recalculate real touch sizes and menu placement on phone rotation,
@@ -555,6 +580,94 @@ func _build_control_settings() -> void:
 		control_settings_panel.visible = false
 	)
 	stack.add_child(dismiss)
+
+func _build_leave_menu() -> void:
+	leave_menu_shade = ColorRect.new()
+	leave_menu_shade.name = "LeaveGameShade"
+	leave_menu_shade.color = Color(0.025, 0.02, 0.04, 0.61)
+	leave_menu_shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(leave_menu_shade)
+	leave_menu_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	leave_menu_shade.visible = false
+
+	leave_menu_panel = PanelContainer.new()
+	leave_menu_panel.name = "LeaveGamePanel"
+	leave_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	leave_menu_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	leave_menu_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	root.add_child(leave_menu_panel)
+	leave_menu_panel.anchor_left = 0.31
+	leave_menu_panel.anchor_right = 0.69
+	leave_menu_panel.anchor_top = 0.245
+	leave_menu_panel.anchor_bottom = 0.765
+	leave_menu_panel.visible = false
+	var margins := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 17)
+	leave_menu_panel.add_child(margins)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 11)
+	margins.add_child(stack)
+	var title := Label.new()
+	title.text = "LEAVE OUTPOST?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", SKIN.GOLD)
+	title.add_theme_font_size_override("font_size", 24)
+	stack.add_child(title)
+	leave_menu_info = Label.new()
+	leave_menu_info.name = "LeaveGameMessage"
+	leave_menu_info.text = "Your progress will be saved before returning to the title."
+	leave_menu_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	leave_menu_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	leave_menu_info.add_theme_color_override("font_color", SKIN.CREAM)
+	leave_menu_info.add_theme_font_size_override("font_size", 17)
+	stack.add_child(leave_menu_info)
+	for caption in ["RESUME ADVENTURE", "CONTROLS", "SAVE & RETURN TO TITLE"]:
+		var action := Button.new()
+		action.text = caption
+		action.custom_minimum_size = Vector2(0, 52)
+		SKIN.apply_button(action, "red" if caption.begins_with("SAVE") else "wood")
+		if caption == "RESUME ADVENTURE":
+			action.pressed.connect(_close_leave_menu)
+		elif caption == "CONTROLS":
+			action.pressed.connect(func() -> void:
+				_close_leave_menu()
+				_show_control_settings()
+			)
+		else:
+			leave_menu_confirm = action
+			action.name = "ReturnToTitle"
+			action.pressed.connect(_return_to_title)
+		stack.add_child(action)
+
+func _open_leave_menu() -> void:
+	_set_top_menu(false)
+	if leave_menu_panel == null or leave_menu_shade == null:
+		return
+	_reset_touch()
+	if skill_detail_panel != null:
+		skill_detail_panel.visible = false
+	if control_settings_panel != null:
+		control_settings_panel.visible = false
+	var online: bool = game != null and game.coop != null and game.coop.online()
+	var is_host: bool = online and game.coop.mode == "hosting"
+	leave_menu_info.text = "Your progress will be saved. Friends will disconnect." if online else "Your progress will be saved before returning to the title."
+	if leave_menu_confirm != null:
+		leave_menu_confirm.text = ("END LAN & RETURN" if is_host else "LEAVE LAN & RETURN") if online else "SAVE & RETURN TO TITLE"
+	leave_menu_shade.visible = true
+	leave_menu_panel.visible = true
+	leave_menu_shade.move_to_front()
+	leave_menu_panel.move_to_front()
+
+func _close_leave_menu() -> void:
+	if leave_menu_panel != null:
+		leave_menu_panel.visible = false
+	if leave_menu_shade != null:
+		leave_menu_shade.visible = false
+
+func _return_to_title() -> void:
+	if game != null and game.has_method("save_and_return_to_title"):
+		game.save_and_return_to_title()
 
 func _show_control_settings() -> void:
 	_set_top_menu(false)
@@ -1244,6 +1357,12 @@ func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _input(event: InputEvent) -> void:
+	# A modal must block gameplay touch, camera orbit, tools and joystick.
+	if leave_menu_panel != null and leave_menu_panel.visible:
+		if event.is_action_pressed("ui_cancel"):
+			_close_leave_menu()
+			get_viewport().set_input_as_handled()
+		return
 	if _handle_smart_input(event):
 		return
 	if (control_settings_panel != null and control_settings_panel.visible) or (skill_detail_panel != null and skill_detail_panel.visible):
