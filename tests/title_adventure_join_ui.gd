@@ -57,7 +57,11 @@ func _run() -> void:
 	var session_script: Script = load("res://scripts/network/coop_session.gd") as Script
 	_check(session_script != null, "Existing LAN co-op session remains available")
 	if session_script != null:
-		_check(session_script.has_method("respond_to_join"), "Host can approve or decline a join request")
+		var has_approval: bool = false
+		for method_entry in session_script.get_script_method_list():
+			if str(method_entry.get("name", "")) == "respond_to_join":
+				has_approval = true
+		_check(has_approval, "Host can approve or decline a join request")
 	var join_popup: Script = load("res://scripts/network/coop_join_approval.gd") as Script
 	_check(join_popup != null, "Host join-approval popup script imports")
 	title.queue_free()
