@@ -491,13 +491,14 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
 			# Original hand-stacked trees; no new scene nodes/draw calls.
 			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
+			var crown_tile: int = PIXELS.foliage_tile_at(x, z, world_seed)
 			var crown_height: float = 1.66 + float(i % 2) * 0.27
 			PIXELS.box(st, Vector3(x, y + 0.80, z), Vector3(0.42, 1.60, 0.46), 8, 8)
-			PIXELS.box(st, Vector3(x, y + crown_height, z), Vector3(1.72, 0.91, 1.55), 9, 10, 3, tint)
-			PIXELS.box(st, Vector3(x + 0.33, y + crown_height + 0.59, z - 0.16), Vector3(1.23, 0.71, 1.26), 1, 9, 3, tint)
-			PIXELS.box(st, Vector3(x - 0.44, y + crown_height + 0.26, z + 0.43), Vector3(0.81, 0.61, 0.93), 9, 9, 3, tint)
+			PIXELS.box(st, Vector3(x, y + crown_height, z), Vector3(1.72, 0.91, 1.55), crown_tile, crown_tile, 3, tint)
+			PIXELS.box(st, Vector3(x + 0.33, y + crown_height + 0.59, z - 0.16), Vector3(1.23, 0.71, 1.26), crown_tile, crown_tile, 3, tint)
+			PIXELS.box(st, Vector3(x - 0.44, y + crown_height + 0.26, z + 0.43), Vector3(0.81, 0.61, 0.93), crown_tile, crown_tile, 3, tint)
 		elif i % 3 == 0:
-			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10, 3, PIXELS.foliage_tint_at(x, z, world_seed))
+			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), PIXELS.foliage_tile_at(x, z, world_seed), PIXELS.foliage_tile_at(x, z, world_seed), 3, PIXELS.foliage_tint_at(x, z, world_seed))
 		else:
 			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
 			if i % 5 == 0:
@@ -656,10 +657,11 @@ func _make_fields_scenery() -> void:
 		var y: float = surface_y_at(x, z)
 		if i % 4 == 0:
 			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
+			var crown_tile: int = PIXELS.foliage_tile_at(x, z, world_seed)
 			PIXELS.box(st, Vector3(x, y + 0.75, z), Vector3(0.45, 1.45, 0.48), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), 9, 10, 3, tint)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), 1, 9, 3, tint)
-			PIXELS.box(st, Vector3(x - 0.52, y + 1.91, z + 0.54), Vector3(0.95, 0.64, 0.85), 9, 9, 3, tint)
+			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), crown_tile, crown_tile, 3, tint)
+			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), crown_tile, crown_tile, 3, tint)
+			PIXELS.box(st, Vector3(x - 0.52, y + 1.91, z + 0.54), Vector3(0.95, 0.64, 0.85), crown_tile, crown_tile, 3, tint)
 		elif i % 4 == 1:
 			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
 			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
