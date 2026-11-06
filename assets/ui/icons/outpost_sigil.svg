@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" shape-rendering="crispEdges">
+<!-- Original Outpost hero sigil: small beacon-and-shield emblem, not a generic face portrait. -->
+<path d="M32 3 56 11V36L51 48 32 61 13 48 8 36V11Z" fill="#261b19"/>
+<path d="M32 7 52 14V34L47 45 32 56 17 45 12 34V14Z" fill="#b88948"/>
+<path d="M32 12 47 17V33L43 42 32 50 21 42 17 33V17Z" fill="#433020"/>
+<path d="M27 15H37V25H43V31H21V25H27Z" fill="#f6ddb0"/>
+<path d="M28 21H36V30H28Z" fill="#f5c866"/>
+<path d="M25 32H39V39H25Z" fill="#cc8c37"/>
+<path d="M29 25 32 19 35 25 37 31 34 36 29 36 26 31Z" fill="#f6aa3b"/>
+<path d="M31 27 33 24 35 31 32 33 29 31Z" fill="#ffe298"/>
+<path d="M28 41H36V45H28Z" fill="#ead39c"/>
+<path d="M22 10H26V15H22ZM38 10H42V15H38Z" fill="#e4b663"/>
+</svg>
