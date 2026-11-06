@@ -3,14 +3,31 @@ extends RefCounted
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 
 static func tree() -> MeshInstance3D:
+	# Layered square canopies and bark branches: chunky readable silhouette
+	# similar to the approved mobile isometric reference. ONE mesh per tree.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	PIXELS.box(st, Vector3(0, 0.85, 0), Vector3(0.58, 1.70, 0.60), 8, 8)
-	PIXELS.box(st, Vector3(0, 1.76, 0), Vector3(1.55, 0.9, 1.45), 9, 10)
-	PIXELS.box(st, Vector3(0.12, 2.25, 0.03), Vector3(2.1, 0.92, 1.95), 9, 9)
-	PIXELS.box(st, Vector3(-0.05, 2.80, 0), Vector3(1.5, 0.76, 1.45), 1, 9)
-	PIXELS.box(st, Vector3(0.18, 3.24, 0.08), Vector3(0.8, 0.50, 0.8), 1, 10)
+	PIXELS.box(st, Vector3(0, 1.35, 0), Vector3(0.60, 2.70, 0.64), 8, 8)
+	PIXELS.box(st, Vector3(-0.55, 2.40, 0.0), Vector3(1.25, 0.29, 0.29), 8, 8)
+	PIXELS.box(st, Vector3(0.42, 2.90, 0.1), Vector3(0.94, 0.26, 0.29), 8, 8)
+	PIXELS.box(st, Vector3(-0.27, 2.62, 0), Vector3(2.00, 0.95, 2.22), 10, 10)
+	PIXELS.box(st, Vector3(0.34, 3.10, 0.08), Vector3(2.65, 1.05, 2.50), 9, 10)
+	PIXELS.box(st, Vector3(-0.20, 3.72, 0.0), Vector3(2.26, 0.94, 2.20), 9, 9)
+	PIXELS.box(st, Vector3(0.05, 4.22, -0.12), Vector3(1.52, 0.76, 1.60), 1, 9)
+	PIXELS.box(st, Vector3(-0.48, 3.26, 0.92), Vector3(0.78, 0.71, 0.75), 1, 9)
+	PIXELS.box(st, Vector3(0.89, 2.91, -0.41), Vector3(0.69, 0.66, 1.05), 2, 10)
 	return PIXELS.as_instance(st, "VoxelTree")
+
+static func pine_tree() -> MeshInstance3D:
+	# Sparse triangular steps, still entirely cubes (no smooth cones).
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	PIXELS.box(st, Vector3(0, 1.80, 0), Vector3(0.52, 3.60, 0.52), 8, 8)
+	for layer in range(4):
+		var extent: float = 2.7 - float(layer) * 0.55
+		PIXELS.box(st, Vector3(0, 1.85 + float(layer) * 0.75, 0),
+			Vector3(extent, 0.82, extent), 10 if layer < 2 else 9, 10)
+	return PIXELS.as_instance(st, "VoxelPineTree")
 
 static func rock(kind: String = "stone") -> MeshInstance3D:
 	var st := SurfaceTool.new()
