@@ -4,7 +4,7 @@ extends RefCounted
 const TILE_PIXELS: int = 16
 const GRID: int = 4
 const PIXELS: int = TILE_PIXELS * GRID
-const ART_ATLAS_PATH: String = "res://assets/voxel/outpost_atlas_16px.png"
+const ART_ATLAS_PATH: String = "res://assets/voxel/outpost_visual_atlas_16px.svg"
 const COAST_ATLAS_PATH: String = "res://assets/voxel/coastal_terrain_16px.svg"
 static var _shared_coast_atlas: Texture2D
 
