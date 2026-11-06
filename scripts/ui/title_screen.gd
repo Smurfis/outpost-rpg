@@ -119,10 +119,12 @@ func _make_screen() -> void:
 	
 	var logo: Control = LOGO_SCENE.instantiate() as Control
 	logo.name = "OutpostLogo"
-	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
-	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
+	# Clear the .tscn's old 650×358 minimum BEFORE assigning approved dimensions;
+	# otherwise Godot silently clamps the new size and wrecks pixel alignment.
 	logo.custom_minimum_size = Vector2.ZERO
 	_canvas.add_child(logo)
+	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
+	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
 
 	_splash = SPLASH_SCENE.instantiate() as Label
 	_splash.name = "UpdateSplash"
@@ -148,9 +150,12 @@ func _make_screen() -> void:
 		b.name = kind.capitalize() + "Button"
 		b.set("button_kind", kind)
 		var placement: Rect2 = approved_rects[kind] if _approved_art else Rect2(425, 342 + 79 * i, 430, 72)
+		_canvas.add_child(b)
+		# Button._ready() restores legacy 430×76 minimum; reset it before
+		# assigning the exact PNG cutout's independent pixel footprint.
+		b.custom_minimum_size = Vector2.ZERO
 		b.position = placement.position
 		b.size = placement.size
-		_canvas.add_child(b)
 		b.custom_minimum_size = placement.size
 		match kind:
 			"play":
