@@ -53,6 +53,14 @@ func _run() -> void:
 		await process_frame
 		var panel: Control = screen.get_node_or_null("Artboard/SettingsPanel") as Control
 		check(panel != null, "Title screen has settings panel")
+		var scroll_button: Button = screen.get("_changelog_button") as Button
+		var scroll_panel: PanelContainer = screen.get("_changelog_panel") as PanelContainer
+		check(scroll_button != null and scroll_button.icon != null, "Small independent parchment changelog scroll exists")
+		check(scroll_panel != null and not scroll_panel.visible, "Changelog scroll starts collapsed")
+		screen._toggle_changelog()
+		check(scroll_panel != null and scroll_panel.visible and scroll_panel.find_child("ChangelogBody", true, false) != null, "Changelog opens a scrollable reading panel")
+		screen._toggle_changelog()
+		check(scroll_panel != null and not scroll_panel.visible, "Changelog can be dismissed")
 		check(screen.get("_updater") != null, "In-app updater service is connected")
 		var button: Button = screen.get("_update_button") as Button
 		check(button != null and button.text == "CHECK FOR UPDATES", "Visible and deliberate update-check action")
