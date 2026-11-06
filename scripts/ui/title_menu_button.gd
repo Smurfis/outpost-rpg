@@ -17,6 +17,33 @@ func _ready() -> void:
 
 func _apply_appearance() -> void:
 	var kind: String = button_kind if CAPTIONS.has(button_kind) else "play"
+	var baked_image: Texture2D
+	var approved_path: String = ASSET_BASE + "btn_" + kind + ".png"
+	if ResourceLoader.exists(approved_path):
+		baked_image = load(approved_path) as Texture2D
+	if baked_image != null:
+		# The approved PNG already includes its own hand-lettered caption/icon.
+		# Keep this a true accessible Button, but do not print a second label.
+		text = ""
+		icon = null
+		tooltip_text = CAPTIONS[kind]
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		for state in ["normal", "hover", "pressed", "disabled"]:
+			var art_style := StyleBoxTexture.new()
+			art_style.texture = baked_image
+			art_style.modulate_color = Color.WHITE
+			if state == "hover":
+				art_style.modulate_color = Color("fff5db")
+			elif state == "pressed":
+				art_style.modulate_color = Color("d4c3aa")
+			elif state == "disabled":
+				art_style.modulate_color = Color(0.72, 0.72, 0.72, 0.92)
+			add_theme_stylebox_override(state, art_style)
+		var art_focus := StyleBoxFlat.new()
+		art_focus.bg_color = Color.TRANSPARENT
+		art_focus.border_color = Color.TRANSPARENT
+		add_theme_stylebox_override("focus", art_focus)
+		return
 	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
 	var picture: Texture2D = _find_art("icon_", kind, "icons")
 	if picture != null:
