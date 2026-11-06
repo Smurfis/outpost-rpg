@@ -13,6 +13,7 @@ var _wordmark: Label
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	if ResourceLoader.exists(LOGO_PATH):
 		_logo_texture = load(LOGO_PATH) as Texture2D
 	# A committed transparent vector logo always ships in the APK. It intentionally
