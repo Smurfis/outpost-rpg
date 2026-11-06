@@ -93,7 +93,7 @@ func _ready() -> void:
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_G], "interact": [KEY_E], "attack": [KEY_F, KEY_SPACE], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_G], "interact": [KEY_E], "attack": [KEY_F, KEY_SPACE], "jump": [KEY_J], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -645,6 +645,8 @@ func select_quick_tool(item_id: String) -> bool:
 	elif not is_equipped(item_id) and not equip_item(item_id):
 		return false
 	active_quick_tool = item_id
+	if hero != null:
+		hero.set_held_tool(active_quick_tool)
 	_save()
 	_refresh_menu()
 	return true
@@ -795,6 +797,7 @@ func _apply_equipment() -> void:
 	if hero == null:
 		return
 	hero.set_weapon(str(equipment.get("weapon", "training_blade")))
+	hero.set_held_tool(active_quick_tool)
 	hero.set_shield(str(equipment.get("offhand", "")) == "shield")
 	hero.set_torch(str(equipment.get("offhand", "")) == "torch")
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
