@@ -421,10 +421,12 @@ func _build_skill_details() -> void:
 	skill_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	skill_detail_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
 	skill_detail_panel.visible = false
-	var title: Label = _label("WEAPON MASTERY", 21, SKIN.GOLD, 0.363, 0.274, 0.643, 0.335)
+	var title := Label.new()
+	title.text = "WEAPON MASTERY"
+	title.add_theme_color_override("font_color", SKIN.GOLD)
+	title.add_theme_font_size_override("font_size", 21)
 	title.name = "SkillDetailHeading"
 	skill_detail_panel.add_child(title)
-	root.remove_child(title)
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_left = 16
 	title.offset_top = 13
