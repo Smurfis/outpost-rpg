@@ -716,7 +716,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 func _make_camera_drag_hint() -> void:
 	# Camera movement belongs to the player's free finger on empty world;
 	# the old rotated-arrow UI took important Android screen space.
-	var hint_label: Label = _label("HOLD WORLD → ORBIT", 14, Color("#f7dc9c"), 0.768, 0.307, 0.987, 0.348)
+	var hint_label: Label = _label("DRAG WORLD → ORBIT", 14, Color("#f7dc9c"), 0.768, 0.307, 0.987, 0.348)
 	hint_label.name = "CameraDragHint"
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	camera_gesture_hint = hint_label
@@ -1143,12 +1143,14 @@ func _input(event: InputEvent) -> void:
 			camera_hold_ready = false
 			return
 	elif event is InputEventScreenDrag and event.index == camera_drag_finger and game != null:
+		# A deliberate free-world swipe orbits immediately, while small finger
+		# jitter is ignored. The previous implementation cancelled the gesture
+		# once it passed 26 px before a 0.82s hold, making orbit feel broken.
+		# Holding still continues to enable precision dragging.
+		if not camera_hold_ready and event.position.distance_to(camera_hold_origin) >= 16.0:
+			camera_hold_ready = true
 		if camera_hold_ready:
 			game.drag_camera(event.screen_relative.x)
-		elif event.position.distance_to(camera_hold_origin) > 26.0:
-			# Early movement is not an orbit; this prevents accidental
-			# camera turns while interacting with the world.
-			camera_drag_finger = -1
 		return
 	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):
