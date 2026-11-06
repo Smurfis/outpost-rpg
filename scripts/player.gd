@@ -75,7 +75,7 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	_model("adventurer_torso", visual, Vector3.ZERO)
 	var head: MeshInstance3D = _model("adventurer_head", visual, Vector3(0, 1.89, -0.035))
 	if bool(game.get("voxel_art_enabled")):
-		head.scale = Vector3.ONE * 1.19
+		head.scale = Vector3.ONE * 1.34 # Slightly oversized Cube World-like face; collision stays unchanged.
 	left_arm = _pivot("LeftArm", Vector3(-0.54, 1.51, 0.02))
 	right_arm = _pivot("RightArm", Vector3(0.54, 1.51, 0.02))
 	left_leg = _pivot("LeftLeg", Vector3(-0.205, 0.78, 0.0))

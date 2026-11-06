@@ -1,6 +1,7 @@
 extends Control
 ## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
 ## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
+const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
@@ -17,6 +18,7 @@ var _center: Vector3 = Vector3.ZERO # Last texture sample, NOT the player marker
 var _sample_angle: float = 0.0 # Latest camera orbit; changes without texture updates.
 var _has_sample: bool = false
 var _refresh_count: int = 0
+var _relief_samples: int = 0 # Height-call counter for Android performance QA.
 
 func setup(game_ref: Node) -> void:
 	game = game_ref
@@ -73,6 +75,7 @@ func _refresh_pixels() -> void:
 	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
 	var half_extent: float = float(biome.get("map_half")) if biome != null else 0.0
 	for py in range(RESOLUTION):
+		var last_elevation: float = -0.055
 		for px in range(RESOLUTION):
 			# World-aligned: rotation happens via a single cheap canvas transform.
 			var local := Vector2((float(px) + 0.5) / float(RESOLUTION) * 2.0 - 1.0,
@@ -83,11 +86,12 @@ func _refresh_pixels() -> void:
 			var wx: float = _center.x + local.x * MAP_RADIUS
 			var wz: float = _center.z + local.y * MAP_RADIUS
 			var colour: Color = Color("648641")
+			var zone: String = ""
 			if biome != null:
 				if absf(wx) >= half_extent or absf(wz) >= half_extent:
 					colour = Color("266983")
 				else:
-					var zone: String = str(biome.coast_zone_at(wx, wz))
+					zone = str(biome.coast_zone_at(wx, wz))
 					match zone:
 						"water": colour = Color("276f8c")
 						"wet_sand": colour = Color("b0a57f")
@@ -105,6 +109,16 @@ func _refresh_pixels() -> void:
 								6: colour = Color("aa9774")
 								7: colour = Color("55764c")
 								_: colour = Color("739a4e")
+			# Actual voxel elevation gives the miniature terrain subtle relief.
+			# Reuse a height per two horizontal pixels to limit noise sampling.
+			if biome != null and zone == "inland":
+				if px % 2 == 0:
+					last_elevation = float(biome._tile_height(floori(wx), floori(wz)))
+					_relief_samples += 1
+				if last_elevation > 0.45:
+					colour = colour.lightened(clampf(last_elevation * 0.055, 0.0, 0.17))
+				elif last_elevation < -0.55:
+					colour = colour.darkened(clampf(-last_elevation * 0.055, 0.0, 0.15))
 			# Ink-speckled pixels keyed to world coordinates (no camera flicker).
 			var ink: int = posmod(floori(wx) * 31 + floori(wz) * 43, 23)
 			if ink == 0:
@@ -162,6 +176,20 @@ func _draw() -> void:
 				draw_circle(center + offset, 5.0, DARK_WOOD)
 				draw_circle(center + offset, 3.1, marker)
 				draw_circle(center + offset + Vector2(-1.0, -1.0), 1.1, Color("fff2c7"))
+		# Only real world trees are marked; this pass does not invent
+		# stream-chunk positions or add costly terrain samples on camera orbit.
+		for thing in game.get_children():
+			if not (thing is MeshInstance3D) or not str(thing.name).begins_with("VoxelTree"):
+				continue
+			var tree: MeshInstance3D = thing as MeshInstance3D
+			var relative := Vector2(tree.global_position.x - player.global_position.x, tree.global_position.z - player.global_position.z)
+			var offset: Vector2 = _world_to_map(relative) * (interior / MAP_RADIUS)
+			if offset.length_squared() >= (interior - 7.0) * (interior - 7.0):
+				continue
+			var variety: int = PIXELS.foliage_variant_at(tree.global_position.x, tree.global_position.z, 64012)
+			var tree_colour: Color = Color("e68bb6") if variety <= 3 else Color("d1dc54") if variety <= 5 else Color("ab86d9") if variety == 6 else Color("59b2aa") if variety == 7 else Color("78b75a")
+			draw_circle(center + offset, 3.3, DARK_WOOD)
+			draw_circle(center + offset, 2.1, tree_colour)
 		# Fixed centre; arrow heading is relative to camera and world map.
 		var yaw: float = _sample_angle
 		var avatar: Node3D = player.get("visual") as Node3D

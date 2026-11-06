@@ -8,6 +8,7 @@ const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
@@ -359,7 +360,7 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 		var prop: MeshInstance3D
 		match id:
 			"oak_tree":
-				prop = VOXEL_PROPS.tree()
+				prop = VOXEL_PROPS.tree(VOXEL_PALETTE.foliage_tint_at(where.x, where.z, 64012), VOXEL_PALETTE.foliage_tile_at(where.x, where.z, 64012))
 			"rock_deposit":
 				prop = VOXEL_PROPS.rock()
 			"supply_crate":

@@ -93,10 +93,13 @@ static func get_material() -> StandardMaterial3D:
 	mat.roughness = 1.0
 	mat.metallic = 0.0
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Vertex tints allow pink, gold and jade foliage in a single batched mesh,
+	# without multiplying material/texture objects or Android draw calls.
+	mat.vertex_color_use_as_albedo = true
 	_shared_material = mat
 	return mat
 
-static func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tile: int) -> void:
+static func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tile: int, tint: Color = Color.WHITE) -> void:
 	var t: int = clampi(tile, 0, 15)
 	# Half-texel UV inset prevents a tile pulling pixels from its neighbours.
 	var u0: float = float((t % GRID) * TILE_PIXELS) + 0.5
@@ -111,22 +114,58 @@ static func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3
 	]
 	var points: Array[Vector3] = [a, b, c, d]
 	for index in [0, 1, 2, 0, 2, 3]:
+		st.set_color(tint)
 		st.set_uv(uv[index])
 		st.add_vertex(points[index])
 
-static func box(st: SurfaceTool, center: Vector3, full_size: Vector3, top_tile: int, side_tile: int, bottom_tile: int = 3) -> void:
+static func box(st: SurfaceTool, center: Vector3, full_size: Vector3, top_tile: int, side_tile: int, bottom_tile: int = 3, tint: Color = Color.WHITE) -> void:
 	var l: float = center.x - full_size.x * 0.5
 	var r: float = center.x + full_size.x * 0.5
 	var b: float = center.y - full_size.y * 0.5
 	var t: float = center.y + full_size.y * 0.5
 	var n: float = center.z - full_size.z * 0.5
 	var f: float = center.z + full_size.z * 0.5
-	quad(st, Vector3(l, t, n), Vector3(l, t, f), Vector3(r, t, f), Vector3(r, t, n), top_tile)
-	quad(st, Vector3(l, b, f), Vector3(l, b, n), Vector3(r, b, n), Vector3(r, b, f), bottom_tile)
-	quad(st, Vector3(l, b, f), Vector3(r, b, f), Vector3(r, t, f), Vector3(l, t, f), side_tile)
-	quad(st, Vector3(r, b, f), Vector3(r, b, n), Vector3(r, t, n), Vector3(r, t, f), side_tile)
-	quad(st, Vector3(r, b, n), Vector3(l, b, n), Vector3(l, t, n), Vector3(r, t, n), side_tile)
-	quad(st, Vector3(l, b, n), Vector3(l, b, f), Vector3(l, t, f), Vector3(l, t, n), side_tile)
+	quad(st, Vector3(l, t, n), Vector3(l, t, f), Vector3(r, t, f), Vector3(r, t, n), top_tile, tint)
+	quad(st, Vector3(l, b, f), Vector3(l, b, n), Vector3(r, b, n), Vector3(r, b, f), bottom_tile, tint)
+	quad(st, Vector3(l, b, f), Vector3(r, b, f), Vector3(r, t, f), Vector3(l, t, f), side_tile, tint)
+	quad(st, Vector3(r, b, f), Vector3(r, b, n), Vector3(r, t, n), Vector3(r, t, f), side_tile, tint)
+	quad(st, Vector3(r, b, n), Vector3(l, b, n), Vector3(l, t, n), Vector3(r, t, n), side_tile, tint)
+	quad(st, Vector3(l, b, n), Vector3(l, b, f), Vector3(l, t, f), Vector3(l, t, n), side_tile, tint)
+
+# Deterministic cluster-based seasonal tint: sunny lime, cherry blossom,
+# deep green and magical lavender. Combined with existing coloured atlas
+# cells, this avoids extra texture memory and Android draw calls.
+static func foliage_variant_at(x: float, z: float, seed: int = 64012) -> int:
+	var cx: int = floori(x / 14.0)
+	var cz: int = floori(z / 14.0)
+	return posmod(cx * 71 + cz * 101 + seed * 13 + cx * cz * 7, 11)
+
+# Draw variant crowns from already-loaded atlas cells, not just a
+# multiplication of dark green pixels: cherry/purple foliage must stay vivid.
+# No new textures; all variants still use the same 64x64 atlas.
+static func foliage_tile_at(x: float, z: float, seed: int = 64012) -> int:
+	var kind: int = foliage_variant_at(x, z, seed)
+	if kind in [0, 1, 2, 3]:
+		return 14 # Original vibrant berry-red tile doubles as pink blossom.
+	if kind in [4, 5]:
+		return 1 # Sunlit lime tile.
+	if kind == 6:
+		return 13 # Violet floral tile.
+	if kind == 7:
+		return 7 # Teal-moss tile.
+	return 9 # Evergreen leaves.
+
+static func foliage_tint_at(x: float, z: float, seed: int = 64012) -> Color:
+	var kind: int = foliage_variant_at(x, z, seed)
+	if kind in [0, 1, 2, 3]:
+		return Color(1.0, 0.82, 1.0) # Cherry blossom red-pink.
+	if kind in [4, 5]:
+		return Color(1.0, 1.0, 0.52) # Sunlit chartreuse.
+	if kind == 6:
+		return Color(1.0, 0.79, 1.0) # Violet floral crown.
+	if kind == 7:
+		return Color(0.52, 0.95, 1.0) # Cool jade canopy.
+	return Color.WHITE # Forest green, preserving the original source art.
 
 static func create_mesh(st: SurfaceTool) -> ArrayMesh:
 	st.generate_normals()
