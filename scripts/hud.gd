@@ -382,6 +382,159 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	return pos.x >= screen.x * 0.26 and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
 
 
+func _build_quick_tray() -> void:
+	quick_tray = Panel.new()
+	quick_tray.name = "ConsumableHoldSlider"
+	quick_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quick_tray.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	root.add_child(quick_tray)
+	_anchors(quick_tray, 0.650, 0.527, 0.888, 0.824)
+	quick_tray.visible = false
+	quick_tray_list = VBoxContainer.new()
+	quick_tray_list.name = "OwnedConsumableChoices"
+	quick_tray_list.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	quick_tray.add_child(quick_tray_list)
+	quick_tray_list.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	quick_tray_list.offset_left = 6
+	quick_tray_list.offset_top = 6
+	quick_tray_list.offset_right = -6
+	quick_tray_list.offset_bottom = -6
+
+func _open_quick_tray() -> void:
+	if quick_tray_open or game == null or quick_hold_kind == "":
+		return
+	quick_options = game.available_quick_consumables(quick_hold_kind)
+	if quick_options.is_empty():
+		toast("Craft a %s first, then hold to assign it." % ("tonic" if quick_hold_kind == "potion" else "meal or stew"))
+		return
+	quick_selected = -1
+	for child in quick_tray_list.get_children():
+		quick_tray_list.remove_child(child)
+		child.queue_free()
+	for item in quick_options:
+		var choice := Label.new()
+		choice.text = "  " + item.capitalize() + "  ×" + str(int(game.inventory.get(item, 0)))
+		choice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		choice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		choice.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		choice.add_theme_font_size_override("font_size", 18)
+		choice.add_theme_color_override("font_color", SKIN.CREAM)
+		choice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		quick_tray_list.add_child(choice)
+	quick_tray_open = true
+	quick_tray.visible = true
+
+func _drag_quick_slider(pos: Vector2) -> void:
+	if not quick_tray_open and pos.y < quick_hold_origin.y - 28.0:
+		_open_quick_tray()
+	if quick_tray_open and not quick_options.is_empty() and pos.y < quick_hold_origin.y - 20.0:
+		var bounds: Rect2 = quick_tray.get_global_rect()
+		var fraction: float = clampf((pos.y - bounds.position.y) / maxf(1.0, bounds.size.y), 0.0, 0.999)
+		quick_selected = int(floorf(fraction * float(quick_options.size())))
+		for i in range(quick_tray_list.get_child_count()):
+			var label: Label = quick_tray_list.get_child(i) as Label
+			label.add_theme_color_override("font_color", SKIN.GOLD if i == quick_selected else SKIN.CREAM)
+
+func _finish_quick_hold() -> void:
+	var kind: String = quick_hold_kind
+	var selected: int = quick_selected
+	var options: Array[String] = quick_options.duplicate()
+	var was_tray: bool = quick_tray_open
+	_cancel_quick_hold()
+	if game == null:
+		return
+	if was_tray:
+		if selected >= 0 and selected < options.size() and game.set_quick_consumable(kind, options[selected]):
+			toast("Equipped %s to %s radial." % [options[selected].capitalize(), kind])
+	elif not game.use_quick_consumable(kind):
+		toast("Hold and drag upward to equip an owned %s." % kind)
+	_refresh_quick_radials()
+
+func _cancel_quick_hold() -> void:
+	quick_hold_finger = -1
+	quick_hold_mouse = false
+	quick_hold_kind = ""
+	quick_hold_seconds = 0.0
+	quick_tray_open = false
+	quick_selected = -1
+	if quick_tray != null:
+		quick_tray.visible = false
+
+func _handle_quick_input(event: InputEvent) -> bool:
+	if game == null or quick_buttons.is_empty():
+		return false
+	if (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible):
+		_cancel_quick_hold()
+		return false
+	if event is InputEventScreenTouch:
+		if event.pressed and quick_hold_finger < 0:
+			for key in ["potion", "consumable"]:
+				var button: Button = quick_buttons[key] as Button
+				if button.get_global_rect().grow(4.0).has_point(event.position):
+					quick_hold_finger = event.index
+					quick_hold_kind = key
+					quick_hold_origin = event.position
+					quick_hold_seconds = 0.0
+					return true
+		if not event.pressed and event.index == quick_hold_finger:
+			quick_ignore_mouse_until = Time.get_ticks_msec() + 220
+			_finish_quick_hold()
+			return true
+	elif event is InputEventScreenDrag and event.index == quick_hold_finger:
+		_drag_quick_slider(event.position)
+		return true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < quick_ignore_mouse_until:
+			return false
+		if event.pressed and quick_hold_finger < 0 and not quick_hold_mouse:
+			for key in ["potion", "consumable"]:
+				if (quick_buttons[key] as Button).get_global_rect().grow(4.0).has_point(event.position):
+					quick_hold_mouse = true
+					quick_hold_kind = key
+					quick_hold_origin = event.position
+					quick_hold_seconds = 0.0
+					return true
+		if not event.pressed and quick_hold_mouse:
+			_finish_quick_hold()
+			return true
+	elif event is InputEventMouseMotion and quick_hold_mouse:
+		_drag_quick_slider(event.position)
+		return true
+	return false
+
+func _refresh_quick_radials() -> void:
+	if game == null:
+		return
+	for i in range(3):
+		var key: String = "skill_%d" % (i + 1)
+		var button: Button = quick_buttons.get(key) as Button
+		if button == null:
+			continue
+		var unlocked: bool = i < game.unlocked_skill_slots()
+		var skill: String = ["power_strike", "cleave", "sundering_blow"][i]
+		var time_left: float = float(game.skill_cooldowns.get(skill, 0.0))
+		button.disabled = not unlocked or time_left > 0.0
+		var label: Label = button.get_node_or_null("ActionLabel") as Label
+		if label != null:
+			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["POWER", "CLEAVE", "SUNDER"][i] if unlocked else "LOCK"
+	for kind in ["potion", "consumable"]:
+		var button: Button = quick_buttons.get(kind) as Button
+		if button == null:
+			continue
+		var item: String = str(game.quick_slots.get(kind, ""))
+		if int(game.inventory.get(item, 0)) <= 0:
+			item = ""
+		var label: Label = button.get_node_or_null("ActionLabel") as Label
+		if label != null:
+			label.text = "EMPTY" if item == "" else item.to_upper()
+		button.modulate = Color("#b9afae") if item == "" else Color.WHITE
+		if quick_icon_cache.get(kind, "-") != item:
+			quick_icon_cache[kind] = item
+			var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
+			if art != null:
+				var icon_id: String = item if item != "" else "heart" if kind == "potion" else "meal"
+				art.texture = load("res://assets/icons/" + icon_id + ".svg") as Texture2D
+
 func _build_smart_tray() -> void:
 	smart_tray = Panel.new()
 	smart_tray.name = "QuickToolSlider"
