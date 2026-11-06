@@ -287,7 +287,7 @@ func refresh() -> void:
 	if not visible or window == null:
 		return
 	equipment_toggle.text = "EQUIPMENT  ▴" if equipment_expanded else "EQUIPMENT  ▾"
-	equipment_body.get_parent().visible = equipment_expanded
+	(equipment_body.get_parent() as Control).visible = equipment_expanded
 	if equipment_expanded:
 		_render_equipment()
 	for id in filter_buttons:
