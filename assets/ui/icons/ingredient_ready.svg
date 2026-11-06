@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" shape-rendering="crispEdges">
+<!-- Original inventory-ready status emblem: true transparency and readable at 24 px. -->
+<path d="M8 4H40V8H44V40H40V44H8V40H4V8H8Z" fill="#3A2820"/>
+<path d="M9 9H39V13H39V39H9Z" fill="#5E793C"/>
+<path d="M10 10H38V13H10Z" fill="#C2A465"/>
+<path d="M12 23L18 29L34 13L40 19L18 39L7 29Z" fill="#292B20"/>
+<path d="M11 23L18 30L35 14L39 18L18 36L9 27Z" fill="#E5E5B4"/>
+</svg>
