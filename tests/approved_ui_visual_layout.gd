@@ -90,20 +90,21 @@ func _run() -> void:
 	game.inventory["stone"] = 5
 	game.show_inventory()
 	verify(game.menu.current_page == "bag", "Bag opens from old gameplay API")
-	var filter_all: Button = game.menu.recipes_list.get_node_or_null("BagFilters/BagFilter_all") as Button
-	verify(filter_all != null, "Inventory has real All, Materials, Gear and Food category filters")
-	game.menu._set_bag_filter("material")
-	verify(game.menu.bag_filter == "material" and game.menu.recipes_list.get_node_or_null("BagItemGrid/Item_wood") != null, "Material filter shows only actual owned resources")
-	game.menu._set_bag_filter("all")
-	var bag_meter: ProgressBar = game.menu.station_tabs.find_child("BagCapacityMeter", true, false) as ProgressBar
-	verify(bag_meter != null and bag_meter.get_theme_stylebox("fill") is StyleBoxFlat, "Carry-weight meter uses a visible solid fill instead of transparent frame")
-	var grid: GridContainer = game.menu.recipes_list.get_node_or_null("BagItemGrid") as GridContainer
-	verify(grid != null and grid.columns == 4, "Bag uses compact 4-column sprite inventory")
+	var inv = game.menu.inventory_window
+	verify(inv != null and inv.visible and not game.menu.shell.visible, "Separate right-side inventory opens instead of old crafting panel")
+	var filter_all: Button = inv.get_node_or_null("InventoryWindow/InventoryLayout/BagFilters/BagFilter_all") as Button
+	verify(filter_all != null, "Inventory keeps real materials, gear and food category filters")
+	inv._change_filter("material")
+	verify(inv.filter_kind == "material" and inv.inventory_grid.get_node_or_null("Item_wood") != null, "Material filter displays actual carried materials")
+	inv._change_filter("all")
+	verify(inv.bag_meter != null and inv.bag_meter.get_theme_stylebox("fill") is StyleBoxFlat, "Real bag load meter remains visible")
+	var grid: GridContainer = inv.inventory_grid
+	verify(grid != null and grid.columns >= 4 and grid.columns <= 6, "Inventory grid adapts to landscape phone widths")
 	if grid != null:
-		verify(grid.get_node_or_null("Item_wood") != null, "Item tiles are real interactive buttons")
-		game.menu._bag_select("wood")
-		verify(game.menu.selected_bag_id == "wood", "Item selection opens details")
-
+		verify(grid.get_node_or_null("Item_wood") != null, "Carried items have interactive icon tiles")
+		inv._select_item("wood")
+		verify(inv.selected_id == "wood" and inv.item_card.visible, "Item selection opens functional detail pane")
+		verify(inv.get_node_or_null("InventoryWindow/InventoryLayout/CharacterEquipmentSection") != null, "Inventory displays collapsible equipment silhouette")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0.0, 0.35, 0.0)
 	game.menu.close_page()
 	game.show_crafting()
