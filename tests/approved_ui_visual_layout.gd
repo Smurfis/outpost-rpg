@@ -116,45 +116,43 @@ func _run() -> void:
 	if crafting != null:
 		verify(crafting.size.x <= 880.0 and crafting.size.y <= 600.0, "Craft modal pixel dimensions capped on wide phones")
 		verify(crafting.size.x < game.menu.shell.size.x * 0.75, "Craft leaves landscape visible on Android")
-	verify(game.menu.craft_step == "browse", "Craft stage begins on full-width recipe cards")
-	verify(game.menu.craft_stage_strip.get_child_count() == 4, "Four illustrated workflow steps visible only in crafting")
-	verify(game.menu.craft_stage_strip.get_node_or_null("CraftStage_1") != null, "Select stage is a separate highlighted UI element")
-	verify(game.menu.subtitle.text.contains("CHOOSE RECIPE"), "Workshop has concise staged navigation")
-	verify(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Single pane recipe browse")
+	verify(game.menu.craft_step == "browse", "Station begins with browse/selected recipe")
+	verify(not game.menu.craft_stage_strip.visible and game.menu.craft_stage_strip.get_child_count() == 0, "No extra four-step breadcrumb controls")
+	verify(not game.menu.station_tabs.visible and game.menu.station_tabs.get_child_count() == 0, "Interacting with one object never displays five station tabs")
+	verify(game.menu.selected_station == "workbench" and game.menu.title.text.contains("WOODWORK"), "Actual nearby workbench determines the crafting header")
+	verify(game.menu.station_badge.visible and game.menu.station_badge.texture != null, "Independent woodwork icon represents the interacted station")
+	verify(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Recipes on the left; item details remain on the right")
 	var spear: Button = game.menu.recipes_list.get_node_or_null("Recipe_spear") as Button
-	verify(spear != null, "Forest Spear is a real item card")
+	verify(spear != null, "Forest Spear is a tappable recipe row")
 	if spear != null:
 		var name_text: Label = spear.get_child(1) as Label
-		verify(name_text != null and name_text.get_theme_color("font_color") == Color("#342416"), "Recipe names use dark ink against light parchment cards")
+		verify(name_text != null and name_text.get_theme_color("font_color") == Color("#342416"), "Item names remain legible on light parchment")
 		spear.pressed.emit()
-	verify(game.menu.craft_step == "detail" and not game.menu.left_scroll.visible, "Tap a card to inspect item")
-	game.menu._begin_prepare()
-	verify(game.menu.craft_step == "prepare", "Prepare step preserves real crafting state")
-	verify(game.menu.subtitle.text.contains("PREPARE MATERIALS"), "Preparation page communicates stage and purpose")
+	verify(game.menu.selected_id == "spear" and game.menu.left_scroll.visible, "Tapping a recipe shows details without leaving the list")
+	var craft_action: Button = game.menu.details.find_child("StationCraftAction", true, false) as Button
+	verify(craft_action != null and craft_action.text.contains("CRAFT"), "Station detail has one clear craft action instead of Prepare and Load tabs")
+	var close_crafting: Button = game.menu.dismiss_button
+	verify(close_crafting != null and not close_crafting.disabled and close_crafting.pressed.is_connected(game.menu.close_page), "Craft X is always reachable")
+	if close_crafting != null:
+		var red_circle: StyleBoxFlat = close_crafting.get_theme_stylebox("normal") as StyleBoxFlat
+		verify(red_circle != null and red_circle.corner_radius_top_left >= 50 and close_crafting.custom_minimum_size.x >= 54, "Close X is a large, red circular button")
 	game.menu.close_page()
 	verify(not game.menu.visible, "Close returns to gameplay without modifying inventory")
+	game.hero.global_position = game.station_positions["campfire"] + Vector3(0.0, 0.35, 0.0)
 	game.show_crafting()
-	game.menu._station_change("enchanting")
-	verify(game.menu.visible and game.menu.selected_station == "enchanting", "Enchanting station is navigable")
-	var enchant_tabs: HBoxContainer = game.menu.station_tabs
-	var other_tabs_enabled: bool = true
-	for tab in enchant_tabs.get_children():
-		if tab is Button and (tab as Button).text != "ENCHANT":
-			other_tabs_enabled = other_tabs_enabled and not (tab as Button).disabled
-	verify(other_tabs_enabled, "Enchanting does not disable other station tabs when no active craft")
-	var close_crafting: Button = game.menu.dismiss_button
-	verify(close_crafting != null and not close_crafting.disabled and close_crafting.pressed.is_connected(game.menu.close_page), "Dedicated close button always works on Enchanting")
+	verify(game.menu.selected_station == "campfire" and game.menu.title.text.contains("CAMPFIRE"), "Campfire interaction immediately switches correct station context")
+	verify(game.menu.station_badge.texture.resource_path.ends_with("/station_campfire.svg"), "Campfire gets its own visual icon")
+	verify(game.menu.recipes_list.get_node_or_null("Recipe_spear") == null, "Campfire shows food/tonic recipes, never unrelated workbench weapons")
 	var outside_tap := InputEventScreenTouch.new()
 	outside_tap.pressed = true
 	game.menu._dismiss_from_shade(outside_tap)
-	verify(not game.menu.visible, "Tapping outside Enchanting safely dismisses modal")
+	verify(not game.menu.visible, "Tapping outside campfire safely dismisses modal")
 	game.show_crafting()
-	game.menu._station_change("enchanting")
 	var android_back := InputEventAction.new()
 	android_back.action = "ui_cancel"
 	android_back.pressed = true
 	game.menu._input(android_back)
-	verify(not game.menu.visible, "Android Back/Escape closes Enchanting without trapping player")
+	verify(not game.menu.visible, "Android Back/Escape always closes station crafting")
 	game.queue_free()
 	await process_frame
 	print("APPROVED UI RESULT: %d failures" % failures)
