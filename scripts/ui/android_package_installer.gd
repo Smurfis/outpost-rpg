@@ -12,6 +12,7 @@ const APK_MIME := "application/vnd.android.package-archive"
 const STATE_FILE := "user://outpost_apk_download.cfg"
 
 var _android_runtime: Object
+var _java: Object
 var _manager: Object
 var _download_id: int = -1
 var _download_code: int = 0
@@ -49,8 +50,9 @@ func _ensure_android() -> bool:
 	if not OS.has_feature("Android"):
 		status_changed.emit("Built-in APK installation is only available in the Android app.")
 		return false
+	_java = Engine.get_singleton("JavaClassWrapper")
 	_android_runtime = Engine.get_singleton("AndroidRuntime")
-	if _android_runtime == null:
+	if _android_runtime == null or _java == null:
 		status_changed.emit("Android installer interface is unavailable in this build.")
 		return false
 	if _manager == null:
@@ -74,8 +76,8 @@ func start_download(url: String, channel: String, code: int) -> void:
 	_download_channel = channel
 	_download_code = code
 	var filename: String = url.get_file()
-	var Uri = JavaClassWrapper.wrap("android.net.Uri")
-	var Request = JavaClassWrapper.wrap("android.app.DownloadManager$Request")
+	var Uri = _java.wrap("android.net.Uri")
+	var Request = _java.wrap("android.app.DownloadManager$Request")
 	var req = Request.Request(Uri.parse(url))
 	req.setTitle("Outpost " + channel.capitalize() + " " + str(code))
 	req.setDescription("Outpost official GitHub release APK")
@@ -85,7 +87,7 @@ func start_download(url: String, channel: String, code: int) -> void:
 	# App-scoped external Download directory requires no unrestricted file access.
 	req.setDestinationInExternalFilesDir(_android_runtime.getApplicationContext(), "Download", filename)
 	_download_id = int(_manager.enqueue(req))
-	if _download_id <= 0 or JavaClassWrapper.get_exception() != null:
+	if _download_id <= 0 or _java.get_exception() != null:
 		_download_id = -1
 		status_changed.emit("Unable to start the system download. Try again.")
 		return
@@ -119,7 +121,7 @@ func _process(delta: float) -> void:
 	_poll_elapsed = 0.0
 	if _manager == null:
 		return
-	var Query = JavaClassWrapper.wrap("android.app.DownloadManager$Query")
+	var Query = _java.wrap("android.app.DownloadManager$Query")
 	var q = Query.Query()
 	q.setFilterById(PackedInt64Array([_download_id]))
 	var cursor = _manager.query(q)
@@ -158,13 +160,13 @@ func install_downloaded() -> void:
 	if not _ensure_android():
 		return
 	var activity: Object = _android_runtime.getActivity()
-	var Intent = JavaClassWrapper.wrap("android.content.Intent")
-	var Uri = JavaClassWrapper.wrap("android.net.Uri")
+	var Intent = _java.wrap("android.content.Intent")
+	var Uri = _java.wrap("android.net.Uri")
 	var pm: Object = activity.getPackageManager()
 	if pm != null and not bool(pm.canRequestPackageInstalls()):
 		# Android 8+ grants unknown-source installation per app. We only send
 		# the user to the official settings UI after tapping INSTALL.
-		var Settings = JavaClassWrapper.wrap("android.provider.Settings")
+		var Settings = _java.wrap("android.provider.Settings")
 		var permission_intent = Intent.Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
 		permission_intent.setData(Uri.parse("package:" + str(activity.getPackageName())))
 		activity.startActivity(permission_intent)
@@ -174,7 +176,7 @@ func install_downloaded() -> void:
 	intent.setDataAndType(_ready_uri, APK_MIME)
 	intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 	activity.startActivity(intent)
-	if JavaClassWrapper.get_exception() != null:
+	if _java.get_exception() != null:
 		status_changed.emit("Android couldn't open the installer. Try your system Downloads app.")
 	else:
 		status_changed.emit("Android installer opened. Approve the APK there; Outpost does not install silently.")
