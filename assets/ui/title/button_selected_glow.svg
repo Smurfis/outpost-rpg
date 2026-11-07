@@ -1,12 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="528" height="144" viewBox="0 0 528 144">
-<!-- A feathered aura only: NO oval/gold stroke, button border or hard edge. -->
+<!-- The ONLY title selection light: no gold oval, rectangular stroke or rays in button PNGs. -->
 <defs>
 <radialGradient id="aura" cx="50%" cy="50%" r="50%" gradientTransform="translate(0,0.04) scale(1,0.93)">
-<stop offset="0" stop-color="#ffecc6" stop-opacity=".22"/>
-<stop offset=".35" stop-color="#ffd77b" stop-opacity=".13"/>
-<stop offset=".70" stop-color="#ffcc57" stop-opacity=".045"/>
-<stop offset="1" stop-color="#ffd76f" stop-opacity="0"/>
+<stop offset="0" stop-color="#fff2d1" stop-opacity=".20"/>
+<stop offset=".30" stop-color="#ffdb87" stop-opacity=".13"/>
+<stop offset=".65" stop-color="#f7c868" stop-opacity=".045"/>
+<stop offset="1" stop-color="#f7c868" stop-opacity="0"/>
 </radialGradient>
 </defs>
 <rect width="528" height="144" fill="url(#aura)"/>
+<!-- Three quiet, separate glints on each side FOLLOW the selected control. -->
+<g stroke-linecap="round" fill="none">
+<path d="M12 48 L30 59 M6 76 L27 76 M12 104 L30 93 M516 48 L498 59 M522 76 L501 76 M516 104 L498 93" stroke="#ffe3a4" stroke-width="3.2" opacity=".30"/>
+<path d="M13 49 L27 58 M8 76 L25 76 M13 103 L27 94 M515 49 L501 58 M520 76 L503 76 M515 103 L501 94" stroke="#fff9eb" stroke-width="1.25" opacity=".35"/>
+</g>
 </svg>
