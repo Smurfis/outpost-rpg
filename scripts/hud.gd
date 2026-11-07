@@ -974,9 +974,36 @@ func _make_camera_drag_hint() -> void:
 
 func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	# Reserve joystick, hotbar, co-op, quest, top HUD and smart-action areas.
-	# Central visible world accepts drag even while movement uses finger 0.
-	return pos.x >= screen.x * (0.38 if floating_joystick_enabled else 0.26) and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
+	# Earlier builds allowed orbit only in a narrow central rectangle. On
+	# landscape phones that excluded much of the *visible* 3D playfield.
+	# Use the whole unobstructed world, but never steal UI or joystick taps.
+	if pos.x < screen.x * 0.20 or pos.x > screen.x * 0.985:
+		return false
+	if pos.y < screen.y * 0.14 or pos.y > screen.y * 0.93:
+		return false
+	if floating_joystick_enabled and _floating_zone(pos):
+		return false
+	var blocked: Array[Control] = [
+		wallet_bag, wallet_collapse, quest_toggle, menu_button,
+		smart_button, torch_button, joystick, top_menu_panel,
+		quick_tray, smart_tray, quest_detail_back
+	]
+	for item in blocked:
+		if item != null and item.is_visible_in_tree() and item.get_global_rect().grow(9.0).has_point(pos):
+			return false
+	for key in quick_buttons:
+		var action: Control = quick_buttons[key] as Control
+		if action != null and action.is_visible_in_tree() and action.get_global_rect().grow(9.0).has_point(pos):
+			return false
+	for action in top_menu_actions:
+		if action != null and action.is_visible_in_tree() and action.get_global_rect().grow(9.0).has_point(pos):
+			return false
+	return true
+
+func _camera_drag_motion(event: InputEventScreenDrag) -> float:
+	# Some Android devices report relative but zero screen_relative. Respect
+	# whichever real finger delta exists; never infer it from minimap movement.
+	return event.screen_relative.x if absf(event.screen_relative.x) > 0.001 else event.relative.x
 
 
 func _build_quick_tray() -> void:
@@ -1418,7 +1445,9 @@ func _input(event: InputEvent) -> void:
 		if not camera_hold_ready and event.position.distance_to(camera_hold_origin) >= 16.0:
 			camera_hold_ready = true
 		if camera_hold_ready:
-			game.drag_camera(event.screen_relative.x)
+			var dx: float = _camera_drag_motion(event)
+			if absf(dx) > 0.001:
+				game.drag_camera(dx)
 		return
 	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):
