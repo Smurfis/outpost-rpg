@@ -29,6 +29,10 @@ var quick_selected: int = -1
 var quick_ignore_mouse_until: int = 0
 var quick_icon_cache: Dictionary = {}
 var hero_detail: Label
+var hero_status_frame: Panel
+var hero_portrait_frame: Panel
+var hero_portrait_art: TextureRect
+var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
 var clock_label: Label
@@ -125,8 +129,11 @@ func _ready() -> void:
 	# the gold sigil is an independent icon; equipment retains the real 3D avatar.
 	var status_frame: Panel = _panel(0.018, 0.019, 0.279, 0.139)
 	status_frame.name = "HeroStatusFrame"
+	hero_status_frame = status_frame
+	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.65, 0.42))
 	var sigil := TextureRect.new()
 	sigil.name = "OutpostSigil"
+	hero_sigil = sigil
 	sigil.texture = load("res://assets/ui/icons/outpost_sigil.svg") as Texture2D
 	sigil.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sigil.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -138,9 +145,11 @@ func _ready() -> void:
 	# emblem remains in the corner as a crest, not a substitute for the hero.
 	var portrait_back: Panel = _panel(0.022, 0.027, 0.089, 0.131)
 	portrait_back.name = "HeroPortraitFrame"
-	portrait_back.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+	hero_portrait_frame = portrait_back
+	portrait_back.add_theme_stylebox_override("panel", _hud_glass(0.26, 0.53))
 	var hero_portrait := TextureRect.new()
 	hero_portrait.name = "HeroPortrait"
+	hero_portrait_art = hero_portrait
 	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v2.svg") as Texture2D
 	hero_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	hero_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -182,6 +191,7 @@ func _ready() -> void:
 	# Other holdings and carry weight live in the bag, not in a permanent HUD.
 	wallet_frame = _panel(0.302, 0.018, 0.710, 0.087)
 	wallet_frame.name = "ResourceQuickChips"
+	wallet_frame.add_theme_stylebox_override("panel", _hud_glass(0.47, 0.30))
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "‹"
@@ -221,6 +231,7 @@ func _ready() -> void:
 	# announcing the finished starter quest.
 	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
+	quest_frame.add_theme_stylebox_override("panel", _hud_glass(0.53, 0.28))
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
@@ -452,8 +463,8 @@ func _apply_wallet_layout() -> void:
 	wallet_resource_icon.visible = wallet_open
 	wallet_resource_count.visible = wallet_open
 	wallet_collapse.text = "‹" if wallet_open else "›"
-	_anchors(wallet_frame, 0.302, 0.018, 0.710 if wallet_open else 0.410, 0.087)
-	_anchors(wallet_bag, 0.638 if wallet_open else 0.349, 0.019, 0.699 if wallet_open else 0.405, 0.089)
+	# No %-width panels on 20:9: the wallet is a fixed-size glass chip.
+	_layout_player_chrome()
 
 func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
@@ -858,6 +869,85 @@ func _layout_touch_hud() -> void:
 	if radial_level != null:
 		_place_px(radial_level, screen, Rect2(maxf(182.0, 186.0 * scale),
 				screen.y - 86.0 * scale, 83.0 * scale, 83.0 * scale))
+	_layout_player_chrome_for_size(screen, scale)
+
+func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
+	# The actual UI art stays transparent and separately editable; this is
+	# only the slim backing to keep health/text legible over bright terrain.
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.105, 0.085, 0.11, opacity)
+	style.border_color = Color(0.84, 0.70, 0.48, border_alpha)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(0)
+	style.anti_aliasing = true
+	return style
+
+func _layout_player_chrome() -> void:
+	if root == null or hero_status_frame == null:
+		return
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	if screen.x <= 0.0 or screen.y <= 0.0:
+		return
+	var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
+	_layout_player_chrome_for_size(screen, scale)
+
+func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
+	# Preserve the approved top-left portrait/HP composition at BOTH 16:9
+	# and 20:9. Previous %-anchors stretched the status and wallet by hundreds
+	# of pixels on modern Android landscapes.
+	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
+		return
+	var unit: float = scale
+	var rects: Dictionary = {
+		"status": Rect2(16, 15, 338, 94),
+		"portrait_frame": Rect2(22, 21, 76, 78),
+		"portrait": Rect2(27, 25, 66, 70),
+		"sigil": Rect2(77, 79, 26, 25),
+		"name": Rect2(110, 22, 230, 25),
+		"health": Rect2(110, 51, 229, 21),
+		"health_text": Rect2(111, 52, 227, 19),
+		"weapon": Rect2(111, 80, 231, 22),
+		"wallet": Rect2(374, 16, 312 if wallet_open else 101, 55),
+		"wallet_toggle": Rect2(379, 20, 40, 47),
+		"coins": Rect2(422, 22, 99, 42),
+		"resource_icon": Rect2(524, 25, 29, 34),
+		"resource_count": Rect2(555, 22, 86, 42),
+		"bag": Rect2(640 if wallet_open else 422, 20, 44, 47),
+		"weight": Rect2(17, 112, 352, 24),
+		"quest_frame": Rect2(16, 143, 347, 52),
+		"quest_button": Rect2(23, 151, 109, 37),
+		"quest": Rect2(140, 150, 216, 38),
+		"journal_frame": Rect2(19, 202, 375, 143),
+		"journal_text": Rect2(34, 215, 345, 119)
+	}
+	var pairs: Dictionary = {
+		"status": hero_status_frame,
+		"portrait_frame": hero_portrait_frame,
+		"portrait": hero_portrait_art,
+		"sigil": hero_sigil,
+		"name": status,
+		"health": health_bar,
+		"health_text": health_numbers,
+		"weapon": hero_detail,
+		"wallet": wallet_frame,
+		"wallet_toggle": wallet_collapse,
+		"coins": wallet_coin,
+		"resource_icon": wallet_resource_icon,
+		"resource_count": wallet_resource_count,
+		"bag": wallet_bag,
+		"weight": bag_weight_label,
+		"quest_frame": quest_frame,
+		"quest_button": quest_toggle,
+		"quest": quest,
+		"journal_frame": quest_detail_back,
+		"journal_text": quest_detail
+	}
+	for key in pairs:
+		var control: Control = pairs[key] as Control
+		if control != null:
+			var bounds: Rect2 = rects[key]
+			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
