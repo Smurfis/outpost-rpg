@@ -4,8 +4,6 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
-const PORTRAIT_RING = preload("res://scripts/ui/hero_portrait_ring.gd")
-const PORTRAIT_MASK = preload("res://assets/ui/shaders/hero_portrait_circle.gdshader")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -34,7 +32,6 @@ var hero_detail: Label
 var hero_status_frame: Panel
 var hero_portrait_frame: Panel
 var hero_portrait_art: TextureRect
-var hero_portrait_ring: Control
 var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
@@ -133,8 +130,7 @@ func _ready() -> void:
 	var status_frame: Panel = _panel(0.018, 0.019, 0.279, 0.139)
 	status_frame.name = "HeroStatusFrame"
 	hero_status_frame = status_frame
-	# Keep the hit/layout control but remove ALL grey card fill and outlines.
-	status_frame.add_theme_stylebox_override("panel", SKIN.flat("transparent"))
+	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.65, 0.42))
 	var sigil := TextureRect.new()
 	sigil.name = "OutpostSigil"
 	hero_sigil = sigil
@@ -150,22 +146,17 @@ func _ready() -> void:
 	var portrait_back: Panel = _panel(0.022, 0.027, 0.089, 0.131)
 	portrait_back.name = "HeroPortraitFrame"
 	hero_portrait_frame = portrait_back
-	portrait_back.add_theme_stylebox_override("panel", SKIN.flat("transparent"))
+	portrait_back.add_theme_stylebox_override("panel", _hud_glass(0.26, 0.53))
 	var hero_portrait := TextureRect.new()
 	hero_portrait.name = "HeroPortrait"
 	hero_portrait_art = hero_portrait
 	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v2.svg") as Texture2D
-	var mask := ShaderMaterial.new()
-	mask.shader = PORTRAIT_MASK
-	hero_portrait.material = mask
 	hero_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	hero_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	hero_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	hero_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hero_portrait)
 	_anchors(hero_portrait, 0.026, 0.031, 0.085, 0.126)
-	hero_portrait_ring = PORTRAIT_RING.new()
-	root.add_child(hero_portrait_ring)
 	root.move_child(sigil, root.get_child_count() - 1)
 	status = _label("Adventurer", 18, Color("#fff1c7"), 0.094, 0.026, 0.269, 0.058)
 	status.clip_text = true
@@ -173,7 +164,6 @@ func _ready() -> void:
 	health_bar = _meter(0.094, 0.061, 0.269, 0.090, Color("#d74c43"))
 	health_numbers = _label("100 / 100 HP", 15, Color("#fff1db"), 0.095, 0.062, 0.267, 0.087)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_style_rpg_meter(health_bar, Color("#df454c"), Color(0.13, 0.025, 0.04, 0.60))
 	mana_bar = _meter(0.065, 0.089, 0.235, 0.110, Color("#417cdb"))
 	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
 	mana_numbers = _label("MP —", 13, Color("#d8e6ff"), 0.070, 0.089, 0.230, 0.110)
@@ -181,10 +171,8 @@ func _ready() -> void:
 	# Mana is not implemented yet: never dedicate a visible line to "MP —".
 	mana_bar.visible = false
 	mana_numbers.visible = false
-	_style_rpg_meter(mana_bar, Color("#4f95ee"), Color(0.02, 0.08, 0.21, 0.60))
 	xp_bar = _meter(0.170, 0.974, 0.801, 0.990, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
-	_style_rpg_meter(xp_bar, Color("#ac70ea"), Color(0.10, 0.05, 0.16, 0.70), true)
 	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.032, 0.960, 0.131, 0.993)
 	xp_level_badge.name = "CharacterLevelBadge"
 	xp_level_badge.visible = false  # Level appears inside the separate ornate radial frame.
@@ -203,7 +191,7 @@ func _ready() -> void:
 	# Other holdings and carry weight live in the bag, not in a permanent HUD.
 	wallet_frame = _panel(0.302, 0.018, 0.710, 0.087)
 	wallet_frame.name = "ResourceQuickChips"
-	wallet_frame.add_theme_stylebox_override("panel", SKIN.flat("transparent"))
+	wallet_frame.add_theme_stylebox_override("panel", _hud_glass(0.47, 0.30))
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "‹"
@@ -211,7 +199,6 @@ func _ready() -> void:
 	root.add_child(wallet_collapse)
 	_anchors(wallet_collapse, 0.304, 0.023, 0.340, 0.082)
 	wallet_collapse.pressed.connect(_toggle_wallet)
-	_style_text_only_button(wallet_collapse)
 	wallet_coin = _label("◈ 0", 17, SKIN.GOLD, 0.364, 0.029, 0.460, 0.079)
 	wallet_coin.name = "WalletCoinCount"
 	wallet_resource_icon = TextureRect.new()
@@ -244,7 +231,7 @@ func _ready() -> void:
 	# announcing the finished starter quest.
 	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
-	quest_frame.add_theme_stylebox_override("panel", SKIN.flat("transparent"))
+	quest_frame.add_theme_stylebox_override("panel", _hud_glass(0.53, 0.28))
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
@@ -252,7 +239,6 @@ func _ready() -> void:
 	root.add_child(quest_toggle)
 	_anchors(quest_toggle, 0.028, 0.174, 0.117, 0.222)
 	quest_toggle.pressed.connect(_toggle_quest)
-	_style_text_only_button(quest_toggle)
 	quest = _label("Gather wood and stone", 16, Color("#ffe6bb"), 0.127, 0.173, 0.334, 0.224)
 	quest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -842,15 +828,12 @@ func _layout_touch_hud() -> void:
 	# leave distinct hit targets even with two fingers on a small phone.
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
-	# Tight right-side combat arc: top skill is almost centered above
-	# Interact, the other two move right by 72px, ALL physical touch hitboxes
-	# remain separated from Interact and the expanded minimap flyout.
 	var combat: Array[Vector3] = [
-		Vector3(127.0, 264.0, 37.0), # skill 1: above Interact, not on top of its hitbox
-		Vector3(214.0, 181.0, 37.0), # skill 2: tighter middle-left of Interact
-		Vector3(214.0,  99.0, 37.0), # skill 3: below skill 2, nearer Interact
-		Vector3(531.0,  82.0, 32.0), # Heal left of Torch
-		Vector3(613.0,  82.0, 32.0)  # Potion left of Heal
+		Vector3(202.0, 243.0, 37.0), # skill 1: near Interact, clear of menu
+		Vector3(286.0, 186.0, 37.0), # skill 2: 10px horizontal gap to skill 1
+		Vector3(286.0, 102.0, 37.0), # skill 3: 10px vertical gap to skill 2
+		Vector3(531.0, 82.0, 32.0),  # heal/food immediately LEFT of Torch
+		Vector3(613.0, 82.0, 32.0)   # potion immediately LEFT of Heal
 	]
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	for index in range(keys.size()):
@@ -874,49 +857,19 @@ func _layout_touch_hud() -> void:
 			screen.x - edge - tool_width,
 			screen.y - 168.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
 			tool_width, tool_height))
-	# Actual character XP occupies the FULL physical width right at the
-	# screen bottom: no unused 10px black/grey margin or shortened ribbon.
-	# The independent level jewel overlays it near the joystick's right edge.
-	var xp_thickness: float = 12.0 * scale
-	_place_px(xp_bar, screen, Rect2(0.0, screen.y - xp_thickness, screen.x, xp_thickness))
-	_place_px(xp_level_label, screen, Rect2(screen.x * 0.38,
-			screen.y - 34.0 * scale, screen.x * 0.24, 22.0 * scale))
+	# Keep XP readable but reduce the enormous opaque bottom ribbon.
+	_place_px(xp_bar, screen, Rect2(screen.x * 0.17,
+			screen.y - 23.0 * scale, screen.x * 0.61, 13.0 * scale))
+	_place_px(xp_level_label, screen, Rect2(screen.x * 0.20,
+			screen.y - 29.0 * scale, screen.x * 0.55, 22.0 * scale))
 	_place_px(xp_level_badge, screen, Rect2(edge,
 			screen.y - 31.0 * scale, 105.0 * scale, 24.0 * scale))
+	# The separate ornate level jewel attaches to the BOTTOM XP bar.
+	# Keep it clear of the joystick (fixed x=26..174 at native landscape).
 	if radial_level != null:
-		var jewel_size: float = 83.0 * scale
 		_place_px(radial_level, screen, Rect2(maxf(182.0, 186.0 * scale),
-				screen.y - jewel_size, jewel_size, jewel_size))
+				screen.y - 86.0 * scale, 83.0 * scale, 83.0 * scale))
 	_layout_player_chrome_for_size(screen, scale)
-
-func _style_rpg_meter(bar: ProgressBar, fill_color: Color, background_color: Color, screen_edge: bool = false) -> void:
-	# Modern RPG bars: tinted dark TRACK ONLY, never a full rectangular
-	# player card. XP uses square corners to sit perfectly flush with screen.
-	var background := StyleBoxFlat.new()
-	background.bg_color = background_color
-	background.set_border_width_all(0)
-	background.set_corner_radius_all(0 if screen_edge else 3)
-	var foreground := StyleBoxFlat.new()
-	foreground.bg_color = fill_color
-	foreground.set_border_width_all(0)
-	foreground.set_corner_radius_all(0 if screen_edge else 3)
-	bar.add_theme_stylebox_override("background", background)
-	bar.add_theme_stylebox_override("fill", foreground)
-
-func _style_text_only_button(button: Button) -> void:
-	# Functional 40px-plus tap targets without a wood/grey card showing
-	# underneath the world. Hover gives only a tiny translucent tint.
-	var clear := SKIN.flat("transparent")
-	var hovered := StyleBoxFlat.new()
-	hovered.bg_color = Color(0.24, 0.16, 0.08, 0.23)
-	hovered.set_border_width_all(0)
-	hovered.set_corner_radius_all(8)
-	for state in ["normal", "disabled", "focus"]:
-		button.add_theme_stylebox_override(state, clear)
-	button.add_theme_stylebox_override("hover", hovered)
-	button.add_theme_stylebox_override("pressed", hovered)
-	button.add_theme_color_override("font_color", Color("#f6dc9e"))
-	button.add_theme_color_override("font_hover_color", Color("#fff2cc"))
 
 func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
 	# The actual UI art stays transparent and separately editable; this is
@@ -949,8 +902,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 338, 94),
 		"portrait_frame": Rect2(22, 21, 76, 78),
-		"portrait": Rect2(27, 26, 66, 66),
-		"portrait_ring": Rect2(21, 20, 79, 79),
+		"portrait": Rect2(27, 25, 66, 70),
 		"sigil": Rect2(77, 79, 26, 25),
 		"name": Rect2(110, 22, 230, 25),
 		"health": Rect2(110, 51, 229, 21),
@@ -973,7 +925,6 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"status": hero_status_frame,
 		"portrait_frame": hero_portrait_frame,
 		"portrait": hero_portrait_art,
-		"portrait_ring": hero_portrait_ring,
 		"sigil": hero_sigil,
 		"name": status,
 		"health": health_bar,
@@ -1740,8 +1691,6 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		status.text = player_display_name
 		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
-	if hero_portrait_ring != null:
-		hero_portrait_ring.call("update_health", health_bar.value / 100.0)
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:

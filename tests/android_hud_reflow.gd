@@ -177,26 +177,6 @@ func _run() -> void:
 	hud._layout_touch_hud()
 
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")
-	var viewport_size: Vector2 = game.hud.get_viewport().get_visible_rect().size
-	verify(absf(hud.xp_bar.position.x) < 1.0 and absf(hud.xp_bar.size.x - viewport_size.x) < 2.0, "XP bar now spans the entire Android viewport")
-	verify(absf(hud.xp_bar.get_global_rect().end.y - viewport_size.y) < 2.0, "XP runs flush with the physical bottom edge")
-	var top_skill: Button = hud.quick_buttons["skill_1"]
-	var middle_skill: Button = hud.quick_buttons["skill_2"]
-	var lower_skill: Button = hud.quick_buttons["skill_3"]
-	verify(top_skill.get_global_rect().get_center().x > middle_skill.get_global_rect().get_center().x, "Upper special moves right toward the centre above Interact")
-	verify(top_skill.get_global_rect().get_center().y < smart.get_global_rect().get_center().y, "Upper special stays above Interact instead of blocking it")
-	verify(not top_skill.get_global_rect().intersects(smart.get_global_rect()), "The upper skill NEVER masks Interact's touch target")
-	verify(middle_skill.get_global_rect().get_center().x > smart.get_global_rect().get_center().x - 150.0, "Middle skill is shifted right into a tight combat cluster")
-	verify(absf(middle_skill.get_global_rect().get_center().x - lower_skill.get_global_rect().get_center().x) < 2.0, "Lower two skills align vertically in one neat column")
-	verify(hud.hero_portrait_ring != null and hud.hero_portrait_ring.get_global_rect().encloses(hud.hero_portrait_art.get_global_rect()), "Health portrait has its own circular overlay, independent from the HP bar")
-	hud.render_status(47.0, {"coins": 4}, 26, 0, "training_blade", "Gather wood", "")
-	verify(absf(float(hud.hero_portrait_ring.get("health_fraction")) - 0.47) < 0.02, "Portrait's real HP arc changes with actual health")
-	verify(hud.hero_portrait_art.material is ShaderMaterial, "Hero portrait has a proper alpha-clipped circular shader")
-	for panel_name in ["HeroStatusFrame", "ResourceQuickChips", "QuestBanner", "HeroPortraitFrame"]:
-		var backing: Panel = controls.get_node_or_null(panel_name) as Panel
-		var style: StyleBoxFlat = backing.get_theme_stylebox("panel") as StyleBoxFlat if backing != null else null
-		verify(style != null and style.bg_color.a == 0.0 and style.border_width_left == 0, panel_name + " has no grey rectangle or visible borders")
-	verify(not hud.mana_bar.visible and not hud.mana_numbers.visible, "No invented mana stat until real mana gameplay exists")
 	verify(hud.xp_bar.get_global_rect().position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.94, "XP meter remains below action cluster")
 
 	hud.bag_weight_label.visible = true

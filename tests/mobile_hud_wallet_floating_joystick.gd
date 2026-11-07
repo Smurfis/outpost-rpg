@@ -30,7 +30,7 @@ func _run() -> void:
 	verify(bag != null, "Live bag action attached to wallet")
 	verify(hud_root.get_node_or_null("CharacterLevelBadge") != null, "Level badge is left of screen-wide XP meter")
 	var badge: Label = hud_root.get_node_or_null("CharacterLevelBadge") as Label
-	verify(badge != null and absf(hud.xp_bar.position.x) < 1.0, "Character XP begins at the leftmost pixel; the ornate level jewel overlays the bar")
+	verify(badge != null and hud.xp_bar.position.x > badge.position.x, "XP level begins left of progress bar")
 	verify(hud_root.get_node_or_null("LastTrackedResourceCount") != null, "One tracked resource instead of four permanent materials")
 	hud.render_status(83.0, {"wood": 8, "stone": 5, "coins": 147}, 40, 0, "training_blade", "Find iron", "")
 	verify(hud.wallet_coin.text.contains("147"), "Wallet shows the actual currency owned")
