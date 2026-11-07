@@ -34,6 +34,10 @@ func _run() -> void:
 	verify(panel.inventory_grid.columns >= 4 and panel.inventory_grid.columns <= 6, "Mobile grid uses 4-6 columns")
 	verify(panel.inventory_grid.get_node_or_null("Item_wood") != null, "Real material tile appears")
 	verify(panel.inventory_grid.get_node_or_null("Item_spear") != null, "Real gear tile appears")
+	var spear_tile: Button = panel.inventory_grid.get_node_or_null("Item_spear") as Button
+	verify(spear_tile != null and spear_tile.tooltip_text.contains("Weight") and spear_tile.tooltip_text.contains("Tap to inspect"), "Weapons expose concise tooltip on mouse hover; touch still opens details")
+	var inventory_x: Button = panel.window.find_child("InventoryCloseButton", true, false) as Button
+	verify(inventory_x != null and inventory_x.get_theme_stylebox("normal") is StyleBoxFlat and (inventory_x.get_theme_stylebox("normal") as StyleBoxFlat).corner_radius_top_left >= 50, "Inventory has matching large red circular close button")
 	verify(panel.bag_meter.value > 0.0 and panel.bag_meter.max_value == game.bag_capacity(), "Capacity meter displays existing carry system")
 	verify(panel.equipment_body.find_child("EquipmentSlot_weapon", true, false) != null, "Character equipment slots are actionable")
 	panel._change_filter("consumable")
