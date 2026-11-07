@@ -68,6 +68,10 @@ func _run() -> void:
 		check(scroll_panel != null and not scroll_panel.visible, "Changelog scroll starts collapsed")
 		screen._toggle_changelog()
 		check(scroll_panel != null and scroll_panel.visible and scroll_panel.find_child("ChangelogBody", true, false) != null, "Changelog opens a scrollable reading panel")
+		var red_close: Button = scroll_panel.find_child("ChangelogCloseButton", true, false) as Button
+		check(scroll_panel.clip_contents and scroll_panel.get_theme_stylebox("panel") is StyleBoxFlat, "Changelog contents are clipped inside one contained modal")
+		check(red_close != null and red_close.get_theme_stylebox("normal") is StyleBoxFlat and (red_close.get_theme_stylebox("normal") as StyleBoxFlat).corner_radius_top_left >= 50, "Changelog uses the same large red circular close control")
+		check(red_close != null and red_close.pressed.is_connected(screen._toggle_changelog), "Changelog close X is a functional action")
 		screen._toggle_changelog()
 		check(scroll_panel != null and not scroll_panel.visible, "Changelog can be dismissed")
 		var selected_glow: TextureRect = screen.get_node_or_null("Artboard/SelectedTitleButtonGlow") as TextureRect
