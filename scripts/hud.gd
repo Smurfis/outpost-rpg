@@ -14,6 +14,11 @@ var camera_drag_finger: int = -1
 var camera_hold_seconds: float = 0.0
 var camera_hold_ready: bool = false
 var camera_hold_origin: Vector2 = Vector2.ZERO
+var station_touch_finger: int = -1
+var station_touch_name: String = ""
+var station_touch_start: Vector2 = Vector2.ZERO
+var station_mouse_candidate: String = ""
+var station_mouse_start: Vector2 = Vector2.ZERO
 var xp_level_label: Label
 var quick_buttons: Dictionary = {}
 var quick_hold_finger: int = -1
@@ -802,17 +807,20 @@ func _layout_touch_hud() -> void:
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
 	var map_bottom: float = map_top + map_side
 	var toggle_side: float = 52.0 * scale
+	# MENU belongs up at the map's top-left shoulder, not detached
+	# beneath the clock. Leave the circular minimap unobstructed.
+	var map_left: float = screen.x - edge - map_side
 	_radial_px(menu_button, screen,
-			Vector2(screen.x - edge - toggle_side * 0.5, map_bottom + 37.0 * scale),
+			Vector2(map_left - 32.0 * scale, map_top + toggle_side * 0.5),
 			toggle_side * 0.5)
 	_place_px(clock_label, screen, Rect2(screen.x - edge - 205.0 * scale,
 			map_bottom + 12.0 * scale, 139.0 * scale, 44.0 * scale))
 	# Three columns, two rows, one logical menu group. Buttons are modest
 	# rectangles rather than distorted ovals and do not cover the ability arc.
 	var menu_width: float = 314.0 * scale
-	var menu_top: float = map_bottom + 73.0 * scale
+	var menu_top: float = map_top + 60.0 * scale
 	var menu_height: float = 114.0 * scale
-	var menu_left: float = screen.x - edge - menu_width
+	var menu_left: float = map_left - menu_width - 7.0 * scale
 	_place_px(top_menu_panel, screen, Rect2(menu_left, menu_top, menu_width, menu_height))
 	var gap: float = 6.0 * scale
 	var col_width: float = (menu_width - gap * 4.0) / 3.0
@@ -829,9 +837,9 @@ func _layout_touch_hud() -> void:
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(202.0, 243.0, 37.0), # skill 1: near Interact, clear of menu
-		Vector3(286.0, 186.0, 37.0), # skill 2: 10px horizontal gap to skill 1
-		Vector3(286.0, 102.0, 37.0), # skill 3: 10px vertical gap to skill 2
+		Vector3(126.0, 287.0, 37.0), # POWER centered above CRAFT/INTERACT
+		Vector3(205.0, 204.0, 37.0), # CLEAVE compact to the left
+		Vector3(205.0, 121.0, 37.0), # SUNDER below CLEAVE
 		Vector3(531.0, 82.0, 32.0),  # heal/food immediately LEFT of Torch
 		Vector3(613.0, 82.0, 32.0)   # potion immediately LEFT of Heal
 	]
@@ -870,6 +878,16 @@ func _layout_touch_hud() -> void:
 		_place_px(radial_level, screen, Rect2(maxf(182.0, 186.0 * scale),
 				screen.y - 86.0 * scale, 83.0 * scale, 83.0 * scale))
 	_layout_player_chrome_for_size(screen, scale)
+	# The bottom-centre prompt was covering consumables and character XP.
+	# Keep short notices together in a compact top-centre stack instead.
+	var info_width: float = minf(352.0 * scale, screen.x * 0.34)
+	var info_left: float = (screen.x - info_width) * 0.5
+	var info_y: float = maxf(148.0 * scale, screen.y * 0.21)
+	_place_px(context_prompt_frame, screen, Rect2(info_left, info_y, info_width, 43.0 * scale))
+	_place_px(hint, screen, Rect2(info_left + 9.0 * scale, info_y + 3.0 * scale, info_width - 18.0 * scale, 37.0 * scale))
+	var toast_y: float = info_y - 57.0 * scale
+	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 45.0 * scale))
+	_place_px(toast_label, screen, Rect2(info_left + 9.0 * scale, toast_y + 3.0 * scale, info_width - 18.0 * scale, 38.0 * scale))
 
 func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
 	# The actual UI art stays transparent and separately editable; this is
