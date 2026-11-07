@@ -684,7 +684,7 @@ func _build_changelog_scroll() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	stack.add_child(scroll)
-		var details := _menu_label("WHAT TO TEST  •  ALPHA\n\n[1] CRAFTING: Open near a workbench, change stations, close with X, Back or the new top-left BACK TO GAME button.\n\n[2] CONTROLS: Try fixed/dynamic thumbstick, sticky movement STOP, second-finger camera while walking.\n\n[3] INVENTORY: MENU -> BAG, filter items, inspect, close.\n\n[4] TITLE: Select Play/Continue/Settings; Quit should highlight in white only.\n\nRECENT ALPHA FEATURES\nCube World-style chibi/voxel foliage, round terrain minimap, Albion-inspired bag/equipment, transparent hero portrait, radial XP jewel.\n\nNOT FINISHED\nArt-accurate HUD mockup replacement, physical Android visuals and full gamepad accessibility.", 17)
+	var details := _menu_label("WHAT TO TEST  •  ALPHA\n\n[1] CRAFTING: Open near a workbench, change stations, close with X, Back or the new top-left BACK TO GAME button.\n\n[2] CONTROLS: Try fixed/dynamic thumbstick, sticky movement STOP, second-finger camera while walking.\n\n[3] INVENTORY: MENU -> BAG, filter items, inspect, close.\n\n[4] TITLE: Select Play/Continue/Settings; Quit should highlight in white only.\n\nRECENT ALPHA FEATURES\nCube World-style chibi/voxel foliage, round terrain minimap, Albion-inspired bag/equipment, transparent hero portrait, radial XP jewel.\n\nNOT FINISHED\nArt-accurate HUD mockup replacement, physical Android visuals and full gamepad accessibility.", 17)
 	details.name = "ChangelogBody"
 	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
