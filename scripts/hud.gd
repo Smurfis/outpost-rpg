@@ -1600,6 +1600,41 @@ func _input(event: InputEvent) -> void:
 		return
 	if _handle_quick_input(event):
 		return
+	# Detect a short tap on a projected Crafting Station; long drags still
+	# orbit the camera. Never steal the fixed/dynamic thumbstick or UI taps.
+	if event is InputEventScreenTouch and game != null:
+		if event.pressed and station_touch_finger < 0 and event.index != finger and _can_start_camera_drag(event.position):
+			var candidate: String = game.station_at_screen(event.position)
+			if not candidate.is_empty():
+				station_touch_finger = event.index
+				station_touch_name = candidate
+				station_touch_start = event.position
+		elif not event.pressed and event.index == station_touch_finger:
+			var station_name: String = station_touch_name
+			var is_tap: bool = event.position.distance_to(station_touch_start) < 17.0
+			station_touch_finger = -1
+			station_touch_name = ""
+			if is_tap and not station_name.is_empty():
+				camera_drag_finger = -1
+				camera_hold_ready = false
+				game.visit_crafting_station(station_name)
+				get_viewport().set_input_as_handled()
+				return
+	elif event is InputEventScreenDrag and event.index == station_touch_finger:
+		if event.position.distance_to(station_touch_start) >= 17.0:
+			station_touch_finger = -1
+			station_touch_name = ""
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and game != null:
+		if event.pressed and not mouse_stick and _can_start_camera_drag(event.position):
+			station_mouse_candidate = game.station_at_screen(event.position)
+			station_mouse_start = event.position
+		elif not event.pressed:
+			var name_on_release: String = station_mouse_candidate
+			station_mouse_candidate = ""
+			if not name_on_release.is_empty() and event.position.distance_to(station_mouse_start) < 17.0:
+				game.visit_crafting_station(name_on_release)
+				get_viewport().set_input_as_handled()
+				return
 	if event is InputEventScreenTouch and game != null:
 		if event.pressed and camera_drag_finger < 0 and event.index != finger and _can_start_camera_drag(event.position):
 			camera_drag_finger = event.index
@@ -1669,6 +1704,9 @@ func _reset_touch() -> void:
 	camera_drag_finger = -1
 	camera_hold_seconds = 0.0
 	camera_hold_ready = false
+	station_touch_finger = -1
+	station_touch_name = ""
+	station_mouse_candidate = ""
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
