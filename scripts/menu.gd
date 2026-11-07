@@ -10,6 +10,7 @@ var popup_frame: PanelContainer
 var title: Label
 var subtitle: Label
 var header_buttons: Dictionary = {}
+var close_button: Button
 var station_tabs: HBoxContainer
 var recipes_list: VBoxContainer
 var details: VBoxContainer
@@ -48,7 +49,9 @@ func _ready() -> void:
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.01, 0.01, 0.22)
+	shade.name = "OutsideDismissBackdrop"
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	shade.gui_input.connect(_on_shade_input)
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
@@ -87,12 +90,16 @@ func _ready() -> void:
 	craft.pressed.connect(_switch_craft)
 	header_buttons["craft"] = craft
 	header.add_child(craft)
-	var close := Button.new()
-	close.text = "X"
-	close.custom_minimum_size = Vector2(48, 48)
-	SKIN.apply_button(close, "red")
-	close.pressed.connect(close_page)
-	header.add_child(close)
+	close_button = Button.new()
+	close_button.name = "CloseBagCraftMenu"
+	close_button.text = "CLOSE  X"
+	close_button.tooltip_text = "Close inventory / crafting"
+	close_button.custom_minimum_size = Vector2(96, 52)
+	close_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	close_button.focus_mode = Control.FOCUS_NONE
+	SKIN.apply_button(close_button, "red")
+	close_button.pressed.connect(close_page)
+	header.add_child(close_button)
 	subtitle = _label("", 16, Color("f4d9a6"))
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_OFF
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -256,6 +263,18 @@ func open(page: String) -> void:
 
 func close_page() -> void:
 	visible = false
+
+func _on_shade_input(event: InputEvent) -> void:
+	# Tapping anywhere OUTSIDE the frame is a reliable Android fallback.
+	# The frame lies above this backdrop and continues to receive bag clicks.
+	if not visible:
+		return
+	if event is InputEventScreenTouch and event.pressed:
+		close_page()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		close_page()
+		get_viewport().set_input_as_handled()
 
 func _first_recipe(station: String) -> String:
 	for recipe in game.recipes:
@@ -981,7 +1000,7 @@ func _clear_result() -> void:
 	selected_id = _first_recipe(selected_station)
 	refresh()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if not visible or not event.is_action_pressed("ui_cancel"):
 		return
 	if current_page == "craft" and craft_step != "browse" and game.crafting.is_empty():
