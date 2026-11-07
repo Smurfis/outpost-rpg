@@ -167,26 +167,14 @@ func _layout_for_size(available: Vector2) -> void:
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
 		return
-	# Keep central x=320..1120 pixels exactly as approved so the tent logo,
-	# all four button cutouts and their painted surroundings remain aligned.
-	# Only side scenery expands into the additional phone-screen width.
-	var left: TextureRect = _wide_backdrop.get_node("WideLeft") as TextureRect
-	var center: TextureRect = _wide_backdrop.get_node("WideCenter") as TextureRect
-	var right: TextureRect = _wide_backdrop.get_node("WideRight") as TextureRect
-	# Avoid stretching any of the painted corner flags or border engraving.
-	# The EXTRA scenery occupies its own strip, never the existing corner art.
-	left.position = Vector2(0.0, 0.0)
-	left.size = Vector2(WIDE_LEFT_CUT, DESIGN.y)
-	center.position = Vector2(WIDE_LEFT_CUT, 0.0)
-	center.size = Vector2(WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y)
-	right.position = Vector2(WIDE_RIGHT_CUT + half_extra, 0.0)
-	right.size = Vector2(DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
-	var left_fill: TextureRect = _wide_backdrop.get_node("WideLeftFill") as TextureRect
-	var right_fill: TextureRect = _wide_backdrop.get_node("WideRightFill") as TextureRect
-	left_fill.position = Vector2(-half_extra, 0.0)
-	left_fill.size = Vector2(half_extra, DESIGN.y)
-	right_fill.position = Vector2(WIDE_RIGHT_CUT, 0.0)
-	right_fill.size = Vector2(half_extra, DESIGN.y)
+	# The original three-piece backdrop duplicated the left/right painted
+	# border, flag, tent and portal in the expanded 20:9 side strips. Use ONE
+	# continuous copy of the approved landscape, spanning the full viewport.
+	# Only the background scales horizontally: all clickable buttons, logo,
+	# version badge and overlay sprites retain their original proportions.
+	var panorama: TextureRect = _wide_backdrop.get_node("WidePanorama") as TextureRect
+	panorama.position = Vector2(-half_extra, 0.0)
+	panorama.size = Vector2(DESIGN.x + 2.0 * half_extra, DESIGN.y)
 
 func _make_screen() -> void:
 	var curtain := ColorRect.new()
@@ -360,33 +348,25 @@ func _make_screen() -> void:
 	_canvas.add_child(_update_notice)
 
 func _make_wide_background() -> void:
-	# Atlas slices use the SAME PNG as the approved screen, rather than a
-	# duplicate image/blur that would break the source-matched art cutouts.
+	# One image, one frame, one left banner and one right banner.
+	# Never atlas/copy the border into extra side panels on ultrawide phones:
+	# it creates the highly visible duplicated 20:9 screenshot artifacts.
 	_wide_backdrop = Control.new()
 	_wide_backdrop.name = "WideBackdrop"
 	_wide_backdrop.size = DESIGN
 	_wide_backdrop.visible = false
 	_wide_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(_wide_backdrop)
-	var regions: Dictionary = {
-		"WideLeftFill": Rect2(240.0, 0.0, 80.0, DESIGN.y),
-		"WideRightFill": Rect2(WIDE_RIGHT_CUT, 0.0, 80.0, DESIGN.y),
-		"WideLeft": Rect2(0.0, 0.0, WIDE_LEFT_CUT, DESIGN.y),
-		"WideCenter": Rect2(WIDE_LEFT_CUT, 0.0, WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y),
-		"WideRight": Rect2(WIDE_RIGHT_CUT, 0.0, DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
-	}
-	for part_name in ["WideLeftFill", "WideRightFill", "WideLeft", "WideCenter", "WideRight"]:
-		var atlas: AtlasTexture = AtlasTexture.new()
-		atlas.atlas = _approved_backdrop.texture
-		atlas.region = regions[part_name]
-		var part: TextureRect = TextureRect.new()
-		part.name = part_name
-		part.texture = atlas
-		part.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		part.stretch_mode = TextureRect.STRETCH_SCALE
-		part.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		part.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_wide_backdrop.add_child(part)
+	var panorama := TextureRect.new()
+	panorama.name = "WidePanorama"
+	panorama.texture = _approved_backdrop.texture
+	panorama.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	panorama.stretch_mode = TextureRect.STRETCH_SCALE
+	panorama.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	panorama.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panorama.position = Vector2.ZERO
+	panorama.size = DESIGN
+	_wide_backdrop.add_child(panorama)
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	# The screenshot/mock-up is not one flattened UI. Every asset stays a
