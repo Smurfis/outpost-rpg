@@ -1,10 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="528" height="144" viewBox="0 0 528 144">
-<defs><radialGradient id="glow" cx="50%" cy="50%" r="54%" gradientTransform="translate(0,-0.18) scale(1,1.36)">
-<stop offset="0" stop-color="#ffe79b" stop-opacity="0.48"/>
-<stop offset=".40" stop-color="#ffd057" stop-opacity="0.30"/>
-<stop offset=".78" stop-color="#f1ad3d" stop-opacity="0.13"/>
-<stop offset="1" stop-color="#f6b83a" stop-opacity="0"/>
-</radialGradient></defs>
-<rect width="528" height="144" fill="url(#glow)"/>
-<rect x="24" y="20" width="480" height="104" rx="44" fill="none" stroke="#ffdd7e" stroke-opacity=".18" stroke-width="3"/>
+<!-- A feathered aura only: NO oval/gold stroke, button border or hard edge. -->
+<defs>
+<radialGradient id="aura" cx="50%" cy="50%" r="50%" gradientTransform="translate(0,0.04) scale(1,0.93)">
+<stop offset="0" stop-color="#ffecc6" stop-opacity=".22"/>
+<stop offset=".35" stop-color="#ffd77b" stop-opacity=".13"/>
+<stop offset=".70" stop-color="#ffcc57" stop-opacity=".045"/>
+<stop offset="1" stop-color="#ffd76f" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect width="528" height="144" fill="url(#aura)"/>
 </svg>

@@ -149,10 +149,13 @@ func _layout_for_size(available: Vector2) -> void:
 	# On 16:9 displays half_extra == 0, so the approved position is kept.
 	var version_plaque: TextureRect = _canvas.get_node_or_null("VersionPlaque") as TextureRect
 	var version_label: Label = _canvas.get_node_or_null("Version") as Label
+	# Badge retains its ORIGINAL 177x57 silhouette and stays inset from
+	# the extended right edge. The label is positioned RELATIVE to the plaque.
+	var badge_left: float = DESIGN.x + half_extra - 192.0
 	if version_plaque != null:
-		version_plaque.position = Vector2(1058.0 + half_extra, 642.0)
+		version_plaque.position = Vector2(badge_left, 645.0)
 	if version_label != null:
-		version_label.position = Vector2(1068.0 + half_extra, 652.0)
+		version_label.position = Vector2(badge_left + 7.0, 650.0)
 	if _changelog_button != null:
 		_changelog_button.position.x = 1164.0 + half_extra
 	if _changelog_panel != null:
@@ -167,12 +170,20 @@ func _layout_for_size(available: Vector2) -> void:
 	var left: TextureRect = _wide_backdrop.get_node("WideLeft") as TextureRect
 	var center: TextureRect = _wide_backdrop.get_node("WideCenter") as TextureRect
 	var right: TextureRect = _wide_backdrop.get_node("WideRight") as TextureRect
-	left.position = Vector2(-half_extra, 0.0)
-	left.size = Vector2(WIDE_LEFT_CUT + half_extra, DESIGN.y)
+	# Avoid stretching any of the painted corner flags or border engraving.
+	# The EXTRA scenery occupies its own strip, never the existing corner art.
+	left.position = Vector2(0.0, 0.0)
+	left.size = Vector2(WIDE_LEFT_CUT, DESIGN.y)
 	center.position = Vector2(WIDE_LEFT_CUT, 0.0)
 	center.size = Vector2(WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y)
-	right.position = Vector2(WIDE_RIGHT_CUT, 0.0)
-	right.size = Vector2(DESIGN.x - WIDE_RIGHT_CUT + half_extra, DESIGN.y)
+	right.position = Vector2(WIDE_RIGHT_CUT + half_extra, 0.0)
+	right.size = Vector2(DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
+	var left_fill: TextureRect = _wide_backdrop.get_node("WideLeftFill") as TextureRect
+	var right_fill: TextureRect = _wide_backdrop.get_node("WideRightFill") as TextureRect
+	left_fill.position = Vector2(-half_extra, 0.0)
+	left_fill.size = Vector2(half_extra, DESIGN.y)
+	right_fill.position = Vector2(WIDE_RIGHT_CUT, 0.0)
+	right_fill.size = Vector2(half_extra, DESIGN.y)
 
 func _make_screen() -> void:
 	var curtain := ColorRect.new()
@@ -288,15 +299,22 @@ func _make_screen() -> void:
 	# A single live version label over a matching textless PNG plaque.
 	# _layout_for_size moves both to the actual ultrawide right edge.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
+	_add_image("VersionPlaque", "version_clear_not_baked.png", "version_plaque_clear.svg", Vector2(1088, 645), Vector2(177, 57))
 	var version := Label.new()
 	version.name = "Version"
-	version.text = "%s  •  %d" % [live_version, int(ProjectSettings.get_setting("application/config/android_build_code", 11))]
-	version.position = Vector2(1068, 652)
-	version.size = Vector2(183, 40)
+	var channel: String = "ALPHA" if str(ProjectSettings.get_setting("application/config/build_channel", "stable")) == "alpha" else "STABLE"
+	var build_code: int = int(ProjectSettings.get_setting("application/config/android_build_code", 11))
+	var clean_version: String = live_version.trim_prefix("v").replace("-dev", "").replace("-alpha", "")
+	# Separate semantic test revision (.1, .2, ...) from numeric Android build
+	# code. Each published Alpha workflow increases its versionCode by one.
+	var revision: int = maxi(1, build_code - 1006)
+	version.text = ("V.A.%s.%d" % [clean_version, revision]) if channel == "ALPHA" else ("V.S.%s" % clean_version)
+	version.text += "\nBUILD %d" % build_code
+	version.position = Vector2(1095, 650)
+	version.size = Vector2(163, 47)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_label_style(version, 18, Color("fff1d5"), Color("2b1e25"))
+	_label_style(version, 15, Color("fff1d5"), Color("2b1e25"))
 	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(version)
 
@@ -348,11 +366,13 @@ func _make_wide_background() -> void:
 	_wide_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(_wide_backdrop)
 	var regions: Dictionary = {
+		"WideLeftFill": Rect2(240.0, 0.0, 80.0, DESIGN.y),
+		"WideRightFill": Rect2(WIDE_RIGHT_CUT, 0.0, 80.0, DESIGN.y),
 		"WideLeft": Rect2(0.0, 0.0, WIDE_LEFT_CUT, DESIGN.y),
 		"WideCenter": Rect2(WIDE_LEFT_CUT, 0.0, WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y),
 		"WideRight": Rect2(WIDE_RIGHT_CUT, 0.0, DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
 	}
-	for part_name in ["WideLeft", "WideCenter", "WideRight"]:
+	for part_name in ["WideLeftFill", "WideRightFill", "WideLeft", "WideCenter", "WideRight"]:
 		var atlas: AtlasTexture = AtlasTexture.new()
 		atlas.atlas = _approved_backdrop.texture
 		atlas.region = regions[part_name]
@@ -506,6 +526,9 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 
 func _set_title_button_glow(selected_button: Button) -> void:
 	if _selection_glow == null or selected_button.disabled:
+		return
+	if str(selected_button.get("button_kind")) == "quit":
+		_selection_glow.visible = false
 		return
 	_selection_glow.position = selected_button.position - Vector2(44, 24)
 	_selection_glow.size = selected_button.size + Vector2(88, 48)
@@ -661,7 +684,7 @@ func _build_changelog_scroll() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	stack.add_child(scroll)
-	var details := _menu_label("LATEST ALPHA TEST\\n\\n• Stable / Alpha version selection in Settings\\n• Mainline title and world-loading updates\\n• New hero portrait, radial XP jewel and crafting flow\\n• Escape and outside-tap controls for crafting\\n\\nTESTING NEXT\\nTitle button cutouts, moving glow, HUD icon artwork, camera and minimap layout.", 17)
+	var details := _menu_label("WHAT TO TEST  •  ALPHA\n\n[1] CRAFTING: Open near a workbench, change stations, close with X, Back or the new top-left BACK TO GAME button.\n\n[2] CONTROLS: Try fixed/dynamic thumbstick, sticky movement STOP, second-finger camera while walking.\n\n[3] INVENTORY: MENU -> BAG, filter items, inspect, close.\n\n[4] TITLE: Select Play/Continue/Settings; Quit should highlight in white only.\n\nRECENT ALPHA FEATURES\nCube World-style chibi/voxel foliage, round terrain minimap, Albion-inspired bag/equipment, transparent hero portrait, radial XP jewel.\n\nNOT FINISHED\nArt-accurate HUD mockup replacement, physical Android visuals and full gamepad accessibility.", 17)
 	details.name = "ChangelogBody"
 	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

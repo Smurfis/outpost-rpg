@@ -37,7 +37,7 @@ func _run() -> void:
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
 	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Backdrop no longer uses mismatched dusk opacity")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
-	_check(version != null and version.visible and version.text.contains("0.5.0-dev"), "One live version label avoids doubled painted lettering")
+	_check(version != null and version.visible and version.text.contains("0.5.0") and version.text.contains("BUILD"), "One live channel/build label avoids doubled painted lettering")
 	title.call("_on_play")
 	var adventure: PanelContainer = title.get_node_or_null("Artboard/AdventurePanel") as PanelContainer
 	var shade: ColorRect = title.get_node_or_null("Artboard/AdventureShade") as ColorRect

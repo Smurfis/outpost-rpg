@@ -76,13 +76,13 @@ func _run() -> void:
 	var lights: TextureRect = title.get_node_or_null("Artboard/TitleLights") as TextureRect
 	_check(lights != null and not lights.visible, "Legacy SVG light layer is hidden to prevent double artwork")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
-	_check(version != null and version.text.begins_with("v0.5.0-dev"), "Live version data is still available")
+	_check(version != null and (version.text.begins_with("V.A.") or version.text.begins_with("V.S.")) and version.text.contains("BUILD"), "Channel-labelled incremental version and Android build are legible")
 	if version != null:
 		_check(version.modulate.a > 0.99, "Matching hand-painted version text is not duplicated")
 	var version_plaque: TextureRect = title.get_node_or_null("Artboard/VersionPlaque") as TextureRect
 	_check(version_plaque != null and version_plaque.texture != null, "Version plaque is independent from world backdrop")
 	if version_plaque != null and version_plaque.texture != null:
-		_check(version_plaque.texture.resource_path.ends_with("/version_badge_textless.png"), "Original matching version plaque rendered")
+		_check(version_plaque.texture.resource_path.ends_with("/version_plaque_clear.svg"), "Independent transparent version plaque replaces opaque screenshot patch")
 	_check(title.get_node_or_null("Artboard/VersionCornerWood") == null, "No oversized opaque wood/grey patch is drawn around version badge")
 	var splash: Label = title.get_node_or_null("Artboard/UpdateSplash") as Label
 	_check(splash != null and splash.get_node_or_null("HandLetteredHero") != null, "Hand-lettered approved slogan loads independently")
@@ -98,19 +98,21 @@ func _run() -> void:
 	if wide != null and artboard != null and backdrop != null:
 		title.call("_layout_for_size", Vector2(2400.0, 1080.0)) # 20:9 Android
 		if version_plaque != null and version != null:
-			_check(version_plaque.position == Vector2(1218, 642), "On 20:9, actual version plaque occupies expanded right-hand area")
-			_check(version.position == Vector2(1228, 652), "Version label travels with plaque onto phone's far right")
+			_check(version_plaque.position == Vector2(1248, 645), "On 20:9, actual version plaque occupies expanded right-hand area")
+			_check(version.position == Vector2(1255, 650), "Version label travels with plaque onto phone's far right")
 			var right_gap: float = 2400.0 - (artboard.position.x + (version_plaque.position.x + version_plaque.size.x) * artboard.scale.x)
 			_check(right_gap > 15.0 and right_gap < 50.0, "Version sits neatly near physical right screen edge")
+		var left_fill: TextureRect = wide.get_node_or_null("WideLeftFill") as TextureRect
+		var right_fill: TextureRect = wide.get_node_or_null("WideRightFill") as TextureRect
 		var left: TextureRect = wide.get_node_or_null("WideLeft") as TextureRect
 		var center: TextureRect = wide.get_node_or_null("WideCenter") as TextureRect
 		var right: TextureRect = wide.get_node_or_null("WideRight") as TextureRect
 		_check(wide.visible and not backdrop.visible, "20:9 uses extended scenery instead of 16:9 backdrop")
 		_check(artboard.scale.is_equal_approx(Vector2(1.5, 1.5)), "Foreground uniformly scales without stretching the logo or buttons")
-		_check(left != null and center != null and right != null, "All three background slices present")
+		_check(left != null and center != null and right != null and left_fill != null and right_fill != null, "Original unscaled corners and background extension strips exist")
 		if left != null and center != null and right != null:
-			_check(is_equal_approx(artboard.position.x + left.position.x * artboard.scale.x, 0.0), "Background reaches left screen edge")
-			_check(is_equal_approx(artboard.position.x + (right.position.x + right.size.x) * artboard.scale.x, 2400.0), "Background reaches right screen edge")
+			_check(is_equal_approx(artboard.position.x + left_fill.position.x * artboard.scale.x, 0.0), "Background reaches left screen edge")
+			_check(is_equal_approx(artboard.position.x + (right.position.x + right.size.x) * artboard.scale.x, 2400.0) and left.size.x == 320.0 and right.size.x == 160.0, "Background fills the screen without stretching corner flags")
 			_check(center.position.is_equal_approx(Vector2(320, 0)) and center.size.is_equal_approx(Vector2(800, 720)), "Original centre preserves cutout alignment")
 			var atlas: AtlasTexture = center.texture as AtlasTexture
 			_check(atlas != null and atlas.region == Rect2(320, 0, 800, 720), "Centre samples original approved PNG without distortion")
@@ -118,7 +120,7 @@ func _run() -> void:
 		_check(play != null and play.position == Vector2(427, 344) and play.size == Vector2(422, 92), "Widescreen preserves Play hitbox and art geometry")
 		title.call("_layout_for_size", Vector2(1280.0, 720.0))
 		if version_plaque != null and version != null:
-			_check(version_plaque.position == Vector2(1058, 642) and version.position == Vector2(1068, 652), "16:9 version uses original badge coordinates")
+			_check(version_plaque.position == Vector2(1088, 645) and version.position == Vector2(1095, 650), "16:9 version uses original badge coordinates")
 		_check(not wide.visible and backdrop.visible and artboard.position.is_equal_approx(Vector2.ZERO), "16:9 remains pixel-identical to approved composition")
 	title.queue_free()
 	await process_frame
