@@ -268,3 +268,10 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/visual_world_minimap.gd 2>&1 | tee visual-world.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|VISUAL FAIL:' visual-world.log; then exit 1; fi
           grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual-world.log
+
+      - name: Regression test flat minimap, Android camera drag and bag close
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/minimap_bag_camera_regression.gd 2>&1 | tee map-bag-camera.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|MAP BAG CAMERA FAIL:' map-bag-camera.log; then exit 1; fi
+          grep -q "MAP BAG CAMERA RESULT: 0 failure(s)" map-bag-camera.log
