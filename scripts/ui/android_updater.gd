@@ -12,6 +12,11 @@ const CHANNEL_KEY: String = "application/config/build_channel"
 const DOWNLOAD_PREFIX: String = "https://github.com/Smurfis/outpost-rpg/releases/download/"
 const PROJECT_VERSION_KEY: String = "application/config/android_build_code"
 const DEFAULT_VERSION_CODE: int = 11
+# Temporarily suspend Alpha APK distribution/installation after v1012 received
+# a Google Play Protect "Harmful app blocked" warning (issue #69).
+# Removing a risky permission is not proof the warning was a false positive.
+const ALPHA_DOWNLOADS_PAUSED: bool = true
+const APK_INSTALLS_PAUSED: bool = true
 
 var _request: HTTPRequest
 var target_channel: String = ""
@@ -61,12 +66,16 @@ func has_active_download() -> bool:
 	return _download_id >= 0 and not _download_complete
 
 func has_ready_download() -> bool:
-	return _download_id >= 0 and _download_complete
+	# A previously downloaded v1012 must not show an install affordance.
+	return not APK_INSTALLS_PAUSED and _download_id >= 0 and _download_complete
 
 func download_label() -> String:
 	return "%s build %d" % [_download_channel.capitalize(), _download_code]
 
 func start_apk_download(url: String, channel: String, code: int) -> bool:
+	if channel == "alpha" and ALPHA_DOWNLOADS_PAUSED:
+		status_changed.emit("Alpha downloads are paused pending Play Protect review of v1012. Do not override the warning.")
+		return false
 	if not valid_asset_url(url, channel):
 		status_changed.emit("Blocked an unrecognised APK URL.")
 		return false
@@ -126,28 +135,10 @@ func cancel_apk_download() -> void:
 	status_changed.emit("APK download cancelled.")
 
 func install_downloaded_apk() -> bool:
-	if not has_ready_download() or not _connect_android():
-		status_changed.emit("No completed Outpost APK to install.")
-		return false
-	var uri = _download_manager.getUriForDownloadedFile(_download_id)
-	var exception = JavaClassWrapper.get_exception()
-	if exception != null or uri == null:
-		status_changed.emit("Android cannot share this APK. Open Downloads to install it.")
-		open_android_downloads()
-		return false
-	var Intent = JavaClassWrapper.wrap("android.content.Intent")
-	var intent = Intent.Intent(Intent.ACTION_VIEW)
-	intent.setDataAndType(uri, APK_MIME)
-	intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-	intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-	var activity = _android_runtime.getActivity()
-	# Android owns the install confirmation and the Unknown Apps permission
-	# dialog. No programmatic installation, channel overwrite or save copying.
-	var launch = func() -> void:
-		activity.startActivity(intent)
-	activity.runOnUiThread(_android_runtime.createRunnableFromGodotCallable(launch))
-	status_changed.emit("Approve installation in Android. Stable and Alpha install separately.")
-	return true
+	# The game is not a package manager. Hold the permission-sensitive
+	# self-install feature until the Play Protect classification is resolved.
+	status_changed.emit("In-game APK installs are paused for security review. Never disable Play Protect to install an Outpost build.")
+	return false
 
 func open_android_downloads() -> bool:
 	if not _connect_android():
@@ -260,6 +251,9 @@ func installed_version_code() -> int:
 	return int(ProjectSettings.get_setting(PROJECT_VERSION_KEY, DEFAULT_VERSION_CODE))
 
 func check_for_updates() -> void:
+	if selected_channel() == "alpha" and ALPHA_DOWNLOADS_PAUSED:
+		status_changed.emit("Alpha releases are paused pending Play Protect review of build v1012.")
+		return
 	if _request != null:
 		status_changed.emit("Already checking for an update...")
 		return
@@ -320,6 +314,9 @@ static func find_newest_release(releases: Array, installed_code: int, tag_prefix
 		if not number.is_valid_int():
 			continue
 		var code: int = int(number)
+		# v1012 was explicitly reported by a tester as Play Protect blocked.
+		if tag_prefix == ALPHA_TAG_PREFIX and code == 1012:
+			continue
 		if code <= max_code:
 			continue
 		var assets: Variant = item.get("assets", [])
