@@ -52,15 +52,16 @@ func _run() -> void:
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)
 	game.show_crafting()
 	await process_frame
-	check(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Crafting opens with one full-width recipe page")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Crafting opens with Albion recipe list and details together")
 	check(game.menu.left_scroll.get_script() != null, "Recipe list uses touchscreen swipe control")
+	check(game.menu.title.text.contains("WOODWORK") and game.menu.station_badge.visible, "Actual interacted station determines window title and icon")
+	check(game.menu.station_tabs.get_child_count() == 0 and not game.menu.craft_stage_strip.visible, "No five-station tabs or redundant stage cards")
 	game.menu._recipe_change("spear")
 	await process_frame
-	check(not game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Tapping recipe opens a separate details page")
-	game.menu._begin_prepare()
-	check(game.menu.craft_step == "prepare", "Details moves to preparation flow")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Tapping a recipe updates tooltip without losing list")
+	check(game.menu.details.find_child("StationCraftAction", true, false) != null, "Selected recipe offers a direct Craft action")
 	game.menu._back_to_browse()
-	check(game.menu.left_scroll.visible, "Back returns to full recipe list")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Browsing remains accessible without navigation screens")
 	game.queue_free()
 	await process_frame
 	print("PHONE UX RESULT: %d failures" % failed)
