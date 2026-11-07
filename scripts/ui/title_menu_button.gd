@@ -160,12 +160,25 @@ static func _remove_screenshot_matte(source: Texture2D, kind: String) -> Texture
 			contour = PackedVector2Array([Vector2(4, 21), Vector2(21, 8), Vector2(265, 8), Vector2(287, 20), Vector2(288, 52), Vector2(268, 70), Vector2(21, 72), Vector2(4, 60)])
 	if contour.is_empty():
 		return source
+	# The original PNG includes a few pixels of its old dark screenshot
+	# matte INSIDE the outline. A hard polygon cut leaves a visible grey halo.
+	# Feather only the final 3.5 px inward; never shrink or recolour the real
+	# button text, icons or centre art. This is intentionally a tiny title pass.
 	for y in range(bitmap.get_height()):
 		for x in range(bitmap.get_width()):
-			if not Geometry2D.is_point_in_polygon(Vector2(float(x) + 0.5, float(y) + 0.5), contour):
-				var px: Color = bitmap.get_pixel(x, y)
+			var pixel := Vector2(float(x) + 0.5, float(y) + 0.5)
+			var px: Color = bitmap.get_pixel(x, y)
+			if not Geometry2D.is_point_in_polygon(pixel, contour):
 				px.a = 0.0
-				bitmap.set_pixel(x, y, px)
+			else:
+				var nearest: float = 100.0
+				for i in range(contour.size()):
+					var endpoint: Vector2 = contour[(i + 1) % contour.size()]
+					var closest: Vector2 = Geometry2D.get_closest_point_to_segment(pixel, contour[i], endpoint)
+					nearest = minf(nearest, pixel.distance_to(closest))
+				if nearest < 3.5:
+					px.a *= smoothstep(0.0, 3.5, nearest)
+			bitmap.set_pixel(x, y, px)
 	return ImageTexture.create_from_image(bitmap)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:

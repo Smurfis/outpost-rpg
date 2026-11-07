@@ -149,8 +149,33 @@ func _run() -> void:
 	verify(not hud.hint.visible, "Generic exploration text stays hidden")
 	verify(not hud.mana_bar.visible and not hud.mana_numbers.visible, "Nonfunctional MP placeholder does not consume HUD space")
 	var status: Panel = controls.get_node_or_null("HeroStatusFrame") as Panel
+	var portrait: TextureRect = controls.get_node_or_null("HeroPortrait") as TextureRect
+	var wallet: Panel = controls.get_node_or_null("ResourceQuickChips") as Panel
+	verify(status != null and portrait != null and wallet != null, "Portrait and compact player resource chrome remain separate editable controls")
 	if status != null:
 		verify(status.get_global_rect().encloses(hud.hero_detail.get_global_rect()), "Mastery line stays inside status frame")
+		var player_style: StyleBoxFlat = status.get_theme_stylebox("panel") as StyleBoxFlat
+		verify(player_style != null and player_style.bg_color.a < 0.80 and player_style.border_width_left <= 2, "HP/name backing is translucent with a slim border, not opaque wood")
+		verify(absf(status.size.x - 338.0) < 3.0, "Portrait and health frame remains compact on standard Android landscape")
+	if wallet != null:
+		var wallet_style: StyleBoxFlat = wallet.get_theme_stylebox("panel") as StyleBoxFlat
+		verify(wallet_style != null and wallet_style.bg_color.a < 0.65, "Wallet is a lightweight translucent chip")
+		verify(absf(wallet.size.x - 312.0) < 3.0, "Wallet does not stretch with screen width")
+		verify(wallet.get_global_rect().position.x > status.get_global_rect().end.x, "Wallet does not cover the hero portrait or HP")
+	if portrait != null and status != null:
+		verify(status.get_global_rect().encloses(portrait.get_global_rect()), "Independent hero portrait stays inside slim status frame")
+	# Simulate ultra-wide coordinates without changing gameplay or the viewport.
+	# Check the px-layout parameters, not a single fixed percentage at 16:9.
+	hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
+	if status != null and wallet != null:
+		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 405.6) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
+		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 374.4) < 2.0, "At 20:9 resources stay in a slim independent chip")
+		hud._toggle_wallet()
+		hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
+		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 121.2) < 2.0, "Collapsed wallet shrinks to a 101px compact chip on ultrawide phones")
+		hud._toggle_wallet()
+	hud._layout_touch_hud()
+
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")
 	verify(hud.xp_bar.get_global_rect().position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.94, "XP meter remains below action cluster")
 
