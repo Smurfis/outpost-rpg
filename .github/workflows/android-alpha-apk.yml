@@ -126,7 +126,6 @@ jobs:
           launcher_icons/adaptive_monochrome_432x432="res://assets/branding/generated/outpost_adaptive_monochrome_432.png"
           permissions/internet=true
           permissions/access_network_state=true
-          permissions/custom_permissions=PackedStringArray("android.permission.REQUEST_INSTALL_PACKAGES")
           EOF
           sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
           grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg
@@ -147,7 +146,10 @@ jobs:
           test -s build/Outpost-Alpha-Android.apk
           unzip -t build/Outpost-Alpha-Android.apk >/dev/null
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump permissions build/Outpost-Alpha-Android.apk | tee build/alpha-permissions.log
-          grep -q "android.permission.REQUEST_INSTALL_PACKAGES" build/alpha-permissions.log
+          if grep -q "android.permission.REQUEST_INSTALL_PACKAGES" build/alpha-permissions.log; then
+            echo "::error::REQUEST_INSTALL_PACKAGES must not ship while security issue #69 is unresolved."
+            exit 1
+          fi
           cp build/Outpost-Alpha-Android.apk "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
           ls -lh "build/Outpost-Alpha-v$OUTPOST_BUILD_CODE.apk"
       - name: Verify actual Android package contains the custom launcher icons
