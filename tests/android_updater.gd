@@ -27,6 +27,11 @@ func _release(code: int, url: String, is_draft: bool = false) -> Dictionary:
 func _run() -> void:
 	var updater_script = load("res://scripts/ui/android_updater.gd")
 	check(updater_script != null, "Updater script imports")
+	if updater_script != null:
+		check(updater_script.ALPHA_DOWNLOADS_PAUSED and updater_script.APK_INSTALLS_PAUSED, "v1012 response keeps Alpha downloads and APK installer paused")
+		var blocked_url: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1012/Outpost-Alpha-v1012.apk"
+		var blocked_release: Dictionary = {"tag_name":"outpost-alpha-v1012", "draft":false, "assets":[{"name":"Outpost-Alpha-v1012.apk", "browser_download_url":blocked_url}]}
+		check(updater_script.find_newest_release([blocked_release], 0, "outpost-alpha-v").is_empty(), "Security-flagged v1012 never offered as a release")
 	if updater_script == null:
 		quit(1)
 		return
