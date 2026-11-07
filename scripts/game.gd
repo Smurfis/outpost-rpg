@@ -6,6 +6,7 @@ const ENEMY = preload("res://scripts/enemy.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
+const STATION_PATH = preload("res://scripts/navigation/crafting_station_path.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
@@ -39,6 +40,9 @@ var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
 var stations: Dictionary = {}
+var station_walk_target: String = ""
+var station_walk_timeout: float = 0.0
+var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
@@ -135,6 +139,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		rotate_camera(1)
 
 func _process(delta: float) -> void:
+	_update_station_walk(delta)
 	_update_crafting(delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
@@ -171,7 +176,7 @@ func _process(delta: float) -> void:
 	elif enemy != null:
 		hint = "Dungeon guardian nearby • use ATTACK" if coop != null and coop.in_party_dungeon() else "Wild boar nearby • use ATTACK"
 	elif closest_station() != "":
-		hint = "%s nearby • open CRAFT to make items" % closest_station().capitalize()
+		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
@@ -282,6 +287,7 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
+		terrain_surface = landscape
 		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
 		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
 		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
@@ -449,6 +455,69 @@ func closest_station() -> String:
 
 func near_station(station_id: String) -> bool:
 	return closest_station() == station_id
+
+func station_at_screen(screen_pos: Vector2) -> String:
+	# The station is a mesh, not a clickable full-screen GUI overlay. Using
+	# camera projection keeps touch selection consistent during camera orbit.
+	if camera == null or hero == null or (menu != null and menu.visible):
+		return ""
+	var closest: String = ""
+	var threshold: float = clampf(get_viewport().get_visible_rect().size.y * 0.085, 43.0, 78.0)
+	for station_id in stations:
+		var node: Node3D = stations[station_id] as Node3D
+		if node == null or camera.is_position_behind(node.global_position + Vector3.UP):
+			continue
+		var projected: Vector2 = camera.unproject_position(node.global_position + Vector3.UP * 0.9)
+		var distance: float = screen_pos.distance_to(projected)
+		if distance < threshold:
+			threshold = distance
+			closest = str(station_id)
+	return closest
+
+func visit_crafting_station(station_id: String) -> bool:
+	if hero == null or menu == null or menu.visible or not station_positions.has(station_id):
+		return false
+	# If standing beside the clicked station, open immediately. Otherwise
+	# navigate to the closest usable perimeter, never into the station mesh.
+	var target: Vector3 = station_positions[station_id]
+	var horizontal: float = Vector2(hero.global_position.x - target.x, hero.global_position.z - target.z).length()
+	if horizontal <= 3.0 and closest_station() == station_id:
+		hero.stop_interaction_move()
+		station_walk_target = ""
+		show_crafting()
+		return true
+	var path: PackedVector3Array = STATION_PATH.plan(hero.global_position, station_id, station_positions, terrain_surface)
+	if path.is_empty():
+		hud.toast("No safe route to this Crafting Station.")
+		return false
+	station_walk_target = station_id
+	station_walk_timeout = 22.0
+	hero.move_along_station_path(path)
+	hud.toast("Walking to %s Crafting Station" % station_id.capitalize())
+	return true
+
+func cancel_station_walk() -> void:
+	station_walk_target = ""
+	station_walk_timeout = 0.0
+
+func _update_station_walk(delta: float) -> void:
+	if station_walk_target.is_empty() or hero == null:
+		return
+	station_walk_timeout -= delta
+	if not hero.interaction_moving or station_walk_timeout <= 0.0:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		return
+	if menu != null and menu.visible:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		return
+	var point: Vector3 = station_positions[station_walk_target]
+	var distance: float = Vector2(hero.global_position.x - point.x, hero.global_position.z - point.z).length()
+	if distance <= 3.25 and closest_station() == station_walk_target:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		show_crafting()
 
 func _resources() -> void:
 	for pos in [Vector3(-6, 0, -1), Vector3(-8, 0, -6), Vector3(6, 0, -7), Vector3(11, 0, 2), Vector3(-12, 0, 9), Vector3(7, 0, 12), Vector3(14, 0, -10)]:

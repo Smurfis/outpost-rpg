@@ -42,13 +42,24 @@ const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front 
 var interaction_target: Vector3 = Vector3.ZERO
 var interaction_moving: bool = false
 var interaction_locked: bool = false
+var station_waypoints: PackedVector3Array = PackedVector3Array()
 
 func move_to_interaction(target: Vector3) -> void:
+	station_waypoints.clear()
 	interaction_target = target
+	interaction_moving = true
+
+func move_along_station_path(path: PackedVector3Array) -> void:
+	station_waypoints = path.duplicate()
+	if station_waypoints.is_empty():
+		stop_interaction_move()
+		return
+	interaction_target = station_waypoints[0]
 	interaction_moving = true
 
 func stop_interaction_move() -> void:
 	interaction_moving = false
+	station_waypoints.clear()
 
 func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	game = game_ref
@@ -256,10 +267,21 @@ func _physics_process(delta: float) -> void:
 	if interaction_moving and not modal_open:
 		if control.length() > 0.15:
 			stop_interaction_move()
+			if game.has_method("cancel_station_walk"):
+				game.cancel_station_walk()
 		else:
+			# Advance through A* cells at close range; legacy dungeon portals
+			# still use their original interaction_target / 2.4m arrival rule.
+			while station_waypoints.size() > 0:
+				var node: Vector3 = station_waypoints[0]
+				if Vector2(node.x - global_position.x, node.z - global_position.z).length() > 0.65:
+					break
+				station_waypoints.remove_at(0)
+			if station_waypoints.size() > 0:
+				interaction_target = station_waypoints[0]
 			var towards: Vector3 = interaction_target - global_position
 			towards.y = 0.0
-			if towards.length() <= 2.4:
+			if station_waypoints.is_empty() and towards.length() <= (2.4 if game.station_walk_target.is_empty() else 0.65):
 				stop_interaction_move()
 				direction = Vector3.ZERO
 			else:
@@ -394,6 +416,13 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection
+	# Station crafting is interrupted when combat damages the player, rather
+	# than leaving a modal trapping them while enemies keep attacking.
+	if actual > 0.0 and game.menu != null and game.menu.visible and game.menu.current_page == "craft":
+		game.menu.close_page()
+		game.hud.toast("Crafting Station interrupted by damage!")
+	if actual > 0.0 and game.has_method("cancel_station_walk"):
+		game.cancel_station_walk()
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
 	var defeated: bool = health <= 0.0

@@ -1,6 +1,6 @@
 extends Node3D
 const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
-## Four readable 3D crafting stations. Built-in meshes; original, mobile-friendly.
+## Five clickable 3D Crafting Stations. Built-in meshes; original, mobile-friendly.
 var station_id: String = "workbench"
 var activity: float = 0.0
 var effect: MeshInstance3D
@@ -114,7 +114,7 @@ func _build() -> void:
 			_block(Vector3(0.10, 0.44, 0.10), Vector3(0.70, 1.55, 0.53), Color("8a603c"))
 			_block(Vector3(0.31, 0.11, 0.17), Vector3(0.70, 1.77, 0.53), Color("aaa9a0"))
 			effect = _block(Vector3(0.50, 0.12, 0.31), Vector3(0.08, 1.24, -0.11), Color("cad0c7"))
-			_label("WORKBENCH | [CRAFT]", Color("f3dc9e"))
+			_label("WORKBENCH • CRAFTING STATION", Color("f3dc9e"))
 		"forge":
 			# Tiered cobblestone and dark hearth; tall chimney reads from iso view.
 			_block(Vector3(2.96, 0.39, 2.35), Vector3(0, 0.19, 0), Color("6b6660"))
@@ -129,7 +129,7 @@ func _build() -> void:
 			_block(Vector3(0.89, 0.55, 0.64), Vector3(0, 0.30, -1.65), Color("67645f"))
 			_block(Vector3(1.35, 0.21, 0.71), Vector3(0, 0.71, -1.65), Color("88929a"))
 			_block(Vector3(0.40, 0.17, 0.34), Vector3(0, 0.87, -1.65), Color("a9b2b6"))
-			_label("FORGE | [CRAFT]", Color("f7b56e"))
+			_label("FORGE • CRAFTING STATION", Color("f7b56e"))
 		"loom":
 			for x in [-1.18, 1.18]:
 				_block(Vector3(0.23, 2.15, 0.28), Vector3(x, 1.1, 0), Color("856545"))
@@ -138,7 +138,7 @@ func _build() -> void:
 			for i in range(13):
 				_block(Vector3(0.038, 1.3, 0.045), Vector3(-1.03 + float(i) * 0.17, 1.28, 0.05), Color("d8d1b2"))
 			effect = _block(Vector3(1.92, 0.52, 0.12), Vector3(0, 1.04, 0.2), Color("7b9e88"))
-			_label("WEAVING LOOM | [CRAFT]", Color("d9dfb4"))
+			_label("LOOM • CRAFTING STATION", Color("d9dfb4"))
 		"enchanting":
 			_block(Vector3(2.55, 0.36, 1.8), Vector3(0, 0.87, 0), Color("#535075"))
 			for x in [-0.97, 0.97]:
@@ -147,7 +147,7 @@ func _build() -> void:
 			effect = _block(Vector3(0.76, 0.18, 0.76), Vector3(0, 1.20, 0), Color("#ba82df"))
 			for x in [-0.83, 0.83]:
 				_block(Vector3(0.26, 0.76, 0.25), Vector3(x, 1.41, 0), Color("#e2b661"))
-			_label("ENCHANTING BENCH | [CRAFT]", Color("#e9b9fe"))
+			_label("ENCHANTING • CRAFTING STATION", Color("#e9b9fe"))
 		"campfire":
 			for i in range(8):
 				var a: float = TAU * float(i) / 8.0
@@ -158,7 +158,7 @@ func _build() -> void:
 			_rod(0.73, 0.73, 0.25, Vector3(0, 1.18, 0), Color("525d5d"))
 			for x in [-0.62, 0.62]:
 				_rod(0.07, 0.07, 0.56, Vector3(x, 1.25, 0), Color("555d5a"))
-			_label("CAMPFIRE | [CRAFT]", Color("f2c583"))
+			_label("CAMPFIRE • CRAFTING STATION", Color("f2c583"))
 	if effect != null:
 		effect.position.y += 0.01
 

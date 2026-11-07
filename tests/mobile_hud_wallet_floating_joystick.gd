@@ -47,10 +47,11 @@ func _run() -> void:
 	var clock: Label = hud_root.get_node_or_null("MinimapFooterClock") as Label
 	verify(clock != null, "Day/night display has a dedicated location beneath future minimap")
 	if clock != null and top_menu != null:
-		verify(clock.anchor_top >= 0.32 and top_menu.anchor_top >= 0.32, "Clock and menu sit below reserved minimap footprint")
-		verify(clock.anchor_bottom < 0.40 and top_menu.anchor_bottom < 0.40, "Clock and menu remain compact above tool radials")
+		verify(clock.anchor_top >= 0.32, "Clock remains below the map")
+		verify(top_menu.anchor_top < 0.14 and top_menu.anchor_bottom < 0.17, "Menu is now near the top right beside the minimap")
+		verify(top_menu.get_global_rect().end.x < hud.minimap.get_global_rect().position.x, "Menu is left of minimap, never obscuring it")
 	verify(not game.menu.visible, "Bag and Gear modal panels stay hidden while playing")
-	verify(hud.top_menu_panel.anchor_top >= 0.39 and hud.top_menu_panel.anchor_bottom <= 0.59, "Expanded menu stays between minimap footer and abilities")
+	verify(hud.top_menu_panel.anchor_top < 0.22 and hud.top_menu_panel.anchor_bottom < 0.35, "Expanded menu is a compact top-right flyout, not next to combat buttons")
 	for slot in ["skill_1", "skill_2", "skill_3"]:
 		var skill_button: Button = hud.quick_buttons[slot] as Button
 		verify(hud.top_menu_panel.anchor_bottom < skill_button.anchor_top, "Expanded menu never obscures radial " + slot)
