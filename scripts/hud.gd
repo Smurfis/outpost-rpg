@@ -98,6 +98,7 @@ var floating_joystick_enabled: bool = false
 var sticky_movement_enabled: bool = false
 var sticky_movement_toggle: CheckButton
 var stop_sticky_button: Button
+var ignore_menu_synthetic_mouse_until: int = 0
 var player_display_name: String = "Adventurer"
 var control_settings_panel: Panel
 var leave_menu_shade: ColorRect
@@ -1020,6 +1021,8 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	# Reserve the actual button rectangles instead of a huge blocked right zone.
 	if pos.x < screen.x * 0.24 or pos.y < screen.y * 0.16 or pos.y > screen.y * 0.94:
 		return false
+	if floating_joystick_enabled and finger < 0 and _floating_zone(pos):
+		return false
 	if minimap != null and minimap.get_global_rect().grow(7.0).has_point(pos):
 		return false
 	for action in [smart_button, torch_button, menu_button, stop_sticky_button]:
@@ -1436,12 +1439,45 @@ func _start_floating_stick(pos: Vector2) -> void:
 func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
+func _touch_menu_navigation(event: InputEvent) -> bool:
+	if game == null or (game.menu != null and game.menu.visible):
+		return false
+	var pos := Vector2.ZERO
+	if event is InputEventScreenTouch:
+		if not (event as InputEventScreenTouch).pressed:
+			return false
+		pos = (event as InputEventScreenTouch).position
+		ignore_menu_synthetic_mouse_until = Time.get_ticks_msec() + 280
+	elif event is InputEventMouseButton:
+		if not (event as InputEventMouseButton).pressed or (event as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT:
+			return false
+		if Time.get_ticks_msec() < ignore_menu_synthetic_mouse_until:
+			return false
+		pos = (event as InputEventMouseButton).position
+	else:
+		return false
+	# Process at root input stage because on Android decorative fullscreen
+	# Control children can otherwise intercept the actual UI Button signal.
+	if menu_button != null and menu_button.visible and menu_button.get_global_rect().has_point(pos):
+		_set_top_menu(not top_menu_open)
+		get_viewport().set_input_as_handled()
+		return true
+	if top_menu_open:
+		for action in top_menu_actions:
+			if action.visible and action.get_global_rect().has_point(pos):
+				action.pressed.emit()
+				get_viewport().set_input_as_handled()
+				return true
+	return false
+
 func _input(event: InputEvent) -> void:
 	# A modal must block gameplay touch, camera orbit, tools and joystick.
 	if leave_menu_panel != null and leave_menu_panel.visible:
 		if event.is_action_pressed("ui_cancel"):
 			_close_leave_menu()
 			get_viewport().set_input_as_handled()
+		return
+	if _touch_menu_navigation(event):
 		return
 	if _handle_smart_input(event):
 		return
