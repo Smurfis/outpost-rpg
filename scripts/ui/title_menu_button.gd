@@ -136,23 +136,21 @@ func _draw() -> void:
 	# Quit has its own white-ink treatment, not gold asterisks/rays.
 	if button_kind == "quit" or not is_title_highlighted():
 		return
-	# Four short golden rays on each side reproduce the original Play sparkles.
-	# No rectangular selection borders or grey side boxes.
-	var pulse: float = 1.0 if reduced_motion else 0.89 + 0.11 * sin(_spark_elapsed * 3.0)
-	var gold := Color(1.0, 0.70, 0.17, pulse)
-	var bright := Color(1.0, 0.94, 0.58, pulse)
-	var outline := Color(0.38, 0.19, 0.10, pulse)
+	# Cleaned images have ZERO baked rays: these subtle strokes exist only
+	# on the current selected action. No black circular outlines/asterisks.
+	var pulse: float = 0.62 if reduced_motion else 0.57 + 0.12 * sin(_spark_elapsed * 3.0)
+	var gold := Color(1.0, 0.76, 0.32, pulse)
+	var bright := Color(1.0, 0.96, 0.77, pulse * 0.73)
 	var middle: float = roundf(size.y * 0.5)
 	for side in [-1, 1]:
 		var sign: float = float(side)
 		var edge: float = 2.0 if side == -1 else size.x - 2.0
 		for bend in [-1, 0, 1]:
-			var offset_y: float = float(bend) * 19.0
-			var root := Vector2(edge + sign * 10.0, middle + offset_y * 0.28)
-			var tip := Vector2(edge + sign * (35.0 if bend == 0 else 31.0), middle + offset_y)
-			draw_line(root, tip, outline, 9.0)
-			draw_line(root, tip, gold, 6.0)
-			draw_line(root, tip, bright, 2.0)
+			var offset_y: float = float(bend) * 15.0
+			var origin := Vector2(edge + sign * 10.0, middle + offset_y * 0.32)
+			var target := Vector2(edge + sign * 23.0, middle + offset_y)
+			draw_line(origin, target, gold, 3.0)
+			draw_line(origin, target, bright, 1.0)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	var style := StyleBoxTexture.new()
