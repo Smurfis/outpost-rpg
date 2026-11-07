@@ -96,7 +96,7 @@ func _run() -> void:
 	_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Title expands viewport instead of using 16:9 black sidebars")
 	var artboard: Control = title.get_node_or_null("Artboard") as Control
 	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
-	_check(wide != null, "Approved background has three aspect-safe widescreen slices")
+	_check(wide != null, "Approved background has a continuous aspect-safe widescreen panorama")
 	if wide != null and artboard != null and backdrop != null:
 		title.call("_layout_for_size", Vector2(2400.0, 1080.0)) # 20:9 Android
 		if version_plaque != null and version != null:
@@ -104,20 +104,18 @@ func _run() -> void:
 			_check(version.position == Vector2(1255, 650), "Version label travels with plaque onto phone's far right")
 			var right_gap: float = 2400.0 - (artboard.position.x + (version_plaque.position.x + version_plaque.size.x) * artboard.scale.x)
 			_check(right_gap > 15.0 and right_gap < 50.0, "Version sits neatly near physical right screen edge")
-		var left_fill: TextureRect = wide.get_node_or_null("WideLeftFill") as TextureRect
-		var right_fill: TextureRect = wide.get_node_or_null("WideRightFill") as TextureRect
-		var left: TextureRect = wide.get_node_or_null("WideLeft") as TextureRect
-		var center: TextureRect = wide.get_node_or_null("WideCenter") as TextureRect
-		var right: TextureRect = wide.get_node_or_null("WideRight") as TextureRect
-		_check(wide.visible and not backdrop.visible, "20:9 uses extended scenery instead of 16:9 backdrop")
-		_check(artboard.scale.is_equal_approx(Vector2(1.5, 1.5)), "Foreground uniformly scales without stretching the logo or buttons")
-		_check(left != null and center != null and right != null and left_fill != null and right_fill != null, "Original unscaled corners and background extension strips exist")
-		if left != null and center != null and right != null:
-			_check(is_equal_approx(artboard.position.x + left_fill.position.x * artboard.scale.x, 0.0), "Background reaches left screen edge")
-			_check(is_equal_approx(artboard.position.x + (right.position.x + right.size.x) * artboard.scale.x, 2400.0) and left.size.x == 320.0 and right.size.x == 160.0, "Background fills the screen without stretching corner flags")
-			_check(center.position.is_equal_approx(Vector2(320, 0)) and center.size.is_equal_approx(Vector2(800, 720)), "Original centre preserves cutout alignment")
-			var atlas: AtlasTexture = center.texture as AtlasTexture
-			_check(atlas != null and atlas.region == Rect2(320, 0, 800, 720), "Centre samples original approved PNG without distortion")
+		# Regression for Android screenshot with duplicated banner/tree/portal
+		# panels and vertical border seams at BOTH x-edges of the 16:9 art.
+		var panorama: TextureRect = wide.get_node_or_null("WidePanorama") as TextureRect
+		_check(wide.visible and not backdrop.visible, "20:9 uses the continuous widescreen backdrop")
+		_check(artboard.scale.is_equal_approx(Vector2(1.5, 1.5)), "Foreground logo and button art stay pixel-proportional")
+		_check(panorama != null and wide.get_child_count() == 1, "One panorama only: never duplicate left/right flags, waterfall or decorative frame")
+		if panorama != null:
+			_check(panorama.texture == backdrop.texture, "Widescreen uses the single approved landscape rather than repeating atlas regions")
+			_check(panorama.position.is_equal_approx(Vector2(-160, 0)), "Widescreen background begins at the left edge")
+			_check(panorama.size.is_equal_approx(Vector2(1600, 720)), "Widescreen background spans 20:9 in design units")
+			_check(is_equal_approx(artboard.position.x + panorama.position.x * artboard.scale.x, 0.0), "The left frame touches the physical screen edge")
+			_check(is_equal_approx(artboard.position.x + (panorama.position.x + panorama.size.x) * artboard.scale.x, 2400.0), "The right frame touches the physical screen edge")
 		var play: Button = title.get_node_or_null("Artboard/PlayButton") as Button
 		_check(play != null and play.position == Vector2(427, 344) and play.size == Vector2(422, 92), "Widescreen preserves Play hitbox and art geometry")
 		title.call("_layout_for_size", Vector2(1280.0, 720.0))
