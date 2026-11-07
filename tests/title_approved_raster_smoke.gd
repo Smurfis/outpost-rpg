@@ -71,7 +71,9 @@ func _run() -> void:
 		var style: StyleBoxTexture = button.get_theme_stylebox("normal") as StyleBoxTexture
 		_check(style != null and style.texture != null, button_name + " has independent approved PNG art")
 		if style != null and style.texture != null:
-			_check(style.texture.resource_path.ends_with("/btn_" + button_name.to_lower() + ".png"), button_name + " uses matching approved cutout")
+			_check(style.texture is ImageTexture, button_name + " uses a genuine RGBA masked runtime texture")
+			var pixels: Image = style.texture.get_image()
+			_check(pixels != null and pixels.get_pixel(0, 0).a < 0.01 and pixels.get_pixel(pixels.get_width() / 2, pixels.get_height() / 2).a > 0.95, button_name + " has clear corners but keeps opaque centre art")
 		_check(button.pressed.get_connections().size() > 0, button_name + " retains its interactive action")
 	var lights: TextureRect = title.get_node_or_null("Artboard/TitleLights") as TextureRect
 	_check(lights != null and not lights.visible, "Legacy SVG light layer is hidden to prevent double artwork")
