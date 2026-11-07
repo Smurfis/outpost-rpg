@@ -1,7 +1,7 @@
 extends Control
-## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
-## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
-const RESOLUTION: int = 64
+## Outpost overworld minimap: flat-shaded biome colors and cached camera-relative display.
+## Camera orbit never triggers a terrain resample; grass and paths have coherent solid fill.
+const RESOLUTION: int = 48
 const MAP_RADIUS: float = 46.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
 const IDLE_REFRESH_INTERVAL: float = 2.0
@@ -9,6 +9,16 @@ const MOVEMENT_REFRESH_DISTANCE: float = 1.4
 const RIM: Color = Color("cba668")
 const DARK_WOOD: Color = Color("382719")
 const INNER_WOOD: Color = Color("765033")
+# A deliberately restrained cartographic palette. The terrain's randomized
+# pixel-art variations belong in the 3D world, NOT in a navigational map.
+const MAP_GRASS: Color = Color("6f9a51")
+const MAP_PATH: Color = Color("b69c70")
+const MAP_STONE: Color = Color("899095")
+const MAP_SOIL: Color = Color("92724e")
+const MAP_DRY_SAND: Color = Color("ddc591")
+const MAP_WET_SAND: Color = Color("ada17e")
+const MAP_WATER: Color = Color("337e9b")
+const MAP_SHORE: Color = Color("a9b67e")
 var game: Node
 var _image: Image
 var _texture: ImageTexture
@@ -82,35 +92,26 @@ func _refresh_pixels() -> void:
 				continue
 			var wx: float = _center.x + local.x * MAP_RADIUS
 			var wz: float = _center.z + local.y * MAP_RADIUS
-			var colour: Color = Color("648641")
+			var colour: Color = MAP_GRASS
 			if biome != null:
 				if absf(wx) >= half_extent or absf(wz) >= half_extent:
-					colour = Color("266983")
+					colour = MAP_WATER
 				else:
 					var zone: String = str(biome.coast_zone_at(wx, wz))
 					match zone:
-						"water": colour = Color("276f8c")
-						"wet_sand": colour = Color("b0a57f")
-						"dry_sand": colour = Color("dec994")
-						"grass_sand": colour = Color("a8b47a")
-						"coastal_soil": colour = Color("829b68")
+						"water": colour = MAP_WATER
+						"wet_sand": colour = MAP_WET_SAND
+						"dry_sand": colour = MAP_DRY_SAND
+						"grass_sand": colour = MAP_SHORE
+						"coastal_soil": colour = MAP_SOIL
 						_:
 							var tile: int = int(biome._ground_tile(floori(wx), floori(wz)))
 							match tile:
-								1: colour = Color("9bbd60")
-								2: colour = Color("426f3e")
-								3: colour = Color("94734f")
-								4: colour = Color("858c91")
-								5: colour = Color("c2a574")
-								6: colour = Color("aa9774")
-								7: colour = Color("55764c")
-								_: colour = Color("739a4e")
-			# Ink-speckled pixels keyed to world coordinates (no camera flicker).
-			var ink: int = posmod(floori(wx) * 31 + floori(wz) * 43, 23)
-			if ink == 0:
-				colour = colour.lightened(0.10)
-			elif ink == 9:
-				colour = colour.darkened(0.07)
+								3: colour = MAP_SOIL
+								4: colour = MAP_STONE
+								5, 6: colour = MAP_PATH
+								_: colour = MAP_GRASS # All grass and moss shades merge
+			# No hashed ink, light flecks or pixel-level random colour noise.
 			_image.set_pixel(px, py, colour)
 	_texture.update(_image)
 	_refresh_count += 1
