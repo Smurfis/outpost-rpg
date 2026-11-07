@@ -45,6 +45,21 @@ func _run() -> void:
 	check(updater_script.find_newest_release([alpha_release], 0).is_empty(), "Stable never offers Alpha APKs")
 	check(updater_script.find_newest_release(inputs, 0, "outpost-alpha-v").is_empty(), "Alpha never offers Stable APKs")
 	check(updater_script.find_newest_release([{"tag_name":"outpost-alpha-v1005","assets":[{"name":"Outpost-Android-v1005.apk","browser_download_url":alpha_url}]}], 0, "outpost-alpha-v").is_empty(), "Mismatched APK names cannot be installed across channels")
+	var installer_script = load("res://scripts/ui/android_package_installer.gd")
+	check(installer_script != null, "Native in-app download/installer script imports")
+	if installer_script != null:
+		check(installer_script.expected_apk_url("alpha", 1011) == "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1011/Outpost-Alpha-v1011.apk", "Official Alpha APK path is canonical")
+		check(installer_script.expected_apk_url("stable", 1048) == "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v1048/Outpost-Android-v1048.apk", "Official Stable APK path is canonical")
+		check(installer_script.trusted_apk_url(installer_script.expected_apk_url("alpha", 1011), "alpha", 1011), "Official signed Alpha release accepted")
+		check(not installer_script.trusted_apk_url(installer_script.expected_apk_url("alpha", 1011) + "?redirect=evil", "alpha", 1011), "Unsafe appended URL params rejected")
+		check(not installer_script.trusted_apk_url(installer_script.expected_apk_url("alpha", 1011), "stable", 1011), "Cross-channel URLs cannot be exchanged")
+		check(not installer_script.trusted_apk_url("https://evil.example/Outpost-Alpha-v1011.apk", "alpha", 1011), "Arbitrary APK hosting rejected")
+		check(not installer_script.trusted_apk_url("https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1011/bad.apk", "alpha", 1011), "Renamed release files rejected")
+		var installer = installer_script.new()
+		root.add_child(installer)
+		check(not installer.can_install() and not installer.is_downloading(), "No APK is silently downloaded or installed during launch")
+		installer.queue_free()
+
 	var title: PackedScene = load("res://scenes/ui/title_screen.tscn")
 	check(title != null, "Title scene imports with updater")
 	if title != null:
@@ -71,6 +86,13 @@ func _run() -> void:
 			check(not selected_glow.visible, "Old selected glow hides when focus moves elsewhere")
 
 		check(screen.get("_updater") != null, "In-app updater service is connected")
+		check(screen.get("_installer") != null, "Android DownloadManager installer exists in-game")
+		var native_install: Button = screen.get("_install_button") as Button
+		var native_progress: ProgressBar = screen.get("_download_progress") as ProgressBar
+		check(native_install != null and native_install.disabled, "Install APK requires a completed user-requested download")
+		check(native_progress != null and not native_progress.visible, "In-game download progress starts hidden")
+		check(screen.get_node_or_null("Artboard/SettingsPanel") != null and screen.get_node_or_null("Artboard/SettingsPanel").find_child("SettingsSwipe", true, false) != null, "Settings scrolls on narrow Android landscape")
+		check(screen.get("_update_status").text.contains("inside Outpost"), "User is not instructed to use Chrome for APK install")
 		var button: Button = screen.get("_update_button") as Button
 		check(button != null and button.text == "CHECK FOR UPDATES", "Visible and deliberate update-check action")
 		var label: Label = screen.get("_update_status") as Label
