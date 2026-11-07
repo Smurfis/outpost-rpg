@@ -162,7 +162,7 @@ func _layout_for_size(available: Vector2) -> void:
 	if _changelog_button != null:
 		_changelog_button.position.x = 1164.0 + half_extra
 	if _changelog_panel != null:
-		_changelog_panel.position.x = 800.0 + half_extra
+		_changelog_panel.position.x = 766.0 + half_extra
 	_approved_backdrop.visible = not is_wide
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
@@ -664,33 +664,47 @@ func _build_changelog_scroll() -> void:
 	_canvas.add_child(_changelog_button)
 	_changelog_panel = PanelContainer.new()
 	_changelog_panel.name = "ChangelogPanel"
-	_changelog_panel.position = Vector2(800, 257)
-	_changelog_panel.size = Vector2(358, 346)
-	_changelog_panel.custom_minimum_size = Vector2(358, 346)
-	_changelog_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	_changelog_panel.position = Vector2(766, 249)
+	_changelog_panel.size = Vector2(405, 373)
+	_changelog_panel.custom_minimum_size = Vector2(405, 373)
+	_changelog_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	_changelog_panel.clip_contents = true
 	_changelog_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(_changelog_panel)
 	var margins := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margins.add_theme_constant_override("margin_" + side, 14)
+		margins.add_theme_constant_override("margin_" + side, 17)
 	_changelog_panel.add_child(margins)
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 9)
 	margins.add_child(stack)
-	stack.add_child(_menu_label("OUTPOST  ◆  WHAT'S NEW", 23))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	stack.add_child(header)
+	var heading := _menu_label("OUTPOST  ◆  WHAT'S NEW", 22)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(heading)
+	var close := Button.new()
+	close.name = "ChangelogCloseButton"
+	SKIN.apply_close_button(close, 50)
+	close.tooltip_text = "Close changelog"
+	close.pressed.connect(_toggle_changelog)
+	header.add_child(close)
 	var scroll := ScrollContainer.new()
 	scroll.name = "ChangelogScrollList"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.clip_contents = true
+	scroll.follow_focus = true
 	stack.add_child(scroll)
-	var details := _menu_label("WHAT TO TEST  •  ALPHA\n\n[1] CRAFTING: Open near a workbench, change stations, close with X, Back or the new top-left BACK TO GAME button.\n\n[2] CONTROLS: Try fixed/dynamic thumbstick, sticky movement STOP, second-finger camera while walking.\n\n[3] INVENTORY: MENU -> BAG, filter items, inspect, close.\n\n[4] TITLE: Select Play/Continue/Settings; Quit should highlight in white only.\n\nRECENT ALPHA FEATURES\nCube World-style chibi/voxel foliage, round terrain minimap, Albion-inspired bag/equipment, transparent hero portrait, radial XP jewel.\n\nNOT FINISHED\nArt-accurate HUD mockup replacement, physical Android visuals and full gamepad accessibility.", 17)
+	var details := _menu_label("ALPHA TEST NOTES\n\nCRAFTING  •  Interact beside a campfire, forge, loom, woodwork bench or enchanting table. Only that station's items appear, with its icon. Tap a recipe and craft directly when materials are ready.\n\nITEMS  •  Tap weapon, armour and inventory icons to inspect details. Hover with a mouse for a quick tooltip.\n\nCONTROLS  •  Try fixed or dynamic thumbstick, sticky movement STOP, and second-finger camera rotation.\n\nWORLD  •  Cube World-inspired voxel scenery, circular minimap and Albion-style equipment.\n\nTESTING  •  Please report any stuck menu, overlapping text, incorrect hitboxes or missing crafting option.\n\nANDROID SECURITY  •  In-game APK installation remains paused during Play Protect review.", 17)
 	details.name = "ChangelogBody"
 	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	details.text = details.text.replace("\\n", "\n")
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(details)
-	stack.add_child(_menu_button("CLOSE SCROLL", _toggle_changelog, "parchment"))
+	# No redundant full-width CLOSE button: the consistent radial X is enough.
 	_changelog_panel.visible = false
 
 func _toggle_changelog() -> void:
