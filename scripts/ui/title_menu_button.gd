@@ -60,6 +60,7 @@ func _apply_appearance() -> void:
 		_selection_material = ShaderMaterial.new()
 		_selection_material.shader = GOLD_SHADER
 		_selection_material.set_shader_parameter("originally_gold", kind == "play")
+		_selection_material.set_shader_parameter("plaque_kind", ["play", "continue", "settings", "quit"].find(kind))
 		material = _selection_material
 		_update_active_art()
 		add_theme_stylebox_override("focus", art_focus)
@@ -132,7 +133,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	if not is_title_highlighted():
+	# Quit has its own white-ink treatment, not gold asterisks/rays.
+	if button_kind == "quit" or not is_title_highlighted():
 		return
 	# Four short golden rays on each side reproduce the original Play sparkles.
 	# No rectangular selection borders or grey side boxes.
