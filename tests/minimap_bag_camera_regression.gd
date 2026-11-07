@@ -20,11 +20,11 @@ func _run() -> void:
 	if scene == null:
 		quit(1)
 		return
-	var game: Node3D = scene.instantiate()
+	var game = scene.instantiate()
 	root.add_child(game)
 	await process_frame
-	var menu: CanvasLayer = game.menu as CanvasLayer
-	var hud: CanvasLayer = game.hud as CanvasLayer
+	var menu = game.menu
+	var hud = game.hud
 	_check(menu != null and hud != null, "Bag and HUD use the live game")
 	if menu == null or hud == null:
 		quit(1)
