@@ -49,7 +49,8 @@ func _ready() -> void:
 	window = PanelContainer.new()
 	window.name = "InventoryWindow"
 	window.mouse_filter = Control.MOUSE_FILTER_STOP
-	window.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	window.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	window.clip_contents = true
 	add_child(window)
 	var layout := VBoxContainer.new()
 	layout.name = "InventoryLayout"
@@ -59,13 +60,11 @@ func _ready() -> void:
 	var heading := HBoxContainer.new()
 	layout.add_child(heading)
 	heading.add_child(_text("◈  INVENTORY", 23, SKIN.GOLD, true))
-	var switch_craft := _button("CRAFT", "wood")
-	switch_craft.custom_minimum_size = Vector2(76, 44)
-	switch_craft.pressed.connect(func() -> void: menu.open("craft"))
-	heading.add_child(switch_craft)
-	var close := _button("✕", "red")
+	# Crafting belongs to the real station: inventory must not expose a
+	# remote five-station hub or switch players away from their item tooltip.
+	var close := Button.new()
 	close.name = "InventoryCloseButton"
-	close.custom_minimum_size = Vector2(46, 46)
+	SKIN.apply_close_button(close, 54)
 	close.pressed.connect(func() -> void: menu.close_page())
 	heading.add_child(close)
 
@@ -151,7 +150,7 @@ func _ready() -> void:
 
 	item_card = PanelContainer.new()
 	item_card.name = "InventoryItemDetails"
-	item_card.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	item_card.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	item_card.visible = false
 	add_child(item_card)
 	item_info = VBoxContainer.new()
@@ -331,7 +330,7 @@ func _gear_button(slot: String) -> Button:
 	var button := _button("", "wood_selected" if slot == selected_slot else "wood")
 	button.name = "EquipmentSlot_" + slot
 	button.custom_minimum_size = Vector2(54, 51)
-	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot)
+	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to view compatible equipment")
 	button.pressed.connect(_gear_clicked.bind(slot))
 	if id != "":
 		var art: TextureRect = _icon(id, 37)
@@ -421,7 +420,7 @@ func _render_items() -> void:
 		var tile := _button("", "wood_selected" if id == selected_id else "wood")
 		tile.name = "Item_" + id
 		tile.custom_minimum_size = Vector2(slot_px, slot_px)
-		tile.tooltip_text = id.replace("_", " ").capitalize() + " x%d" % int(game.inventory[id])
+		tile.tooltip_text = _item_tip(id)
 		tile.pressed.connect(_select_item.bind(id))
 		inventory_grid.add_child(tile)
 		var image: TextureRect = _icon(id, slot_px - 12.0)
@@ -461,6 +460,27 @@ func _select_item(id: String) -> void:
 	selected_slot = ""
 	refresh()
 
+func _item_tip(id: String) -> String:
+	# Mouse/desktop hover is a genuine tooltip, while tapping the same
+	# icon on Android opens the existing item-details card with actions.
+	if id.is_empty():
+		return "Empty equipment slot"
+	var label: String = id.replace("_", " ").capitalize()
+	var quantity: int = int(game.inventory.get(id, 0))
+	var heading: String = label + "  ×%d" % quantity
+	if game.is_equipped(id):
+		heading += "  •  EQUIPPED"
+	var weight: float = CARRY.weight(id, game.equipped_bag_id(), game.equipped_bag_stars())
+	var result: String = heading + "\n" + _kind(id).capitalize() + "  •  Weight %.2f" % weight
+	for recipe in game.recipes:
+		if str(recipe.get("result", "")) == id:
+			result += "\n" + str(recipe.get("desc", ""))
+			break
+	if CARRY.is_bag(id):
+		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
+	result += "\nTap to inspect" 
+	return result
+
 func _render_details() -> void:
 	_clear(item_info)
 	item_card.visible = selected_id != "" and int(game.inventory.get(selected_id, 0)) > 0
@@ -469,8 +489,8 @@ func _render_details() -> void:
 	var top := HBoxContainer.new()
 	item_info.add_child(top)
 	top.add_child(_text("ITEM DETAILS", 19, SKIN.GOLD, true))
-	var close := _button("✕", "red")
-	close.custom_minimum_size = Vector2(39, 39)
+	var close := Button.new()
+	SKIN.apply_close_button(close, 48)
 	close.pressed.connect(func() -> void:
 		selected_id = ""
 		refresh()
