@@ -17,6 +17,7 @@ const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
+const ANDROID_INSTALLER := preload("res://scripts/ui/android_package_installer.gd")
 const SKIN := preload("res://scripts/ui/outpost_skin.gd")
 const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
@@ -72,6 +73,11 @@ var _adventure_heading: Label
 var _new_adventure_pending: bool = true
 var _volume: float = 0.85
 var _download_button: Button
+var _install_button: Button
+var _download_progress: ProgressBar
+var _installer: Node
+var _update_download_code: int = 0
+var _update_download_channel: String = ""
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
@@ -543,6 +549,17 @@ func _build_settings() -> void:
 	_settings_panel = parts["frame"] as PanelContainer
 	_settings_panel.name = "SettingsPanel"
 	var stack: VBoxContainer = parts["stack"] as VBoxContainer
+	# The complete build-control panel must scroll in Android landscape.
+	# Do not squeeze touch buttons beyond their minimum height.
+	var margins: MarginContainer = stack.get_parent() as MarginContainer
+	var settings_scroll := ScrollContainer.new()
+	settings_scroll.name = "SettingsSwipe"
+	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margins.remove_child(stack)
+	margins.add_child(settings_scroll)
+	settings_scroll.add_child(stack)
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stack.add_child(_menu_label("Sound and accessibility", 18))
 	var volume_row := HBoxContainer.new()
 	volume_row.add_theme_constant_override("separation", 12)
@@ -626,6 +643,12 @@ func _build_settings() -> void:
 	add_child(_updater)
 	_updater.status_changed.connect(_on_update_status)
 	_updater.update_found.connect(_on_update_found)
+	_installer = ANDROID_INSTALLER.new()
+	_installer.name = "AndroidPackageInstaller"
+	add_child(_installer)
+	_installer.status_changed.connect(_on_update_status)
+	_installer.download_progress.connect(_on_apk_download_progress)
+	_installer.install_ready.connect(_on_apk_ready)
 	if _selected_channel not in ["stable", "alpha"]:
 		_selected_channel = _updater.installed_channel()
 	_updater.set_target_channel(_selected_channel)
@@ -642,10 +665,26 @@ func _build_settings() -> void:
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
-	_update_status = _menu_label("Android build %d • Downloads open in your browser." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
+	_install_button = _menu_button("INSTALL APK", _install_downloaded_apk, "wood")
+	_install_button.name = "InstallDownloadedAPK"
+	_install_button.disabled = true
+	_install_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	update_row.add_child(_install_button)
+	_download_progress = ProgressBar.new()
+	_download_progress.name = "APKDownloadProgress"
+	_download_progress.show_percentage = true
+	_download_progress.min_value = 0.0
+	_download_progress.max_value = 100.0
+	_download_progress.value = 0.0
+	_download_progress.custom_minimum_size = Vector2(0, 21)
+	_download_progress.visible = false
+	stack.add_child(_download_progress)
+	_update_status = _menu_label("Android build %d • APK downloads are managed inside Outpost." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
-	_update_status.custom_minimum_size = Vector2(0, 42)
+	_update_status.custom_minimum_size = Vector2(0, 68)
 	stack.add_child(_update_status)
+	if OS.has_feature("Android"):
+		_installer.restore_download()
 	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
 	_settings_panel.visible = false
 
@@ -719,12 +758,16 @@ func _select_update_channel(channel: String) -> void:
 	if _updater != null:
 		_updater.set_target_channel(channel)
 	_update_download_url = ""
+	_update_download_code = 0
+	_update_download_channel = ""
 	if _download_button != null:
 		_download_button.disabled = true
 		_download_button.text = "DOWNLOAD APK"
 	if _update_notice != null:
 		_update_notice.visible = false
 	_refresh_channel_buttons()
+	if _install_button != null:
+		_install_button.disabled = _installer == null or not _installer.can_install() or _installer.downloaded_channel() != channel
 	_on_update_status("Selected %s. Tap CHECK FOR UPDATES to find its APK." % channel.capitalize())
 	_write_prefs()
 
@@ -798,15 +841,47 @@ func _join_friend() -> void:
 	_launch_game(_new_adventure_pending, "join", address, _adventure_name.text)
 
 func _check_or_download_update() -> void:
-	if not _update_download_url.is_empty():
-		# The Android installer always needs the user's approval. A browser
-		# download avoids unsafe file:// URI / FileProvider workarounds.
-		var error: Error = OS.shell_open(_update_download_url)
-		if error != OK:
-			_on_update_status("Couldn't open your browser; use the GitHub Releases page.")
+	if _installer != null and _installer.can_install() and _installer.downloaded_channel() == _selected_channel:
+		_install_downloaded_apk()
 		return
-	if _updater != null:
-		_updater.check_for_updates()
+	if _update_download_url.is_empty():
+		_check_updates_only()
+		return
+	if _installer == null:
+		_on_update_status("In-app installer is unavailable. Try a newer Android build.")
+		return
+	if not ANDROID_INSTALLER.trusted_apk_url(_update_download_url, _update_download_channel, _update_download_code):
+		_on_update_status("The download address didn't match the selected official build.")
+		return
+	_installer.start_download(_update_download_url, _update_download_channel, _update_download_code)
+	if _installer.is_downloading():
+		_download_button.disabled = true
+		_download_button.text = "DOWNLOADING"
+		_download_progress.value = 0
+		_download_progress.visible = true
+
+func _install_downloaded_apk() -> void:
+	if _installer != null:
+		if _installer.downloaded_channel() != _selected_channel:
+			_on_update_status("Choose the %s channel before installing its downloaded APK." % _installer.downloaded_channel().capitalize())
+			return
+		_installer.install_downloaded()
+
+func _on_apk_download_progress(fraction: float) -> void:
+	if _download_progress != null:
+		_download_progress.visible = true
+		_download_progress.value = clampf(fraction * 100.0, 0.0, 100.0)
+
+func _on_apk_ready(channel: String, code: int) -> void:
+	if _install_button != null:
+		_install_button.disabled = channel != _selected_channel
+		_install_button.text = "INSTALL %d" % code
+	if _download_button != null:
+		_download_button.disabled = true
+		_download_button.text = "APK READY"
+	if _download_progress != null:
+		_download_progress.visible = true
+		_download_progress.value = 100
 
 func _on_update_status(message: String) -> void:
 	if _update_status != null:
@@ -814,13 +889,15 @@ func _on_update_status(message: String) -> void:
 
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
 	_update_download_url = download_url
+	_update_download_code = version_code
+	_update_download_channel = _selected_channel
 	if _download_button != null:
-		_download_button.disabled = false
-		_download_button.text = "DOWNLOAD BUILD %d" % version_code
+		_download_button.disabled = _installer != null and _installer.is_downloading()
+		_download_button.text = "GET BUILD %d" % version_code
 	if _update_notice != null:
 		_update_notice.text = "%s APK  •  BUILD %d" % [_selected_channel.to_upper(), version_code]
 		_update_notice.visible = true
-	_on_update_status("%s build %d available. Tap Download, then approve Android install. Different channels have separate saves." % [_selected_channel.capitalize(), version_code])
+	_on_update_status("%s build %d available. Download HERE, then approve the Android installer. Stable and Alpha have separate saves." % [_selected_channel.capitalize(), version_code])
 
 func _toggle_settings() -> void:
 	if _changelog_panel != null:
