@@ -95,6 +95,9 @@ var top_menu_pressed: bool = false
 var top_menu_hold_seconds: float = 0.0
 var top_menu_opened_by_hold: bool = false
 var floating_joystick_enabled: bool = false
+var sticky_movement_enabled: bool = false
+var sticky_movement_toggle: CheckButton
+var stop_sticky_button: Button
 var player_display_name: String = "Adventurer"
 var control_settings_panel: Panel
 var leave_menu_shade: ColorRect
@@ -344,6 +347,14 @@ func _ready() -> void:
 	# Their existing separate modal pages open only when explicitly requested,
 	# leaving joystick / smart-Interact / 3 skill buttons in their own positions.
 	# Offhand torch remains available without interfering with three ability slots.
+	stop_sticky_button = Button.new()
+	stop_sticky_button.name = "StopStickyMovement"
+	stop_sticky_button.text = "■ STOP"
+	SKIN.apply_button(stop_sticky_button, "red")
+	stop_sticky_button.focus_mode = Control.FOCUS_NONE
+	root.add_child(stop_sticky_button)
+	stop_sticky_button.visible = false
+	stop_sticky_button.pressed.connect(_stop_sticky_movement)
 	torch_button = _action("torch", "TORCH", 0.700, 0.844, 0.757, 0.934, "round")
 
 	# The single context button replaces redundant ATTACK and GATHER tiles.
@@ -353,7 +364,7 @@ func _ready() -> void:
 	quick_buttons["skill_3"] = _action("skill_3", "SUNDER", 0.705, 0.760, 0.764, 0.870, "round")
 	# Both utility radials start empty. Tap uses the equipped item; hold and
 	# slide upwards chooses among actually owned consumables.
-	quick_buttons["consumable"] = _action("consumable", "FOOD", 0.773, 0.852, 0.830, 0.947, "round")
+	quick_buttons["consumable"] = _action("consumable", "HEAL", 0.773, 0.852, 0.830, 0.947, "round")
 	quick_buttons["potion"] = _action("potion", "POTION", 0.835, 0.842, 0.894, 0.943, "round")
 	for key in ["consumable", "potion"]:
 		(quick_buttons[key] as Button).mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -547,7 +558,7 @@ func _show_skill_details() -> void:
 	skill_detail_panel.visible = true
 
 func _build_control_settings() -> void:
-	control_settings_panel = _panel(0.329, 0.226, 0.689, 0.731)
+	control_settings_panel = _panel(0.329, 0.155, 0.689, 0.850)
 	control_settings_panel.name = "InGameControlSettings"
 	control_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	control_settings_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
@@ -568,16 +579,28 @@ func _build_control_settings() -> void:
 	stack.add_child(heading)
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
-	floating_mode_toggle.text = "Floating movement joystick"
+	floating_mode_toggle.text = "Dynamic thumbstick (tap lower-left anywhere)"
 	floating_mode_toggle.add_theme_font_size_override("font_size", 17)
 	floating_mode_toggle.toggled.connect(_set_floating_mode)
 	stack.add_child(floating_mode_toggle)
 	var note := Label.new()
-	note.text = "Off: joystick stays fixed. On: touch anywhere in the lower-left movement area; the ring follows your thumb."
+	note.text = "Off: fixed classic joystick. On: joystick teleports to your first touch in the lower-left, then follows your thumb."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", SKIN.CREAM)
 	stack.add_child(note)
+	sticky_movement_toggle = CheckButton.new()
+	sticky_movement_toggle.name = "StickyMovementToggle"
+	sticky_movement_toggle.text = "Sticky movement (keep walking on finger lift)"
+	sticky_movement_toggle.add_theme_font_size_override("font_size", 17)
+	sticky_movement_toggle.toggled.connect(_set_sticky_movement)
+	stack.add_child(sticky_movement_toggle)
+	var sticky_hint := Label.new()
+	sticky_hint.text = "With Sticky on, tap STOP near the thumbstick to stand still. Menus and backgrounding always stop movement."
+	sticky_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sticky_hint.add_theme_font_size_override("font_size", 15)
+	sticky_hint.add_theme_color_override("font_color", SKIN.CREAM)
+	stack.add_child(sticky_hint)
 	var name_title := Label.new()
 	name_title.text = "Character display name (local)"
 	name_title.add_theme_color_override("font_color", SKIN.CREAM)
@@ -708,6 +731,12 @@ func _set_floating_mode(enabled: bool) -> void:
 	_reset_touch()
 	_save_control_prefs()
 
+func _set_sticky_movement(enabled: bool) -> void:
+	sticky_movement_enabled = enabled
+	_reset_touch()
+	_save_control_prefs()
+
+
 func _save_character_name() -> void:
 	if name_edit == null:
 		return
@@ -722,15 +751,18 @@ func _load_control_prefs() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONTROL_PREFS) == OK:
 		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
+		sticky_movement_enabled = bool(config.get_value("controls", "sticky_movement", false))
 		player_display_name = str(config.get_value("profile", "display_name", "Adventurer")).strip_edges()
 		if player_display_name.is_empty():
 			player_display_name = "Adventurer"
 	floating_mode_toggle.set_pressed_no_signal(floating_joystick_enabled)
+	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
+	config.set_value("controls", "sticky_movement", sticky_movement_enabled)
 	config.set_value("profile", "display_name", player_display_name)
 	config.save(CONTROL_PREFS)
 
@@ -785,11 +817,11 @@ func _layout_touch_hud() -> void:
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(267.0, 240.0, 40.0), # skill 1
-		Vector3(355.0, 195.0, 40.0), # skill 2 (no square-hitbox overlap with skill 1)
-		Vector3(363.0, 110.0, 40.0), # skill 3
-		Vector3(264.0, 82.0, 32.0),  # food
-		Vector3(183.0, 82.0, 32.0)   # potion
+		Vector3(194.0, 210.0, 37.0), # skill 1: closer to Interact
+		Vector3(255.0, 155.0, 37.0), # skill 2: compact arc
+		Vector3(268.0, 72.0, 37.0),  # skill 3: clears Interact's left edge
+		Vector3(531.0, 82.0, 32.0),  # heal/food immediately LEFT of Torch
+		Vector3(613.0, 82.0, 32.0)   # potion immediately LEFT of Heal
 	]
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	for index in range(keys.size()):
@@ -798,6 +830,8 @@ func _layout_touch_hud() -> void:
 				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
 	_radial_px(torch_button, screen,
 			Vector2(screen.x - 449.0 * scale, screen.y - 82.0 * scale), 32.0 * scale)
+	if stop_sticky_button != null:
+		_place_px(stop_sticky_button, screen, Rect2(24.0 * scale, screen.y - 237.0 * scale, 118.0 * scale, 48.0 * scale))
 	# Follow the action target without obscuring the on-screen controls.
 	if tool_gesture_hint != null:
 		_place_px(tool_gesture_hint, screen, Rect2(
@@ -982,9 +1016,22 @@ func _make_camera_drag_hint() -> void:
 
 func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	# Reserve joystick, hotbar, co-op, quest, top HUD and smart-action areas.
-	# Central visible world accepts drag even while movement uses finger 0.
-	return pos.x >= screen.x * (0.38 if floating_joystick_enabled else 0.26) and pos.x <= screen.x * 0.78 and pos.y >= screen.y * 0.34 and pos.y <= screen.y * 0.77
+	# The SECOND touch must be able to orbit during a held movement joystick.
+	# Reserve the actual button rectangles instead of a huge blocked right zone.
+	if pos.x < screen.x * 0.24 or pos.y < screen.y * 0.16 or pos.y > screen.y * 0.94:
+		return false
+	if minimap != null and minimap.get_global_rect().grow(7.0).has_point(pos):
+		return false
+	for action in [smart_button, torch_button, menu_button, stop_sticky_button]:
+		if action != null and action.visible and action.get_global_rect().grow(8.0).has_point(pos):
+			return false
+	for action in quick_buttons.values():
+		if action is Control and (action as Control).visible and (action as Control).get_global_rect().grow(8.0).has_point(pos):
+			return false
+	for action in top_menu_actions:
+		if action.visible and action.get_global_rect().grow(6.0).has_point(pos):
+			return false
+	return true
 
 
 func _build_quick_tray() -> void:
@@ -1371,7 +1418,7 @@ func _process(delta: float) -> void:
 func _position_stick() -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	if floating_joystick_enabled:
-		joystick.visible = finger >= 0 or mouse_stick
+		joystick.visible = finger >= 0 or mouse_stick or (sticky_movement_enabled and move_vector.length_squared() > 0.001)
 		return
 	joystick.visible = true
 	joystick.position = Vector2(26.0, screen.y - 177.0)
@@ -1440,7 +1487,7 @@ func _input(event: InputEvent) -> void:
 				_start_floating_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
-			_reset_touch()
+			_end_movement_touch()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
@@ -1450,9 +1497,24 @@ func _input(event: InputEvent) -> void:
 				_start_floating_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and mouse_stick and finger == -1:
-			_reset_touch()
+			_end_movement_touch()
 	elif event is InputEventMouseMotion and mouse_stick and finger == -1:
 		_stick(event.position)
+
+func _end_movement_touch() -> void:
+	finger = -1
+	mouse_stick = false
+	if not sticky_movement_enabled:
+		move_vector = Vector2.ZERO
+	_position_stick()
+	if stop_sticky_button != null:
+		stop_sticky_button.visible = sticky_movement_enabled and move_vector.length_squared() > 0.001
+
+func _stop_sticky_movement() -> void:
+	move_vector = Vector2.ZERO
+	if stop_sticky_button != null:
+		stop_sticky_button.visible = false
+	_position_stick()
 
 func _reset_touch() -> void:
 	_cancel_smart_hold()
@@ -1463,6 +1525,8 @@ func _reset_touch() -> void:
 	finger = -1
 	mouse_stick = false
 	move_vector = Vector2.ZERO
+	if stop_sticky_button != null:
+		stop_sticky_button.visible = false
 	_position_stick()
 
 func _notification(what: int) -> void:
