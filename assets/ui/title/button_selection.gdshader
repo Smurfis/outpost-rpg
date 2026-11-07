@@ -11,32 +11,9 @@ void fragment() {
     vec3 rgb = original.rgb;
     float luma = dot(rgb, vec3(0.299, 0.587, 0.114));
 
-    // The PNG source cutouts also include an opaque rectangular landscape
-    // screenshot. Mask it to the button silhouette, with soft 2-3 px edges.
-    // The unselected plaque never contains its permanent surrounding rays.
-    float y = UV.y;
-    float curve = smoothstep(0.21, 0.49, abs(y - 0.50));
-    float inset = 0.092 + 0.078 * curve;
-    float top = 0.07;
-    float bottom = 0.94;
-    if (plaque_kind == 1) {
-        inset = 0.055 + 0.055 * curve;
-        top = 0.075;
-        bottom = 0.94;
-    } else if (plaque_kind == 2) {
-        inset = 0.053 + 0.065 * curve;
-        top = 0.075;
-        bottom = 0.935;
-    } else if (plaque_kind == 3) {
-        inset = 0.110 + 0.068 * curve;
-        top = 0.10;
-        bottom = 0.92;
-    }
-    float left_soft = smoothstep(inset, inset + 0.015, UV.x);
-    float right_soft = 1.0 - smoothstep(1.0 - inset - 0.015, 1.0 - inset, UV.x);
-    float top_soft = smoothstep(top, top + 0.016, y);
-    float bottom_soft = 1.0 - smoothstep(bottom - 0.016, bottom, y);
-    float alpha = original.a * left_soft * right_soft * top_soft * bottom_soft;
+    // ImageTexture now contains actual transparent pixels outside the plaque.
+    // Do not apply another rectangular/oval clipping mask over the artwork.
+    float alpha = original.a;
 
     // Play's original golden plaque should dim when not selected, like all
     // other plaques; never leave gold around it when moving to another.
