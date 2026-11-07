@@ -925,12 +925,15 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	SKIN.apply_button(button, "wood")
 	if kind == "round":
 		var normal: StyleBoxFlat = SKIN.flat("hud")
-		normal.bg_color = Color("#3a2820")
-		normal.border_color = SKIN.GOLD
-		normal.set_border_width_all(4)
+		# No heavy gold donut around the touch controls: understated
+		# translucent frame leaves actual icon and ability art prominent.
+		normal.bg_color = Color(0.14, 0.11, 0.12, 0.77)
+		normal.border_color = Color(0.83, 0.67, 0.44, 0.37)
+		normal.set_border_width_all(2)
 		normal.set_corner_radius_all(95)
 		var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-		pressed.bg_color = Color("#9d612f")
+		pressed.bg_color = Color(0.48, 0.31, 0.19, 0.90)
+		pressed.border_color = Color(1.0, 0.90, 0.65, 0.58)
 		var disabled: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
 		disabled.bg_color = Color("#342d29")
 		disabled.border_color = Color("#81725e")
