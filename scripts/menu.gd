@@ -292,6 +292,8 @@ func open(page: String) -> void:
 			selected_station = station
 			selected_id = _first_recipe(station)
 			loaded.clear()
+			if game.crafting.is_empty():
+				completed_id = "" # Old bench receipt cannot appear at a new station.
 		elif selected_id == "":
 			selected_id = _first_recipe(selected_station)
 	# Never throw an already-open Prepare step away when returning from another
