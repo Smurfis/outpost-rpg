@@ -303,7 +303,13 @@ func _make_screen() -> void:
 	var version := Label.new()
 	version.name = "Version"
 	var channel: String = "ALPHA" if str(ProjectSettings.get_setting("application/config/build_channel", "stable")) == "alpha" else "STABLE"
-	version.text = "%s  •  %d\n%s" % [channel, int(ProjectSettings.get_setting("application/config/android_build_code", 11)), live_version]
+	var build_code: int = int(ProjectSettings.get_setting("application/config/android_build_code", 11))
+	var clean_version: String = live_version.trim_prefix("v").replace("-dev", "").replace("-alpha", "")
+	# Separate semantic test revision (.1, .2, ...) from numeric Android build
+	# code. Each published Alpha workflow increases its versionCode by one.
+	var revision: int = maxi(1, build_code - 1006)
+	version.text = ("V.A.%s.%d" % [clean_version, revision]) if channel == "ALPHA" else ("V.S.%s" % clean_version)
+	version.text += "\nBUILD %d" % build_code
 	version.position = Vector2(1095, 650)
 	version.size = Vector2(163, 47)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
