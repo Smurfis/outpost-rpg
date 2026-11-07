@@ -64,6 +64,18 @@ func _run() -> void:
 
 	if mini != null and toggle != null:
 		_does_not_overlap(mini, toggle, "Minimap is clear of its menu toggle")
+		verify(toggle.get_global_rect().end.x < mini.get_global_rect().position.x, "MENU sits immediately left of the upper-right minimap")
+		verify(toggle.get_global_rect().position.y <= mini.get_global_rect().position.y + 9.0, "MENU aligns to the minimap's top edge")
+	var specials: Array[Button] = [hud.quick_buttons["skill_1"], hud.quick_buttons["skill_2"], hud.quick_buttons["skill_3"]]
+	if smart != null:
+		verify(specials[0].get_global_rect().get_center().x > specials[1].get_global_rect().get_center().x, "POWER is now centered above and closer to CRAFT")
+		verify(specials[0].get_global_rect().get_center().y < smart.get_global_rect().position.y, "POWER remains above rather than intercepting CRAFT touch")
+		verify(specials[1].get_global_rect().get_center().x > smart.get_global_rect().position.x - 170.0, "Middle and lower specials form a compact group near CRAFT")
+	var context_panel: Panel = controls.get_node_or_null("ContextPrompt") as Panel
+	var toast_panel: Panel = controls.get_node_or_null("LootQuestToast") as Panel
+	if context_panel != null and toast_panel != null:
+		verify(context_panel.get_global_rect().end.y < controls.size.y * 0.42, "Crafting Station context prompt does not cover the lower abilities or XP")
+		verify(toast_panel.get_global_rect().end.y < context_panel.get_global_rect().position.y, "Toast and actionable context are vertically aligned without overlapping")
 	hud._set_top_menu(true)
 	verify(hud.top_menu_actions.size() == 6 and menu.visible, "Six-option drop-down opens")
 	for option in hud.top_menu_actions:
