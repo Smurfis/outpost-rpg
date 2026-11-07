@@ -829,11 +829,14 @@ func _layout_touch_hud() -> void:
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(202.0, 243.0, 37.0), # skill 1: near Interact, clear of menu
-		Vector3(286.0, 186.0, 37.0), # skill 2: 10px horizontal gap to skill 1
-		Vector3(286.0, 102.0, 37.0), # skill 3: 10px vertical gap to skill 2
-		Vector3(531.0, 82.0, 32.0),  # heal/food immediately LEFT of Torch
-		Vector3(613.0, 82.0, 32.0)   # potion immediately LEFT of Heal
+		# Distances measured from RIGHT/BOTTOM in scaled design units.
+		# POWER is directly above INTERACT (right=90); the other two
+		# skills are tucked alongside it but never overlap hitboxes.
+		Vector3( 90.0, 269.0, 37.0), # POWER: centred directly over Interact
+		Vector3(191.0, 202.0, 37.0), # CLEAVE/LOCK: compact beside Interact
+		Vector3(191.0,  98.0, 37.0), # SUNDER/LOCK: neatly below previous
+		Vector3(531.0,  82.0, 32.0), # heal left of torch; unchanged
+		Vector3(613.0,  82.0, 32.0)  # potion left of heal; unchanged
 	]
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	for index in range(keys.size()):
