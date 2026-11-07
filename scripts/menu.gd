@@ -249,7 +249,7 @@ func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	var container := PanelContainer.new()
 	# Text in these nested detail cards is cream/gold, so use dark carved
 	# wood instead of a light item-card surface with unreadable cream text.
-	container.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	container.add_theme_stylebox_override("panel", SKIN.modal_section())
 	target.add_child(container)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
@@ -882,6 +882,7 @@ func _render_recipe() -> void:
 		row.add_child(_ingredient_state_icon(own >= need))
 		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
+	next.name = "StationCraftAction"
 	next.text = "IMPROVE QUALITY" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "CRAFT  ◆  %s" % str(recipe.get("name", "ITEM")).to_upper()
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
