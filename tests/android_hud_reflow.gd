@@ -76,6 +76,72 @@ func _run() -> void:
 			_does_not_overlap(option, button, "Menu option does not cover playable ability: " + option.name)
 	hud._set_top_menu(false)
 
+	# An actual Android tap path rather than direct Button.pressed.emit() only.
+	if toggle != null:
+		var menu_tap := InputEventScreenTouch.new()
+		menu_tap.index = 1
+		menu_tap.pressed = true
+		menu_tap.position = toggle.get_global_rect().get_center()
+		hud._input(menu_tap)
+		verify(hud.top_menu_open, "Tapping MENU opens the live six-item flyout")
+		var bag_action: Button = controls.get_node_or_null("BagMenuButton") as Button
+		if bag_action != null:
+			var bag_tap := InputEventScreenTouch.new()
+			bag_tap.index = 1
+			bag_tap.pressed = true
+			bag_tap.position = bag_action.get_global_rect().get_center()
+			hud._input(bag_tap)
+			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Tapping BAG opens Albion inventory, not an inert overlay")
+			var emergency: Button = game.menu.emergency_close
+			verify(emergency != null and emergency.visible, "Back to Game stays above the Bag and Craft panels")
+			if emergency != null:
+				var exit_tap := InputEventScreenTouch.new()
+				exit_tap.pressed = true
+				exit_tap.position = emergency.get_global_rect().get_center()
+				game.menu._input(exit_tap)
+				verify(not game.menu.visible, "Tapping Back to Game actually leaves the bag")
+		game.show_crafting()
+		verify(game.menu.visible and game.menu.current_page == "craft", "Crafting reopens after bag touch")
+		game.menu.close_page()
+
+	# Dynamic stick and independent second-finger camera while moving.
+	hud._set_floating_mode(true)
+	hud._set_sticky_movement(true)
+	var screen_size: Vector2 = hud.get_viewport().get_visible_rect().size
+	var first := InputEventScreenTouch.new()
+	first.index = 0
+	first.pressed = true
+	first.position = Vector2(screen_size.x * 0.11, screen_size.y * 0.75)
+	hud._input(first)
+	verify(hud.finger == 0, "Dynamic thumbstick captures an imprecise lower-left touch")
+	var walk := InputEventScreenDrag.new()
+	walk.index = 0
+	walk.position = first.position + Vector2(34, -9)
+	hud._input(walk)
+	verify(hud.move_vector.length_squared() > 0.001, "Dynamic thumbstick starts movement on drag")
+	var second := InputEventScreenTouch.new()
+	second.index = 1
+	second.pressed = true
+	second.position = Vector2(screen_size.x * 0.53, screen_size.y * 0.56)
+	hud._input(second)
+	verify(hud.finger == 0 and hud.camera_drag_finger == 1, "Second finger can orbit while first holds movement")
+	var release_cam := InputEventScreenTouch.new()
+	release_cam.index = 1
+	release_cam.pressed = false
+	release_cam.position = second.position
+	hud._input(release_cam)
+	var release_stick := InputEventScreenTouch.new()
+	release_stick.index = 0
+	release_stick.pressed = false
+	release_stick.position = walk.position
+	hud._input(release_stick)
+	verify(hud.finger == -1 and hud.move_vector.length_squared() > 0.001, "Sticky mode intentionally preserves movement after finger lift")
+	verify(hud.stop_sticky_button.visible, "Sticky movement exposes the STOP safety button")
+	hud._stop_sticky_movement()
+	verify(hud.move_vector == Vector2.ZERO and not hud.stop_sticky_button.visible, "STOP action reliably cancels sticky movement")
+	hud._set_sticky_movement(false)
+	hud._set_floating_mode(false)
+
 	hud.render_status(81.0, {"wood": 8, "stone": 3, "coins": 12}, 80, 0,
 			"training_blade", "Gather wood and stone, then craft a spear", "Explore the fields")
 	verify(hud.quest.text == "Gather wood and stone", "Quest ticker shows a concise actionable clause")
