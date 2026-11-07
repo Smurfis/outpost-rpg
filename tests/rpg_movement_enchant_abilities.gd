@@ -32,8 +32,8 @@ func _run() -> void:
 	var hotbar: Panel = game.hud.root.get_node_or_null("FunctionalHotbar") as Panel
 	var menu_button: Button = game.hud.root.get_node_or_null("TopRightMenuButton") as Button
 	var attached_bag: Button = game.hud.root.get_node_or_null("Action_bag") as Button
-	verify(hotbar != null and hotbar.anchor_top >= 0.39 and hotbar.anchor_bottom <= 0.59, "Collapsed six-option menu stays below minimap and above abilities")
-	verify(menu_button != null and menu_button.anchor_top >= 0.32, "Top menu toggle is parked beneath minimap")
+	verify(hotbar != null and hotbar.anchor_top < 0.22 and hotbar.anchor_bottom < 0.35, "Six-option flyout sits near the top-right minimap without covering abilities")
+	verify(menu_button != null and menu_button.anchor_top < 0.15, "Top menu toggle is parked beside the upper minimap")
 	verify(attached_bag != null and attached_bag.anchor_top < 0.10, "Bag is attached to collapsible wallet, not a permanent bar")
 	verify(game.hud.torch_button != null and game.hud.torch_button.anchor_top > 0.80, "Offhand torch remains separate from menu flyout")
 	verify(game.hud.root.get_node_or_null("Action_attack") == null and game.hud.root.get_node_or_null("Action_gather") == null, "Obsolete combat tiles removed")
