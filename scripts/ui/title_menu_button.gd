@@ -35,6 +35,10 @@ func _apply_appearance() -> void:
 	if ResourceLoader.exists(approved_path):
 		baked_image = load(approved_path) as Texture2D
 	if baked_image != null:
+		baked_image = _remove_screenshot_matte(baked_image, kind)
+		# The original PNG contains screenshot scenery and Play starbursts
+		# outside the plaque. Pixel-alpha clip the plaque as REAL transparent
+		# runtime art, so nothing remains baked when selection moves.
 		# The approved PNG already includes its own hand-lettered caption/icon.
 		# Keep this a true accessible Button, but do not print a second label.
 		text = ""
@@ -133,26 +137,36 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	# Quit has its own white-ink treatment, not gold asterisks/rays.
-	if button_kind == "quit" or not is_title_highlighted():
-		return
-	# Four short golden rays on each side reproduce the original Play sparkles.
-	# No rectangular selection borders or grey side boxes.
-	var pulse: float = 1.0 if reduced_motion else 0.89 + 0.11 * sin(_spark_elapsed * 3.0)
-	var gold := Color(1.0, 0.70, 0.17, pulse)
-	var bright := Color(1.0, 0.94, 0.58, pulse)
-	var outline := Color(0.38, 0.19, 0.10, pulse)
-	var middle: float = roundf(size.y * 0.5)
-	for side in [-1, 1]:
-		var sign: float = float(side)
-		var edge: float = 2.0 if side == -1 else size.x - 2.0
-		for bend in [-1, 0, 1]:
-			var offset_y: float = float(bend) * 19.0
-			var root := Vector2(edge + sign * 10.0, middle + offset_y * 0.28)
-			var tip := Vector2(edge + sign * (35.0 if bend == 0 else 31.0), middle + offset_y)
-			draw_line(root, tip, outline, 9.0)
-			draw_line(root, tip, gold, 6.0)
-			draw_line(root, tip, bright, 2.0)
+	# Rays and soft illumination are now entirely separate title-screen
+	# layers that follow focus. Never draw a second fixed border over a PNG.
+	pass
+
+static func _remove_screenshot_matte(source: Texture2D, kind: String) -> Texture2D:
+	var bitmap: Image = source.get_image()
+	if bitmap == null:
+		return source
+	bitmap.convert(Image.FORMAT_RGBA8)
+	# Vertices are in the original PNG pixel-space (never resize at import).
+	# They hug the real cutouts rather than the opaque rectangular screenshot.
+	var contour := PackedVector2Array()
+	match kind:
+		"play":
+			contour = PackedVector2Array([Vector2(44, 27), Vector2(55, 13), Vector2(76, 6), Vector2(99, 4), Vector2(117, 10), Vector2(304, 10), Vector2(327, 2), Vector2(357, 8), Vector2(377, 22), Vector2(381, 67), Vector2(365, 82), Vector2(341, 90), Vector2(76, 91), Vector2(53, 80), Vector2(43, 60)])
+		"continue":
+			contour = PackedVector2Array([Vector2(12, 28), Vector2(32, 12), Vector2(54, 7), Vector2(308, 7), Vector2(334, 15), Vector2(351, 30), Vector2(350, 51), Vector2(327, 69), Vector2(41, 73), Vector2(11, 51)])
+		"settings":
+			contour = PackedVector2Array([Vector2(8, 33), Vector2(31, 11), Vector2(54, 5), Vector2(285, 5), Vector2(311, 17), Vector2(329, 39), Vector2(319, 58), Vector2(291, 71), Vector2(41, 71), Vector2(7, 55)])
+		"quit":
+			contour = PackedVector2Array([Vector2(4, 21), Vector2(21, 8), Vector2(265, 8), Vector2(287, 20), Vector2(288, 52), Vector2(268, 70), Vector2(21, 72), Vector2(4, 60)])
+	if contour.is_empty():
+		return source
+	for y in range(bitmap.get_height()):
+		for x in range(bitmap.get_width()):
+			if not Geometry2D.is_point_in_polygon(Vector2(float(x) + 0.5, float(y) + 0.5), contour):
+				var px: Color = bitmap.get_pixel(x, y)
+				px.a = 0.0
+				bitmap.set_pixel(x, y, px)
+	return ImageTexture.create_from_image(bitmap)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	var style := StyleBoxTexture.new()
