@@ -48,6 +48,9 @@ jobs:
           python3 -m venv .launcher-venv
           .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
           .launcher-venv/bin/python tools/generate_android_launcher_icons.py
+          # Original title PNG also contained huge baked opaque button shadows.
+          # Generate physically clean imported assets before packaging the APK.
+          .launcher-venv/bin/python tools/clean_title_art.py
       - name: Configure permanent Android signing identity and version
         shell: bash
         env:
