@@ -394,7 +394,6 @@ func refresh() -> void:
 	var browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == ""
 	left_scroll.visible = current_page != "craft" or browse
 	right_scroll.visible = true
-	left_scroll.scroll_vertical = left_scroll.scroll_vertical
 	right_scroll.scroll_vertical = 0 if current_page == "craft" else right_scroll.scroll_vertical
 
 func _render_bag() -> void:
@@ -715,27 +714,35 @@ func _render_craft_steps() -> void:
 		card.add_child(text_label)
 
 func _render_craft() -> void:
-	title.text = "OUTPOST  ◆  HANDCRAFTING"
-	var nearby: String = game.closest_station()
-	var stage_label: String = "1/4  CHOOSE RECIPE"
+	# This screen belongs to exactly ONE station, chosen by world proximity
+	# (or the active crafting job). No wood/forge/loom/campfire/enchant tabs.
+	var station: String = selected_station
+	station_badge.visible = station_names.has(station)
+	if station_badge.visible:
+		station_badge.texture = load("res://assets/ui/icons/station_" + station + ".svg") as Texture2D
+		title.text = str(station_names[station]) + "  •  CRAFTING"
+	else:
+		station_badge.texture = null
+		title.text = "CRAFTING STATION"
+	if station.is_empty():
+		subtitle.text = "Move closer to a crafting station to see its items."
+		recipes_list.add_child(_label("No crafting station nearby.", 18, SKIN.INK))
+		details.add_child(_label("Use INTERACT beside a workbench, forge, loom, campfire or enchanting table.", 18, SKIN.INK))
+		return
+	var count: int = 0
+	for candidate in game.recipes:
+		if str(candidate.get("station", "workbench")) == station:
+			count += 1
 	if not game.crafting.is_empty():
-		stage_label = "3/4  WORK STATION"
+		subtitle.text = "WORK IN PROGRESS  •  " + str(station_names[station])
 	elif completed_id != "":
-		stage_label = "4/4  COMPLETE"
-	elif craft_step == "prepare":
-		stage_label = "2/4  PREPARE MATERIALS"
-	elif craft_step == "detail":
-		stage_label = "1/4  INSPECT ITEM"
-	_render_craft_steps()
-	subtitle.text = "%s    •    %s" % [stage_label, ("AT " + nearby.capitalize()) if nearby != "" else "BROWSE RECIPES FROM ANYWHERE"]
-	for station_id in ["workbench", "forge", "loom", "campfire", "enchanting"]:
-		var tab := Button.new()
-		tab.text = str(station_names[station_id])
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tab.disabled = not game.crafting.is_empty() and selected_station != station_id
-		SKIN.apply_button(tab, "wood_selected" if selected_station == station_id else "wood")
-		tab.pressed.connect(_station_change.bind(station_id))
-		station_tabs.add_child(tab)
+		subtitle.text = "ITEM COMPLETE  •  " + str(station_names[station])
+	else:
+		subtitle.text = "NEARBY " + str(station_names[station]) + "  •  %d recipes" % count
+	# Selection remains in sync with the interacted station even after moving
+	# between stations, and no recipe from another bench can leak through.
+	if selected_id.is_empty() or str(game._recipe_by_id(selected_id).get("station", "")) != station:
+		selected_id = _first_recipe(station)
 	for recipe in game.recipes:
 		if str(recipe.get("station", "workbench")) != selected_station:
 			continue
@@ -809,13 +816,8 @@ func _render_craft() -> void:
 		badge.anchor_top = 0.10
 		badge.anchor_bottom = 0.42
 		choose.add_child(badge)
-		if selected_id == id:
-			var selection_outline := Panel.new()
-			selection_outline.name = "SelectedRecipeBorder"
-			selection_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			selection_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
-			choose.add_child(selection_outline)
-			selection_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		# Selected recipe is already highlighted by its parchment surface.
+		# An extra full-card outline hid text and recreated opaque borders.
 	if not game.crafting.is_empty():
 		_render_work()
 	elif completed_id != "":
@@ -823,10 +825,7 @@ func _render_craft() -> void:
 	else:
 		if selected_id == "" or game._recipe_by_id(selected_id).is_empty() or str(game._recipe_by_id(selected_id).get("station", "")) != selected_station:
 			selected_id = _first_recipe(selected_station)
-		if craft_step == "prepare":
-			_render_prepare()
-		else:
-			_render_recipe()
+		_render_recipe() # One-step craft action; no ingredient-loading menu.
 
 func _craft_selected() -> void:
 	# Skip the extra Prepare/Load screens for ordinary station crafting:
