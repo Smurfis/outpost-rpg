@@ -10,6 +10,7 @@ var shell: Control
 var popup_frame: PanelContainer
 var inventory_window: Control
 var dismiss_button: Button
+var emergency_close: Button
 var title: Label
 var subtitle: Label
 var header_buttons: Dictionary = {}
@@ -150,6 +151,19 @@ func _ready() -> void:
 	add_child(inventory_window)
 	inventory_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inventory_window.visible = false
+	# Put the escape action above both modal systems, outside their panels.
+	# This remains reachable even if a nested recipe/tab control captures touch.
+	emergency_close = Button.new()
+	emergency_close.name = "EmergencyBackToGame"
+	emergency_close.text = "‹  BACK TO GAME"
+	emergency_close.custom_minimum_size = Vector2(184, 54)
+	emergency_close.position = Vector2(12, 12)
+	emergency_close.size = Vector2(184, 54)
+	emergency_close.focus_mode = Control.FOCUS_ALL
+	emergency_close.mouse_filter = Control.MOUSE_FILTER_STOP
+	SKIN.apply_button(emergency_close, "wood_selected")
+	emergency_close.pressed.connect(close_page)
+	add_child(emergency_close)
 	visible = false
 
 func _layout_popup() -> void:
@@ -249,6 +263,8 @@ func open(page: String) -> void:
 	if page == "craft" and game.crafting.is_empty():
 		craft_step = "browse"
 	visible = true
+	if emergency_close != null:
+		emergency_close.move_to_front()
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
 	if page == "bag" or page == "equipment":
@@ -271,7 +287,7 @@ func open(page: String) -> void:
 
 func close_page() -> void:
 	visible = false
-	shell.visible = true
+	shell.visible = false
 	if inventory_window != null:
 		inventory_window.close_page()
 
@@ -284,7 +300,23 @@ func _dismiss_from_shade(event: InputEvent) -> void:
 		close_page()
 
 func _input(event: InputEvent) -> void:
-	if visible and event.is_action_pressed("ui_cancel"):
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		close_page()
+		get_viewport().set_input_as_handled()
+		return
+	# Handle this escape region before any Control can swallow the event.
+	# Android often has no hardware Back button in landscape immersive mode.
+	var pressed: bool = false
+	var pointer := Vector2.ZERO
+	if event is InputEventScreenTouch:
+		pressed = (event as InputEventScreenTouch).pressed
+		pointer = (event as InputEventScreenTouch).position
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		pressed = (event as InputEventMouseButton).pressed
+		pointer = (event as InputEventMouseButton).position
+	if pressed and emergency_close != null and emergency_close.get_global_rect().grow(10.0).has_point(pointer):
 		close_page()
 		get_viewport().set_input_as_handled()
 
@@ -1016,10 +1048,6 @@ func _clear_result() -> void:
 	refresh()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not visible or not event.is_action_pressed("ui_cancel"):
-		return
-	if current_page == "craft" and craft_step != "browse" and game.crafting.is_empty():
-		_back_to_browse()
-	else:
+	if visible and event.is_action_pressed("ui_cancel"):
 		close_page()
-	get_viewport().set_input_as_handled()
+		get_viewport().set_input_as_handled()
