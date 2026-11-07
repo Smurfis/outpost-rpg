@@ -32,8 +32,17 @@ func _run() -> void:
 	if mini != null:
 		mini._process(0.6)
 		var texture: ImageTexture = mini.get("_texture") as ImageTexture
-		_check(texture != null and texture.get_size() == Vector2(64, 64), "Minimap builds higher-detail cached terrain texture")
+		_check(texture != null and texture.get_size() == Vector2(48, 48), "Minimap builds efficient flat-shaded terrain texture")
 		_check(mini.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Minimap never blocks touch controls")
+		var map_image: Image = mini.get("_image") as Image
+		var distinct: Dictionary = {}
+		for y in range(map_image.get_height()):
+			for x in range(map_image.get_width()):
+				var shade: Color = map_image.get_pixel(x, y)
+				if shade.a > 0.5:
+					distinct[shade.to_html()] = true
+		_check(distinct.size() <= 8, "Solid biomes use at most eight defined colours, not randomized ink pixels")
+
 		# Camera orbit should rotate the map, markers and compass together.
 		# The minimap always samples the player's actual current world position.
 		var player_position: Vector3 = game.hero.global_position
