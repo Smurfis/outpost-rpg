@@ -33,6 +33,10 @@ func _run() -> void:
 	var older: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v12/Outpost-Android-v12.apk"
 	var newer: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-android-v15/Outpost-Android-v15.apk"
 	var inputs: Array = [_release(12, older), _release(15, newer), _release(14, "https://attacker.example/update.apk"), _release(99, newer, true)]
+	check(updater_script.valid_asset_url(newer, "stable"), "Stable download path is strict and trusted")
+	check(not updater_script.valid_asset_url(newer + "?inline=1", "stable"), "No GitHub querystring APK ambiguity")
+	check(not updater_script.valid_asset_url(newer, "alpha"), "Cannot cross-wire a Stable file to Alpha installer")
+	check(not updater_script.valid_asset_url("https://github.com.evil.example/Smurfis/outpost-rpg/releases/download/outpost-android-v15/Outpost-Android-v15.apk", "stable"), "Lookalike domains cannot trigger in-game downloads")
 	var found: Dictionary = updater_script.find_newest_release(inputs, 11)
 	check(int(found.get("version_code", 0)) == 15 and str(found.get("download_url", "")) == newer, "Picks highest trusted valid update code")
 	check(updater_script.find_newest_release(inputs, 15).is_empty(), "Does not offer the installed version")
@@ -83,7 +87,8 @@ func _run() -> void:
 		check(notice != null and notice.visible and notice.text.contains("BUILD 15"), "New release shows visible title-screen update notice")
 		var download: Button = screen.get("_download_button") as Button
 		check(download != null and not download.disabled and download.text.contains("15"), "Dedicated download button enables for the discovered build")
-		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action opens only the trusted update URL")
+		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action starts the native in-game Android manager instead of a Chrome web view")
+		check(screen.get("_download_progress_bar") != null and screen.get("_cancel_download_button") != null, "Native download has in-game progress and cancellation controls")
 		check(button.text == "CHECK FOR UPDATES", "Checking for newer updates remains available")
 		var stable: Button = screen.get("_channel_stable_button") as Button
 		var alpha: Button = screen.get("_channel_alpha_button") as Button

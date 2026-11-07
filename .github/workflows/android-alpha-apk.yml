@@ -123,6 +123,7 @@ jobs:
           launcher_icons/adaptive_monochrome_432x432="res://assets/branding/generated/outpost_adaptive_monochrome_432.png"
           permissions/internet=true
           permissions/access_network_state=true
+          permissions/request_install_packages=true
           EOF
           sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
           grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg

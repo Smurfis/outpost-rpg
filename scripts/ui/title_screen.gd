@@ -72,6 +72,9 @@ var _adventure_heading: Label
 var _new_adventure_pending: bool = true
 var _volume: float = 0.85
 var _download_button: Button
+var _cancel_download_button: Button
+var _download_progress_bar: ProgressBar
+var _update_version_code: int = 0
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
@@ -539,7 +542,8 @@ func _hide_title_glow_if_idle() -> void:
 		_selection_glow.visible = false
 
 func _build_settings() -> void:
-	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 590.0)
+	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 650.0)
+	(parts["stack"] as VBoxContainer).add_theme_constant_override("separation", 5)
 	_settings_panel = parts["frame"] as PanelContainer
 	_settings_panel.name = "SettingsPanel"
 	var stack: VBoxContainer = parts["stack"] as VBoxContainer
@@ -626,6 +630,8 @@ func _build_settings() -> void:
 	add_child(_updater)
 	_updater.status_changed.connect(_on_update_status)
 	_updater.update_found.connect(_on_update_found)
+	_updater.download_progress.connect(_on_download_progress)
+	_updater.download_ready.connect(_on_apk_ready)
 	if _selected_channel not in ["stable", "alpha"]:
 		_selected_channel = _updater.installed_channel()
 	_updater.set_target_channel(_selected_channel)
@@ -637,16 +643,29 @@ func _build_settings() -> void:
 	_update_button.name = "CheckForUpdates"
 	_update_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	update_row.add_child(_update_button)
-	_download_button = _menu_button("DOWNLOAD APK", _check_or_download_update, "wood_selected")
+	_download_button = _menu_button("DOWNLOAD IN GAME", _check_or_download_update, "wood_selected")
 	_download_button.name = "DownloadUpdate"
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
-	_update_status = _menu_label("Android build %d • Downloads open in your browser." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
+	_update_status = _menu_label("Installed build %d • Download in Outpost, approve installation with Android." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
-	_update_status.custom_minimum_size = Vector2(0, 42)
+	_update_status.custom_minimum_size = Vector2(0, 38)
 	stack.add_child(_update_status)
+	_download_progress_bar = ProgressBar.new()
+	_download_progress_bar.name = "AndroidDownloadProgress"
+	_download_progress_bar.max_value = 100.0
+	_download_progress_bar.show_percentage = false
+	_download_progress_bar.custom_minimum_size = Vector2(0, 13)
+	_download_progress_bar.visible = false
+	stack.add_child(_download_progress_bar)
+	_cancel_download_button = _menu_button("CANCEL DOWNLOAD", _cancel_update_download, "red")
+	_cancel_download_button.name = "CancelAPKDownload"
+	_cancel_download_button.custom_minimum_size = Vector2(0, 36)
+	_cancel_download_button.visible = false
+	stack.add_child(_cancel_download_button)
 	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
+	_sync_download_ui()
 	_settings_panel.visible = false
 
 func _build_changelog_scroll() -> void:
@@ -721,10 +740,11 @@ func _select_update_channel(channel: String) -> void:
 	_update_download_url = ""
 	if _download_button != null:
 		_download_button.disabled = true
-		_download_button.text = "DOWNLOAD APK"
+		_download_button.text = "DOWNLOAD IN GAME"
 	if _update_notice != null:
 		_update_notice.visible = false
 	_refresh_channel_buttons()
+	_sync_download_ui()
 	_on_update_status("Selected %s. Tap CHECK FOR UPDATES to find its APK." % channel.capitalize())
 	_write_prefs()
 
@@ -798,15 +818,50 @@ func _join_friend() -> void:
 	_launch_game(_new_adventure_pending, "join", address, _adventure_name.text)
 
 func _check_or_download_update() -> void:
-	if not _update_download_url.is_empty():
-		# The Android installer always needs the user's approval. A browser
-		# download avoids unsafe file:// URI / FileProvider workarounds.
-		var error: Error = OS.shell_open(_update_download_url)
-		if error != OK:
-			_on_update_status("Couldn't open your browser; use the GitHub Releases page.")
+	if _updater == null:
 		return
+	if _updater.has_ready_download():
+		_updater.install_downloaded_apk()
+		return
+	if _updater.has_active_download():
+		_on_update_status("Download in progress. Tap CANCEL to stop it.")
+		return
+	if not _update_download_url.is_empty():
+		_updater.start_apk_download(_update_download_url, _selected_channel, _update_version_code)
+		_sync_download_ui()
+		return
+	_updater.check_for_updates()
+
+func _on_download_progress(downloaded: int, total: int) -> void:
+	if _download_progress_bar != null:
+		_download_progress_bar.visible = true
+		_download_progress_bar.value = 100.0 * float(downloaded) / float(total) if total > 0 else 0.0
+	_sync_download_ui()
+
+func _on_apk_ready(channel: String, code: int) -> void:
+	_on_update_status("%s build %d ready. Tap INSTALL APK; Android will request confirmation." % [channel.capitalize(), code])
+	_sync_download_ui()
+
+func _cancel_update_download() -> void:
 	if _updater != null:
-		_updater.check_for_updates()
+		_updater.cancel_apk_download()
+	_sync_download_ui()
+
+func _sync_download_ui() -> void:
+	if _updater == null or _download_button == null:
+		return
+	var downloading: bool = _updater.has_active_download()
+	var ready: bool = _updater.has_ready_download()
+	if ready:
+		_download_button.disabled = false
+		_download_button.text = "INSTALL APK"
+	elif downloading:
+		_download_button.disabled = true
+		_download_button.text = "DOWNLOADING…"
+	if _cancel_download_button != null:
+		_cancel_download_button.visible = downloading
+	if _download_progress_bar != null and not downloading:
+		_download_progress_bar.visible = ready
 
 func _on_update_status(message: String) -> void:
 	if _update_status != null:
@@ -814,13 +869,15 @@ func _on_update_status(message: String) -> void:
 
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
 	_update_download_url = download_url
+	_update_version_code = version_code
 	if _download_button != null:
 		_download_button.disabled = false
-		_download_button.text = "DOWNLOAD BUILD %d" % version_code
+		_download_button.text = "GET BUILD %d" % version_code
 	if _update_notice != null:
 		_update_notice.text = "%s APK  •  BUILD %d" % [_selected_channel.to_upper(), version_code]
 		_update_notice.visible = true
-	_on_update_status("%s build %d available. Tap Download, then approve Android install. Different channels have separate saves." % [_selected_channel.capitalize(), version_code])
+	_on_update_status("%s build %d available. Download inside Outpost; Android approves install. Separate saves." % [_selected_channel.capitalize(), version_code])
+	_sync_download_ui()
 
 func _toggle_settings() -> void:
 	if _changelog_panel != null:
