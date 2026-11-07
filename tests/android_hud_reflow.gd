@@ -171,7 +171,7 @@ func _run() -> void:
 		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 405.6) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
 		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 374.4) < 2.0, "At 20:9 resources stay in a slim independent chip")
 		hud._toggle_wallet()
-		verify(absf((wallet.anchor_right - wallet.anchor_left) * 1280.0 - 101.0) > 5.0, "Collapsed wallet no longer retains giant old percentage width")
+		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 121.2) < 2.0, "Collapsed wallet shrinks to a 101px compact chip on ultrawide phones")
 		hud._toggle_wallet()
 	hud._layout_touch_hud()
 
