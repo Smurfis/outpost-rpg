@@ -13,6 +13,7 @@ var dismiss_button: Button
 var emergency_close: Button
 var title: Label
 var subtitle: Label
+var station_badge: TextureRect
 var header_buttons: Dictionary = {}
 var station_tabs: HBoxContainer
 var recipes_list: VBoxContainer
@@ -58,17 +59,26 @@ func _ready() -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
 	frame.name = "CompactMenuFrame"
-	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	frame.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	frame.clip_contents = true
 	shell.add_child(frame)
 	popup_frame = frame
 	_layout_popup()
 	get_viewport().size_changed.connect(_layout_popup)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 6)
+	page.add_theme_constant_override("separation", 10)
 	frame.add_child(page)
 	var header := HBoxContainer.new()
 	page.add_child(header)
-	title = _label("OUTPOST  •  CRAFTING", 25, Color("fff0ce"))
+	station_badge = TextureRect.new()
+	station_badge.name = "InteractedStationIcon"
+	station_badge.custom_minimum_size = Vector2(61, 61)
+	station_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	station_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	station_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	station_badge.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	header.add_child(station_badge)
+	title = _label("CRAFTING STATION", 25, Color("fff0ce"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var bag := Button.new()
@@ -93,11 +103,9 @@ func _ready() -> void:
 	header_buttons["craft"] = craft
 	header.add_child(craft)
 	var close := Button.new()
-	close.text = "X"
-	close.custom_minimum_size = Vector2(48, 48)
-	SKIN.apply_button(close, "red")
+	SKIN.apply_close_button(close, 57.0)
 	close.name = "CraftModalClose"
-	close.tooltip_text = "Close crafting and return to the world"
+	close.tooltip_text = "Return to game"
 	close.focus_mode = Control.FOCUS_ALL
 	close.pressed.connect(close_page)
 	dismiss_button = close
@@ -116,19 +124,20 @@ func _ready() -> void:
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
 	page.add_child(station_tabs)
+	station_tabs.visible = false # Single real-world station, never a five-tab hub.
 	var panes := HBoxContainer.new()
 	panes.add_theme_constant_override("separation", 8)
 	panes.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var surface := PanelContainer.new()
-	surface.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	surface.add_theme_stylebox_override("panel", SKIN.modal_section(true))
 	surface.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(surface)
 	surface.add_child(panes)
 	left_scroll = TOUCH_SCROLL.new()
 	left_scroll.name = "RecipeSwipeList"
-	left_scroll.custom_minimum_size = Vector2(250, 0)
+	left_scroll.custom_minimum_size = Vector2(206, 0)
 	left_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_scroll.size_flags_stretch_ratio = 0.79
+	left_scroll.size_flags_stretch_ratio = 0.94
 	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(left_scroll)
 	recipes_list = VBoxContainer.new()
@@ -137,9 +146,9 @@ func _ready() -> void:
 	left_scroll.add_child(recipes_list)
 	right_scroll = TOUCH_SCROLL.new()
 	right_scroll.name = "CraftingDetailsSwipe"
-	right_scroll.custom_minimum_size = Vector2(270, 0)
+	right_scroll.custom_minimum_size = Vector2(230, 0)
 	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_scroll.size_flags_stretch_ratio = 1.21
+	right_scroll.size_flags_stretch_ratio = 1.06
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(right_scroll)
 	details = VBoxContainer.new()
@@ -155,13 +164,12 @@ func _ready() -> void:
 	# This remains reachable even if a nested recipe/tab control captures touch.
 	emergency_close = Button.new()
 	emergency_close.name = "EmergencyBackToGame"
-	emergency_close.text = "‹  BACK TO GAME"
-	emergency_close.custom_minimum_size = Vector2(184, 54)
 	emergency_close.position = Vector2(12, 12)
-	emergency_close.size = Vector2(184, 54)
+	emergency_close.size = Vector2(50, 50)
 	emergency_close.focus_mode = Control.FOCUS_ALL
 	emergency_close.mouse_filter = Control.MOUSE_FILTER_STOP
-	SKIN.apply_button(emergency_close, "wood_selected")
+	SKIN.apply_close_button(emergency_close, 50)
+	emergency_close.tooltip_text = "Emergency exit from Bag or Gear"
 	emergency_close.pressed.connect(close_page)
 	add_child(emergency_close)
 	visible = false
@@ -169,14 +177,14 @@ func _ready() -> void:
 func _layout_popup() -> void:
 	# Stable *pixel* dimensions rather than a huge percentage of ultra-wide
 	# mobile screens. Leave the game visible around the frame, but keep
-	# sufficient space for five station tabs and large thumb targets.
+	# enough room for a single-station icon, recipe list and details.
 	if popup_frame == null:
 		return
 	var bounds: Vector2 = get_viewport().get_visible_rect().size
 	var max_width: float = maxf(300.0, bounds.x - 30.0)
 	var max_height: float = maxf(320.0, bounds.y - 34.0)
-	var width_px: float = minf(clampf(bounds.x * 0.60, 620.0, 880.0), max_width)
-	var height_px: float = minf(clampf(bounds.y * 0.73, 450.0, 600.0), max_height)
+	var width_px: float = minf(clampf(bounds.x * 0.68, 620.0, 900.0), max_width)
+	var height_px: float = minf(clampf(bounds.y * 0.68, 380.0, 565.0), max_height)
 	popup_frame.anchor_left = 0.5
 	popup_frame.anchor_right = 0.5
 	popup_frame.anchor_top = 0.5
@@ -185,6 +193,8 @@ func _layout_popup() -> void:
 	popup_frame.offset_right = width_px * 0.5
 	popup_frame.offset_top = -height_px * 0.5
 	popup_frame.offset_bottom = height_px * 0.5
+	if emergency_close != null:
+		emergency_close.position = Vector2(maxf(8.0, (bounds.x - width_px) * 0.5 - 61.0), maxf(10.0, (bounds.y - height_px) * 0.5 + 6.0))
 
 func _style(background: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -264,6 +274,7 @@ func open(page: String) -> void:
 		craft_step = "browse"
 	visible = true
 	if emergency_close != null:
+		emergency_close.visible = page == "bag" or page == "equipment"
 		emergency_close.move_to_front()
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
@@ -273,11 +284,15 @@ func open(page: String) -> void:
 		return
 	shell.visible = true
 	inventory_window.close_page()
-	if page == "craft" and game.crafting.is_empty():
-		var station: String = game.closest_station()
-		if station != "":
+	if page == "craft":
+		# Lock the UI to the world object actually interacted with. Never
+		# silently keep an old forge recipe while looking at a campfire.
+		var station: String = str(game.crafting.get("station", "")) if not game.crafting.is_empty() else game.closest_station()
+		if station != selected_station:
 			selected_station = station
-		if selected_id == "":
+			selected_id = _first_recipe(station)
+			loaded.clear()
+		elif selected_id == "":
 			selected_id = _first_recipe(selected_station)
 	# Never throw an already-open Prepare step away when returning from another
 	# modal; only new sessions and explicit navigation reset the workflow.
@@ -316,7 +331,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		pressed = (event as InputEventMouseButton).pressed
 		pointer = (event as InputEventMouseButton).position
-	if pressed and emergency_close != null and emergency_close.get_global_rect().grow(10.0).has_point(pointer):
+	if pressed and ((emergency_close != null and emergency_close.visible and emergency_close.get_global_rect().grow(10.0).has_point(pointer)) or (current_page == "craft" and dismiss_button != null and dismiss_button.get_global_rect().grow(8.0).has_point(pointer))):
 		close_page()
 		get_viewport().set_input_as_handled()
 
@@ -340,7 +355,7 @@ func _recipe_change(id: String) -> void:
 	if not game.crafting.is_empty():
 		return
 	selected_id = id
-	craft_step = "detail" # One recipe at a time on small touchscreens.
+	craft_step = "detail" # Detail remains alongside the recipe list.
 	loaded.clear()
 	completed_id = ""
 	refresh()
@@ -359,10 +374,12 @@ func refresh() -> void:
 	for page_key in header_buttons:
 		var button: Button = header_buttons[page_key] as Button
 		if button != null:
-			SKIN.apply_button(button, "wood_selected" if current_page == str(page_key) else "wood")
+			# No redundant BAG / GEAR / CRAFT navigation in a station modal.
+			button.visible = false
 	_clear(station_tabs)
 	_clear(craft_stage_strip)
-	craft_stage_strip.visible = current_page == "craft"
+	craft_stage_strip.visible = false
+	station_tabs.visible = false
 	_clear(recipes_list)
 	_clear(details)
 	if current_page == "bag":
@@ -371,13 +388,14 @@ func refresh() -> void:
 		_render_equipment()
 	else:
 		_render_craft()
-	# The prior two-column recipe browser was cramped on a phone. Browse
-	# full-width, tap a recipe for a focused popup, then Prepare / Work.
-	var recipe_browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == "" and craft_step == "browse"
-	left_scroll.visible = current_page != "craft" or recipe_browse
-	right_scroll.visible = current_page != "craft" or not recipe_browse
-	left_scroll.scroll_vertical = 0 if current_page == "craft" and recipe_browse else left_scroll.scroll_vertical
-	right_scroll.scroll_vertical = 0 if current_page == "craft" and not recipe_browse else right_scroll.scroll_vertical
+	# Albion-like layout: always see station recipes on the left and the
+	# selected item/required materials on the right. During active crafting
+	# focus the right on the real work action (not a dead recipe selector).
+	var browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == ""
+	left_scroll.visible = current_page != "craft" or browse
+	right_scroll.visible = true
+	left_scroll.scroll_vertical = left_scroll.scroll_vertical
+	right_scroll.scroll_vertical = 0 if current_page == "craft" else right_scroll.scroll_vertical
 
 func _render_bag() -> void:
 	title.text = "OUTPOST  •  BAG"
@@ -810,6 +828,17 @@ func _render_craft() -> void:
 		else:
 			_render_recipe()
 
+func _craft_selected() -> void:
+	# Skip the extra Prepare/Load screens for ordinary station crafting:
+	# the authoritative game service still validates station, inventory,
+	# unique equipment and character level before consuming materials.
+	if selected_id.is_empty() or not game.can_craft(selected_id):
+		return
+	if game.begin_craft(selected_id):
+		loaded.clear()
+		completed_id = ""
+		refresh()
+
 func _begin_prepare() -> void:
 	craft_step = "prepare"
 	loaded.clear()
@@ -825,12 +854,7 @@ func _render_recipe() -> void:
 	if recipe.is_empty():
 		details.add_child(_label("Choose a recipe to see its requirements.", 20, Color("f5deb0")))
 		return
-	var browse_back := Button.new()
-	browse_back.text = "‹  ALL RECIPES"
-	browse_back.custom_minimum_size = Vector2(0, 58)
-	SKIN.apply_button(browse_back, "wood")
-	browse_back.pressed.connect(_back_to_browse)
-	details.add_child(browse_back)
+	# Recipes remain visible alongside details; no back-navigation button.
 	var product_id: String = str(recipe.get("result", ""))
 	var intro := _column_panel(details, Color("5f3b29"))
 	var head := HBoxContainer.new()
@@ -859,11 +883,11 @@ func _render_recipe() -> void:
 		row.add_child(_ingredient_state_icon(own >= need))
 		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
-	next.text = "ENHANCE  ◆  PREPARE" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "NEXT  ◆  PREPARE ITEM"
+	next.text = "IMPROVE QUALITY" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "CRAFT  ◆  %s" % str(recipe.get("name", "ITEM")).to_upper()
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
-	next.disabled = game.owns_unique(product_id) or (CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3) or (selected_id == "fiery_weapon" and game.character_level() < 3)
-	next.pressed.connect(_begin_prepare)
+	next.disabled = not game.can_craft(selected_id)
+	next.pressed.connect(_craft_selected)
 	details.add_child(next)
 	if game.owns_unique(product_id):
 		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
@@ -871,8 +895,8 @@ func _render_recipe() -> void:
 		details.add_child(_label("Maximum 3 stars. Select a different bag or tier.", 15, SKIN.GOLD))
 	elif selected_id == "fiery_weapon" and game.character_level() < 3:
 		details.add_child(_label("Gain character levels before using this bench.", 15, SKIN.GOLD))
-	elif not game.near_station(selected_station):
-		details.add_child(_label("You can browse anywhere. Craft beside the matching station.", 14, Color("ffe2a6")))
+	elif not game.can_craft(selected_id):
+		details.add_child(_label(game.craft_block_reason(selected_id), 14, Color("88422d")))
 
 func _render_prepare() -> void:
 	var recipe: Dictionary = game._recipe_by_id(selected_id)
@@ -1036,7 +1060,7 @@ func _render_result() -> void:
 	result.add_child(_icon(completed_id, 126))
 	result.add_child(_label(completed_id.replace("_", " ").capitalize() + (" • now %s!" % "★".repeat(int(game.bag_quality.get(completed_id, 0))) if CARRY.is_bag(completed_id) else " added to your inventory!"), 21, Color("c3e9b7")))
 	var again := Button.new()
-	again.text = "CHOOSE ANOTHER RECIPE"
+	again.text = "CRAFT ANOTHER"
 	again.custom_minimum_size = Vector2(0, 52)
 	SKIN.apply_button(again, "green")
 	again.pressed.connect(_clear_result)
