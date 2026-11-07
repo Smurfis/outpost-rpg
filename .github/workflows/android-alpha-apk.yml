@@ -123,6 +123,9 @@ jobs:
           launcher_icons/adaptive_monochrome_432x432="res://assets/branding/generated/outpost_adaptive_monochrome_432.png"
           permissions/internet=true
           permissions/access_network_state=true
+          # User-initiated APK installation via Android's own consent screen.
+          # Not INSTALL_PACKAGES (privileged/system apps only).
+          permissions/custom_permissions=PackedStringArray("android.permission.REQUEST_INSTALL_PACKAGES")
           EOF
           sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
           grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg
