@@ -631,6 +631,8 @@ func gather() -> void:
 		return
 	hero.gather_swing(item)
 	var amount: int = grant_item(item, desired)
+	if amount > 0 and hud != null:
+		hud.record_gather(item, amount)
 	if amount <= 0:
 		hud.toast("Bag full — gathering stopped.")
 		return
