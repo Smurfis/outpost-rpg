@@ -95,13 +95,13 @@ func _run() -> void:
 		menu_tap.pressed = true
 		menu_tap.position = toggle.get_global_rect().get_center()
 		hud._input(menu_tap)
-		verify(not hud.top_menu_open, "Menu does not activate on finger-down (prevents double toggling)")
+		verify(hud.top_menu_open, "Single MENU tap activates on the first finger-down even when Godot consumes release")
 		var menu_release := InputEventScreenTouch.new()
 		menu_release.index = menu_tap.index
 		menu_release.pressed = false
 		menu_release.position = menu_tap.position
 		hud._input(menu_release)
-		verify(hud.top_menu_open, "A single touch press+release opens the centered six-item modal")
+		verify(hud.top_menu_open, "Finger release does not close the centered six-item modal")
 		var bag_action: Button = controls.get_node_or_null("BagMenuButton") as Button
 		if bag_action != null:
 			var bag_tap := InputEventScreenTouch.new()
