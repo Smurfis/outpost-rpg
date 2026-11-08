@@ -68,6 +68,9 @@ func _run() -> void:
 		check(scroll_panel != null and not scroll_panel.visible, "Changelog scroll starts collapsed")
 		screen._toggle_changelog()
 		check(scroll_panel != null and scroll_panel.visible and scroll_panel.find_child("ChangelogBody", true, false) != null, "Changelog opens a scrollable reading panel")
+		check(scroll_panel.position.y < 180.0 and scroll_button.position.y < 200.0, "Changelog and scroll trigger moved higher in title art")
+		check((scroll_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a < 0.85, "Changelog uses newly approved translucent bronze frame")
+		check(panel.find_child("AndroidUpdateSectionFrame", true, false) != null, "Updater controls share a matching wood/parchment section")
 		var red_close: Button = scroll_panel.find_child("ChangelogCloseButton", true, false) as Button
 		check(scroll_panel.clip_contents and scroll_panel.get_theme_stylebox("panel") is StyleBoxFlat, "Changelog contents are clipped inside one contained modal")
 		check(red_close != null and red_close.get_theme_stylebox("normal") is StyleBoxFlat and (red_close.get_theme_stylebox("normal") as StyleBoxFlat).corner_radius_top_left >= 50, "Changelog uses the same large red circular close control")

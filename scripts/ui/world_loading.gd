@@ -55,19 +55,25 @@ func _build_screen() -> void:
 	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	page.add_child(veil)
 
-	# No blocking grey PanelContainer. The elements appear directly over the
-	# approved backdrop, with enough vertical room for large Android text.
+	# Keep the approved scenery but use the same translucent wood/bronze
+	# frame as the Menu and Changelog. The world load remains cancellable.
 	var middle := CenterContainer.new()
 	middle.name = "LoadingCenter"
 	middle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	page.add_child(middle)
+	var loading_frame := PanelContainer.new()
+	loading_frame.name = "WorldLoadingFrame"
+	var glass := SKIN.modal_panel()
+	glass.bg_color = Color(0.17, 0.11, 0.10, 0.80)
+	loading_frame.add_theme_stylebox_override("panel", glass)
+	middle.add_child(loading_frame)
 	var column := VBoxContainer.new()
 	column.name = "LoadingStack"
 	column.custom_minimum_size = Vector2(450, 400)
 	column.add_theme_constant_override("separation", 12)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	middle.add_child(column)
+	loading_frame.add_child(column)
 
 	var crest := TextureRect.new()
 	crest.name = "OutpostLoadingCrest"
@@ -98,14 +104,9 @@ func _build_screen() -> void:
 	_progress.value = 0
 	_progress.custom_minimum_size = Vector2(420, 25)
 	_progress.show_percentage = false
-	var rail := StyleBoxFlat.new()
-	rail.bg_color = Color("1b1825")
-	rail.border_color = Color("a7753e")
-	rail.set_border_width_all(3)
-	rail.set_corner_radius_all(5)
-	var filled := StyleBoxFlat.new()
-	filled.bg_color = Color("f4bd66")
-	filled.set_corner_radius_all(5)
+	var rail: StyleBoxFlat = SKIN.flat("inset")
+	var filled: StyleBoxFlat = SKIN.flat("wood_selected")
+	filled.bg_color = Color("#eabf70")
 	_progress.add_theme_stylebox_override("background", rail)
 	_progress.add_theme_stylebox_override("fill", filled)
 	column.add_child(_progress)

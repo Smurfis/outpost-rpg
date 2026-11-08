@@ -150,6 +150,8 @@ var top_menu_pressed: bool = false
 var top_menu_hold_seconds: float = 0.0
 var top_menu_opened_by_hold: bool = false
 var floating_joystick_enabled: bool = false
+var adaptive_joystick_enabled: bool = false
+var adaptive_joystick_toggle: CheckButton
 var sticky_movement_enabled: bool = false
 var sticky_movement_toggle: CheckButton
 var stop_sticky_button: Button
@@ -180,6 +182,8 @@ var floating_mode_toggle: CheckButton
 var name_edit: LineEdit
 var skill_detail_panel: Panel
 var skill_detail_text: Label
+var skill_mastery_bar: ProgressBar
+var skill_slot_rows: Array[Label] = []
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -1016,13 +1020,13 @@ func _open_journal() -> void:
 		_toggle_quest()
 
 func _build_skill_details() -> void:
-	skill_detail_panel = _panel(0.337, 0.245, 0.680, 0.650)
+	skill_detail_panel = _panel(0.292, 0.170, 0.708, 0.830)
 	skill_detail_panel.name = "WeaponSkillDetails"
 	skill_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	skill_detail_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	skill_detail_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	skill_detail_panel.visible = false
 	var title := Label.new()
-	title.text = "WEAPON MASTERY"
+	title.text = "✦  SKILLS  •  WEAPON MASTERY"
 	title.add_theme_color_override("font_color", SKIN.GOLD)
 	title.add_theme_font_size_override("font_size", 21)
 	title.name = "SkillDetailHeading"
@@ -1040,9 +1044,39 @@ func _build_skill_details() -> void:
 	skill_detail_panel.add_child(skill_detail_text)
 	skill_detail_text.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	skill_detail_text.offset_left = 20
-	skill_detail_text.offset_top = 74
+	skill_detail_text.offset_top = 78
 	skill_detail_text.offset_right = -20
-	skill_detail_text.offset_bottom = -75
+	skill_detail_text.offset_bottom = -315
+	# Reusable parchment-backed mastery panel and three real ability slots.
+	var progress_back := Panel.new()
+	progress_back.name = "MasterySectionFrame"
+	progress_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	progress_back.add_theme_stylebox_override("panel", SKIN.modal_section())
+	skill_detail_panel.add_child(progress_back)
+	_anchors(progress_back, 0.045, 0.285, 0.955, 0.383)
+	skill_mastery_bar = ProgressBar.new()
+	skill_mastery_bar.name = "WeaponMasteryProgress"
+	skill_mastery_bar.max_value = 60.0
+	skill_mastery_bar.show_percentage = false
+	skill_mastery_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	skill_mastery_bar.add_theme_stylebox_override("background", SKIN.flat("inset"))
+	skill_mastery_bar.add_theme_stylebox_override("fill", SKIN.flat("wood_selected"))
+	progress_back.add_child(skill_mastery_bar)
+	_anchors(skill_mastery_bar, 0.05, 0.24, 0.95, 0.76)
+	for i in range(3):
+		var slot_frame := Panel.new()
+		slot_frame.name = "MasterySkillSlot_%d" % (i + 1)
+		slot_frame.add_theme_stylebox_override("panel", SKIN.modal_section())
+		skill_detail_panel.add_child(slot_frame)
+		_anchors(slot_frame, 0.045, 0.405 + 0.127 * float(i), 0.955, 0.515 + 0.127 * float(i))
+		var status_line := Label.new()
+		status_line.name = "SkillUnlocked_%d" % (i + 1)
+		status_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		status_line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		status_line.add_theme_font_size_override("font_size", 16)
+		slot_frame.add_child(status_line)
+		_anchors(status_line, 0.04, 0.05, 0.96, 0.95)
+		skill_slot_rows.append(status_line)
 	var close := Button.new()
 	close.name = "CloseSkills"
 	close.text = "CLOSE"
@@ -1064,18 +1098,26 @@ func _show_skill_details() -> void:
 	var rank: int = game.mastery_rank(weapon)
 	var mastery_xp: int = int(game.weapon_mastery_xp.get(weapon, 0))
 	var available: int = game.unlocked_skill_slots()
-	skill_detail_text.text = "%s\nRank %d  •  %d mastery XP\n\nUnlocked abilities: %d / 3\n\n1. Power Strike\n2. Cleave\n3. Sundering Blow\n\nUse the three combat buttons beside Interact to activate unlocked abilities." % [weapon.replace("_", " ").capitalize(), rank, mastery_xp, available]
+	skill_detail_text.text = "%s  •  Mastery rank %d  •  %d XP" % [weapon.replace("_", " ").capitalize(), rank, mastery_xp]
+	skill_mastery_bar.value = 60 if rank >= 10 else mastery_xp % 60
+	var names: Array[String] = ["POWER STRIKE", "CLEAVE", "SUNDERING BLOW"]
+	var required: Array[int] = [1, 3, 5]
+	for i in range(skill_slot_rows.size()):
+		var row: Label = skill_slot_rows[i]
+		var unlocked: bool = i < available
+		row.text = "◆  %s   •   %s" % [names[i], "UNLOCKED" if unlocked else "RANK %d REQUIRED" % required[i]]
+		row.add_theme_color_override("font_color", SKIN.GOLD if unlocked else SKIN.CREAM)
 	skill_detail_panel.visible = true
 
 func _build_control_settings() -> void:
 	control_settings_panel = _panel(0.329, 0.155, 0.689, 0.850)
 	control_settings_panel.name = "InGameControlSettings"
 	control_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	control_settings_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	control_settings_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	control_settings_panel.visible = false
 	var stack := VBoxContainer.new()
 	stack.name = "SettingsFields"
-	stack.add_theme_constant_override("separation", 12)
+	stack.add_theme_constant_override("separation", 6)
 	control_settings_panel.add_child(stack)
 	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stack.offset_left = 20
@@ -1099,6 +1141,12 @@ func _build_control_settings() -> void:
 	note.add_theme_font_size_override("font_size", 15)
 	note.add_theme_color_override("font_color", SKIN.CREAM)
 	stack.add_child(note)
+	adaptive_joystick_toggle = CheckButton.new()
+	adaptive_joystick_toggle.name = "AdaptiveJoystickToggle"
+	adaptive_joystick_toggle.text = "Adaptive joystick (recentre near your thumb)"
+	adaptive_joystick_toggle.add_theme_font_size_override("font_size", 15)
+	adaptive_joystick_toggle.toggled.connect(_set_adaptive_joystick)
+	stack.add_child(adaptive_joystick_toggle)
 	sticky_movement_toggle = CheckButton.new()
 	sticky_movement_toggle.name = "StickyMovementToggle"
 	sticky_movement_toggle.text = "Sticky movement (keep walking on finger lift)"
@@ -1348,6 +1396,13 @@ func _set_floating_mode(enabled: bool) -> void:
 	_reset_touch()
 	_save_control_prefs()
 
+func _set_adaptive_joystick(enabled: bool) -> void:
+	adaptive_joystick_enabled = enabled
+	if adaptive_joystick_toggle != null:
+		adaptive_joystick_toggle.set_pressed_no_signal(enabled)
+	_reset_touch()
+	_save_control_prefs()
+
 func _set_sticky_movement(enabled: bool) -> void:
 	sticky_movement_enabled = enabled
 	_reset_touch()
@@ -1368,17 +1423,20 @@ func _load_control_prefs() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONTROL_PREFS) == OK:
 		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
+		adaptive_joystick_enabled = bool(config.get_value("controls", "adaptive_joystick", false))
 		sticky_movement_enabled = bool(config.get_value("controls", "sticky_movement", false))
 		player_display_name = str(config.get_value("profile", "display_name", "Adventurer")).strip_edges()
 		if player_display_name.is_empty():
 			player_display_name = "Adventurer"
 	floating_mode_toggle.set_pressed_no_signal(floating_joystick_enabled)
+	adaptive_joystick_toggle.set_pressed_no_signal(adaptive_joystick_enabled)
 	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
+	config.set_value("controls", "adaptive_joystick", adaptive_joystick_enabled)
 	config.set_value("controls", "sticky_movement", sticky_movement_enabled)
 	config.set_value("profile", "display_name", player_display_name)
 	config.save(CONTROL_PREFS)
@@ -1780,6 +1838,8 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	if pos.x < screen.x * 0.24 or pos.y < screen.y * 0.16 or pos.y > screen.y * 0.94:
 		return false
 	if floating_joystick_enabled and finger < 0 and _floating_zone(pos):
+		return false
+	if finger < 0 and _adaptive_stick_zone(pos):
 		return false
 	if minimap != null and minimap.get_global_rect().grow(7.0).has_point(pos):
 		return false
@@ -2243,6 +2303,18 @@ func _floating_zone(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	return pos.x >= 8.0 and pos.x <= screen.x * 0.35 and pos.y >= screen.y * 0.35 and pos.y <= screen.y * 0.92
 
+func _adaptive_stick_zone(pos: Vector2) -> bool:
+	if floating_joystick_enabled or not adaptive_joystick_enabled:
+		return false
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	return pos.x < screen.x * 0.35 and pos.y > screen.y * 0.35 and pos.distance_to(_center()) <= 162.0
+
+func _start_adaptive_stick(pos: Vector2) -> void:
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var target := Vector2(clampf(pos.x, 72.0, screen.x * 0.35 - 48.0),
+			clampf(pos.y, screen.y * 0.38, screen.y - 80.0))
+	joystick.position = target - joystick.size * 0.5
+
 func _start_floating_stick(pos: Vector2) -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	var center: Vector2 = Vector2(clampf(pos.x, 74.0, screen.x * 0.35 - 48.0), clampf(pos.y, screen.y * 0.38, screen.y - 83.0))
@@ -2378,8 +2450,8 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 			leave_ignore_synthetic_mouse_until = Time.get_ticks_msec() + 360
 			if activate:
 				pressed_action.pressed.emit()
-			elif outside:
-				_set_top_menu(false)
+			# No outside-release dismissal: Android may deliver opening touch-up
+			# to the shade, which previously closed MENU immediately.
 	elif event is InputEventScreenDrag:
 		var drag: InputEventScreenDrag = event
 		if drag.index == top_menu_touch_finger and drag.position.distance_to(top_menu_touch_origin) >= 40.0:
@@ -2399,8 +2471,7 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				top_menu_mouse_candidate = null
 				if activate:
 					pressed_action.pressed.emit()
-				elif outside:
-					_set_top_menu(false)
+				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
 	# Leave-game has priority over every gameplay and synthetic UI event.
@@ -2507,21 +2578,25 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.relative.x)
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and event.position.distance_to(_center()) < 104.0)):
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 or _adaptive_stick_zone(event.position)))):
 			finger = event.index
 			mouse_stick = false
 			if floating_joystick_enabled:
 				_start_floating_stick(event.position)
+			elif adaptive_joystick_enabled:
+				_start_adaptive_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and event.index == finger:
 			_end_movement_touch()
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and event.position.distance_to(_center()) < 104.0)):
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 or _adaptive_stick_zone(event.position)))):
 			mouse_stick = true
 			if floating_joystick_enabled:
 				_start_floating_stick(event.position)
+			elif adaptive_joystick_enabled:
+				_start_adaptive_stick(event.position)
 			_stick(event.position)
 		elif not event.pressed and mouse_stick and finger == -1:
 			_end_movement_touch()

@@ -160,8 +160,9 @@ func _ready() -> void:
 	add_child(inventory_window)
 	inventory_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inventory_window.visible = false
-	# Put the escape action above both modal systems, outside their panels.
-	# This remains reachable even if a nested recipe/tab control captures touch.
+	# Keep an emergency close as a fallback for crafting only. Bag and Gear
+	# own their red X in the top-right of the real InventoryWindow; the
+	# previous emergency X floated on the FAR LEFT of the screen.
 	emergency_close = Button.new()
 	emergency_close.name = "EmergencyBackToGame"
 	emergency_close.position = Vector2(12, 12)
@@ -274,7 +275,7 @@ func open(page: String) -> void:
 		craft_step = "browse"
 	visible = true
 	if emergency_close != null:
-		emergency_close.visible = page == "bag" or page == "equipment"
+		emergency_close.visible = false # The actual inventory header has its own tested red X.
 		emergency_close.move_to_front()
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO

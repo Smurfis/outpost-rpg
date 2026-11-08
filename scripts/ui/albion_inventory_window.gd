@@ -64,7 +64,9 @@ func _ready() -> void:
 	# remote five-station hub or switch players away from their item tooltip.
 	var close := Button.new()
 	close.name = "InventoryCloseButton"
-	SKIN.apply_close_button(close, 54)
+	SKIN.apply_close_button(close, 48)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_END
+	close.tooltip_text = "Close inventory"
 	close.pressed.connect(func() -> void: menu.close_page())
 	heading.add_child(close)
 
