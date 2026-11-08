@@ -188,7 +188,9 @@ func rotate_camera(direction: int) -> void:
 func drag_camera(screen_pixels: float) -> void:
 	# Continuous world-space orbit from Android one-finger drag or desktop
 	# right mouse drag. It never changes movement/chunk ownership directly.
-	camera_angle_target -= clampf(screen_pixels, -140.0, 140.0) * CAMERA_DRAG_RADIANS_PER_PIXEL
+	# Cap pathological Android event deltas: one dropped touch frame must not
+	# spin the world by a whole quarter turn.
+	camera_angle_target -= clampf(screen_pixels, -90.0, 90.0) * CAMERA_DRAG_RADIANS_PER_PIXEL
 
 func _camera(delta: float) -> void:
 	if hero == null or camera == null:
@@ -211,12 +213,13 @@ func _camera(delta: float) -> void:
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(desired_focus) > 1.8
 	camera_occlusion_rise = lerpf(camera_occlusion_rise, 7.0 if occluded else 0.0, 1.0 - exp(-5.0 * t))
-	destination.y += camera_occlusion_rise
-	if camera.global_position == Vector3.ZERO:
-		camera.global_position = destination
-	else:
-		camera.global_position = camera.global_position.lerp(destination, 1.0 - exp(-7.0 * t))
-	camera.look_at(focus, Vector3.UP)
+	# Old position interpolation lagged behind smoothed yaw, so look_at()
+	# changed pitch unpredictably when users swiped sideways very quickly.
+	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
+	# each frame to guarantee a constant pitch and zero roll.
+	var raised_focus: Vector3 = focus + Vector3.UP * camera_occlusion_rise
+	camera.global_position = raised_focus + orbit
+	camera.look_at(raised_focus, Vector3.UP)
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
