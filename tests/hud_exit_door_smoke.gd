@@ -74,22 +74,22 @@ func _run() -> void:
 	_check(return_button != null and return_button.pressed.is_connected(hud._return_to_title), "Save/Return shortcut retains actual saving binding")
 	_tap(hud, resume)
 	_check(not popup.visible and not shade.visible and not close_button.visible, "Actual RESUME touch dismisses modal and shade")
-	hud._open_leave_menu()
+	hud.call("_open_leave_menu")
 	_tap(hud, close_button)
 	_check(not popup.visible and not shade.visible, "Actual circular X touch closes Leave popup")
-	hud._open_leave_menu()
+	hud.call("_open_leave_menu")
 	_tap(hud, controls)
-	_check(not popup.visible and hud.control_settings_panel.visible, "Actual CONTROLS touch opens settings instead of trapping player")
-	hud.control_settings_panel.visible = false
-	hud._open_leave_menu()
-	var before: Vector2 = hud.move_vector
+	_check(not popup.visible and (hud.get("control_settings_panel") as Control).visible, "Actual CONTROLS touch opens settings instead of trapping player")
+	(hud.get("control_settings_panel") as Control).visible = false
+	hud.call("_open_leave_menu")
+	var before: Vector2 = hud.get("move_vector")
 	var outside := InputEventScreenTouch.new()
 	outside.pressed = true
 	outside.index = 8
 	outside.position = Vector2(220.0, 360.0)
 	hud._input(outside)
-	_check(hud.move_vector == before and popup.visible, "Opaque Leave shade blocks movement/camera input")
-	hud._close_leave_menu()
+	_check(hud.get("move_vector") == before and popup.visible, "Opaque Leave shade blocks movement/camera input")
+	hud.call("_close_leave_menu")
 	game.queue_free()
 	await process_frame
 	print("EXIT HUD RESULT: %d failures" % failures)

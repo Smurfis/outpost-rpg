@@ -39,12 +39,12 @@ func _run() -> void:
 	var version_save: String = "user://hud_v2_versions_touch_test.json"
 	root.set_meta("outpost_new_adventure", true)
 	var game: Node3D = game_scene.instantiate()
-	game.save_path = version_save
+	game.set("save_path", version_save)
 	root.add_child(game)
 	current_scene = game
 	await process_frame
-	var hud: Node = game.hud
-	hud._open_leave_menu()
+	var hud: Node = game.get("hud") as Node
+	hud.call("_open_leave_menu")
 	var version_action: Button = hud.get_node_or_null("OutpostHUD/LeaveGamePanel").find_child("OpenVersionChannels", true, false) as Button
 	_tap(hud, version_action, 71)
 	_check(bool(root.get_meta("outpost_open_settings", false)), "VERSIONS touch requests Title Settings")
@@ -64,12 +64,12 @@ func _run() -> void:
 	var return_save: String = "user://hud_v2_save_touch_test.json"
 	root.set_meta("outpost_new_adventure", true)
 	var game2: Node3D = game_scene.instantiate()
-	game2.save_path = return_save
+	game2.set("save_path", return_save)
 	root.add_child(game2)
 	current_scene = game2
 	await process_frame
-	var hud2: Node = game2.hud
-	hud2._open_leave_menu()
+	var hud2: Node = game2.get("hud") as Node
+	hud2.call("_open_leave_menu")
 	var save_action: Button = hud2.get_node_or_null("OutpostHUD/LeaveGamePanel").find_child("ReturnToTitle", true, false) as Button
 	_tap(hud2, save_action, 72)
 	_check(FileAccess.file_exists(return_save), "SAVE & RETURN touch writes progress")
