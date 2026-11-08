@@ -45,6 +45,7 @@ func _run() -> void:
 	await process_frame
 	var hud: Node = game.get("hud") as Node
 	hud.call("_open_leave_menu")
+	await process_frame
 	var version_action: Button = hud.get_node_or_null("OutpostHUD/LeaveGamePanel").find_child("OpenVersionChannels", true, false) as Button
 	_tap(hud, version_action, 71)
 	_check(bool(root.get_meta("outpost_open_settings", false)), "VERSIONS touch requests Title Settings")
@@ -70,6 +71,7 @@ func _run() -> void:
 	await process_frame
 	var hud2: Node = game2.get("hud") as Node
 	hud2.call("_open_leave_menu")
+	await process_frame
 	var save_action: Button = hud2.get_node_or_null("OutpostHUD/LeaveGamePanel").find_child("ReturnToTitle", true, false) as Button
 	_tap(hud2, save_action, 72)
 	_check(FileAccess.file_exists(return_save), "SAVE & RETURN touch writes progress")
