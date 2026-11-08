@@ -1098,7 +1098,7 @@ func _show_skill_details() -> void:
 	var rank: int = game.mastery_rank(weapon)
 	var mastery_xp: int = int(game.weapon_mastery_xp.get(weapon, 0))
 	var available: int = game.unlocked_skill_slots()
-	skill_detail_text.text = "%s  •  Mastery rank %d  •  %d XP" % [weapon.replace("_", " ").capitalize(), rank, mastery_xp]
+	skill_detail_text.text = "%s  •  Mastery rank %d  •  %d XP  •  %d/3 abilities" % [weapon.replace("_", " ").capitalize(), rank, mastery_xp, available]
 	skill_mastery_bar.value = 60 if rank >= 10 else mastery_xp % 60
 	var names: Array[String] = ["POWER STRIKE", "CLEAVE", "SUNDERING BLOW"]
 	var required: Array[int] = [1, 3, 5]
