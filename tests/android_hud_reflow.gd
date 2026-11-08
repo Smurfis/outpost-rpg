@@ -116,7 +116,7 @@ func _run() -> void:
 			hud._input(bag_release)
 			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Press+release BAG in modal opens Albion inventory, not an inert overlay")
 			verify(not game.menu.emergency_close.visible, "Old far-left inventory close is hidden")
-			var window_x: Button = game.menu.inventory_window.window.find_child("InventoryCloseButton", true, false) as Button
+			var window_x: Button = game.menu.inventory_window.find_child("InventoryCloseButton", true, false) as Button
 			verify(window_x != null and window_x.get_global_rect().get_center().x > game.menu.inventory_window.window.get_global_rect().get_center().x, "Red inventory close stays on its own header at right")
 			if window_x != null:
 				window_x.pressed.emit()

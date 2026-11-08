@@ -22,6 +22,7 @@ var scroll: ScrollContainer
 var bag_weight_label: Label
 var bag_meter: ProgressBar
 var overflow_button: Button
+var inventory_close_button: Button
 var filter_buttons: Dictionary = {}
 var filter_kind: String = "all"
 var sort_kind: String = "name"
@@ -65,10 +66,12 @@ func _ready() -> void:
 	var close := Button.new()
 	close.name = "InventoryCloseButton"
 	SKIN.apply_close_button(close, 48)
-	close.size_flags_horizontal = Control.SIZE_SHRINK_END
 	close.tooltip_text = "Close inventory"
 	close.pressed.connect(func() -> void: menu.close_page())
-	heading.add_child(close)
+	# Explicitly place the X inside the real inventory's top-right edge;
+	# HBox stretch alignment had left it near the centre/left on Android.
+	inventory_close_button = close
+	add_child(close)
 
 	equipment_toggle = _button("EQUIPMENT  ▴", "wood")
 	equipment_toggle.name = "EquipmentCollapse"
@@ -174,6 +177,8 @@ func open_page(page: String) -> void:
 		selected_slot = ""
 	# The two entry points share one actual layout, not two competing modals.
 	_layout_windows()
+	if inventory_close_button != null:
+		inventory_close_button.move_to_front()
 	refresh()
 
 func close_page() -> void:
@@ -190,6 +195,9 @@ func _layout_windows() -> void:
 	window.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	window.position = Vector2(bounds.x - width_px - 10.0, 10.0)
 	window.size = Vector2(width_px, height_px)
+	if inventory_close_button != null:
+		inventory_close_button.position = window.position + Vector2(width_px - 58.0, 9.0)
+		inventory_close_button.size = Vector2(48.0, 48.0)
 	if item_card != null:
 		var detail_width: float = minf(320.0, maxf(230.0, bounds.x * 0.27))
 		var left_x: float = maxf(10.0, window.position.x - detail_width - 9.0)
