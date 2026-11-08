@@ -115,14 +115,12 @@ func _run() -> void:
 			bag_release.position = bag_tap.position
 			hud._input(bag_release)
 			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Press+release BAG in modal opens Albion inventory, not an inert overlay")
-			var emergency: Button = game.menu.emergency_close
-			verify(emergency != null and emergency.visible, "Back to Game stays above the Bag and Craft panels")
-			if emergency != null:
-				var exit_tap := InputEventScreenTouch.new()
-				exit_tap.pressed = true
-				exit_tap.position = emergency.get_global_rect().get_center()
-				game.menu._input(exit_tap)
-				verify(not game.menu.visible, "Tapping Back to Game actually leaves the bag")
+			verify(not game.menu.emergency_close.visible, "Old far-left inventory close is hidden")
+			var window_x: Button = game.menu.inventory_window.window.find_child("InventoryCloseButton", true, false) as Button
+			verify(window_x != null and window_x.get_global_rect().get_center().x > game.menu.inventory_window.window.get_global_rect().get_center().x, "Red inventory close stays on its own header at right")
+			if window_x != null:
+				window_x.pressed.emit()
+				verify(not game.menu.visible, "Pressing inventory's own X actually leaves the bag")
 		game.show_crafting()
 		verify(game.menu.visible and game.menu.current_page == "craft", "Crafting reopens after bag touch")
 		game.menu.close_page()
