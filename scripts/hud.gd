@@ -4,6 +4,7 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
+const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -59,6 +60,7 @@ var hint: Label
 var toast_label: Label
 var health_bar: ProgressBar
 var xp_bar: ProgressBar
+var xp_bar_divisions: Control
 var toast_panel: Panel
 var items: Dictionary = {}
 var joystick: Panel
@@ -176,18 +178,46 @@ func _ready() -> void:
 	# Mana is not implemented yet: never dedicate a visible line to "MP —".
 	mana_bar.visible = false
 	mana_numbers.visible = false
-	xp_bar = _meter(0.170, 0.974, 0.801, 0.990, Color("#a86ed7"))
+	# Character XP: a single full-width, segmented strip touching the bottom
+	# edge. This is character progression, not a large circular radial badge.
+	xp_bar = _meter(0.0, 0.975, 1.0, 1.0, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
-	xp_level_badge = _label("Lv. 1", 16, SKIN.GOLD, 0.032, 0.960, 0.131, 0.993)
+	var xp_background := StyleBoxFlat.new()
+	xp_background.bg_color = Color("#24192b")
+	xp_background.border_color = Color("#bd904c")
+	xp_background.set_border_width_all(1)
+	xp_background.set_corner_radius_all(0)
+	xp_background.set_content_margin_all(0)
+	xp_background.anti_aliasing = false
+	xp_bar.add_theme_stylebox_override("background", xp_background)
+	var xp_fill := StyleBoxFlat.new()
+	xp_fill.bg_color = Color("#aa6cda")
+	xp_fill.set_border_width_all(0)
+	xp_fill.set_corner_radius_all(0)
+	xp_fill.set_content_margin_all(0)
+	xp_fill.anti_aliasing = false
+	xp_bar.add_theme_stylebox_override("fill", xp_fill)
+	xp_bar_divisions = XP_DIVISIONS.new()
+	xp_bar_divisions.name = "CharacterXPDivisions"
+	xp_bar.add_child(xp_bar_divisions)
+	xp_bar_divisions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	xp_level_badge = _label("Lv. 1", 13, Color("#ffe8ab"), 0.002, 0.975, 0.075, 1.0)
 	xp_level_badge.name = "CharacterLevelBadge"
-	xp_level_badge.visible = false  # Level appears inside the separate ornate radial frame.
-	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_level_badge.visible = true
+	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	xp_level_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	xp_level_badge.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# Preserve the radial component for future gathering/skill level-up
+	# feedback, but never draw the oversized circle on the persistent HUD.
 	radial_level = RADIAL_LEVEL.new()
 	root.add_child(radial_level)
-	xp_level_label = _label("0 / 100 XP", 14, Color("#fff2d1"), 0.192, 0.965, 0.783, 0.992)
+	radial_level.visible = false
+	xp_level_label = _label("0 / 100 XP  •  100 TO NEXT", 14, Color("#fff2d1"), 0.08, 0.975, 0.93, 1.0)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	xp_level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	xp_level_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	xp_level_label.clip_text = true
 	hero_detail = _label("Training Blade  •  M1", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -865,18 +895,7 @@ func _layout_touch_hud() -> void:
 			screen.x - edge - tool_width,
 			screen.y - 168.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
 			tool_width, tool_height))
-	# Keep XP readable but reduce the enormous opaque bottom ribbon.
-	_place_px(xp_bar, screen, Rect2(screen.x * 0.17,
-			screen.y - 23.0 * scale, screen.x * 0.61, 13.0 * scale))
-	_place_px(xp_level_label, screen, Rect2(screen.x * 0.20,
-			screen.y - 29.0 * scale, screen.x * 0.55, 22.0 * scale))
-	_place_px(xp_level_badge, screen, Rect2(edge,
-			screen.y - 31.0 * scale, 105.0 * scale, 24.0 * scale))
-	# The separate ornate level jewel attaches to the BOTTOM XP bar.
-	# Keep it clear of the joystick (fixed x=26..174 at native landscape).
-	if radial_level != null:
-		_place_px(radial_level, screen, Rect2(maxf(182.0, 186.0 * scale),
-				screen.y - 86.0 * scale, 83.0 * scale, 83.0 * scale))
+	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
 	# The bottom-centre prompt was covering consumables and character XP.
 	# Keep short notices together in a compact top-centre stack instead.
@@ -888,6 +907,19 @@ func _layout_touch_hud() -> void:
 	var toast_y: float = info_y - 57.0 * scale
 	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 45.0 * scale))
 	_place_px(toast_label, screen, Rect2(info_left + 9.0 * scale, toast_y + 3.0 * scale, info_width - 18.0 * scale, 38.0 * scale))
+
+func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
+	# Always spans x=0..viewport width and y=viewport bottom, including 20:9.
+	# These are separate controls with IGNORE input, so the strip can never
+	# swallow joystick, camera, bag, menu, or skill touches.
+	if screen.x <= 0.0 or screen.y <= 0.0 or xp_bar == null:
+		return
+	var height_px: float = clampf(18.0 * scale, 17.0, 23.0)
+	var y: float = screen.y - height_px
+	_place_px(xp_bar, screen, Rect2(0.0, y, screen.x, height_px))
+	_place_px(xp_level_badge, screen, Rect2(10.0 * scale, y, 85.0 * scale, height_px))
+	_place_px(xp_level_label, screen, Rect2(105.0 * scale, y,
+			maxf(1.0, screen.x - 210.0 * scale), height_px))
 
 func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
 	# The actual UI art stays transparent and separately editable; this is
@@ -1740,7 +1772,9 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		var rank: int = int(level_data.get("level", 1))
 		var required: float = maxf(1.0, float(level_data.get("required", 100)))
 		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
-		xp_level_label.text = "%d / %d XP" % [int(level_data.get("current", 0)), int(required)]
+		var current_xp: int = int(level_data.get("current", 0))
+		var required_xp: int = maxi(1, roundi(required))
+		xp_level_label.text = "%d / %d XP  •  %d TO NEXT" % [current_xp, required_xp, maxi(0, required_xp - current_xp)]
 		xp_level_badge.text = "Lv. %d" % rank
 		if radial_level != null:
 			radial_level.call("update_level", rank, xp_bar.value / 100.0)

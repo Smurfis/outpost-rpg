@@ -66,10 +66,9 @@ func _run() -> void:
 	verify(camera_hint != null and not camera_hint.visible, "Temporary camera help no longer blocks the world")
 	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character XP remains in its bottom bar")
 	var radial: Control = hud.get_node_or_null("RadialLevelFrame") as Control
-	verify(radial != null and radial.get_node_or_null("LevelNumber") != null, "Ornate radial level frame is separate from player HP portrait")
-	if radial != null:
-		verify(radial.position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.8, "Radial level jewel remains attached to bottom XP")
-		verify(radial.get("fill_amount") >= 0.0, "Radial jewel has live level progress")
+	verify(radial != null and radial.get_node_or_null("LevelNumber") != null, "Reusable radial art remains available for future skill-level popups")
+	verify(radial != null and not radial.visible, "Oversized character-level radial does not cover gameplay")
+	verify(game.hud.xp_level_badge.visible, "Compact numeric character level belongs inside the bottom-edge XP strip")
 	var coop: Button = hud.get_node_or_null("CoopEntryButton") as Button
 	verify(coop != null and coop.pressed.is_connected(game.hud._open_coop), "Co-op remains usable")
 	game.hud.render_status(67.0, {"wood": 8, "stone": 5, "hide": 3, "coins": 12}, 52, 0, "spear", "Gather more wood", "Nearby: a tree")
