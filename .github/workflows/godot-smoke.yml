@@ -205,6 +205,10 @@ jobs:
         run: |
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_utility_cards.gd 2>&1 | tee hud-v2.log
 
+      - name: Verify WoW-style full-width, bottom-edge character XP at 16:9 and 20:9
+        run: |
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_fullwidth_xp_v2.gd 2>&1 | tee hud-edge-xp.log
+
       - name: Verify real Android HUD hitboxes, map and responsive menu spacing
         run: |
           set -o pipefail

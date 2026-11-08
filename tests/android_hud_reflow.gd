@@ -189,7 +189,11 @@ func _run() -> void:
 	hud._layout_touch_hud()
 
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")
-	verify(hud.xp_bar.get_global_rect().position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.94, "XP meter remains below action cluster")
+	var xp_rect: Rect2 = hud.xp_bar.get_global_rect()
+	var viewport_size: Vector2 = hud.get_viewport().get_visible_rect().size
+	verify(absf(xp_rect.position.x) < 1.1 and absf(xp_rect.end.x - viewport_size.x) < 1.1, "XP stretches to both full viewport edges")
+	verify(absf(xp_rect.end.y - viewport_size.y) < 1.1, "XP hugs the exact bottom viewport edge")
+	verify(hud.xp_bar_divisions != null and hud.xp_bar_divisions.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Segmented strip is visual-only, not an invisible touch overlay")
 
 	hud.bag_weight_label.visible = true
 	_does_not_overlap(hud.bag_weight_label, hud.quest_frame, "Bag weight alert does not obscure quest")
