@@ -65,7 +65,7 @@ func _run() -> void:
 	if mini != null and toggle != null:
 		_does_not_overlap(mini, toggle, "Minimap is clear of its menu toggle")
 		verify(toggle.get_global_rect().end.x < mini.get_global_rect().position.x, "MENU sits immediately left of the upper-right minimap")
-		verify(toggle.get_global_rect().position.y <= mini.get_global_rect().position.y + 9.0, "MENU aligns to the minimap's top edge")
+		verify(toggle.get_global_rect().position.y < mini.get_global_rect().position.y, "MENU aligns above the map with the new zone pill")
 	var specials: Array[Button] = [hud.quick_buttons["skill_1"], hud.quick_buttons["skill_2"], hud.quick_buttons["skill_3"]]
 	if smart != null:
 		verify(specials[0].get_global_rect().get_center().x > specials[1].get_global_rect().get_center().x, "POWER is now centered above and closer to CRAFT")
@@ -95,7 +95,13 @@ func _run() -> void:
 		menu_tap.pressed = true
 		menu_tap.position = toggle.get_global_rect().get_center()
 		hud._input(menu_tap)
-		verify(hud.top_menu_open, "Tapping MENU opens the centered six-item modal")
+		verify(not hud.top_menu_open, "Menu does not activate on finger-down (prevents double toggling)")
+		var menu_release := InputEventScreenTouch.new()
+		menu_release.index = menu_tap.index
+		menu_release.pressed = false
+		menu_release.position = menu_tap.position
+		hud._input(menu_release)
+		verify(hud.top_menu_open, "A single touch press+release opens the centered six-item modal")
 		var bag_action: Button = controls.get_node_or_null("BagMenuButton") as Button
 		if bag_action != null:
 			var bag_tap := InputEventScreenTouch.new()

@@ -60,7 +60,8 @@ func _run() -> void:
 		var footer_bounds: Rect2 = hud.clock_footer.get_global_rect()
 		verify(absf(footer_bounds.position.y - (mini_bounds.end.y - 7.0)) < 2.0, "Minimap calendar footer visually attaches to map")
 		verify(top_menu.get_global_rect().end.x < mini_bounds.position.x, "Wooden MENU is left of minimap, never obscuring it")
-		verify(top_menu.get_global_rect().position.y <= mini_bounds.position.y + 9.0, "Mobile MENU shares map top alignment")
+		verify(top_menu.get_global_rect().position.y < mini_bounds.position.y, "Single-tap MENU aligns to zone pill above the minimap")
+		verify(hud.zone_pill != null and hud.zone_pill.get_global_rect().end.y <= mini_bounds.position.y, "WoW-inspired zone pill is ABOVE the circular map")
 	verify(not game.menu.visible, "Bag and Gear modal panels stay hidden while playing")
 	var screen_mid: Vector2 = hud.get_viewport().get_visible_rect().size * 0.5
 	verify(hud.top_menu_panel.get_global_rect().get_center().distance_to(screen_mid) < 2.0, "Game MENU is now a centered modal, not a tiny map dropdown")
@@ -76,12 +77,19 @@ func _run() -> void:
 	verify(hud.joystick.position == stick_before and (hud.quick_buttons["skill_1"] as Button).position == skill_before, "Opening Bag and Gear never nudges movement or skills")
 
 	verify(not hud.top_menu_open, "Extra options are collapsed by default")
-	hud._menu_button_down()
+	var tap_down := InputEventScreenTouch.new()
+	tap_down.index = 13
+	tap_down.position = top_menu.get_global_rect().get_center()
+	tap_down.pressed = true
+	hud._input(tap_down)
 	hud._process(0.38)
-	verify(hud.top_menu_open and hud.top_menu_panel.visible and hud.top_menu_shade.visible, "Hold opens the centered game-menu modal")
-	hud._menu_button_up()
-	hud._menu_button_pressed()
-	verify(hud.top_menu_open, "Releasing long press does not immediately close dropdown")
+	verify(not hud.top_menu_open, "Holding Menu does not accidentally open or double toggle a modal")
+	var tap_up := InputEventScreenTouch.new()
+	tap_up.index = 13
+	tap_up.position = tap_down.position
+	tap_up.pressed = false
+	hud._input(tap_up)
+	verify(hud.top_menu_open and hud.top_menu_panel.visible and hud.top_menu_shade.visible, "One tap-release opens the centered game menu immediately")
 	verify(hud.top_menu_actions.size() == 6, "Menu has six functional destinations")
 	for option in hud.top_menu_actions:
 		verify(option.visible, "Expanded option is visible: " + option.name)

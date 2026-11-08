@@ -26,7 +26,7 @@ func setup(game_ref: Node) -> void:
 func _ready() -> void:
 	name = "LiveWorldMinimap"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_image = Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGBA8)
 	_image.fill(Color.TRANSPARENT)
 	_texture = ImageTexture.create_from_image(_image)
@@ -71,13 +71,23 @@ func _world_to_map(world_delta: Vector2) -> Vector2:
 	var s: float = sin(_sample_angle)
 	return Vector2(world_delta.x * c - world_delta.y * s, world_delta.x * s + world_delta.y * c)
 
+static func terrain_colour(zone: String) -> Color:
+	# One consistent colour per *actual coast classification*, never a
+	# random tint based on terrain tile hash or player-relative grid pixel.
+	match zone:
+		"water": return Color("28677b")
+		"wet_sand": return Color("aba282")
+		"dry_sand": return Color("ddc696")
+		"grass_sand": return Color("91a96a")
+		"coastal_soil": return Color("78975c")
+		_: return Color("719a51")  # All inland grass is the SAME green.
+
 func _refresh_pixels() -> void:
 	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
 	var half_extent: float = float(biome.get("map_half")) if biome != null else 0.0
 	for py in range(RESOLUTION):
-		var last_elevation: float = -0.055
 		for px in range(RESOLUTION):
-			# World-aligned: rotation happens via a single cheap canvas transform.
+			# World-aligned, camera rotation applied in _draw().
 			var local := Vector2((float(px) + 0.5) / float(RESOLUTION) * 2.0 - 1.0,
 				(float(py) + 0.5) / float(RESOLUTION) * 2.0 - 1.0)
 			if local.length_squared() >= 0.96:
@@ -85,48 +95,17 @@ func _refresh_pixels() -> void:
 				continue
 			var wx: float = _center.x + local.x * MAP_RADIUS
 			var wz: float = _center.z + local.y * MAP_RADIUS
-			var colour: Color = Color("648641")
-			var zone: String = ""
+			var region: String = "inland"
 			if biome != null:
 				if absf(wx) >= half_extent or absf(wz) >= half_extent:
-					colour = Color("266983")
+					region = "water"
 				else:
-					zone = str(biome.coast_zone_at(wx, wz))
-					match zone:
-						"water": colour = Color("276f8c")
-						"wet_sand": colour = Color("b0a57f")
-						"dry_sand": colour = Color("dec994")
-						"grass_sand": colour = Color("a8b47a")
-						"coastal_soil": colour = Color("829b68")
-						_:
-							var tile: int = int(biome._ground_tile(floori(wx), floori(wz)))
-							match tile:
-								1: colour = Color("9bbd60")
-								2: colour = Color("426f3e")
-								3: colour = Color("94734f")
-								4: colour = Color("858c91")
-								5: colour = Color("c2a574")
-								6: colour = Color("aa9774")
-								7: colour = Color("55764c")
-								_: colour = Color("739a4e")
-			# Actual voxel elevation gives the miniature terrain subtle relief.
-			# Reuse a height per two horizontal pixels to limit noise sampling.
-			if biome != null and zone == "inland":
-				if px % 2 == 0:
-					last_elevation = float(biome._tile_height(floori(wx), floori(wz)))
-					_relief_samples += 1
-				if last_elevation > 0.45:
-					colour = colour.lightened(clampf(last_elevation * 0.055, 0.0, 0.17))
-				elif last_elevation < -0.55:
-					colour = colour.darkened(clampf(-last_elevation * 0.055, 0.0, 0.15))
-			# Cleaner, less noisy cartography: retained terrain/biome colour
-			# categories, but fewer decorative speckles than the old map.
-			var ink: int = posmod(floori(wx) * 31 + floori(wz) * 43, 101)
-			if ink == 0:
-				colour = colour.lightened(0.07)
-			elif ink == 49:
-				colour = colour.darkened(0.05)
-			_image.set_pixel(px, py, colour)
+					region = str(biome.coast_zone_at(wx, wz))
+			# No per-pixel noise, no per-voxel green variants, no elevation
+			# tinting. These re-sampled details created checkerboard flashes
+			# on recentering. Actual tree and station markers still render
+			# separately in world space, not inside the texture.
+			_image.set_pixel(px, py, terrain_colour(region))
 	_texture.update(_image)
 	_refresh_count += 1
 

@@ -65,7 +65,10 @@ func _run() -> void:
 	verify(map != null and map.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Circular minimap does not steal camera touch input")
 	if map != null:
 		map._process(0.5)
-		verify(int(map._relief_samples) > 0, "Actual terrain heights shade the round miniature map")
+		verify(int(map._relief_samples) == 0, "Map no longer recomputes flickering per-pixel voxel elevation shades")
+		verify(map.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR, "Unified terrain palette uses smooth display sampling")
+		var palette = load("res://scripts/ui/live_world_minimap.gd")
+		verify(palette.terrain_colour("inland") == palette.terrain_colour("inland"), "All inland grass uses one stable green")
 		var sampled: int = int(map._refresh_count)
 		game.camera_angle = PI * 0.5
 		map._process(0.02)

@@ -189,7 +189,14 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_opaque_terrain_water.gd 2>&1 | tee opaque-terrain.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL OPAQUE TERRAIN:' opaque-terrain.log; then exit 1; fi
           grep -q "OPAQUE TERRAIN RESULT: 0 failure(s)" opaque-terrain.log
-      - name: Verify compact wallet, menu hold, three skills and floating movement joystick
+      - name: Verify single-tap top chrome, stable fast-orbit pitch and stable zone map
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_topbar_camera_zone_v2.gd 2>&1 | tee topbar-camera-zone.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TOPBAR CAMERA:' topbar-camera-zone.log; then exit 1; fi
+          grep -q "TOPBAR CAMERA RESULT: 0 failures" topbar-camera-zone.log
+
+      - name: Verify compact wallet, single-tap menu, three skills and floating movement joystick
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/mobile_hud_wallet_floating_joystick.gd 2>&1 | tee wallet-float-hud.log

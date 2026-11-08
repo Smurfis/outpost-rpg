@@ -4,6 +4,7 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const HUD_V2 = preload("res://scripts/ui/hud_v2_components.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
+const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
@@ -43,6 +44,14 @@ var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
 var clock_label: Label
+var zone_pill: Panel
+var zone_pill_text: Label
+var zone_banner: Label
+var current_zone: String = ""
+var candidate_zone: String = ""
+var candidate_zone_seconds: float = 0.0
+var zone_poll_seconds: float = 0.0
+var zone_banner_seconds: float = 0.0
 var clock_footer: Panel
 var calendar_mark: Label
 var torch_button: Button
@@ -133,6 +142,13 @@ var sticky_movement_enabled: bool = false
 var sticky_movement_toggle: CheckButton
 var stop_sticky_button: Button
 var ignore_menu_synthetic_mouse_until: int = 0
+var top_chrome_finger: int = -1
+var top_chrome_candidate: Button
+var top_chrome_origin: Vector2 = Vector2.ZERO
+var top_chrome_mouse_down: bool = false
+var top_chrome_mouse_candidate: Button
+var top_chrome_mouse_origin: Vector2 = Vector2.ZERO
+var top_chrome_ignore_mouse_until: int = 0
 var player_display_name: String = "Adventurer"
 var control_settings_panel: Panel
 var leave_menu_shade: ColorRect
@@ -274,7 +290,8 @@ func _ready() -> void:
 	wallet_collapse.focus_mode = Control.FOCUS_NONE
 	root.add_child(wallet_collapse)
 	_anchors(wallet_collapse, 0.55, 0.023, 0.63, 0.095)
-	wallet_collapse.pressed.connect(_toggle_wallet)
+	# Touch is routed centrally to prevent duplicate GUI+HUD clicks on Android.
+	# All three top-right controls use exactly one release activation.
 	wallet_popup_title = _label("✦  WALLET", 18, SKIN.GOLD, 0.31, 0.121, 0.47, 0.160)
 	wallet_popup_title.name = "WalletPopupTitle"
 	wallet_popup_title.visible = false
@@ -302,6 +319,8 @@ func _ready() -> void:
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
 	SKIN.apply_button(wallet_bag, "wood")
+	# The inherited _action() BAG pressed signal is desktop GUI fallback only;
+	# Android touches are consumed before GUI delivery by _handle_top_chrome_input.
 	# Retain stable public dictionary keys for existing gameplay/test callers.
 	for key in ["wood", "stone", "hide", "coins"]:
 		var count := _label("0", 12, SKIN.CREAM, 0.0, 0.0, 0.01, 0.01)
@@ -358,6 +377,23 @@ func _ready() -> void:
 	minimap.setup(game)
 	root.add_child(minimap)
 	_anchors(minimap, 0.811, 0.019, 0.980, 0.309)
+	zone_pill = _panel(0.82, 0.012, 0.976, 0.050)
+	zone_pill.name = "MinimapZonePill"
+	zone_pill.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	zone_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone_pill_text = _label("OUTPOST CLEARING", 16, SKIN.CREAM, 0.826, 0.018, 0.971, 0.044)
+	zone_pill_text.name = "MinimapZoneName"
+	zone_pill_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_pill_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	zone_pill_text.autowrap_mode = TextServer.AUTOWRAP_OFF
+	zone_pill_text.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	zone_pill_text.clip_text = true
+	zone_banner = _label("", 22, SKIN.GOLD, 0.31, 0.12, 0.69, 0.19)
+	zone_banner.name = "ZoneEntryAnnouncement"
+	zone_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	zone_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	zone_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zone_banner.visible = false
 	clock_footer = _panel(0.82, 0.290, 0.975, 0.344)
 	clock_footer.name = "MinimapClockFooterFrame"
 	clock_footer.add_theme_stylebox_override("panel", HUD_V2.utility_card())
@@ -436,9 +472,8 @@ func _ready() -> void:
 	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
 	SKIN.apply_button(menu_button, "wood")
-	menu_button.button_down.connect(_menu_button_down)
-	menu_button.button_up.connect(_menu_button_up)
-	menu_button.pressed.connect(_menu_button_pressed)
+	# Deliberately no button_down/hold handlers: a single tap is sufficient.
+	# Click routing is centralised with WALLET and BAG to avoid double toggles.
 	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "slot")
 	top_menu_actions.append(craft_button)
 	top_menu_actions.append(_action("gear", "GEAR", 0.796, 0.405, 0.888, 0.482, "slot"))
@@ -1158,8 +1193,15 @@ func _layout_touch_hud() -> void:
 	# The live minimap stays a real square instead of becoming an oval on
 	# phones with wider aspect ratios. Footer and menu sit directly below it.
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * scale, screen.x * 0.23))
-	var map_top: float = edge
+	# Make room for the location banner ABOVE (not on top of) the live map.
+	var map_top: float = 58.0 * scale
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
+	var zone_top: float = 16.0 * scale
+	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 34.0 * scale))
+	_place_px(zone_pill_text, screen, Rect2(screen.x - edge - map_side + 7.0 * scale, zone_top + 2.0 * scale,
+			map_side - 14.0 * scale, 30.0 * scale))
+	_place_px(zone_banner, screen, Rect2((screen.x - 440.0 * scale) * 0.5,
+			110.0 * scale, 440.0 * scale, 38.0 * scale))
 	var map_bottom: float = map_top + map_side
 	var toggle_side: float = 52.0 * scale
 	# MENU belongs up at the map's top-left shoulder, not detached
@@ -1168,7 +1210,7 @@ func _layout_touch_hud() -> void:
 	# Equal-height carved mobile controls: WALLET / BAG / MENU.
 	# The menu never overlaps the circular map or consumes a combat slot.
 	_place_px(menu_button, screen, Rect2(map_left - 86.0 * scale,
-			map_top, 78.0 * scale, 50.0 * scale))
+			16.0 * scale, 78.0 * scale, 50.0 * scale))
 	var footer_top: float = map_bottom - 7.0 * scale
 	_place_px(clock_footer, screen, Rect2(map_left + 14.0 * scale,
 			footer_top, map_side - 28.0 * scale, 35.0 * scale))
@@ -1878,12 +1920,62 @@ func _update_context_prompt(helper: String) -> void:
 		context_prompt_frame.visible = show_prompt
 	hint.visible = show_prompt
 
+func _resolve_zone_name() -> String:
+	if game == null:
+		return ""
+	var hero_ref: Node3D = game.get("hero") as Node3D
+	if hero_ref == null:
+		return ""
+	var manager: Node = game.get_node_or_null("Dungeons")
+	if manager != null and manager.get("active_instance") != null:
+		var dungeon: Node = manager.get("active_instance") as Node
+		if dungeon != null:
+			return "DUNGEON · FLOOR %d" % int(dungeon.get("current_floor"))
+		return "DUNGEON"
+	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
+	return ZONE_NAMES.resolve(hero_ref.global_position, biome, false)
+
+func _update_zone_state(delta: float) -> void:
+	zone_poll_seconds += delta
+	if zone_poll_seconds < 0.20:
+		return
+	var sampled: float = zone_poll_seconds
+	zone_poll_seconds = 0.0
+	var observed: String = _resolve_zone_name()
+	if observed.is_empty() or observed == current_zone:
+		candidate_zone = ""
+		candidate_zone_seconds = 0.0
+		return
+	if observed != candidate_zone:
+		candidate_zone = observed
+		candidate_zone_seconds = 0.0
+	else:
+		candidate_zone_seconds += sampled
+	if candidate_zone_seconds >= 0.40:
+		_show_zone_name(candidate_zone)
+		candidate_zone = ""
+		candidate_zone_seconds = 0.0
+
+func _show_zone_name(value: String) -> void:
+	if value.is_empty() or zone_pill_text == null or value == current_zone:
+		return
+	var old_zone: String = current_zone
+	current_zone = value
+	zone_pill_text.text = value
+	if not old_zone.is_empty():
+		zone_banner.text = "ENTERING  ·  " + value
+		zone_banner.visible = true
+		zone_banner.modulate.a = 1.0
+		zone_banner_seconds = 2.7
+
 func _process(delta: float) -> void:
-	if top_menu_pressed and not top_menu_opened_by_hold:
-		top_menu_hold_seconds += delta
-		if top_menu_hold_seconds >= 0.34:
-			top_menu_opened_by_hold = true
-			_set_top_menu(true)
+	# MENU is now tap-to-open; holding is not required to interact.
+	_update_zone_state(delta)
+	if zone_banner_seconds > 0.0:
+		zone_banner_seconds = maxf(0.0, zone_banner_seconds - delta)
+		zone_banner.modulate.a = minf(1.0, zone_banner_seconds * 1.3)
+		if zone_banner_seconds <= 0.0:
+			zone_banner.visible = false
 	if gesture_hint_timeout > 0.0:
 		gesture_hint_timeout = maxf(0.0, gesture_hint_timeout - delta)
 		if gesture_hint_timeout <= 0.0:
@@ -1938,6 +2030,76 @@ func _start_floating_stick(pos: Vector2) -> void:
 func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
+func _top_chrome_button_at(pos: Vector2) -> Button:
+	for control in [menu_button, wallet_bag, wallet_collapse]:
+		if control != null and control.visible and not control.disabled and control.get_global_rect().has_point(pos):
+			return control
+	return null
+
+func _activate_top_chrome(control: Button) -> void:
+	if control == menu_button:
+		_set_top_menu(not top_menu_open)
+	elif control == wallet_bag:
+		_bag()
+	elif control == wallet_collapse:
+		_toggle_wallet()
+
+func _handle_top_chrome_input(event: InputEvent) -> bool:
+	# One press+release owns one activation. A matching finger is required,
+	# while Android-generated synthetic mouse events are suppressed.
+	if event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed and top_chrome_finger < 0:
+			var action: Button = _top_chrome_button_at(touch.position)
+			if action == null:
+				return false
+			top_chrome_finger = touch.index
+			top_chrome_candidate = action
+			top_chrome_origin = touch.position
+			get_viewport().set_input_as_handled()
+			return true
+		if not touch.pressed and touch.index == top_chrome_finger:
+			var action: Button = top_chrome_candidate
+			var activate: bool = action != null and action == _top_chrome_button_at(touch.position) and touch.position.distance_to(top_chrome_origin) < 42.0
+			top_chrome_finger = -1
+			top_chrome_candidate = null
+			top_chrome_ignore_mouse_until = Time.get_ticks_msec() + 450
+			get_viewport().set_input_as_handled()
+			if activate:
+				_activate_top_chrome(action)
+			return true
+	elif event is InputEventScreenDrag:
+		var motion: InputEventScreenDrag = event
+		if motion.index == top_chrome_finger:
+			if motion.position.distance_to(top_chrome_origin) >= 42.0:
+				top_chrome_candidate = null
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var click: InputEventMouseButton = event
+		if Time.get_ticks_msec() < top_chrome_ignore_mouse_until:
+			get_viewport().set_input_as_handled()
+			return true
+		if click.pressed:
+			var action: Button = _top_chrome_button_at(click.position)
+			if action == null:
+				return false
+			top_chrome_mouse_down = true
+			top_chrome_mouse_candidate = action
+			top_chrome_mouse_origin = click.position
+			get_viewport().set_input_as_handled()
+			return true
+		if top_chrome_mouse_down:
+			var action: Button = top_chrome_mouse_candidate
+			var activate: bool = action != null and action == _top_chrome_button_at(click.position) and click.position.distance_to(top_chrome_mouse_origin) < 42.0
+			top_chrome_mouse_down = false
+			top_chrome_mouse_candidate = null
+			get_viewport().set_input_as_handled()
+			if activate:
+				_activate_top_chrome(action)
+			return true
+	return false
+
 func _touch_menu_navigation(event: InputEvent) -> bool:
 	if game == null or (game.menu != null and game.menu.visible):
 		return false
@@ -1961,10 +2123,7 @@ func _touch_menu_navigation(event: InputEvent) -> bool:
 		_toggle_gathered()
 		get_viewport().set_input_as_handled()
 		return true
-	if menu_button != null and menu_button.visible and menu_button.get_global_rect().has_point(pos):
-		_set_top_menu(not top_menu_open)
-		get_viewport().set_input_as_handled()
-		return true
+	# Top MENU/WALLET/BAG are handled on matching touch RELEASE above.
 	if top_menu_open:
 		for action in top_menu_actions:
 			if action.visible and action.get_global_rect().has_point(pos):
@@ -2037,6 +2196,8 @@ func _input(event: InputEvent) -> void:
 	# a modal. Never let this click strike a gameplay skill underneath.
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() < leave_ignore_synthetic_mouse_until:
 		get_viewport().set_input_as_handled()
+		return
+	if _handle_top_chrome_input(event):
 		return
 	if _touch_menu_navigation(event):
 		return
