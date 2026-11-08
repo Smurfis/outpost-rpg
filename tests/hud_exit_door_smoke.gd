@@ -1,5 +1,6 @@
 extends SceneTree
-## The tiny door in the six-slot flyout opens a real save/leave confirmation.
+## Touch-real regression for the two independent Outpost popups.
+## Previous smoke only inspected signal wiring, so Android taps could fail.
 var failures: int = 0
 
 func _initialize() -> void:
@@ -12,7 +13,24 @@ func _check(ok: bool, description: String) -> void:
 		failures += 1
 		push_error("FAIL EXIT HUD: " + description)
 
+func _tap(hud: Node, button: Button) -> void:
+	if button == null:
+		_check(false, "Tap target exists")
+		return
+	var location: Vector2 = button.get_global_rect().get_center()
+	var down := InputEventScreenTouch.new()
+	down.index = 37
+	down.position = location
+	down.pressed = true
+	hud._input(down)
+	var up := InputEventScreenTouch.new()
+	up.index = 37
+	up.position = location
+	up.pressed = false
+	hud._input(up)
+
 func _run() -> void:
+	root.set_meta("outpost_new_adventure", true)
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	_check(scene != null, "Outpost game scene loads")
 	if scene == null:
@@ -27,21 +45,56 @@ func _run() -> void:
 		game.queue_free()
 		quit(1)
 		return
-	var entry: Button = hud.get_node_or_null("OutpostHUD/ExitDoorMenuButton") as Button
-	_check(entry != null and entry.get_node_or_null("ExitDoorIcon") is TextureRect, "Six-slot menu contains a centred pixel-art door icon")
-	_check((hud.get("top_menu_actions") as Array).size() == 6, "No extra HUD slots overlap combat controls")
-	var popup: PanelContainer = hud.get_node_or_null("OutpostHUD/LeaveGamePanel") as PanelContainer
-	var shade: ColorRect = hud.get_node_or_null("OutpostHUD/LeaveGameShade") as ColorRect
-	_check(popup != null and shade != null and not popup.visible, "Save-and-exit panel is hidden during normal gameplay")
+	var hud_root: Control = hud.get("root") as Control
+	var menu_entry: Button = hud_root.get_node_or_null("TopRightMenuButton") as Button
+	var exit_entry: Button = hud_root.get_node_or_null("ExitDoorMenuButton") as Button
+	var modal: Panel = hud_root.get_node_or_null("FunctionalHotbar") as Panel
+	var modal_shade: ColorRect = hud_root.get_node_or_null("GameMenuShade") as ColorRect
+	_check(menu_entry != null and exit_entry != null, "Mobile MENU and Save/Exit buttons are real touch controls")
+	_check(exit_entry != null and exit_entry.get_node_or_null("ExitDoorIcon") is TextureRect, "Exit still uses its independent icon")
+	_check(modal != null and modal_shade != null and not modal.visible, "Game MENU is a separate hidden popup")
+	_check((hud.get("top_menu_actions") as Array).size() == 6, "Six existing destinations preserved")
+	var popup: PanelContainer = hud_root.get_node_or_null("LeaveGamePanel") as PanelContainer
+	var shade: ColorRect = hud_root.get_node_or_null("LeaveGameShade") as ColorRect
+	var close_button: Button = hud_root.get_node_or_null("CloseLeaveOutpost") as Button
+	_check(popup != null and shade != null and close_button != null and not popup.visible, "Leave popup starts closed")
+	_check(popup != null and popup.get_theme_stylebox("panel") is StyleBoxFlat, "Leave popup uses reusable opaque modal frame, not old nine-slice")
+	_check(popup != null and popup.find_child("LeaveGameNoticeFrame", true, false) != null, "Parchment notice style is a reusable component")
+
+	_tap(hud, menu_entry)
+	_check(bool(hud.get("top_menu_open")) and modal.visible and modal_shade.visible, "Actual Android tap opens the centered Game MENU")
+	_tap(hud, exit_entry)
+	await process_frame
+	_check(popup.visible and shade.visible and not modal.visible and not modal_shade.visible, "Touching Save/Exit opens Leave popup and closes Game MENU")
+	var resume: Button = popup.find_child("ResumeAdventureButton", true, false) as Button
+	var controls: Button = popup.find_child("LeaveControlsButton", true, false) as Button
+	var versions: Button = popup.find_child("OpenVersionChannels", true, false) as Button
+	var return_button: Button = popup.find_child("ReturnToTitle", true, false) as Button
+	_check(resume != null and controls != null and versions != null and return_button != null, "All four Leave actions are present")
+	_check(versions != null and versions.pressed.is_connected(hud._return_to_version_channels), "Version shortcut retains actual save/return binding")
+	_check(return_button != null and return_button.pressed.is_connected(hud._return_to_title), "Save/Return shortcut retains actual saving binding")
+	_tap(hud, resume)
+	_check(not popup.visible and not shade.visible and not close_button.visible, "Actual RESUME touch dismisses modal and shade")
 	hud.call("_open_leave_menu")
-	_check(popup != null and popup.visible and shade != null and shade.visible, "Door opens touch-blocking wood/pixel exit overlay")
-	var return_button: Button = popup.find_child("ReturnToTitle", true, false) as Button if popup != null else null
-	_check(return_button != null and return_button.text.contains("RETURN"), "Exit menu has deliberate save-and-return action")
-	var version_button: Button = popup.find_child("OpenVersionChannels", true, false) as Button if popup != null else null
-	_check(version_button != null and version_button.pressed.is_connected(hud._return_to_version_channels), "In-game version shortcut saves and opens title Settings")
-	_check(game.has_method("save_and_return_to_title"), "Return flow saves game and disconnects existing LAN")
+	await process_frame
+	_tap(hud, close_button)
+	_check(not popup.visible and not shade.visible, "Actual circular X touch closes Leave popup")
+	hud.call("_open_leave_menu")
+	await process_frame
+	_tap(hud, controls)
+	_check(not popup.visible, "CONTROLS touch closes Leave popup")
+	_check((hud.get("control_settings_panel") as Control).visible, "CONTROLS touch opens real settings")
+	(hud.get("control_settings_panel") as Control).visible = false
+	hud.call("_open_leave_menu")
+	await process_frame
+	var before: Vector2 = hud.get("move_vector")
+	var outside := InputEventScreenTouch.new()
+	outside.pressed = true
+	outside.index = 8
+	outside.position = Vector2(220.0, 360.0)
+	hud._input(outside)
+	_check(hud.get("move_vector") == before and popup.visible, "Opaque Leave shade blocks movement/camera input")
 	hud.call("_close_leave_menu")
-	_check(popup != null and not popup.visible and shade != null and not shade.visible, "Resume dismisses the modal")
 	game.queue_free()
 	await process_frame
 	print("EXIT HUD RESULT: %d failures" % failures)

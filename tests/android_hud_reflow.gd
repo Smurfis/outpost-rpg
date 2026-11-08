@@ -77,7 +77,7 @@ func _run() -> void:
 		verify(context_panel.get_global_rect().end.y < controls.size.y * 0.42, "Crafting Station context prompt does not cover the lower abilities or XP")
 		verify(toast_panel.get_global_rect().end.y < context_panel.get_global_rect().position.y, "Toast and actionable context are vertically aligned without overlapping")
 	hud._set_top_menu(true)
-	verify(hud.top_menu_actions.size() == 6 and menu.visible, "Six-option drop-down opens")
+	verify(hud.top_menu_actions.size() == 6 and menu.visible and hud.top_menu_shade.visible, "Six-option centered game MENU opens with a shade")
 	for option in hud.top_menu_actions:
 		verify(option.visible and menu.get_global_rect().encloses(option.get_global_rect()), "Menu option fits panel: " + option.name)
 		if mini != null:
@@ -95,7 +95,7 @@ func _run() -> void:
 		menu_tap.pressed = true
 		menu_tap.position = toggle.get_global_rect().get_center()
 		hud._input(menu_tap)
-		verify(hud.top_menu_open, "Tapping MENU opens the live six-item flyout")
+		verify(hud.top_menu_open, "Tapping MENU opens the centered six-item modal")
 		var bag_action: Button = controls.get_node_or_null("BagMenuButton") as Button
 		if bag_action != null:
 			var bag_tap := InputEventScreenTouch.new()
@@ -103,7 +103,12 @@ func _run() -> void:
 			bag_tap.pressed = true
 			bag_tap.position = bag_action.get_global_rect().get_center()
 			hud._input(bag_tap)
-			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Tapping BAG opens Albion inventory, not an inert overlay")
+			var bag_release := InputEventScreenTouch.new()
+			bag_release.index = 1
+			bag_release.pressed = false
+			bag_release.position = bag_tap.position
+			hud._input(bag_release)
+			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Press+release BAG in modal opens Albion inventory, not an inert overlay")
 			var emergency: Button = game.menu.emergency_close
 			verify(emergency != null and emergency.visible, "Back to Game stays above the Bag and Craft panels")
 			if emergency != null:
