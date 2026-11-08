@@ -55,6 +55,8 @@ func _run() -> void:
 		_check(page != null and page.find_child("OutpostLoadingCrest", true, false) != null, "Loading artwork contains the genuine Outpost crest")
 		_check(page != null and page.find_child("Landscape", true, false) != null, "Full-screen backdrop uses approved landscape")
 		_check(page != null and page.find_child("LoadingStack", true, false) != null, "Single centered stack replaces grey loading box")
+		var loading_frame: PanelContainer = page.find_child("WorldLoadingFrame", true, false) as PanelContainer
+		_check(loading_frame != null and loading_frame.get_theme_stylebox("panel") is StyleBoxFlat, "New loading frame matches translucent menu and changelog skin")
 		var bar: ProgressBar = loading.get("_progress") as ProgressBar
 		_check(bar != null and bar.max_value == 100.0, "Real world-generation progress bar is visible")
 		var cancel: Button = loading.get("_cancel_button") as Button

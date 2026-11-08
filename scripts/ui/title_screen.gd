@@ -338,12 +338,7 @@ func _make_screen() -> void:
 	_update_notice.visible = false
 	_update_notice.add_theme_font_size_override("font_size", 18)
 	_update_notice.add_theme_color_override("font_color", Color("ffefbd"))
-	var update_frame := StyleBoxFlat.new()
-	update_frame.bg_color = Color("392833")
-	update_frame.border_color = Color("f1bd69")
-	update_frame.set_border_width_all(4)
-	update_frame.set_corner_radius_all(7)
-	_update_notice.add_theme_stylebox_override("normal", update_frame)
+	SKIN.apply_button(_update_notice, "wood_selected")
 	_update_notice.pressed.connect(_check_or_download_update)
 	_canvas.add_child(_update_notice)
 
@@ -494,7 +489,7 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 	frame.position = (DESIGN - Vector2(width_px, height_px)) * 0.5
 	frame.size = Vector2(width_px, height_px)
 	frame.custom_minimum_size = Vector2(width_px, height_px)
-	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	frame.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(frame)
 	var margins := MarginContainer.new()
@@ -587,11 +582,18 @@ func _build_settings() -> void:
 		_write_prefs()
 	)
 	stack.add_child(tips)
-	stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 22))
+	var updates_frame := PanelContainer.new()
+	updates_frame.name = "AndroidUpdateSectionFrame"
+	updates_frame.add_theme_stylebox_override("panel", SKIN.modal_section())
+	stack.add_child(updates_frame)
+	var updates_stack := VBoxContainer.new()
+	updates_stack.add_theme_constant_override("separation", 3)
+	updates_frame.add_child(updates_stack)
+	updates_stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 19))
 	var channels := HBoxContainer.new()
 	channels.name = "BuildChannelSelector"
 	channels.add_theme_constant_override("separation", 9)
-	stack.add_child(channels)
+	updates_stack.add_child(channels)
 	_channel_stable_button = _menu_button("STABLE", _select_update_channel.bind("stable"))
 	_channel_stable_button.name = "StableChannel"
 	_channel_stable_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -604,7 +606,7 @@ func _build_settings() -> void:
 	_channel_note.name = "BuildChannelDescription"
 	_channel_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_channel_note.custom_minimum_size = Vector2(0, 28)
-	stack.add_child(_channel_note)
+	updates_stack.add_child(_channel_note)
 	_updater = ANDROID_UPDATER.new()
 	_updater.name = "AndroidUpdater"
 	add_child(_updater)
@@ -618,32 +620,35 @@ func _build_settings() -> void:
 	_refresh_channel_buttons()
 	var update_row := HBoxContainer.new()
 	update_row.add_theme_constant_override("separation", 10)
-	stack.add_child(update_row)
+	updates_stack.add_child(update_row)
 	_update_button = _menu_button("CHECK FOR UPDATES", _check_updates_only)
 	_update_button.name = "CheckForUpdates"
 	_update_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	update_row.add_child(_update_button)
-	_download_button = _menu_button("DOWNLOAD IN GAME", _check_or_download_update, "wood_selected")
+	_download_button = _menu_button("DOWNLOAD / INSTALL", _check_or_download_update, "wood_selected")
 	_download_button.name = "DownloadUpdate"
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
 	_update_status = _menu_label("Installed build %d • Download in Outpost, approve installation with Android." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
-	_update_status.custom_minimum_size = Vector2(0, 38)
-	stack.add_child(_update_status)
+	_update_status.custom_minimum_size = Vector2(0, 34)
+	_update_status.add_theme_font_size_override("font_size", 14)
+	updates_stack.add_child(_update_status)
 	_download_progress_bar = ProgressBar.new()
 	_download_progress_bar.name = "AndroidDownloadProgress"
 	_download_progress_bar.max_value = 100.0
 	_download_progress_bar.show_percentage = false
 	_download_progress_bar.custom_minimum_size = Vector2(0, 13)
+	_download_progress_bar.add_theme_stylebox_override("background", SKIN.flat("inset"))
+	_download_progress_bar.add_theme_stylebox_override("fill", SKIN.flat("wood_selected"))
 	_download_progress_bar.visible = false
-	stack.add_child(_download_progress_bar)
+	updates_stack.add_child(_download_progress_bar)
 	_cancel_download_button = _menu_button("CANCEL DOWNLOAD", _cancel_update_download, "red")
 	_cancel_download_button.name = "CancelAPKDownload"
 	_cancel_download_button.custom_minimum_size = Vector2(0, 36)
 	_cancel_download_button.visible = false
-	stack.add_child(_cancel_download_button)
+	updates_stack.add_child(_cancel_download_button)
 	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
 	_sync_download_ui()
 	_settings_panel.visible = false
@@ -652,7 +657,7 @@ func _build_changelog_scroll() -> void:
 	# A separate original transparent icon, not another opaque baked title crop.
 	_changelog_button = Button.new()
 	_changelog_button.name = "ChangelogScrollButton"
-	_changelog_button.position = Vector2(1164, 266)
+	_changelog_button.position = Vector2(1164, 180)
 	_changelog_button.size = Vector2(62, 70)
 	_changelog_button.tooltip_text = "Read the latest Outpost changes"
 	_changelog_button.icon = load("res://assets/ui/title/changelog_scroll.svg") as Texture2D
@@ -664,10 +669,12 @@ func _build_changelog_scroll() -> void:
 	_canvas.add_child(_changelog_button)
 	_changelog_panel = PanelContainer.new()
 	_changelog_panel.name = "ChangelogPanel"
-	_changelog_panel.position = Vector2(766, 249)
+	_changelog_panel.position = Vector2(766, 142)
 	_changelog_panel.size = Vector2(405, 373)
 	_changelog_panel.custom_minimum_size = Vector2(405, 373)
-	_changelog_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	var translucent_changelog := SKIN.modal_panel()
+	translucent_changelog.bg_color = Color(0.20, 0.13, 0.12, 0.78)
+	_changelog_panel.add_theme_stylebox_override("panel", translucent_changelog)
 	_changelog_panel.clip_contents = true
 	_changelog_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(_changelog_panel)
