@@ -83,13 +83,13 @@ func _run() -> void:
 	tap_down.pressed = true
 	hud._input(tap_down)
 	hud._process(0.38)
-	verify(not hud.top_menu_open, "Holding Menu does not accidentally open or double toggle a modal")
+	verify(hud.top_menu_open, "MENU opens immediately on the first touch-down")
 	var tap_up := InputEventScreenTouch.new()
 	tap_up.index = 13
 	tap_up.position = tap_down.position
 	tap_up.pressed = false
 	hud._input(tap_up)
-	verify(hud.top_menu_open and hud.top_menu_panel.visible and hud.top_menu_shade.visible, "One tap-release opens the centered game menu immediately")
+	verify(hud.top_menu_open and hud.top_menu_panel.visible and hud.top_menu_shade.visible, "Release preserves the centered Game Menu without double activation")
 	verify(hud.top_menu_actions.size() == 6, "Menu has six functional destinations")
 	for option in hud.top_menu_actions:
 		verify(option.visible, "Expanded option is visible: " + option.name)

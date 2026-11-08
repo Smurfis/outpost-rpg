@@ -790,6 +790,8 @@ func grant_item(item_id: String, amount: int, store_excess: bool = false) -> int
 	var fitting: int = CARRY.max_fit(inventory, item_id, amount, equipped_bag_id(), equipped_bag_stars())
 	if fitting > 0:
 		inventory[item_id] = int(inventory.get(item_id, 0)) + fitting
+		if hud != null:
+			hud.record_loot(item_id, fitting)
 	var excess: int = amount - fitting
 	if excess > 0 and store_excess:
 		overflow_loot[item_id] = int(overflow_loot.get(item_id, 0)) + excess
@@ -1001,6 +1003,8 @@ func _try_finish_craft() -> void:
 		bag_quality[result] = mini(3, int(bag_quality.get(result, 0)) + 1)
 	else:
 		inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
+	if hud != null and not result.is_empty():
+		hud.record_loot(result, 1 if is_bag else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
 	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
@@ -1164,6 +1168,7 @@ func on_enemy_killed() -> void:
 	grant_item("hide", 1, true)
 	grant_item("coins", 3, true)
 	gain_experience(12)
+	hud.record_combat_event("Boar defeated")
 	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()

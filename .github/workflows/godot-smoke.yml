@@ -212,6 +212,13 @@ jobs:
         run: |
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_utility_cards.gd 2>&1 | tee hud-v2.log
 
+      - name: Verify live MMORPG loot feed, rarity icon badges and tappable item tooltips
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_loot_feed_tooltip_v2.gd 2>&1 | tee loot-feed-v2.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL LOOT FEED:' loot-feed-v2.log; then exit 1; fi
+          grep -q "LOOT FEED RESULT: 0 failures" loot-feed-v2.log
+
       - name: Verify WoW-style full-width, bottom-edge character XP at 16:9 and 20:9
         run: |
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_fullwidth_xp_v2.gd 2>&1 | tee hud-edge-xp.log

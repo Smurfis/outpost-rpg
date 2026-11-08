@@ -55,13 +55,21 @@ func _run() -> void:
 	hold_down.pressed = true
 	hud._input(hold_down)
 	hud._process(0.42)
-	verify(not hud.top_menu_open, "MENU does not require long-press and never activates twice")
+	verify(hud.top_menu_open, "MENU opens immediately on the FIRST finger down, without needing a hold")
 	var hold_up := InputEventScreenTouch.new()
 	hold_up.index = 16
 	hold_up.position = y0
 	hold_up.pressed = false
 	hud._input(hold_up)
-	verify(hud.top_menu_open, "One deliberate MENU tap opens modal")
+	verify(hud.top_menu_open, "Finger-up does not dismiss the menu opened by the first tap")
+	var echo := InputEventMouseButton.new()
+	echo.button_index = MOUSE_BUTTON_LEFT
+	echo.position = y0
+	echo.pressed = true
+	hud._input(echo)
+	echo.pressed = false
+	hud._input(echo)
+	verify(hud.top_menu_open, "Synthetic Android mouse echo press+release cannot close the freshly opened modal")
 	hud._set_top_menu(false)
 	_tap(hud, wallet_button, 17)
 	verify(hud.wallet_open and hud.wallet_frame.visible, "One WALLET tap expands currency panel")

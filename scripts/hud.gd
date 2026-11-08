@@ -3,6 +3,7 @@ extends CanvasLayer
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const HUD_V2 = preload("res://scripts/ui/hud_v2_components.gd")
+const ITEM_VIEW = preload("res://scripts/ui/outpost_item_view.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
@@ -119,6 +120,17 @@ var gathered_collapse: Button
 var gathered_expanded: bool = true
 var gathered_entries: Array[Dictionary] = []
 var gathered_update_delay: float = 0.0
+var loot_feed_panel: Panel
+var loot_feed_title: Label
+var loot_feed_rows: VBoxContainer
+var loot_feed_entries: Array[Dictionary] = []
+var loot_icon_controls: Array[Button] = []
+var loot_tooltip_panel: Panel
+var loot_tooltip_name: Label
+var loot_tooltip_rarity: Label
+var loot_tooltip_description: Label
+var loot_tooltip_item_id: String = ""
+var loot_mouse_echo_until: int = 0
 var status_effect_strip: HBoxContainer
 var active_status_effects: Array[Dictionary] = []
 var last_inventory_snapshot: Dictionary = {}
@@ -288,6 +300,9 @@ func _ready() -> void:
 	wallet_collapse.tooltip_text = "Expand or collapse your wallet"
 	SKIN.apply_button(wallet_collapse, "wood")
 	wallet_collapse.focus_mode = Control.FOCUS_NONE
+	# Native GUI events may consume release before HUD._input on Android.
+	# These three top-right buttons are routed only by HUD._input.
+	wallet_collapse.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(wallet_collapse)
 	_anchors(wallet_collapse, 0.55, 0.023, 0.63, 0.095)
 	# Touch is routed centrally to prevent duplicate GUI+HUD clicks on Android.
@@ -319,8 +334,11 @@ func _ready() -> void:
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
 	SKIN.apply_button(wallet_bag, "wood")
-	# The inherited _action() BAG pressed signal is desktop GUI fallback only;
-	# Android touches are consumed before GUI delivery by _handle_top_chrome_input.
+	wallet_bag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# _action("bag") adds a native pressed signal; disconnect it so a
+	# synthetic Android mouse event cannot call _bag twice after _input.
+	if wallet_bag.pressed.is_connected(_bag):
+		wallet_bag.pressed.disconnect(_bag)
 	# Retain stable public dictionary keys for existing gameplay/test callers.
 	for key in ["wood", "stone", "hide", "coins"]:
 		var count := _label("0", 12, SKIN.CREAM, 0.0, 0.0, 0.01, 0.01)
@@ -428,6 +446,38 @@ func _ready() -> void:
 	gathered_collapse.pressed.connect(_toggle_gathered)
 	gathered_collapse.visible = false
 	root.add_child(gathered_collapse)
+	# Small WoW/Cube World-style item acquisition log under Last Gathered.
+	# One consistent utility-card material, not another bulky HUD window.
+	loot_feed_panel = _panel(0.81, 0.56, 0.98, 0.75)
+	loot_feed_panel.name = "LootCombatFeed"
+	loot_feed_panel.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	loot_feed_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_feed_panel.visible = false
+	loot_feed_title = _label("LOOT & COMBAT", 14, SKIN.GOLD, 0.81, 0.56, 0.98, 0.60)
+	loot_feed_title.name = "LootCombatFeedTitle"
+	loot_feed_title.visible = false
+	loot_feed_rows = VBoxContainer.new()
+	loot_feed_rows.name = "LootCombatFeedRows"
+	loot_feed_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_feed_rows.add_theme_constant_override("separation", 3)
+	root.add_child(loot_feed_rows)
+	loot_feed_rows.visible = false
+	loot_tooltip_panel = _panel(0.60, 0.40, 0.80, 0.60)
+	loot_tooltip_panel.name = "LootItemTooltip"
+	loot_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_tooltip_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	loot_tooltip_panel.visible = false
+	loot_tooltip_name = _label("", 19, SKIN.CREAM, 0.60, 0.41, 0.80, 0.45)
+	loot_tooltip_name.name = "LootItemTooltipName"
+	loot_tooltip_name.visible = false
+	loot_tooltip_rarity = _label("", 14, Color("#d9cbb7"), 0.60, 0.45, 0.80, 0.49)
+	loot_tooltip_rarity.name = "LootItemTooltipRarity"
+	loot_tooltip_rarity.visible = false
+	loot_tooltip_description = _label("", 14, SKIN.CREAM, 0.60, 0.49, 0.80, 0.59)
+	loot_tooltip_description.name = "LootItemTooltipDescription"
+	loot_tooltip_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	loot_tooltip_description.clip_text = true
+	loot_tooltip_description.visible = false
 	# Top-right carved buttons open a true, central touch-blocking menu.
 	# Keep the original six actions and their gameplay signals.
 	top_menu_shade = ColorRect.new()
@@ -472,6 +522,7 @@ func _ready() -> void:
 	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
 	SKIN.apply_button(menu_button, "wood")
+	menu_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Deliberately no button_down/hold handlers: a single tap is sufficient.
 	# Click routing is centralised with WALLET and BAG to avoid double toggles.
 	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "slot")
@@ -716,6 +767,163 @@ func _refresh_gathered_card() -> void:
 		rows.append("%s ×%d  (%ds)" % [str(entry.get("id", "")).capitalize(), int(entry.get("amount", 0)), seconds])
 	gathered_content.text = "\n".join(rows)
 
+func record_loot(item_id: String, quantity: int, item_rarity: int = -1) -> void:
+	# Item rarity is unknown until authoritative item metadata supplies it.
+	# A dungeon's portal rarity does NOT automatically imply item rarity.
+	if quantity <= 0 or item_id.is_empty() or loot_feed_panel == null:
+		return
+	loot_feed_entries.push_front({
+		"kind": "item", "id": item_id, "amount": quantity,
+		"rarity": clampi(item_rarity, -1, 4), "at": Time.get_ticks_msec()
+	})
+	if loot_feed_entries.size() > 3:
+		loot_feed_entries.resize(3)
+	_refresh_loot_feed()
+	_layout_touch_hud()
+
+func record_combat_event(message: String) -> void:
+	if message.strip_edges().is_empty() or loot_feed_panel == null:
+		return
+	loot_feed_entries.push_front({
+		"kind": "combat", "message": message, "at": Time.get_ticks_msec()
+	})
+	if loot_feed_entries.size() > 3:
+		loot_feed_entries.resize(3)
+	_refresh_loot_feed()
+	_layout_touch_hud()
+
+func _refresh_loot_feed() -> void:
+	if loot_feed_rows == null:
+		return
+	loot_icon_controls.clear()
+	for child in loot_feed_rows.get_children():
+		loot_feed_rows.remove_child(child)
+		child.queue_free()
+	var showing: bool = not loot_feed_entries.is_empty()
+	loot_feed_panel.visible = showing
+	loot_feed_title.visible = showing
+	loot_feed_rows.visible = showing
+	for entry in loot_feed_entries:
+		var item_id: String = str(entry.get("id", ""))
+		var quality: int = int(entry.get("rarity", -1))
+		var count: int = int(entry.get("amount", 0))
+		var is_item: bool = str(entry.get("kind", "item")) == "item"
+		var name_text: String = ITEM_VIEW.display_name(item_id)
+		var title_text: String = "You received ×%d %s" % [count, name_text] if is_item else str(entry.get("message", ""))
+		var line := HBoxContainer.new()
+		line.name = "LootReceipt"
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.custom_minimum_size.y = 28.0
+		line.add_theme_constant_override("separation", 6)
+		loot_feed_rows.add_child(line)
+		# A single framed icon is the source of truth, reused later for
+		# inventories, banks and equipment. Only the frame is tappable.
+		var icon_box := Button.new()
+		icon_box.name = "ItemRarityFrame"
+		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.focus_mode = Control.FOCUS_NONE
+		icon_box.custom_minimum_size = Vector2(28, 28)
+		icon_box.add_theme_stylebox_override("normal", HUD_V2.loot_icon_border(quality))
+		icon_box.add_theme_stylebox_override("hover", HUD_V2.loot_icon_border(quality))
+		icon_box.add_theme_stylebox_override("pressed", HUD_V2.loot_icon_border(quality))
+		line.add_child(icon_box)
+		if is_item:
+			icon_box.set_meta("loot_item_id", item_id)
+			icon_box.set_meta("loot_rarity", quality)
+			loot_icon_controls.append(icon_box)
+			icon_box.tooltip_text = name_text + " — tap for details"
+		var art := TextureRect.new()
+		art.name = "ItemIcon"
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		art.anchor_left = 0.10
+		art.anchor_top = 0.10
+		art.anchor_right = 0.90
+		art.anchor_bottom = 0.90
+		var icon_path: String = "res://assets/icons/" + (item_id if is_item else "attack") + ".svg"
+		if ResourceLoader.exists(icon_path):
+			art.texture = load(icon_path) as Texture2D
+		icon_box.add_child(art)
+		if is_item:
+			# Small circular quantity badge bottom-right of the item image.
+			var bubble := Panel.new()
+			bubble.name = "ItemQuantityBubble"
+			bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			bubble.add_theme_stylebox_override("panel", HUD_V2.loot_quantity_badge())
+			bubble.anchor_left = 0.51
+			bubble.anchor_top = 0.52
+			bubble.anchor_right = 1.14
+			bubble.anchor_bottom = 1.14
+			icon_box.add_child(bubble)
+			var number := Label.new()
+			number.name = "ItemQuantityNumber"
+			number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			number.text = str(count)
+			number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			number.add_theme_font_size_override("font_size", 11)
+			number.add_theme_color_override("font_color", Color.WHITE)
+			bubble.add_child(number)
+			number.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var caption := Label.new()
+		caption.name = "LootReceiptText"
+		caption.text = title_text
+		caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		caption.add_theme_font_size_override("font_size", 12)
+		caption.add_theme_color_override("font_color", Color("#e9dfc8"))
+		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		caption.clip_text = true
+		caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		line.add_child(caption)
+
+func _set_loot_tooltip_visible(showing: bool) -> void:
+	loot_tooltip_panel.visible = showing
+	loot_tooltip_name.visible = showing
+	loot_tooltip_rarity.visible = showing
+	loot_tooltip_description.visible = showing
+	if not showing:
+		loot_tooltip_item_id = ""
+
+func _toggle_loot_tooltip(item_id: String, quality: int) -> void:
+	if item_id == loot_tooltip_item_id and loot_tooltip_panel.visible:
+		_set_loot_tooltip_visible(false)
+		return
+	loot_tooltip_item_id = item_id
+	var recipes: Array = game.recipes if game != null else []
+	loot_tooltip_name.text = ITEM_VIEW.display_name(item_id)
+	loot_tooltip_name.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(quality))
+	loot_tooltip_rarity.text = ITEM_VIEW.rarity_name(quality)
+	loot_tooltip_rarity.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(quality))
+	loot_tooltip_description.text = ITEM_VIEW.description(item_id, recipes)
+	_set_loot_tooltip_visible(true)
+
+func _handle_loot_tooltip_input(event: InputEvent) -> bool:
+	var pos: Vector2
+	if event is InputEventScreenTouch:
+		if not (event as InputEventScreenTouch).pressed:
+			return false
+		pos = (event as InputEventScreenTouch).position
+		loot_mouse_echo_until = Time.get_ticks_msec() + 450
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < loot_mouse_echo_until:
+			get_viewport().set_input_as_handled()
+			return true
+		if not (event as InputEventMouseButton).pressed:
+			return false
+		pos = (event as InputEventMouseButton).position
+	else:
+		return false
+	for icon_box in loot_icon_controls:
+		if is_instance_valid(icon_box) and icon_box.is_visible_in_tree() and icon_box.get_global_rect().has_point(pos):
+			_toggle_loot_tooltip(str(icon_box.get_meta("loot_item_id", "")), int(icon_box.get_meta("loot_rarity", -1)))
+			get_viewport().set_input_as_handled()
+			return true
+	if loot_tooltip_panel.visible and not loot_tooltip_panel.get_global_rect().has_point(pos):
+		_set_loot_tooltip_visible(false)
+	return false
+
 func _toggle_wallet() -> void:
 	if not wallet_open:
 		_set_top_menu(false)
@@ -777,6 +985,8 @@ func _menu_button_pressed() -> void:
 	_set_top_menu(not top_menu_open)
 
 func _set_top_menu(open_menu: bool) -> void:
+	if open_menu:
+		_set_loot_tooltip_visible(false)
 	if open_menu and wallet_open:
 		wallet_open = false
 		_apply_wallet_layout()
@@ -1225,6 +1435,18 @@ func _layout_touch_hud() -> void:
 		_place_px(gathered_title, screen, Rect2(map_left + 8.0 * scale, recent_top + 3.0 * scale, map_side - 45.0 * scale, 28.0 * scale))
 		_place_px(gathered_collapse, screen, Rect2(map_left + map_side - 33.0 * scale, recent_top + 2.0 * scale, 30.0 * scale, 29.0 * scale))
 		_place_px(gathered_content, screen, Rect2(map_left + 11.0 * scale, recent_top + 32.0 * scale, map_side - 19.0 * scale, 62.0 * scale))
+		# The compact log sits BELOW Last Gathered, never on top of its rows.
+		var loot_top: float = recent_top + recent_height + 8.0 * scale
+		_place_px(loot_feed_panel, screen, Rect2(map_left, loot_top, map_side, 127.0 * scale))
+		_place_px(loot_feed_title, screen, Rect2(map_left + 9.0 * scale, loot_top + 2.0 * scale, map_side - 18.0 * scale, 24.0 * scale))
+		_place_px(loot_feed_rows, screen, Rect2(map_left + 8.0 * scale, loot_top + 30.0 * scale, map_side - 16.0 * scale, 92.0 * scale))
+		# Tooltips open inward from the right edge and stay inside the safe area.
+		var detail_left: float = maxf(8.0 * scale, map_left - 303.0 * scale)
+		var detail_top: float = clampf(loot_top, 98.0 * scale, screen.y - 162.0 * scale)
+		_place_px(loot_tooltip_panel, screen, Rect2(detail_left, detail_top, 291.0 * scale, 147.0 * scale))
+		_place_px(loot_tooltip_name, screen, Rect2(detail_left + 14.0 * scale, detail_top + 12.0 * scale, 266.0 * scale, 29.0 * scale))
+		_place_px(loot_tooltip_rarity, screen, Rect2(detail_left + 14.0 * scale, detail_top + 42.0 * scale, 266.0 * scale, 21.0 * scale))
+		_place_px(loot_tooltip_description, screen, Rect2(detail_left + 14.0 * scale, detail_top + 67.0 * scale, 266.0 * scale, 71.0 * scale))
 	# A proper central modal for menu settings; never position the six
 	# clickable destinations as a cramped 3x2 overlay underneath the map.
 	var menu_width: float = minf(498.0 * scale, screen.x * 0.80)
@@ -2045,8 +2267,9 @@ func _activate_top_chrome(control: Button) -> void:
 		_toggle_wallet()
 
 func _handle_top_chrome_input(event: InputEvent) -> bool:
-	# One press+release owns one activation. A matching finger is required,
-	# while Android-generated synthetic mouse events are suppressed.
+	# Top bar actions are fired on the FIRST finger DOWN, never after a
+	# release which Android's GUI can consume. Finger-up and synthetic
+	# mouse events are swallowed, including after MENU opens its modal.
 	if event is InputEventScreenTouch:
 		var touch: InputEventScreenTouch = event
 		if touch.pressed and top_chrome_finger < 0:
@@ -2056,17 +2279,15 @@ func _handle_top_chrome_input(event: InputEvent) -> bool:
 			top_chrome_finger = touch.index
 			top_chrome_candidate = action
 			top_chrome_origin = touch.position
+			top_chrome_ignore_mouse_until = Time.get_ticks_msec() + 450
 			get_viewport().set_input_as_handled()
+			_activate_top_chrome(action)
 			return true
 		if not touch.pressed and touch.index == top_chrome_finger:
-			var action: Button = top_chrome_candidate
-			var activate: bool = action != null and action == _top_chrome_button_at(touch.position) and touch.position.distance_to(top_chrome_origin) < 42.0
 			top_chrome_finger = -1
 			top_chrome_candidate = null
 			top_chrome_ignore_mouse_until = Time.get_ticks_msec() + 450
 			get_viewport().set_input_as_handled()
-			if activate:
-				_activate_top_chrome(action)
 			return true
 	elif event is InputEventScreenDrag:
 		var motion: InputEventScreenDrag = event
@@ -2088,15 +2309,12 @@ func _handle_top_chrome_input(event: InputEvent) -> bool:
 			top_chrome_mouse_candidate = action
 			top_chrome_mouse_origin = click.position
 			get_viewport().set_input_as_handled()
+			_activate_top_chrome(action)
 			return true
 		if top_chrome_mouse_down:
-			var action: Button = top_chrome_mouse_candidate
-			var activate: bool = action != null and action == _top_chrome_button_at(click.position) and click.position.distance_to(top_chrome_mouse_origin) < 42.0
 			top_chrome_mouse_down = false
 			top_chrome_mouse_candidate = null
 			get_viewport().set_input_as_handled()
-			if activate:
-				_activate_top_chrome(action)
 			return true
 	return false
 
@@ -2189,6 +2407,20 @@ func _input(event: InputEvent) -> void:
 	if leave_menu_panel != null and leave_menu_panel.visible:
 		_handle_leave_menu_input(event)
 		return
+	# The finger that OPENED MENU must finish its own release without
+	# being seen as an outside click that immediately closes the new modal.
+	if top_chrome_finger >= 0 and event is InputEventScreenTouch and not (event as InputEventScreenTouch).pressed and (event as InputEventScreenTouch).index == top_chrome_finger:
+		_handle_top_chrome_input(event)
+		return
+	if top_chrome_mouse_down and event is InputEventMouseButton and not (event as InputEventMouseButton).pressed:
+		_handle_top_chrome_input(event)
+		return
+	# A synthetic mouse press/release can arrive AFTER first-touch MENU opens.
+	# Consume that echo BEFORE the modal's outside-click handler sees it,
+	# otherwise the new modal closes instantly and seems to need a double tap.
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() < top_chrome_ignore_mouse_until:
+		get_viewport().set_input_as_handled()
+		return
 	if top_menu_open:
 		_handle_game_menu_input(event)
 		return
@@ -2198,6 +2430,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if _handle_top_chrome_input(event):
+		return
+	if _handle_loot_tooltip_input(event):
 		return
 	if _touch_menu_navigation(event):
 		return
