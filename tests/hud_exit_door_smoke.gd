@@ -64,6 +64,7 @@ func _run() -> void:
 	_tap(hud, menu_entry)
 	_check(bool(hud.get("top_menu_open")) and modal.visible and modal_shade.visible, "Actual Android tap opens the centered Game MENU")
 	_tap(hud, exit_entry)
+	await process_frame
 	_check(popup.visible and shade.visible and not modal.visible and not modal_shade.visible, "Touching Save/Exit opens Leave popup and closes Game MENU")
 	var resume: Button = popup.find_child("ResumeAdventureButton", true, false) as Button
 	var controls: Button = popup.find_child("LeaveControlsButton", true, false) as Button
@@ -75,13 +76,17 @@ func _run() -> void:
 	_tap(hud, resume)
 	_check(not popup.visible and not shade.visible and not close_button.visible, "Actual RESUME touch dismisses modal and shade")
 	hud.call("_open_leave_menu")
+	await process_frame
 	_tap(hud, close_button)
 	_check(not popup.visible and not shade.visible, "Actual circular X touch closes Leave popup")
 	hud.call("_open_leave_menu")
+	await process_frame
 	_tap(hud, controls)
-	_check(not popup.visible and (hud.get("control_settings_panel") as Control).visible, "Actual CONTROLS touch opens settings instead of trapping player")
+	_check(not popup.visible, "CONTROLS touch closes Leave popup")
+	_check((hud.get("control_settings_panel") as Control).visible, "CONTROLS touch opens real settings")
 	(hud.get("control_settings_panel") as Control).visible = false
 	hud.call("_open_leave_menu")
+	await process_frame
 	var before: Vector2 = hud.get("move_vector")
 	var outside := InputEventScreenTouch.new()
 	outside.pressed = true
