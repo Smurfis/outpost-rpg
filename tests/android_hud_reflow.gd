@@ -172,8 +172,8 @@ func _run() -> void:
 	if wallet != null:
 		var wallet_style: StyleBoxFlat = wallet.get_theme_stylebox("panel") as StyleBoxFlat
 		verify(wallet_style != null and wallet_style.bg_color.a < 0.65, "Wallet is a lightweight translucent chip")
-		verify(absf(wallet.size.x - 312.0) < 3.0, "Wallet does not stretch with screen width")
-		verify(wallet.get_global_rect().position.x > status.get_global_rect().end.x, "Wallet does not cover the hero portrait or HP")
+		verify(absf(wallet.size.x - 275.0) < 3.0, "Expanded wallet is a fixed-width Android overlay")
+		verify(wallet.get_global_rect().position.x > status.get_global_rect().end.x, "Wallet flyout does not cover the hero portrait or HP")
 	if portrait != null and status != null:
 		verify(status.get_global_rect().encloses(portrait.get_global_rect()), "Independent hero portrait stays inside slim status frame")
 	# Simulate ultra-wide coordinates without changing gameplay or the viewport.
@@ -181,11 +181,13 @@ func _run() -> void:
 	hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
 	if status != null and wallet != null:
 		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 405.6) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
-		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 374.4) < 2.0, "At 20:9 resources stay in a slim independent chip")
+		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 330.0) < 2.0, "At 20:9 wallet flyout stays exactly 275 scaled pixels wide")
 		hud._toggle_wallet()
+		verify(hud.wallet_frame.visible, "Expanded wallet is visible at 20:9")
 		hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
-		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 121.2) < 2.0, "Collapsed wallet shrinks to a 101px compact chip on ultrawide phones")
+		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 330.0) < 2.0, "Wallet flyout width does not drift when toggled")
 		hud._toggle_wallet()
+		verify(not hud.wallet_frame.visible, "Wallet closes without resizing the surrounding HUD")
 	hud._layout_touch_hud()
 
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")

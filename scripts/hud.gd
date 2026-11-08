@@ -92,9 +92,11 @@ var mana_numbers: Label
 var xp_level_badge: Label
 var wallet_frame: Panel
 var wallet_collapse: Button
-var wallet_open: bool = true
+var wallet_open: bool = false
 var wallet_bag: Button
 var wallet_coin: Label
+var wallet_popup_title: Label
+var wallet_currency_rows: Dictionary = {}
 var wallet_resource_icon: TextureRect
 var wallet_resource_count: Label
 var wallet_resource_id: String = "wood"
@@ -239,20 +241,32 @@ func _ready() -> void:
 	root.add_child(status_effect_strip)
 	status_effect_strip.visible = false
 
-	# Small wallet shows only real coin balance and the last tracked material.
-	# Other holdings and carry weight live in the bag, not in a permanent HUD.
-	wallet_frame = _panel(0.302, 0.018, 0.710, 0.087)
+	# A compact button expands into a currency ledger. No permanent resource
+	# ribbon obscures the world. The bag and MENU remain separate real inputs.
+	wallet_frame = _panel(0.302, 0.116, 0.505, 0.470)
 	wallet_frame.name = "ResourceQuickChips"
-	wallet_frame.add_theme_stylebox_override("panel", _hud_glass(0.47, 0.30))
+	wallet_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	wallet_frame.visible = false
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
-	wallet_collapse.text = "‹"
+	wallet_collapse.text = "◈ WALLET ▾"
+	wallet_collapse.tooltip_text = "Expand or collapse your wallet"
 	SKIN.apply_button(wallet_collapse, "wood")
+	wallet_collapse.focus_mode = Control.FOCUS_NONE
 	root.add_child(wallet_collapse)
-	_anchors(wallet_collapse, 0.304, 0.023, 0.340, 0.082)
+	_anchors(wallet_collapse, 0.55, 0.023, 0.63, 0.095)
 	wallet_collapse.pressed.connect(_toggle_wallet)
-	wallet_coin = _label("◈ 0", 17, SKIN.GOLD, 0.364, 0.029, 0.460, 0.079)
+	wallet_popup_title = _label("✦  WALLET", 18, SKIN.GOLD, 0.31, 0.121, 0.47, 0.160)
+	wallet_popup_title.name = "WalletPopupTitle"
+	wallet_popup_title.visible = false
+	wallet_coin = _label("COINS    0", 17, SKIN.GOLD, 0.31, 0.160, 0.48, 0.204)
 	wallet_coin.name = "WalletCoinCount"
+	wallet_coin.visible = false
+	for denomination in ["copper", "silver", "gold", "gems"]:
+		var line := _label(denomination.capitalize() + "    —", 15, SKIN.CREAM, 0.31, 0.20, 0.48, 0.24)
+		line.name = "WalletCurrency_" + denomination
+		line.visible = false
+		wallet_currency_rows[denomination] = line
 	wallet_resource_icon = TextureRect.new()
 	wallet_resource_icon.name = "LastTrackedResourceIcon"
 	wallet_resource_icon.texture = load("res://assets/icons/wood.svg") as Texture2D
@@ -260,10 +274,12 @@ func _ready() -> void:
 	wallet_resource_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	wallet_resource_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(wallet_resource_icon)
-	_anchors(wallet_resource_icon, 0.472, 0.029, 0.499, 0.074)
-	wallet_resource_count = _label("Wood ×0", 15, SKIN.CREAM, 0.501, 0.029, 0.628, 0.079)
+	_anchors(wallet_resource_icon, 0.31, 0.40, 0.337, 0.44)
+	wallet_resource_icon.visible = false
+	wallet_resource_count = _label("Wood ×0", 14, SKIN.CREAM, 0.34, 0.40, 0.48, 0.44)
 	wallet_resource_count.name = "LastTrackedResourceCount"
 	wallet_resource_count.clip_text = true
+	wallet_resource_count.visible = false
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
 	# Retain stable public dictionary keys for existing gameplay/test callers.
@@ -530,6 +546,7 @@ func _ready() -> void:
 	# ultrawide aspect ratios, and Android window/safe-area changes.
 	get_viewport().size_changed.connect(_layout_touch_hud)
 	_layout_touch_hud()
+	_apply_wallet_layout()
 
 func set_status_effects(effects: Array) -> void:
 	# The gameplay service supplies authoritative effects; this view NEVER
@@ -605,24 +622,32 @@ func _refresh_gathered_card() -> void:
 	gathered_content.text = "\n".join(rows)
 
 func _toggle_wallet() -> void:
+	if not wallet_open:
+		_set_top_menu(false)
 	wallet_open = not wallet_open
 	_apply_wallet_layout()
 
 func _apply_wallet_layout() -> void:
+	wallet_frame.visible = wallet_open
+	wallet_popup_title.visible = wallet_open
 	wallet_coin.visible = wallet_open
 	wallet_resource_icon.visible = wallet_open
 	wallet_resource_count.visible = wallet_open
-	wallet_collapse.text = "‹" if wallet_open else "›"
-	# No %-width panels on 20:9: the wallet is a fixed-size glass chip.
+	for key in wallet_currency_rows:
+		(wallet_currency_rows[key] as Label).visible = wallet_open
+	wallet_collapse.text = "◈ WALLET ▴" if wallet_open else "◈ WALLET ▾"
 	_layout_player_chrome()
 
 func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
 		return
-	wallet_coin.text = "COINS  %d" % int(inventory.get("coins", 0))
+	wallet_coin.text = "COINS     %d" % int(inventory.get("coins", 0))
+	for key in wallet_currency_rows:
+		var balance: String = str(int(inventory[key])) if inventory.has(key) else "—"
+		(wallet_currency_rows[key] as Label).text = "%s     %s" % [str(key).capitalize(), balance]
 	for key in inventory:
 		var id: String = str(key)
-		if id == "coins" or id in ["torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
+		if id in ["coins", "copper", "silver", "gold", "gems", "torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
 			continue
 		var amount: int = int(inventory.get(id, 0))
 		var previous: int = int(last_inventory_snapshot.get(id, 0))
@@ -657,6 +682,9 @@ func _menu_button_pressed() -> void:
 	_set_top_menu(not top_menu_open)
 
 func _set_top_menu(open_menu: bool) -> void:
+	if open_menu and wallet_open:
+		wallet_open = false
+		_apply_wallet_layout()
 	top_menu_open = open_menu
 	top_menu_panel.visible = open_menu
 	for option in top_menu_actions:
@@ -1065,12 +1093,12 @@ func _layout_player_chrome() -> void:
 	_layout_player_chrome_for_size(screen, scale)
 
 func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
-	# Preserve the approved top-left portrait/HP composition at BOTH 16:9
-	# and 20:9. Previous %-anchors stretched the status and wallet by hundreds
-	# of pixels on modern Android landscapes.
+	# Preserve the existing portrait/HP layout and replace the old long
+	# resource strip with a right-shoulder wallet + bag + compact flyout.
 	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
 		return
 	var unit: float = scale
+	var wallet_left: float = screen.x / unit - 522.0
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 338, 94),
 		"portrait_frame": Rect2(22, 21, 76, 78),
@@ -1081,12 +1109,13 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"health_text": Rect2(111, 52, 227, 19),
 		"weapon": Rect2(111, 80, 231, 22),
 		"effects": Rect2(110, 77, 231, 28),
-		"wallet": Rect2(374, 16, 312 if wallet_open else 101, 55),
-		"wallet_toggle": Rect2(379, 20, 40, 47),
-		"coins": Rect2(422, 22, 99, 42),
-		"resource_icon": Rect2(524, 25, 29, 34),
-		"resource_count": Rect2(555, 22, 86, 42),
-		"bag": Rect2(640 if wallet_open else 422, 20, 44, 47),
+		"wallet": Rect2(wallet_left, 75, 275, 248),
+		"wallet_toggle": Rect2(screen.x / unit - 470, 17, 100, 52),
+		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
+		"coins": Rect2(wallet_left + 20, 113, 245, 28),
+		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
+		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
+		"bag": Rect2(screen.x / unit - 361, 17, 70, 52),
 		"weight": Rect2(17, 112, 352, 24),
 		"quest_frame": Rect2(16, 143, 347, 52),
 		"quest_button": Rect2(23, 151, 109, 37),
@@ -1106,6 +1135,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"effects": status_effect_strip,
 		"wallet": wallet_frame,
 		"wallet_toggle": wallet_collapse,
+		"popup_title": wallet_popup_title,
 		"coins": wallet_coin,
 		"resource_icon": wallet_resource_icon,
 		"resource_count": wallet_resource_count,
@@ -1122,6 +1152,10 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
+	for i in range(4):
+		var key: String = ["copper", "silver", "gold", "gems"][i]
+		var line: Label = wallet_currency_rows[key] as Label
+		_place_px(line, screen, Rect2(Vector2(wallet_left + 20.0, 145.0 + 29.0 * i) * unit, Vector2(245, 26) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
