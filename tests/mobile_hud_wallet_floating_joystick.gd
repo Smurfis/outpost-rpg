@@ -54,16 +54,17 @@ func _run() -> void:
 	var top_menu: Button = hud_root.get_node_or_null("TopRightMenuButton") as Button
 	verify(top_menu != null, "One top-right menu replaces button row")
 	var clock: Label = hud_root.get_node_or_null("MinimapFooterClock") as Label
-	verify(clock != null, "Day/night display has a dedicated location beneath future minimap")
+	verify(clock != null and hud.clock_footer != null, "Calendar/day-time has a dedicated attached minimap footer")
 	if clock != null and top_menu != null:
-		verify(clock.anchor_top >= 0.32, "Clock remains below the map")
-		verify(top_menu.anchor_top < 0.14 and top_menu.anchor_bottom < 0.17, "Menu is now near the top right beside the minimap")
-		verify(top_menu.get_global_rect().end.x < hud.minimap.get_global_rect().position.x, "Menu is left of minimap, never obscuring it")
+		var mini_bounds: Rect2 = hud.minimap.get_global_rect()
+		var footer_bounds: Rect2 = hud.clock_footer.get_global_rect()
+		verify(absf(footer_bounds.position.y - (mini_bounds.end.y - 7.0)) < 2.0, "Minimap calendar footer visually attaches to map")
+		verify(top_menu.get_global_rect().end.x < mini_bounds.position.x, "Wooden MENU is left of minimap, never obscuring it")
+		verify(top_menu.get_global_rect().position.y <= mini_bounds.position.y + 9.0, "Mobile MENU shares map top alignment")
 	verify(not game.menu.visible, "Bag and Gear modal panels stay hidden while playing")
-	verify(hud.top_menu_panel.anchor_top < 0.22 and hud.top_menu_panel.anchor_bottom < 0.35, "Expanded menu is a compact top-right flyout, not next to combat buttons")
-	for slot in ["skill_1", "skill_2", "skill_3"]:
-		var skill_button: Button = hud.quick_buttons[slot] as Button
-		verify(hud.top_menu_panel.anchor_bottom < skill_button.anchor_top, "Expanded menu never obscures radial " + slot)
+	var screen_mid: Vector2 = hud.get_viewport().get_visible_rect().size * 0.5
+	verify(hud.top_menu_panel.get_global_rect().get_center().distance_to(screen_mid) < 2.0, "Game MENU is now a centered modal, not a tiny map dropdown")
+	verify(hud.top_menu_shade != null and not hud.top_menu_shade.visible, "Modal shade is hidden during gameplay")
 	var stick_before: Vector2 = hud.joystick.position
 	var skill_before: Vector2 = (hud.quick_buttons["skill_1"] as Button).position
 	hud._bag()
@@ -77,7 +78,7 @@ func _run() -> void:
 	verify(not hud.top_menu_open, "Extra options are collapsed by default")
 	hud._menu_button_down()
 	hud._process(0.38)
-	verify(hud.top_menu_open and hud.top_menu_panel.visible, "Hold opens the options dropdown")
+	verify(hud.top_menu_open and hud.top_menu_panel.visible and hud.top_menu_shade.visible, "Hold opens the centered game-menu modal")
 	hud._menu_button_up()
 	hud._menu_button_pressed()
 	verify(hud.top_menu_open, "Releasing long press does not immediately close dropdown")
@@ -85,7 +86,7 @@ func _run() -> void:
 	for option in hud.top_menu_actions:
 		verify(option.visible, "Expanded option is visible: " + option.name)
 	hud._set_top_menu(false)
-	verify(not hud.top_menu_panel.visible, "Dropdown can be hidden without closing gameplay")
+	verify(not hud.top_menu_panel.visible and not hud.top_menu_shade.visible, "Game MENU closes cleanly without changing gameplay")
 	for key in ["skill_1", "skill_2", "skill_3"]:
 		verify(hud_root.get_node_or_null("Action_" + key) != null, "Exactly three existing skill radials: " + key)
 	verify(hud_root.get_node_or_null("Action_skill_4") == null and hud_root.get_node_or_null("Action_skill_5") == null, "No invented fourth or fifth skill")

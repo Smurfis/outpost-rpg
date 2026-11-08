@@ -119,12 +119,13 @@ func _refresh_pixels() -> void:
 					colour = colour.lightened(clampf(last_elevation * 0.055, 0.0, 0.17))
 				elif last_elevation < -0.55:
 					colour = colour.darkened(clampf(-last_elevation * 0.055, 0.0, 0.15))
-			# Ink-speckled pixels keyed to world coordinates (no camera flicker).
-			var ink: int = posmod(floori(wx) * 31 + floori(wz) * 43, 23)
+			# Cleaner, less noisy cartography: retained terrain/biome colour
+			# categories, but fewer decorative speckles than the old map.
+			var ink: int = posmod(floori(wx) * 31 + floori(wz) * 43, 101)
 			if ink == 0:
-				colour = colour.lightened(0.10)
-			elif ink == 9:
-				colour = colour.darkened(0.07)
+				colour = colour.lightened(0.07)
+			elif ink == 49:
+				colour = colour.darkened(0.05)
 			_image.set_pixel(px, py, colour)
 	_texture.update(_image)
 	_refresh_count += 1
@@ -136,14 +137,15 @@ func _draw() -> void:
 	if diameter <= 0.0:
 		return
 	var center: Vector2 = size * 0.5
-	var radius: float = diameter * 0.5 - 9.0
-	var interior: float = radius - 7.0
-	# Chunky carved-wood + brass bezel around a high-contrast inset map.
-	draw_circle(center + Vector2(0.0, 2.0), radius + 8.0, Color("1e1712"))
-	draw_circle(center, radius + 5.0, DARK_WOOD)
-	draw_circle(center, radius + 1.0, INNER_WOOD)
+	var radius: float = diameter * 0.5 - 7.0
+	var interior: float = radius - 5.0
+	# Slim bronze + carved-wood bezel matches the new compact map footer.
+	# Same world-locked sample and camera-relative rotation: visual pass only.
+	draw_circle(center + Vector2(0.0, 1.0), radius + 4.0, Color("1e1712"))
+	draw_circle(center, radius + 2.0, DARK_WOOD)
+	draw_circle(center, radius, INNER_WOOD)
 	draw_circle(center, radius - 2.0, RIM)
-	draw_circle(center, radius - 5.0, Color("182c2b"))
+	draw_circle(center, radius - 4.0, Color("182c2b"))
 	var player: Node3D = game.get("hero") as Node3D
 	if _texture != null:
 		var display_offset := Vector2.ZERO

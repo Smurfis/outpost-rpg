@@ -43,6 +43,8 @@ var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
 var clock_label: Label
+var clock_footer: Panel
+var calendar_mark: Label
 var torch_button: Button
 var torch_label: Label
 var quest: Label
@@ -113,7 +115,15 @@ var active_status_effects: Array[Dictionary] = []
 var last_inventory_snapshot: Dictionary = {}
 var menu_button: Button
 var top_menu_panel: Panel
+var top_menu_shade: ColorRect
+var top_menu_close_button: Button
 var top_menu_actions: Array[Button] = []
+var top_menu_touch_finger: int = -1
+var top_menu_touch_candidate: Button
+var top_menu_touch_origin: Vector2 = Vector2.ZERO
+var top_menu_mouse_down: bool = false
+var top_menu_mouse_candidate: Button
+var top_menu_mouse_origin: Vector2 = Vector2.ZERO
 var top_menu_open: bool = false
 var top_menu_pressed: bool = false
 var top_menu_hold_seconds: float = 0.0
@@ -129,6 +139,15 @@ var leave_menu_shade: ColorRect
 var leave_menu_panel: PanelContainer
 var leave_menu_info: Label
 var leave_menu_confirm: Button
+var leave_menu_close_button: Button
+var leave_menu_actions: Array[Button] = []
+var leave_touch_finger: int = -1
+var leave_touch_candidate: Button
+var leave_touch_origin: Vector2 = Vector2.ZERO
+var leave_mouse_down: bool = false
+var leave_mouse_candidate: Button
+var leave_mouse_origin: Vector2 = Vector2.ZERO
+var leave_ignore_synthetic_mouse_until: int = 0
 var floating_mode_toggle: CheckButton
 var name_edit: LineEdit
 var skill_detail_panel: Panel
@@ -282,6 +301,7 @@ func _ready() -> void:
 	wallet_resource_count.visible = false
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
+	SKIN.apply_button(wallet_bag, "wood")
 	# Retain stable public dictionary keys for existing gameplay/test callers.
 	for key in ["wood", "stone", "hide", "coins"]:
 		var count := _label("0", 12, SKIN.CREAM, 0.0, 0.0, 0.01, 0.01)
@@ -338,7 +358,12 @@ func _ready() -> void:
 	minimap.setup(game)
 	root.add_child(minimap)
 	_anchors(minimap, 0.811, 0.019, 0.980, 0.309)
-	clock_label = _label("DAY 09:07", 17, Color("#fff0c5"), 0.810, 0.329, 0.927, 0.391)
+	clock_footer = _panel(0.82, 0.290, 0.975, 0.344)
+	clock_footer.name = "MinimapClockFooterFrame"
+	clock_footer.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	calendar_mark = _label("▣", 18, SKIN.GOLD, 0.823, 0.299, 0.838, 0.334)
+	calendar_mark.name = "MinimapCalendarGlyph"
+	clock_label = _label("DAY 09:07", 16, Color("#fff0c5"), 0.838, 0.299, 0.960, 0.338)
 	clock_label.name = "MinimapFooterClock"
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -367,14 +392,50 @@ func _ready() -> void:
 	gathered_collapse.pressed.connect(_toggle_gathered)
 	gathered_collapse.visible = false
 	root.add_child(gathered_collapse)
-	# Top-right flyout is a compact 3 × 2 grid immediately *below* the
-	# reserved minimap footprint (right 17% of screen, top 31%). All three
-	# combat ability radials start at y=0.600 or lower: never cover them.
-	top_menu_panel = _panel(0.681, 0.399, 0.990, 0.584)
+	# Top-right carved buttons open a true, central touch-blocking menu.
+	# Keep the original six actions and their gameplay signals.
+	top_menu_shade = ColorRect.new()
+	top_menu_shade.name = "GameMenuShade"
+	top_menu_shade.color = Color(0.025, 0.019, 0.030, 0.67)
+	top_menu_shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(top_menu_shade)
+	top_menu_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	top_menu_shade.visible = false
+	top_menu_panel = _panel(0.31, 0.20, 0.69, 0.81)
 	top_menu_panel.name = "FunctionalHotbar"
+	top_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	top_menu_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	top_menu_panel.visible = false
+	var menu_heading_back := Panel.new()
+	menu_heading_back.name = "GameMenuHeadingFrame"
+	menu_heading_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu_heading_back.add_theme_stylebox_override("panel", SKIN.modal_section())
+	top_menu_panel.add_child(menu_heading_back)
+	menu_heading_back.anchor_left = 0.035
+	menu_heading_back.anchor_right = 0.965
+	menu_heading_back.anchor_top = 0.038
+	menu_heading_back.anchor_bottom = 0.188
+	var menu_heading := Label.new()
+	menu_heading.name = "GameMenuHeading"
+	menu_heading.text = "OUTPOST  •  MENU"
+	menu_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	menu_heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	menu_heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu_heading.add_theme_font_size_override("font_size", 23)
+	menu_heading.add_theme_color_override("font_color", SKIN.GOLD)
+	menu_heading.add_theme_color_override("font_outline_color", Color("#21161a"))
+	menu_heading.add_theme_constant_override("outline_size", 2)
+	menu_heading_back.add_child(menu_heading)
+	menu_heading.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	top_menu_close_button = Button.new()
+	top_menu_close_button.name = "CloseGameMenu"
+	SKIN.apply_close_button(top_menu_close_button, 40.0)
+	top_menu_close_button.pressed.connect(func() -> void: _set_top_menu(false))
+	root.add_child(top_menu_close_button)
+	top_menu_close_button.visible = false
 	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
+	SKIN.apply_button(menu_button, "wood")
 	menu_button.button_down.connect(_menu_button_down)
 	menu_button.button_up.connect(_menu_button_up)
 	menu_button.pressed.connect(_menu_button_pressed)
@@ -422,7 +483,7 @@ func _ready() -> void:
 	# available inside its menu without a permanent extra HUD button.
 	var exit_entry := Button.new()
 	exit_entry.name = "ExitDoorMenuButton"
-	exit_entry.text = ""
+	exit_entry.text = "SAVE & EXIT"
 	exit_entry.tooltip_text = "Save / leave Outpost"
 	SKIN.apply_button(exit_entry, "wood")
 	# The icon lives inside the Button instead of contributing to its minimum
@@ -437,11 +498,10 @@ func _ready() -> void:
 		door_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		door_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		exit_entry.add_child(door_icon)
-		door_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		door_icon.offset_left = 5
-		door_icon.offset_top = 4
-		door_icon.offset_right = -5
-		door_icon.offset_bottom = -4
+		door_icon.anchor_left = 0.03
+		door_icon.anchor_right = 0.30
+		door_icon.anchor_top = 0.18
+		door_icon.anchor_bottom = 0.82
 	root.add_child(exit_entry)
 	_anchors(exit_entry, 0.895, 0.500, 0.984, 0.575)
 	exit_entry.pressed.connect(_open_leave_menu)
@@ -686,9 +746,24 @@ func _set_top_menu(open_menu: bool) -> void:
 		wallet_open = false
 		_apply_wallet_layout()
 	top_menu_open = open_menu
+	top_menu_pressed = false
 	top_menu_panel.visible = open_menu
+	top_menu_shade.visible = open_menu
+	top_menu_close_button.visible = open_menu
+	top_menu_touch_finger = -1
+	top_menu_touch_candidate = null
+	top_menu_mouse_down = false
+	top_menu_mouse_candidate = null
 	for option in top_menu_actions:
 		option.visible = open_menu
+	if open_menu:
+		_reset_touch()
+		top_menu_shade.move_to_front()
+		top_menu_panel.move_to_front()
+		for option in top_menu_actions:
+			option.move_to_front()
+		top_menu_close_button.move_to_front()
+
 
 func _open_journal() -> void:
 	_set_top_menu(false)
@@ -815,9 +890,12 @@ func _build_control_settings() -> void:
 	stack.add_child(dismiss)
 
 func _build_leave_menu() -> void:
+	# Android modal: translucent shade behind a solid, clearly bounded
+	# shared V2 dialog. Its real Button signals remain available to keyboard
+	# callers, while touch is dispatched explicitly in _input below.
 	leave_menu_shade = ColorRect.new()
 	leave_menu_shade.name = "LeaveGameShade"
-	leave_menu_shade.color = Color(0.025, 0.02, 0.04, 0.61)
+	leave_menu_shade.color = Color(0.025, 0.02, 0.04, 0.74)
 	leave_menu_shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(leave_menu_shade)
 	leave_menu_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -827,42 +905,67 @@ func _build_leave_menu() -> void:
 	leave_menu_panel.name = "LeaveGamePanel"
 	leave_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	leave_menu_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	leave_menu_panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	# Shared new modal style, not the old oversized nine-slice dark-wood art.
+	leave_menu_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	root.add_child(leave_menu_panel)
-	leave_menu_panel.anchor_left = 0.31
-	leave_menu_panel.anchor_right = 0.69
-	leave_menu_panel.anchor_top = 0.245
-	leave_menu_panel.anchor_bottom = 0.765
 	leave_menu_panel.visible = false
 	var margins := MarginContainer.new()
+	margins.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for side in ["left", "right", "top", "bottom"]:
-		margins.add_theme_constant_override("margin_" + side, 17)
+		margins.add_theme_constant_override("margin_" + side, 15)
 	leave_menu_panel.add_child(margins)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 11)
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_theme_constant_override("separation", 9)
 	margins.add_child(stack)
-	var title := Label.new()
-	title.text = "LEAVE OUTPOST?"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", SKIN.GOLD)
-	title.add_theme_font_size_override("font_size", 24)
-	stack.add_child(title)
+
+	var heading_frame := PanelContainer.new()
+	heading_frame.name = "LeaveGameHeadingFrame"
+	heading_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	heading_frame.add_theme_stylebox_override("panel", SKIN.modal_section())
+	heading_frame.custom_minimum_size = Vector2(0, 49)
+	stack.add_child(heading_frame)
+	var heading := Label.new()
+	heading.name = "LeaveGameHeading"
+	heading.text = "LEAVE OUTPOST"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	heading.add_theme_color_override("font_color", SKIN.GOLD)
+	heading.add_theme_color_override("font_outline_color", Color("#1d1014"))
+	heading.add_theme_constant_override("outline_size", 3)
+	heading.add_theme_font_size_override("font_size", 24)
+	heading_frame.add_child(heading)
+
+	var notice_frame := PanelContainer.new()
+	notice_frame.name = "LeaveGameNoticeFrame"
+	notice_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	notice_frame.add_theme_stylebox_override("panel", SKIN.modal_section(true))
+	notice_frame.custom_minimum_size = Vector2(0, 72)
+	stack.add_child(notice_frame)
 	leave_menu_info = Label.new()
 	leave_menu_info.name = "LeaveGameMessage"
 	leave_menu_info.text = "Your progress will be saved before returning to the title."
 	leave_menu_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	leave_menu_info.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	leave_menu_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	leave_menu_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	leave_menu_info.add_theme_color_override("font_color", SKIN.CREAM)
-	leave_menu_info.add_theme_font_size_override("font_size", 17)
-	stack.add_child(leave_menu_info)
+	leave_menu_info.add_theme_color_override("font_color", SKIN.INK)
+	leave_menu_info.add_theme_font_size_override("font_size", 16)
+	notice_frame.add_child(leave_menu_info)
+
 	for caption in ["RESUME ADVENTURE", "CONTROLS", "VERSIONS / UPDATES", "SAVE & RETURN TO TITLE"]:
 		var action := Button.new()
 		action.text = caption
 		action.custom_minimum_size = Vector2(0, 52)
+		action.mouse_filter = Control.MOUSE_FILTER_STOP
 		SKIN.apply_button(action, "red" if caption.begins_with("SAVE") else "wood")
+		action.add_theme_font_size_override("font_size", 18)
 		if caption == "RESUME ADVENTURE":
+			action.name = "ResumeAdventureButton"
 			action.pressed.connect(_close_leave_menu)
 		elif caption == "CONTROLS":
+			action.name = "LeaveControlsButton"
 			action.pressed.connect(func() -> void:
 				_close_leave_menu()
 				_show_control_settings()
@@ -875,7 +978,74 @@ func _build_leave_menu() -> void:
 			action.name = "ReturnToTitle"
 			action.pressed.connect(_return_to_title)
 		stack.add_child(action)
+		leave_menu_actions.append(action)
 
+	# Real red close control sits ON TOP of panel, but does not cover
+	# gameplay outside this modal when hidden.
+	leave_menu_close_button = Button.new()
+	leave_menu_close_button.name = "CloseLeaveOutpost"
+	SKIN.apply_close_button(leave_menu_close_button, 42.0)
+	leave_menu_close_button.pressed.connect(_close_leave_menu)
+	root.add_child(leave_menu_close_button)
+	leave_menu_close_button.visible = false
+
+func _layout_leave_menu_for_size(screen: Vector2, scale: float) -> void:
+	if leave_menu_panel == null or screen.x <= 0.0 or screen.y <= 0.0:
+		return
+	var width_px: float = minf(520.0 * scale, screen.x * 0.80)
+	var height_px: float = minf(478.0 * scale, screen.y * 0.87)
+	var top_left: Vector2 = (screen - Vector2(width_px, height_px)) * 0.5
+	_place_px(leave_menu_panel, screen, Rect2(top_left, Vector2(width_px, height_px)))
+	_place_px(leave_menu_close_button, screen, Rect2(
+			top_left + Vector2(width_px - 52.0 * scale, 9.0 * scale),
+			Vector2.ONE * 43.0 * scale))
+
+func _leave_button_at(pos: Vector2) -> Button:
+	if leave_menu_close_button != null and leave_menu_close_button.visible and leave_menu_close_button.get_global_rect().has_point(pos):
+		return leave_menu_close_button
+	for action in leave_menu_actions:
+		if action.visible and not action.disabled and action.get_global_rect().has_point(pos):
+			return action
+	return null
+
+func _handle_leave_menu_input(event: InputEvent) -> void:
+	# Consume BEFORE dispatch: a successful Save/Return changes scene.
+	get_viewport().set_input_as_handled()
+	if event.is_action_pressed("ui_cancel"):
+		_close_leave_menu()
+	elif event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed and leave_touch_finger < 0:
+			leave_touch_finger = touch.index
+			leave_touch_origin = touch.position
+			leave_touch_candidate = _leave_button_at(touch.position)
+		elif not touch.pressed and touch.index == leave_touch_finger:
+			var pressed_action: Button = leave_touch_candidate
+			var activate: bool = pressed_action != null and pressed_action == _leave_button_at(touch.position) and touch.position.distance_to(leave_touch_origin) < 40.0
+			leave_touch_finger = -1
+			leave_touch_candidate = null
+			leave_ignore_synthetic_mouse_until = Time.get_ticks_msec() + 360
+			if activate:
+				pressed_action.pressed.emit()
+	elif event is InputEventScreenDrag:
+		var drag: InputEventScreenDrag = event
+		if drag.index == leave_touch_finger and drag.position.distance_to(leave_touch_origin) >= 40.0:
+			leave_touch_candidate = null
+	elif event is InputEventMouseButton:
+		var click: InputEventMouseButton = event
+		if click.button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() >= leave_ignore_synthetic_mouse_until:
+			if click.pressed:
+				leave_mouse_down = true
+				leave_mouse_origin = click.position
+				leave_mouse_candidate = _leave_button_at(click.position)
+			elif leave_mouse_down:
+				var pressed_action: Button = leave_mouse_candidate
+				var activate: bool = pressed_action != null and pressed_action == _leave_button_at(click.position) and click.position.distance_to(leave_mouse_origin) < 40.0
+				leave_mouse_down = false
+				leave_mouse_candidate = null
+				if activate:
+					pressed_action.pressed.emit()
+ 
 func _open_leave_menu() -> void:
 	_set_top_menu(false)
 	if leave_menu_panel == null or leave_menu_shade == null:
@@ -890,16 +1060,28 @@ func _open_leave_menu() -> void:
 	leave_menu_info.text = "Your progress will be saved. Friends will disconnect." if online else "Your progress will be saved before returning to the title."
 	if leave_menu_confirm != null:
 		leave_menu_confirm.text = ("END LAN & RETURN" if is_host else "LEAVE LAN & RETURN") if online else "SAVE & RETURN TO TITLE"
+	leave_touch_finger = -1
+	leave_touch_candidate = null
+	leave_mouse_down = false
+	leave_mouse_candidate = null
 	leave_menu_shade.visible = true
 	leave_menu_panel.visible = true
+	leave_menu_close_button.visible = true
 	leave_menu_shade.move_to_front()
 	leave_menu_panel.move_to_front()
+	leave_menu_close_button.move_to_front()
 
 func _close_leave_menu() -> void:
+	leave_touch_finger = -1
+	leave_touch_candidate = null
+	leave_mouse_down = false
+	leave_mouse_candidate = null
 	if leave_menu_panel != null:
 		leave_menu_panel.visible = false
 	if leave_menu_shade != null:
 		leave_menu_shade.visible = false
+	if leave_menu_close_button != null:
+		leave_menu_close_button.visible = false
 
 func _return_to_version_channels() -> void:
 	# Finish the current session/save before changing or installing an APK.
@@ -983,35 +1165,43 @@ func _layout_touch_hud() -> void:
 	# MENU belongs up at the map's top-left shoulder, not detached
 	# beneath the clock. Leave the circular minimap unobstructed.
 	var map_left: float = screen.x - edge - map_side
-	_radial_px(menu_button, screen,
-			Vector2(map_left - 32.0 * scale, map_top + toggle_side * 0.5),
-			toggle_side * 0.5)
-	_place_px(clock_label, screen, Rect2(screen.x - edge - 205.0 * scale,
-			map_bottom + 12.0 * scale, 139.0 * scale, 44.0 * scale))
+	# Equal-height carved mobile controls: WALLET / BAG / MENU.
+	# The menu never overlaps the circular map or consumes a combat slot.
+	_place_px(menu_button, screen, Rect2(map_left - 86.0 * scale,
+			map_top, 78.0 * scale, 50.0 * scale))
+	var footer_top: float = map_bottom - 7.0 * scale
+	_place_px(clock_footer, screen, Rect2(map_left + 14.0 * scale,
+			footer_top, map_side - 28.0 * scale, 35.0 * scale))
+	_place_px(calendar_mark, screen, Rect2(map_left + 21.0 * scale,
+			footer_top + 3.0 * scale, 25.0 * scale, 29.0 * scale))
+	_place_px(clock_label, screen, Rect2(map_left + 49.0 * scale,
+			footer_top + 3.0 * scale, map_side - 70.0 * scale, 29.0 * scale))
 	if gathered_panel != null:
-		var recent_top: float = map_bottom + 62.0 * scale
+		var recent_top: float = map_bottom + 39.0 * scale
 		var recent_height: float = (99.0 if gathered_expanded else 34.0) * scale
 		_place_px(gathered_panel, screen, Rect2(map_left, recent_top, map_side, recent_height))
 		_place_px(gathered_title, screen, Rect2(map_left + 8.0 * scale, recent_top + 3.0 * scale, map_side - 45.0 * scale, 28.0 * scale))
 		_place_px(gathered_collapse, screen, Rect2(map_left + map_side - 33.0 * scale, recent_top + 2.0 * scale, 30.0 * scale, 29.0 * scale))
 		_place_px(gathered_content, screen, Rect2(map_left + 11.0 * scale, recent_top + 32.0 * scale, map_side - 19.0 * scale, 62.0 * scale))
-	# Three columns, two rows, one logical menu group. Buttons are modest
-	# rectangles rather than distorted ovals and do not cover the ability arc.
-	var menu_width: float = 314.0 * scale
-	var menu_top: float = map_top + 60.0 * scale
-	var menu_height: float = 114.0 * scale
-	var menu_left: float = map_left - menu_width - 7.0 * scale
-	_place_px(top_menu_panel, screen, Rect2(menu_left, menu_top, menu_width, menu_height))
-	var gap: float = 6.0 * scale
-	var col_width: float = (menu_width - gap * 4.0) / 3.0
-	var row_height: float = (menu_height - gap * 3.0) / 2.0
+	# A proper central modal for menu settings; never position the six
+	# clickable destinations as a cramped 3x2 overlay underneath the map.
+	var menu_width: float = minf(498.0 * scale, screen.x * 0.80)
+	var menu_height: float = minf(432.0 * scale, screen.y * 0.86)
+	var menu_origin: Vector2 = (screen - Vector2(menu_width, menu_height)) * 0.5
+	_place_px(top_menu_panel, screen, Rect2(menu_origin, Vector2(menu_width, menu_height)))
+	_place_px(top_menu_close_button, screen, Rect2(
+			menu_origin + Vector2(menu_width - 53.0 * scale, 13.0 * scale),
+			Vector2.ONE * 41.0 * scale))
+	var gutter: float = 16.0 * scale
+	var menu_col_width: float = (menu_width - 48.0 * scale - gutter) * 0.5
+	var row_height: float = (menu_height - 152.0 * scale) / 3.0
 	for index in range(top_menu_actions.size()):
-		var column: int = index % 3
-		var row_index: int = index / 3
+		var column: int = index % 2
+		var row_index: int = index / 2
 		_place_px(top_menu_actions[index], screen, Rect2(
-				menu_left + gap + float(column) * (col_width + gap),
-				menu_top + gap + float(row_index) * (row_height + gap),
-				col_width, row_height))
+				menu_origin + Vector2(24.0 * scale + float(column) * (menu_col_width + gutter),
+						99.0 * scale + float(row_index) * (row_height + 11.0 * scale)),
+				Vector2(menu_col_width, row_height)))
 	# Every circular holder is actually square; the centre-to-centre gaps
 	# leave distinct hit targets even with two fingers on a small phone.
 	_radial_px(smart_button, screen,
@@ -1047,6 +1237,7 @@ func _layout_touch_hud() -> void:
 			tool_width, tool_height))
 	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
+	_layout_leave_menu_for_size(screen, scale)
 	# The bottom-centre prompt was covering consumables and character XP.
 	# Keep short notices together in a compact top-centre stack instead.
 	var info_width: float = minf(352.0 * scale, screen.x * 0.34)
@@ -1098,7 +1289,9 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
 		return
 	var unit: float = scale
-	var wallet_left: float = screen.x / unit - 522.0
+	var map_side: float = minf(screen.y * 0.285, minf(228.0 * unit, screen.x * 0.23))
+	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
+	var wallet_left: float = map_left_base - 300.0
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 338, 94),
 		"portrait_frame": Rect2(22, 21, 76, 78),
@@ -1110,12 +1303,12 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"weapon": Rect2(111, 80, 231, 22),
 		"effects": Rect2(110, 77, 231, 28),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
-		"wallet_toggle": Rect2(screen.x / unit - 470, 17, 100, 52),
+		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
 		"coins": Rect2(wallet_left + 20, 113, 245, 28),
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
-		"bag": Rect2(screen.x / unit - 361, 17, 70, 52),
+		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
 		"weight": Rect2(17, 112, 352, 24),
 		"quest_frame": Rect2(16, 143, 347, 52),
 		"quest_button": Rect2(23, 151, 109, 37),
@@ -1780,12 +1973,70 @@ func _touch_menu_navigation(event: InputEvent) -> bool:
 				return true
 	return false
 
+func _game_menu_button_at(pos: Vector2) -> Button:
+	if top_menu_close_button != null and top_menu_close_button.visible and top_menu_close_button.get_global_rect().has_point(pos):
+		return top_menu_close_button
+	for option in top_menu_actions:
+		if option.visible and not option.disabled and option.get_global_rect().has_point(pos):
+			return option
+	return null
+
+func _handle_game_menu_input(event: InputEvent) -> void:
+	# Consume before any button can launch a new scene or modal.
+	get_viewport().set_input_as_handled()
+	if event.is_action_pressed("ui_cancel"):
+		_set_top_menu(false)
+	elif event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed and top_menu_touch_finger < 0:
+			top_menu_touch_finger = touch.index
+			top_menu_touch_origin = touch.position
+			top_menu_touch_candidate = _game_menu_button_at(touch.position)
+		elif not touch.pressed and touch.index == top_menu_touch_finger:
+			var pressed_action: Button = top_menu_touch_candidate
+			var activate: bool = pressed_action != null and pressed_action == _game_menu_button_at(touch.position) and touch.position.distance_to(top_menu_touch_origin) < 40.0
+			var outside: bool = not top_menu_panel.get_global_rect().has_point(touch.position)
+			top_menu_touch_finger = -1
+			top_menu_touch_candidate = null
+			leave_ignore_synthetic_mouse_until = Time.get_ticks_msec() + 360
+			if activate:
+				pressed_action.pressed.emit()
+			elif outside:
+				_set_top_menu(false)
+	elif event is InputEventScreenDrag:
+		var drag: InputEventScreenDrag = event
+		if drag.index == top_menu_touch_finger and drag.position.distance_to(top_menu_touch_origin) >= 40.0:
+			top_menu_touch_candidate = null
+	elif event is InputEventMouseButton:
+		var click: InputEventMouseButton = event
+		if click.button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() >= leave_ignore_synthetic_mouse_until:
+			if click.pressed:
+				top_menu_mouse_down = true
+				top_menu_mouse_origin = click.position
+				top_menu_mouse_candidate = _game_menu_button_at(click.position)
+			elif top_menu_mouse_down:
+				var pressed_action: Button = top_menu_mouse_candidate
+				var activate: bool = pressed_action != null and pressed_action == _game_menu_button_at(click.position) and click.position.distance_to(top_menu_mouse_origin) < 40.0
+				var outside: bool = not top_menu_panel.get_global_rect().has_point(click.position)
+				top_menu_mouse_down = false
+				top_menu_mouse_candidate = null
+				if activate:
+					pressed_action.pressed.emit()
+				elif outside:
+					_set_top_menu(false)
+ 
 func _input(event: InputEvent) -> void:
-	# A modal must block gameplay touch, camera orbit, tools and joystick.
+	# Leave-game has priority over every gameplay and synthetic UI event.
 	if leave_menu_panel != null and leave_menu_panel.visible:
-		if event.is_action_pressed("ui_cancel"):
-			_close_leave_menu()
-			get_viewport().set_input_as_handled()
+		_handle_leave_menu_input(event)
+		return
+	if top_menu_open:
+		_handle_game_menu_input(event)
+		return
+	# Android can echo a mouse click after lifting the finger that dismissed
+	# a modal. Never let this click strike a gameplay skill underneath.
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() < leave_ignore_synthetic_mouse_until:
+		get_viewport().set_input_as_handled()
 		return
 	if _touch_menu_navigation(event):
 		return
