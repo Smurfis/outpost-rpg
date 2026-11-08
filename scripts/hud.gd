@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Outpost mobile HUD: compact live panels, gold-ringed touch actions and a
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const HUD_V2 = preload("res://scripts/ui/hud_v2_components.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
@@ -95,6 +96,16 @@ var wallet_coin: Label
 var wallet_resource_icon: TextureRect
 var wallet_resource_count: Label
 var wallet_resource_id: String = "wood"
+## Live display components — no fictitious currency or status effect state.
+var gathered_panel: Panel
+var gathered_title: Label
+var gathered_content: Label
+var gathered_collapse: Button
+var gathered_expanded: bool = true
+var gathered_entries: Array[Dictionary] = []
+var gathered_update_delay: float = 0.0
+var status_effect_strip: HBoxContainer
+var active_status_effects: Array[Dictionary] = []
 var last_inventory_snapshot: Dictionary = {}
 var menu_button: Button
 var top_menu_panel: Panel
@@ -191,6 +202,14 @@ func _ready() -> void:
 	hero_detail = _label("Training Blade  •  M1", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# Status effects occupy the old weapon-info line only when there are
+	# real effect records. Nothing is drawn for an empty gameplay state.
+	status_effect_strip = HBoxContainer.new()
+	status_effect_strip.name = "PlayerStatusEffects"
+	status_effect_strip.add_theme_constant_override("separation", 4)
+	status_effect_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(status_effect_strip)
+	status_effect_strip.visible = false
 
 	# Small wallet shows only real coin balance and the last tracked material.
 	# Other holdings and carry weight live in the bag, not in a permanent HUD.
@@ -236,7 +255,7 @@ func _ready() -> void:
 	# announcing the finished starter quest.
 	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
-	quest_frame.add_theme_stylebox_override("panel", _hud_glass(0.53, 0.28))
+	quest_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
@@ -279,6 +298,31 @@ func _ready() -> void:
 	clock_label.name = "MinimapFooterClock"
 	clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Actual harvested-item receipts only, never crafted or awarded items.
+	# The card shares the accepted translucent Quest visual language.
+	gathered_panel = _panel(0.814, 0.393, 0.980, 0.546)
+	gathered_panel.name = "LastGatheredPanel"
+	gathered_panel.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	gathered_panel.visible = false
+	gathered_title = _label("LAST GATHERED", 15, SKIN.CREAM, 0.820, 0.396, 0.943, 0.424)
+	gathered_title.name = "LastGatheredHeading"
+	gathered_title.visible = false
+	gathered_content = _label("", 13, SKIN.CREAM, 0.818, 0.426, 0.975, 0.540)
+	gathered_content.name = "LastGatheredItems"
+	gathered_content.visible = false
+	gathered_content.clip_text = true
+	gathered_content.autowrap_mode = TextServer.AUTOWRAP_OFF
+	gathered_collapse = Button.new()
+	gathered_collapse.name = "LastGatheredCollapse"
+	gathered_collapse.text = "▾"
+	gathered_collapse.tooltip_text = "Collapse or expand recently gathered materials"
+	gathered_collapse.custom_minimum_size = Vector2(30.0, 30.0)
+	SKIN.apply_button(gathered_collapse, "wood")
+	gathered_collapse.add_theme_font_size_override("font_size", 15)
+	gathered_collapse.mouse_filter = Control.MOUSE_FILTER_STOP
+	gathered_collapse.pressed.connect(_toggle_gathered)
+	gathered_collapse.visible = false
+	root.add_child(gathered_collapse)
 	# Top-right flyout is a compact 3 × 2 grid immediately *below* the
 	# reserved minimap footprint (right 17% of screen, top 31%). All three
 	# combat ability radials start at y=0.600 or lower: never cover them.
@@ -458,6 +502,79 @@ func _ready() -> void:
 	# ultrawide aspect ratios, and Android window/safe-area changes.
 	get_viewport().size_changed.connect(_layout_touch_hud)
 	_layout_touch_hud()
+
+func set_status_effects(effects: Array) -> void:
+	# The gameplay service supplies authoritative effects; this view NEVER
+	# fabricates stacks, status durations or damage-over-time ticks.
+	active_status_effects.clear()
+	for candidate in effects:
+		if candidate is Dictionary and not str(candidate.get("id", "")).is_empty():
+			active_status_effects.append((candidate as Dictionary).duplicate())
+	for child in status_effect_strip.get_children():
+		status_effect_strip.remove_child(child)
+		child.queue_free()
+	var ordered: Array[Dictionary] = []
+	for effect in active_status_effects:
+		if str(effect.get("kind", "buff")) == "debuff":
+			ordered.append(effect)
+	for effect in active_status_effects:
+		if str(effect.get("kind", "buff")) != "debuff":
+			ordered.append(effect)
+	for i in range(mini(5, ordered.size())):
+		var effect: Dictionary = ordered[i]
+		var negative: bool = str(effect.get("kind", "buff")) == "debuff"
+		var icon := Button.new()
+		icon.name = "StatusEffect_" + str(effect.get("id", "unknown"))
+		icon.custom_minimum_size = Vector2(32.0, 28.0)
+		icon.text = str(effect.get("glyph", "!" if negative else "✦")).substr(0, 2)
+		icon.tooltip_text = "%s • %s • %s remaining • stacks: %d" % [
+				str(effect.get("name", effect.get("id", "Effect"))),
+				"Debuff" if negative else "Buff",
+				str(effect.get("remaining", "—")),
+				maxi(1, int(effect.get("stack_count", 1)))
+		]
+		icon.add_theme_stylebox_override("normal", HUD_V2.effect_icon(negative))
+		icon.add_theme_stylebox_override("hover", HUD_V2.effect_icon(negative))
+		icon.add_theme_font_size_override("font_size", 14)
+		icon.add_theme_color_override("font_color", SKIN.CREAM)
+		icon.focus_mode = Control.FOCUS_NONE
+		status_effect_strip.add_child(icon)
+	if ordered.size() > 5:
+		var extra := Label.new()
+		extra.text = "+%d" % (ordered.size() - 5)
+		extra.add_theme_font_size_override("font_size", 13)
+		extra.add_theme_color_override("font_color", SKIN.GOLD)
+		status_effect_strip.add_child(extra)
+	status_effect_strip.visible = not ordered.is_empty()
+	hero_detail.visible = ordered.is_empty()
+
+func record_gather(item_id: String, quantity: int) -> void:
+	if quantity <= 0 or item_id.is_empty() or gathered_panel == null:
+		return
+	gathered_entries.push_front({"id": item_id, "amount": quantity, "at": Time.get_ticks_msec()})
+	if gathered_entries.size() > 3:
+		gathered_entries.resize(3)
+	gathered_panel.visible = true
+	gathered_title.visible = true
+	gathered_collapse.visible = true
+	_refresh_gathered_card()
+	_layout_touch_hud()
+
+func _toggle_gathered() -> void:
+	gathered_expanded = not gathered_expanded
+	gathered_collapse.text = "▾" if gathered_expanded else "▸"
+	_refresh_gathered_card()
+	_layout_touch_hud()
+
+func _refresh_gathered_card() -> void:
+	if gathered_content == null:
+		return
+	gathered_content.visible = gathered_expanded and not gathered_entries.is_empty()
+	var rows := PackedStringArray()
+	for entry in gathered_entries:
+		var seconds: int = maxi(0, int((Time.get_ticks_msec() - int(entry.get("at", 0))) / 1000))
+		rows.append("%s ×%d  (%ds)" % [str(entry.get("id", "")).capitalize(), int(entry.get("amount", 0)), seconds])
+	gathered_content.text = "\n".join(rows)
 
 func _toggle_wallet() -> void:
 	wallet_open = not wallet_open
@@ -815,6 +932,13 @@ func _layout_touch_hud() -> void:
 			toggle_side * 0.5)
 	_place_px(clock_label, screen, Rect2(screen.x - edge - 205.0 * scale,
 			map_bottom + 12.0 * scale, 139.0 * scale, 44.0 * scale))
+	if gathered_panel != null:
+		var recent_top: float = map_bottom + 62.0 * scale
+		var recent_height: float = (99.0 if gathered_expanded else 34.0) * scale
+		_place_px(gathered_panel, screen, Rect2(map_left, recent_top, map_side, recent_height))
+		_place_px(gathered_title, screen, Rect2(map_left + 8.0 * scale, recent_top + 3.0 * scale, map_side - 45.0 * scale, 28.0 * scale))
+		_place_px(gathered_collapse, screen, Rect2(map_left + map_side - 33.0 * scale, recent_top + 2.0 * scale, 30.0 * scale, 29.0 * scale))
+		_place_px(gathered_content, screen, Rect2(map_left + 11.0 * scale, recent_top + 32.0 * scale, map_side - 19.0 * scale, 62.0 * scale))
 	# Three columns, two rows, one logical menu group. Buttons are modest
 	# rectangles rather than distorted ovals and do not cover the ability arc.
 	var menu_width: float = 314.0 * scale
@@ -926,6 +1050,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"health": Rect2(110, 51, 229, 21),
 		"health_text": Rect2(111, 52, 227, 19),
 		"weapon": Rect2(111, 80, 231, 22),
+		"effects": Rect2(110, 77, 231, 28),
 		"wallet": Rect2(374, 16, 312 if wallet_open else 101, 55),
 		"wallet_toggle": Rect2(379, 20, 40, 47),
 		"coins": Rect2(422, 22, 99, 42),
@@ -948,6 +1073,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"health": health_bar,
 		"health_text": health_numbers,
 		"weapon": hero_detail,
+		"effects": status_effect_strip,
 		"wallet": wallet_frame,
 		"wallet_toggle": wallet_collapse,
 		"coins": wallet_coin,
@@ -1522,6 +1648,11 @@ func _process(delta: float) -> void:
 			_open_quick_tray()
 	_position_stick()
 	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0
+	gathered_update_delay += delta
+	if gathered_update_delay >= 1.0:
+		gathered_update_delay = 0.0
+		if not gathered_entries.is_empty() and gathered_expanded:
+			_refresh_gathered_card()
 	if toast_time > 0.0:
 		toast_time -= delta
 		if toast_time <= 0.0:
@@ -1569,6 +1700,10 @@ func _touch_menu_navigation(event: InputEvent) -> bool:
 		return false
 	# Process at root input stage because on Android decorative fullscreen
 	# Control children can otherwise intercept the actual UI Button signal.
+	if gathered_collapse != null and gathered_collapse.visible and gathered_collapse.get_global_rect().has_point(pos):
+		_toggle_gathered()
+		get_viewport().set_input_as_handled()
+		return true
 	if menu_button != null and menu_button.visible and menu_button.get_global_rect().has_point(pos):
 		_set_top_menu(not top_menu_open)
 		get_viewport().set_input_as_handled()
