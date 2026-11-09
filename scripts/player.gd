@@ -432,5 +432,4 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		game.hud.toast("Defeated! Respawned at outpost; items kept.")
-	else:
-		game.hud.toast("Ouch! -%d HP" % int(roundf(actual)))
+

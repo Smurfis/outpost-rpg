@@ -8,6 +8,7 @@ const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
 const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
+const SKILL_XP_ORB = preload("res://scripts/ui/skill_xp_orb.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -74,6 +75,7 @@ var toast_label: Label
 var health_bar: ProgressBar
 var xp_bar: ProgressBar
 var xp_bar_divisions: Control
+var trained_skill_orb: Control
 var toast_panel: Panel
 var items: Dictionary = {}
 var joystick: Panel
@@ -245,15 +247,15 @@ func _ready() -> void:
 	xp_bar = _meter(0.0, 0.975, 1.0, 1.0, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
 	var xp_background := StyleBoxFlat.new()
-	xp_background.bg_color = Color("#24192b")
-	xp_background.border_color = Color("#bd904c")
+	xp_background.bg_color = Color(0.13, 0.09, 0.16, 0.24)
+	xp_background.border_color = Color(0.75, 0.59, 0.37, 0.30)
 	xp_background.set_border_width_all(1)
 	xp_background.set_corner_radius_all(0)
 	xp_background.set_content_margin_all(0)
 	xp_background.anti_aliasing = false
 	xp_bar.add_theme_stylebox_override("background", xp_background)
 	var xp_fill := StyleBoxFlat.new()
-	xp_fill.bg_color = Color("#aa6cda")
+	xp_fill.bg_color = Color(0.71, 0.46, 0.86, 0.59)
 	xp_fill.set_border_width_all(0)
 	xp_fill.set_corner_radius_all(0)
 	xp_fill.set_content_margin_all(0)
@@ -263,7 +265,7 @@ func _ready() -> void:
 	xp_bar_divisions.name = "CharacterXPDivisions"
 	xp_bar.add_child(xp_bar_divisions)
 	xp_bar_divisions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	xp_level_badge = _label("Lv. 1", 13, Color("#ffe8ab"), 0.002, 0.975, 0.075, 1.0)
+	xp_level_badge = _label("Lv. 1", 13, Color("#ffe8ab"), 0.055, 0.975, 0.12, 1.0)
 	xp_level_badge.name = "CharacterLevelBadge"
 	xp_level_badge.visible = true
 	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -274,13 +276,19 @@ func _ready() -> void:
 	radial_level = RADIAL_LEVEL.new()
 	root.add_child(radial_level)
 	radial_level.visible = false
-	xp_level_label = _label("0 / 100 XP  •  100 TO NEXT", 14, Color("#fff2d1"), 0.08, 0.975, 0.93, 1.0)
+	xp_level_label = _label("0 / 100", 12, Color(1.0, 0.94, 0.81, 0.68), 0.12, 0.975, 0.93, 1.0)
 	xp_level_label.name = "CharacterLevelLabel"
 	xp_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	xp_level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	xp_level_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	xp_level_label.clip_text = true
-	hero_detail = _label("Training Blade  •  M1", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
+	trained_skill_orb = SKILL_XP_ORB.new()
+	trained_skill_orb.name = "TrainedSkillOrb"
+	trained_skill_orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(trained_skill_orb)
+	trained_skill_orb.call("set_skill", "training_blade", 0)
+	hero_detail = _label("", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
+	hero_detail.visible = false
 	hero_detail.clip_text = true
 	hero_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
 	# Status effects occupy the old weapon-info line only when there are
@@ -741,7 +749,7 @@ func set_status_effects(effects: Array) -> void:
 		extra.add_theme_color_override("font_color", SKIN.GOLD)
 		status_effect_strip.add_child(extra)
 	status_effect_strip.visible = not ordered.is_empty()
-	hero_detail.visible = ordered.is_empty()
+	hero_detail.visible = false # Equipped weapon already has an inventory/skills popup.
 
 func record_gather(item_id: String, quantity: int) -> void:
 	if quantity <= 0 or item_id.is_empty() or gathered_panel == null:
@@ -749,11 +757,12 @@ func record_gather(item_id: String, quantity: int) -> void:
 	gathered_entries.push_front({"id": item_id, "amount": quantity, "at": Time.get_ticks_msec()})
 	if gathered_entries.size() > 3:
 		gathered_entries.resize(3)
-	gathered_panel.visible = true
-	gathered_title.visible = true
-	gathered_collapse.visible = true
+	# Keep the bounded receipts for journal/QA only. The actual reward
+	# now floats above the avatar in world-space and isn't duplicated here.
+	gathered_panel.visible = false
+	gathered_title.visible = false
+	gathered_collapse.visible = false
 	_refresh_gathered_card()
-	_layout_touch_hud()
 
 func _toggle_gathered() -> void:
 	gathered_expanded = not gathered_expanded
@@ -764,7 +773,7 @@ func _toggle_gathered() -> void:
 func _refresh_gathered_card() -> void:
 	if gathered_content == null:
 		return
-	gathered_content.visible = gathered_expanded and not gathered_entries.is_empty()
+	gathered_content.visible = false
 	var rows := PackedStringArray()
 	for entry in gathered_entries:
 		var seconds: int = maxi(0, int((Time.get_ticks_msec() - int(entry.get("at", 0))) / 1000))
@@ -1494,7 +1503,7 @@ func _layout_touch_hud() -> void:
 		var receipt_left: float = 16.0 * scale
 		var receipt_top: float = 205.0 * scale
 		var receipt_width: float = minf(285.0 * scale, screen.x * 0.31)
-		var recent_height: float = (77.0 if gathered_expanded else 29.0) * scale
+		var recent_height: float = 0.0 # World-space pickup text replaces tracker card.
 		_place_px(gathered_panel, screen, Rect2(receipt_left, receipt_top, receipt_width, recent_height))
 		_place_px(gathered_title, screen, Rect2(receipt_left + 8.0 * scale, receipt_top + 2.0 * scale,
 				receipt_width - 43.0 * scale, 21.0 * scale))
@@ -1502,7 +1511,7 @@ func _layout_touch_hud() -> void:
 				receipt_top + 2.0 * scale, 25.0 * scale, 25.0 * scale))
 		_place_px(gathered_content, screen, Rect2(receipt_left + 9.0 * scale, receipt_top + 25.0 * scale,
 				receipt_width - 17.0 * scale, 49.0 * scale))
-		var loot_top: float = receipt_top + recent_height + 7.0 * scale
+		var loot_top: float = receipt_top # Only compact loot/combat feed stays on HUD.
 		_place_px(loot_feed_panel, screen, Rect2(receipt_left, loot_top, receipt_width, 89.0 * scale))
 		_place_px(loot_feed_title, screen, Rect2(receipt_left + 9.0 * scale, loot_top + 2.0 * scale,
 				receipt_width - 18.0 * scale, 19.0 * scale))
@@ -1597,9 +1606,11 @@ func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
 	var height_px: float = clampf(18.0 * scale, 17.0, 23.0)
 	var y: float = screen.y - height_px
 	_place_px(xp_bar, screen, Rect2(0.0, y, screen.x, height_px))
-	_place_px(xp_level_badge, screen, Rect2(10.0 * scale, y, 85.0 * scale, height_px))
-	_place_px(xp_level_label, screen, Rect2(105.0 * scale, y,
-			maxf(1.0, screen.x - 210.0 * scale), height_px))
+	_place_px(trained_skill_orb, screen, Rect2(10.0 * scale, y - 41.0 * scale,
+			52.0 * scale, 52.0 * scale))
+	_place_px(xp_level_badge, screen, Rect2(68.0 * scale, y, 69.0 * scale, height_px))
+	_place_px(xp_level_label, screen, Rect2(147.0 * scale, y,
+			maxf(1.0, screen.x - 255.0 * scale), height_px))
 
 func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
 	# The actual UI art stays transparent and separately editable; this is
@@ -2662,6 +2673,12 @@ func _stick(pos: Vector2) -> void:
 			joystick.position += travel.normalized() * (travel.length() - 55.0)
 	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
 
+func set_trained_skill(skill_id: String, total_skill_xp: int) -> void:
+	# Ring progress is real: 60 XP per gathering/weapon mastery rank.
+	# Existing weapon mastery already uses these thresholds; no fake stats.
+	if trained_skill_orb != null:
+		trained_skill_orb.call("set_skill", skill_id, maxi(0, total_skill_xp))
+
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
 	status.text = player_display_name
 	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
@@ -2671,7 +2688,7 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		bag_weight_label.text = "BAG NEAR LIMIT  %.0f / %.0f" % [current_load, max_load]
 		bag_weight_label.visible = current_load >= max_load * 0.85
 		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load >= max_load else Color("#e3b75d"))
-	hero_detail.text = "%s  •  M%d" % [weapon.replace("_", " ").capitalize(), game.mastery_rank(weapon)] if game != null else weapon
+	hero_detail.visible = false
 	if game != null and xp_level_label != null:
 		var level_data: Dictionary = game.level_state()
 		var rank: int = int(level_data.get("level", 1))
@@ -2679,7 +2696,7 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
 		var current_xp: int = int(level_data.get("current", 0))
 		var required_xp: int = maxi(1, roundi(required))
-		xp_level_label.text = "%d / %d XP  •  %d TO NEXT" % [current_xp, required_xp, maxi(0, required_xp - current_xp)]
+		xp_level_label.text = "%d / %d" % [current_xp, required_xp]
 
 		xp_level_badge.text = "Lv. %d" % rank
 		if radial_level != null:

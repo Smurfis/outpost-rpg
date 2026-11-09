@@ -29,8 +29,8 @@ func _run() -> void:
 	hud.record_gather("wood", 3)
 	hud.record_loot("wood", 3)
 	await process_frame
-	verify(hud.loot_feed_panel.visible and hud.loot_feed_rows.visible, "Actual wood grant reveals the feed BELOW Last Gathered")
-	verify(hud.loot_feed_panel.get_global_rect().position.y > hud.gathered_panel.get_global_rect().end.y, "Loot feed doesn't overlap gathered tracker")
+	verify(hud.loot_feed_panel.visible and hud.loot_feed_rows.visible, "Actual grant keeps the compact item feed below Quests")
+	verify(not hud.gathered_panel.visible and hud.loot_feed_panel.get_global_rect().position.y >= hud.quest_frame.get_global_rect().end.y, "No persistent Last Gathered card; item feed remains below Quest")
 	verify(hud.loot_feed_entries.size() == 1, "One grant creates one bounded receipt")
 	verify(hud.loot_icon_controls.size() == 1, "Item receipt has exactly one tappable icon")
 	var icon: Button = hud.loot_icon_controls[0] as Button

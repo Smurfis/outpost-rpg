@@ -46,6 +46,8 @@ var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
+var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
 var weapon_enchants: Dictionary = {} # Owned weapon-id -> fire.
 var quick_slots: Dictionary = {"potion":"", "consumable":""}
@@ -87,6 +89,8 @@ func _ready() -> void:
 		get_tree().root.remove_meta("outpost_new_adventure")
 	if not fresh_start:
 		_load()
+	var previous_skill_xp: int = int(gathering_skill_xp.get(last_trained_skill, 0)) if gathering_skill_xp.has(last_trained_skill) else int(weapon_mastery_xp.get(last_trained_skill, 0))
+	hud.set_trained_skill(last_trained_skill, previous_skill_xp)
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
@@ -174,7 +178,7 @@ func _process(delta: float) -> void:
 	if resource != null:
 		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
 	elif enemy != null:
-		hint = "Dungeon guardian nearby • use ATTACK" if coop != null and coop.in_party_dungeon() else "Wild boar nearby • use ATTACK"
+		hint = "%s nearby • use ATTACK" % enemy_display_name(enemy)
 	elif closest_station() != "":
 		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
@@ -595,6 +599,15 @@ func _nearest_resource():
 			best = node
 	return best
 
+func enemy_display_name(enemy: Node) -> String:
+	if enemy == null:
+		return "Enemy"
+	if enemy.is_in_group("dungeon_guardians"):
+		return str(enemy.get("display_name"))
+	if enemy.name == "WildBoar":
+		return "Wild boar"
+	return enemy.name.replace("_", " ").capitalize()
+
 func _nearest_enemy():
 	var best = null
 	var radius := 3.4
@@ -639,25 +652,30 @@ func gather() -> void:
 	if amount <= 0:
 		hud.toast("Bag full — gathering stopped.")
 		return
-	_show_gather_pickup(resource.global_position, item)
+	_show_gather_pickup(hero.global_position, item, amount)
 	gain_experience(2 * amount)
-	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
+	gain_gathering_skill(item, 2 * amount)
 	_save()
 	_refresh_menu()
 
-func _show_gather_pickup(at: Vector3, resource_id: String) -> void:
-	# Floating +resource above a struck gatherable. No persistent heavy particles.
+func _show_gather_pickup(at: Vector3, resource_id: String, amount: int = 1) -> void:
+	# A single faint world-space "+1 Wood" over the player replaces the
+	# screen-corner Last Gathered card AND large resource toast.
 	var pop := Label3D.new()
-	pop.text = "+" + resource_id.replace("_", " ").capitalize()
-	pop.font_size = 38
-	pop.pixel_size = 0.006
+	pop.name = "FloatingGatherReceipt"
+	pop.text = "+%d %s" % [maxi(1, amount), resource_id.replace("_", " ").capitalize()]
+	pop.font_size = 37
+	pop.pixel_size = 0.005
 	pop.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pop.position = at + Vector3(0.0, 2.1, 0.0)
-	pop.modulate = Color("f4dba2")
+	pop.no_depth_test = true
+	pop.position = at + Vector3(0.0, 2.45, 0.0)
+	pop.modulate = Color(0.91, 0.83, 0.63, 0.80)
+	pop.outline_modulate = Color(0.12, 0.09, 0.10, 0.65)
+	pop.outline_size = 7
 	add_child(pop)
 	var tween := create_tween()
-	tween.tween_property(pop, "position:y", pop.position.y + 0.9, 0.70)
-	tween.parallel().tween_property(pop, "modulate:a", 0.0, 0.70)
+	tween.tween_property(pop, "position:y", pop.position.y + 0.75, 0.95)
+	tween.parallel().tween_property(pop, "modulate:a", 0.0, 0.95)
 	tween.finished.connect(pop.queue_free)
 
 func _load_recipes() -> void:
@@ -1042,6 +1060,15 @@ func gain_experience(amount: int) -> void:
 	if character_level() > before and hud != null:
 		hud.toast("LEVEL UP! Level %d — enchanting and skills grow stronger." % character_level())
 
+func gain_gathering_skill(resource_id: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	var skill: String = "woodcutting" if resource_id == "wood" else "mining" if resource_id in ["stone", "iron", "coal", "clay"] else "foraging"
+	gathering_skill_xp[skill] = maxi(0, int(gathering_skill_xp.get(skill, 0)) + amount)
+	last_trained_skill = skill
+	if hud != null:
+		hud.set_trained_skill(skill, int(gathering_skill_xp[skill]))
+
 func current_weapon_id() -> String:
 	return str(equipment.get("weapon", "training_blade"))
 
@@ -1057,6 +1084,9 @@ func gain_weapon_mastery(weapon_id: String, amount: int) -> void:
 		return
 	var previous: int = LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0)))
 	weapon_mastery_xp[weapon_id] = int(weapon_mastery_xp.get(weapon_id, 0)) + amount
+	last_trained_skill = weapon_id
+	if hud != null:
+		hud.set_trained_skill(weapon_id, int(weapon_mastery_xp[weapon_id]))
 	if LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0))) > previous and hud != null:
 		hud.toast("Weapon mastery! New ability slot available.")
 
@@ -1160,8 +1190,8 @@ func attack() -> void:
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
 	gain_weapon_mastery(weapon, 12)
-	if target.alive:
-		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
+	# World-space damage numbers already come from each mob's hit feedback.
+	# No giant per-swing notification is needed, and no boar assumptions.
 
 func on_enemy_killed() -> void:
 	kills += 1
@@ -1221,7 +1251,7 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -1240,6 +1270,12 @@ func _load() -> void:
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
 		for key in data.get("weapon_mastery_xp", {}):
 			weapon_mastery_xp[str(key)] = maxi(0, int(data["weapon_mastery_xp"][key]))
+	if data.get("gathering_skill_xp", {}) is Dictionary:
+		for key in gathering_skill_xp:
+			gathering_skill_xp[key] = maxi(0, int(data["gathering_skill_xp"].get(key, 0)))
+	var stored_training: String = str(data.get("last_trained_skill", "training_blade"))
+	if gathering_skill_xp.has(stored_training) or stored_training in ["training_blade", "spear", "iron_blade"]:
+		last_trained_skill = stored_training
 	if data.get("weapon_enchants", {}) is Dictionary:
 		for key in data.get("weapon_enchants", {}):
 			if str(key) in ["spear", "iron_blade"] and str(data["weapon_enchants"][key]) == "fire":
