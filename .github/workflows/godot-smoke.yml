@@ -230,6 +230,13 @@ jobs:
         run: |
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_fullwidth_xp_v2.gd 2>&1 | tee hud-edge-xp.log
 
+      - name: Verify compact recent loot cards, readable event bars and torch hitboxes
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_compact_receipts_layout.gd 2>&1 | tee hud-compact-receipts.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL COMPACT RECEIPTS:' hud-compact-receipts.log; then exit 1; fi
+          grep -q "COMPACT RECEIPTS RESULT: 0 failures" hud-compact-receipts.log
+
       - name: Verify real Android HUD hitboxes, map and responsive menu spacing
         run: |
           set -o pipefail

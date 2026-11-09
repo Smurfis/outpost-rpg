@@ -431,10 +431,10 @@ func _ready() -> void:
 	gathered_panel.name = "LastGatheredPanel"
 	gathered_panel.add_theme_stylebox_override("panel", HUD_V2.utility_card())
 	gathered_panel.visible = false
-	gathered_title = _label("LAST GATHERED", 15, SKIN.CREAM, 0.820, 0.396, 0.943, 0.424)
+	gathered_title = _label("LAST GATHERED", 12, SKIN.CREAM, 0.820, 0.396, 0.943, 0.424)
 	gathered_title.name = "LastGatheredHeading"
 	gathered_title.visible = false
-	gathered_content = _label("", 13, SKIN.CREAM, 0.818, 0.426, 0.975, 0.540)
+	gathered_content = _label("", 11, SKIN.CREAM, 0.818, 0.426, 0.975, 0.540)
 	gathered_content.name = "LastGatheredItems"
 	gathered_content.visible = false
 	gathered_content.clip_text = true
@@ -457,7 +457,7 @@ func _ready() -> void:
 	loot_feed_panel.add_theme_stylebox_override("panel", HUD_V2.utility_card())
 	loot_feed_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	loot_feed_panel.visible = false
-	loot_feed_title = _label("LOOT & COMBAT", 14, SKIN.GOLD, 0.81, 0.56, 0.98, 0.60)
+	loot_feed_title = _label("LOOT & COMBAT", 12, SKIN.GOLD, 0.81, 0.56, 0.98, 0.60)
 	loot_feed_title.name = "LootCombatFeedTitle"
 	loot_feed_title.visible = false
 	loot_feed_rows = VBoxContainer.new()
@@ -817,8 +817,8 @@ func _refresh_loot_feed() -> void:
 		var line := HBoxContainer.new()
 		line.name = "LootReceipt"
 		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		line.custom_minimum_size.y = 28.0
-		line.add_theme_constant_override("separation", 6)
+		line.custom_minimum_size.y = 22.0
+		line.add_theme_constant_override("separation", 5)
 		loot_feed_rows.add_child(line)
 		# A single framed icon is the source of truth, reused later for
 		# inventories, banks and equipment. Only the frame is tappable.
@@ -826,7 +826,7 @@ func _refresh_loot_feed() -> void:
 		icon_box.name = "ItemRarityFrame"
 		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		icon_box.focus_mode = Control.FOCUS_NONE
-		icon_box.custom_minimum_size = Vector2(28, 28)
+		icon_box.custom_minimum_size = Vector2(24, 24)
 		icon_box.add_theme_stylebox_override("normal", HUD_V2.loot_icon_border(quality))
 		icon_box.add_theme_stylebox_override("hover", HUD_V2.loot_icon_border(quality))
 		icon_box.add_theme_stylebox_override("pressed", HUD_V2.loot_icon_border(quality))
@@ -841,10 +841,10 @@ func _refresh_loot_feed() -> void:
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.anchor_left = 0.10
-		art.anchor_top = 0.10
-		art.anchor_right = 0.90
-		art.anchor_bottom = 0.90
+		art.anchor_left = 0.08
+		art.anchor_top = 0.08
+		art.anchor_right = 0.92
+		art.anchor_bottom = 0.92
 		var icon_path: String = "res://assets/icons/" + (item_id if is_item else "attack") + ".svg"
 		if ResourceLoader.exists(icon_path):
 			art.texture = load(icon_path) as Texture2D
@@ -874,7 +874,7 @@ func _refresh_loot_feed() -> void:
 		caption.name = "LootReceiptText"
 		caption.text = title_text
 		caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		caption.add_theme_font_size_override("font_size", 12)
+		caption.add_theme_font_size_override("font_size", 11)
 		caption.add_theme_color_override("font_color", Color("#e9dfc8"))
 		caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1486,25 +1486,40 @@ func _layout_touch_hud() -> void:
 			footer_top + 3.0 * scale, 25.0 * scale, 29.0 * scale))
 	_place_px(clock_label, screen, Rect2(map_left + 49.0 * scale,
 			footer_top + 3.0 * scale, map_side - 70.0 * scale, 29.0 * scale))
+	# Keep both receipt cards below the QUEST banner on the LEFT.
+	# The previous position under the right-side minimap placed them directly
+	# behind POWER/LOCK/ATTACK, hiding item icons and blocking tooltip taps.
+	# Compact fixed-width cards also stay clear of the lower-left joystick.
 	if gathered_panel != null:
-		var recent_top: float = map_bottom + 39.0 * scale
-		var recent_height: float = (99.0 if gathered_expanded else 34.0) * scale
-		_place_px(gathered_panel, screen, Rect2(map_left, recent_top, map_side, recent_height))
-		_place_px(gathered_title, screen, Rect2(map_left + 8.0 * scale, recent_top + 3.0 * scale, map_side - 45.0 * scale, 28.0 * scale))
-		_place_px(gathered_collapse, screen, Rect2(map_left + map_side - 33.0 * scale, recent_top + 2.0 * scale, 30.0 * scale, 29.0 * scale))
-		_place_px(gathered_content, screen, Rect2(map_left + 11.0 * scale, recent_top + 32.0 * scale, map_side - 19.0 * scale, 62.0 * scale))
-		# The compact log sits BELOW Last Gathered, never on top of its rows.
-		var loot_top: float = recent_top + recent_height + 8.0 * scale
-		_place_px(loot_feed_panel, screen, Rect2(map_left, loot_top, map_side, 127.0 * scale))
-		_place_px(loot_feed_title, screen, Rect2(map_left + 9.0 * scale, loot_top + 2.0 * scale, map_side - 18.0 * scale, 24.0 * scale))
-		_place_px(loot_feed_rows, screen, Rect2(map_left + 8.0 * scale, loot_top + 30.0 * scale, map_side - 16.0 * scale, 92.0 * scale))
-		# Tooltips open inward from the right edge and stay inside the safe area.
-		var detail_left: float = maxf(8.0 * scale, map_left - 303.0 * scale)
-		var detail_top: float = clampf(loot_top, 98.0 * scale, screen.y - 162.0 * scale)
-		_place_px(loot_tooltip_panel, screen, Rect2(detail_left, detail_top, 291.0 * scale, 147.0 * scale))
-		_place_px(loot_tooltip_name, screen, Rect2(detail_left + 14.0 * scale, detail_top + 12.0 * scale, 266.0 * scale, 29.0 * scale))
-		_place_px(loot_tooltip_rarity, screen, Rect2(detail_left + 14.0 * scale, detail_top + 42.0 * scale, 266.0 * scale, 21.0 * scale))
-		_place_px(loot_tooltip_description, screen, Rect2(detail_left + 14.0 * scale, detail_top + 67.0 * scale, 266.0 * scale, 71.0 * scale))
+		var receipt_left: float = 16.0 * scale
+		var receipt_top: float = 205.0 * scale
+		var receipt_width: float = minf(285.0 * scale, screen.x * 0.31)
+		var recent_height: float = (77.0 if gathered_expanded else 29.0) * scale
+		_place_px(gathered_panel, screen, Rect2(receipt_left, receipt_top, receipt_width, recent_height))
+		_place_px(gathered_title, screen, Rect2(receipt_left + 8.0 * scale, receipt_top + 2.0 * scale,
+				receipt_width - 43.0 * scale, 21.0 * scale))
+		_place_px(gathered_collapse, screen, Rect2(receipt_left + receipt_width - 29.0 * scale,
+				receipt_top + 2.0 * scale, 25.0 * scale, 25.0 * scale))
+		_place_px(gathered_content, screen, Rect2(receipt_left + 9.0 * scale, receipt_top + 25.0 * scale,
+				receipt_width - 17.0 * scale, 49.0 * scale))
+		var loot_top: float = receipt_top + recent_height + 7.0 * scale
+		_place_px(loot_feed_panel, screen, Rect2(receipt_left, loot_top, receipt_width, 89.0 * scale))
+		_place_px(loot_feed_title, screen, Rect2(receipt_left + 9.0 * scale, loot_top + 2.0 * scale,
+				receipt_width - 18.0 * scale, 19.0 * scale))
+		_place_px(loot_feed_rows, screen, Rect2(receipt_left + 8.0 * scale, loot_top + 23.0 * scale,
+				receipt_width - 17.0 * scale, 63.0 * scale))
+		# Tooltip opens towards the centre from the *left* card, instead
+		# of sitting behind right-side combat buttons. All sizes are bounded.
+		var detail_left: float = receipt_left + receipt_width + 10.0 * scale
+		var detail_width: float = minf(270.0 * scale, screen.x - detail_left - 8.0 * scale)
+		var detail_top: float = clampf(loot_top, 99.0 * scale, screen.y - 163.0 * scale)
+		_place_px(loot_tooltip_panel, screen, Rect2(detail_left, detail_top, detail_width, 147.0 * scale))
+		_place_px(loot_tooltip_name, screen, Rect2(detail_left + 13.0 * scale,
+				detail_top + 12.0 * scale, detail_width - 26.0 * scale, 29.0 * scale))
+		_place_px(loot_tooltip_rarity, screen, Rect2(detail_left + 13.0 * scale,
+				detail_top + 42.0 * scale, detail_width - 26.0 * scale, 21.0 * scale))
+		_place_px(loot_tooltip_description, screen, Rect2(detail_left + 13.0 * scale,
+				detail_top + 67.0 * scale, detail_width - 26.0 * scale, 71.0 * scale))
 	# A proper central modal for menu settings; never position the six
 	# clickable destinations as a cramped 3x2 overlay underneath the map.
 	var menu_width: float = minf(498.0 * scale, screen.x * 0.80)
@@ -1541,7 +1556,7 @@ func _layout_touch_hud() -> void:
 		_radial_px(quick_buttons[keys[index]], screen,
 				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
 	_radial_px(torch_button, screen,
-			Vector2(screen.x - 449.0 * scale, screen.y - 82.0 * scale), 32.0 * scale)
+			Vector2(screen.x - 382.0 * scale, screen.y - 82.0 * scale), 32.0 * scale)
 	if stop_sticky_button != null:
 		_place_px(stop_sticky_button, screen, Rect2(24.0 * scale, screen.y - 237.0 * scale, 118.0 * scale, 48.0 * scale))
 	# Follow the action target without obscuring the on-screen controls.
@@ -1562,14 +1577,16 @@ func _layout_touch_hud() -> void:
 	_layout_leave_menu_for_size(screen, scale)
 	# The bottom-centre prompt was covering consumables and character XP.
 	# Keep short notices together in a compact top-centre stack instead.
-	var info_width: float = minf(352.0 * scale, screen.x * 0.34)
+	# Compact top-centre alert stack; reduced in both width and height
+	# so combat/wildlife text doesn't dominate the world view.
+	var info_width: float = minf(298.0 * scale, screen.x * 0.30)
 	var info_left: float = (screen.x - info_width) * 0.5
-	var info_y: float = maxf(148.0 * scale, screen.y * 0.21)
-	_place_px(context_prompt_frame, screen, Rect2(info_left, info_y, info_width, 43.0 * scale))
-	_place_px(hint, screen, Rect2(info_left + 9.0 * scale, info_y + 3.0 * scale, info_width - 18.0 * scale, 37.0 * scale))
-	var toast_y: float = info_y - 57.0 * scale
-	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 45.0 * scale))
-	_place_px(toast_label, screen, Rect2(info_left + 9.0 * scale, toast_y + 3.0 * scale, info_width - 18.0 * scale, 38.0 * scale))
+	var info_y: float = maxf(129.0 * scale, screen.y * 0.175)
+	_place_px(context_prompt_frame, screen, Rect2(info_left, info_y, info_width, 32.0 * scale))
+	_place_px(hint, screen, Rect2(info_left + 7.0 * scale, info_y + 2.0 * scale, info_width - 14.0 * scale, 28.0 * scale))
+	var toast_y: float = info_y - 43.0 * scale
+	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 33.0 * scale))
+	_place_px(toast_label, screen, Rect2(info_left + 7.0 * scale, toast_y + 1.0 * scale, info_width - 14.0 * scale, 30.0 * scale))
 
 func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
 	# Always spans x=0..viewport width and y=viewport bottom, including 20:9.
