@@ -3,6 +3,8 @@ extends CharacterBody3D
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
+const WATER_SURFACE_Y: float = -2.82
 
 var game
 var hud
@@ -28,6 +30,10 @@ var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
 var walking_phase: float = 0.0
+var swimming: bool = false
+var swim_stroke_phase: float = 0.0
+var swim_splash_elapsed: float = 0.0
+var swim_preview_seconds: float = 0.0
 var walk_amount: float = 0.0
 # Collision reaches the next solid tile immediately, but the visible model
 # catches up over subsequent frames instead of popping one voxel at a time.
@@ -266,9 +272,40 @@ func gather_swing(kind: String) -> void:
 	last_gather = kind
 	gather_phase = 1.0
 
+func preview_swimming_fx() -> void:
+	# Preview can be invoked on dry land from Controls. No teleport or saved
+	# state change: 3.5 seconds of stroke pose and real batched water particles.
+	swim_preview_seconds = 3.5
+	swim_stroke_phase = 0.0
+	swim_splash_elapsed = 0.0
+	_emit_swim_splash(true)
+
+
+func _emit_swim_splash(preview: bool = false) -> void:
+	if get_parent() == null:
+		return
+	var location: Vector3 = global_position + Vector3(0.0, 0.48 if preview else (WATER_SURFACE_Y - global_position.y + 0.06), 0.0)
+	SWIM_SPLASH.splash(get_parent() as Node3D, location)
+
+
+func _detect_surface_swimming() -> bool:
+	# Use actual coastal land sampling, not all areas with a low world Y:
+	# the private dungeon is never mistaken for a swimmable sea.
+	if game == null or not bool(game.get("chunk_streaming_enabled")):
+		return false
+	if absf(global_position.x) >= 96.0 or absf(global_position.z) >= 96.0:
+		return false
+	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
+	if terrain == null or not bool(terrain.get("stream_enabled")):
+		return false
+	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6 and global_position.y > WATER_SURFACE_Y - 5.0
+
+
 func _physics_process(delta: float) -> void:
 	elapsed += delta
-	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or interaction_locked
+	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or (hud != null and hud.control_settings_panel != null and hud.control_settings_panel.visible) or interaction_locked
+	swimming = _detect_surface_swimming()
+	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
 		control = Vector2.ZERO
@@ -316,12 +353,17 @@ func _physics_process(delta: float) -> void:
 	velocity.z = direction.z * speed + knockback_velocity.z
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 13.0)
 	var grounded_before_motion: bool = is_on_floor()
-	if grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
+	if swimming:
+		# Soft buoyancy holds the torso near the surface instead of falling
+		# through the opaque ocean plane to the seabed.
+		var float_target: float = WATER_SURFACE_Y - 0.78
+		velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 3.0)
+	elif grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
 		velocity.y = 5.1
 	else:
 		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
-	if auto_step_enabled and not modal_open and grounded_before_motion and is_on_wall() and direction.length_squared() > 0.02:
+	if auto_step_enabled and not modal_open and (grounded_before_motion or swimming) and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
 	# Interpolate the avatar rig separately from the physics capsule. The
 	# capsule must not tunnel through a ledge and the camera stays independent.
@@ -365,6 +407,22 @@ func _physics_process(delta: float) -> void:
 	if combat_phase <= 0.0:
 		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
+	if swimming or swim_preview_seconds > 0.0:
+		# Readable alternating swim strokes and flutter kick on the same
+		# joint rig used by walking, so tools and equipment remain attached.
+		swim_stroke_phase += delta * (8.4 if direction.length() > 0.05 else 4.3)
+		var stroke: float = sin(swim_stroke_phase)
+		left_arm.rotation.x = -0.85 + 0.73 * stroke
+		right_arm.rotation.x = -0.85 - 0.73 * stroke
+		left_leg.rotation.x = -0.40 * stroke
+		right_leg.rotation.x = 0.40 * stroke
+		visual.rotation.z = 0.045 * sin(swim_stroke_phase * 0.5)
+		swim_splash_elapsed += delta
+		if swim_splash_elapsed >= (0.26 if swimming and direction.length() > 0.05 else 0.43):
+			swim_splash_elapsed = 0.0
+			_emit_swim_splash(not swimming)
+	else:
+		swim_splash_elapsed = 0.0
 	# In LAN dungeons only the host owns health; local auto-healing must
 	# never revive knocked-out characters or desync peer health snapshots.
 	if elapsed - last_hit > 6.0 and not (game.coop != null and game.coop.in_party_dungeon()):
