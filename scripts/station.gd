@@ -159,6 +159,22 @@ func _build() -> void:
 			for x in [-0.62, 0.62]:
 				_rod(0.07, 0.07, 0.56, Vector3(x, 1.25, 0), Color("555d5a"))
 			_label("CAMPFIRE • CRAFTING STATION", Color("f2c583"))
+	# PyroLux fire is loaded dynamically so the source tree still opens before
+	# installing the licensed addon. The Alpha APK installs it before export.
+	if station_id in ["campfire", "forge"]:
+		var preset_path: String = "res://addons/pyrolux_fx/presets/3d/fire_campfire.tscn"
+		if ResourceLoader.exists(preset_path):
+			var fire_scene: PackedScene = load(preset_path) as PackedScene
+			if fire_scene != null:
+				var fire: Node3D = fire_scene.instantiate() as Node3D
+				if fire != null:
+					fire.name = "PyroLuxFlames"
+					fire.position = Vector3(0, 0.36, 0) if station_id == "campfire" else Vector3(0, 0.89, -0.20)
+					fire.scale = Vector3.ONE * (0.62 if station_id == "campfire" else 0.44)
+					add_child(fire)
+					# The older primitive fire is only a fallback when the addon is absent.
+					if effect != null:
+						effect.visible = false
 	if effect != null:
 		effect.position.y += 0.01
 

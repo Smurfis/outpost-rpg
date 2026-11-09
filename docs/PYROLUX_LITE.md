@@ -1,6 +1,6 @@
 # PyroLux Lite in Outpost (Alpha)
 
-**Status:** install-on-demand integration; effect presets are not yet wired into Outpost gameplay scenes.
+**Status:** Alpha APK installs licensed effects during CI before Godot import/export. Campfire, forge, offhand torch, and burning enemies now use the installed fire presets.
 
 PyroLux Lite 1.0.3 is usable in commercial games, but its license prohibits sharing the
 raw addon source as a standalone pack or tool. Do **not** commit the extracted
@@ -40,3 +40,9 @@ the Godot project.
 
 The addon supports GL Compatibility on Godot 4.7.2, but Android performance
 and visual quality still need device testing.
+
+## Alpha APK runtime integration
+
+The Alpha Android workflow installs the pinned, SHA-256-verified official addon before importing or exporting the project. The exported APK includes the assets, scripts, and shaders needed to render fire. Players do not install PyroLux separately. Main/Stable's workflow remains unchanged.
+
+The existing campfire and forge stations, player offhand torch, and weapon-enchanted burning enemies load the PyroLux presets at runtime. Existing primitive visuals remain as graceful fallbacks for editor source checkouts that have not run the installer. Other export workflows must install the dependency before building Alpha runtime effects.

@@ -149,6 +149,22 @@ jobs:
           EOF
           sed -i "s/__OUTPOST_BUILD_CODE__/$OUTPOST_BUILD_CODE/g" export_presets.cfg
           grep -q "^version/code=$OUTPOST_BUILD_CODE$" export_presets.cfg
+      - name: Install licensed PyroLux Lite effects into the Alpha build
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The vendor license permits exporting effects in a game, but not
+          # publishing the source addon as a redistributable pack.
+          python3 tools/install_pyrolux_lite.py --no-demo
+          test -f addons/pyrolux_fx/presets/3d/fire_campfire.tscn
+          test -f addons/pyrolux_fx/presets/3d/fire_torch.tscn
+          test -f addons/pyrolux_fx/presets/3d/explosion_grenade.tscn
+          test -f addons/pyrolux_fx/shaders/pyrolux_tongue.gdshader
+      - name: Verify PyroLux source remains untracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git ls-files addons/pyrolux_fx)"
       - name: Import project and export installable Alpha APK
         shell: bash
         run: |
