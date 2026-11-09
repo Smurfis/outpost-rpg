@@ -41,7 +41,9 @@ func _run() -> void:
 	hud.render_status(100.0, {"wood": 3, "coins": 2}, 94, 0, "training_blade", "", "")
 	var level_info: Dictionary = game.level_state()
 	var left: int = maxi(0, int(level_info.get("required", 100)) - int(level_info.get("current", 0)))
-	verify(hud.xp_level_label.text.contains("TO NEXT") and hud.xp_level_label.text.contains(str(left)), "Real remaining XP is displayed, not a fake milestone")
+	verify(hud.xp_level_label.text.contains(str(int(level_info.get("current", 0)))) and not hud.xp_level_label.text.contains("TO NEXT"), "Slim XP strip shows actual progress without the long textual countdown")
+	verify(hud.trained_skill_orb != null and hud.trained_skill_orb.skill_id == "training_blade", "A radial skill icon shows the currently trained ability")
+	verify((bar.get_theme_stylebox("background") as StyleBoxFlat).bg_color.a < 0.5, "XP strip uses a transparent backing")
 	for screen in [Vector2(1280, 720), Vector2(2400, 1080)]:
 		var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
 		hud._layout_xp_for_size(screen, scale)
@@ -49,6 +51,7 @@ func _run() -> void:
 		verify(is_equal_approx(bar.anchor_bottom, 1.0), "Correct bottom anchor at %s" % screen)
 		var required_height: float = clampf(18.0 * scale, 17.0, 23.0)
 		verify(absf((bar.anchor_bottom - bar.anchor_top) * screen.y - required_height) < 0.1, "Pixel-sized height on %s" % screen)
+		verify((hud.trained_skill_orb.size.x - 52.0 * scale) < 2.0, "Skill XP radial keeps a compact icon at %s" % screen)
 	hud._layout_touch_hud()
 	verify(not game.menu.visible and hud.smart_button != null, "Gameplay and smart action are preserved")
 	game.queue_free()

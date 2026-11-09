@@ -30,15 +30,15 @@ func _run() -> void:
 	var style: StyleBoxFlat = hud.quest_frame.get_theme_stylebox("panel") as StyleBoxFlat
 	check(style != null and style.bg_color.a < 0.8, "Quest and Last Gathered are translucent")
 	hud.record_gather("wood", 3)
-	check(hud.gathered_panel.visible and hud.gathered_content.text.contains("Wood ×3"), "Real harvest entry displays quantity")
+	check(not hud.gathered_panel.visible and hud.gathered_content.text.contains("Wood ×3"), "Real harvest is tracked without a persistent HUD panel")
 	hud.record_gather("stone", 2)
 	hud.record_gather("herbs", 1)
 	hud.record_gather("fiber", 4)
 	check(hud.gathered_entries.size() == 3 and not hud.gathered_content.text.contains("Wood"), "Recent receipts are bounded to three entries")
 	hud._toggle_gathered()
-	check(not hud.gathered_content.visible and hud.gathered_panel.visible, "Collapse retains a compact panel header")
+	check(not hud.gathered_content.visible and not hud.gathered_panel.visible, "Legacy collapse never resurrects the retired gathered panel")
 	hud._toggle_gathered()
-	check(hud.gathered_content.visible, "Expanded receipt list restores")
+	check(not hud.gathered_content.visible and hud.gathered_expanded, "Tracked receipts remain available without on-screen clutter")
 	hud.set_status_effects([
 			{"id":"poison", "name":"Poison", "kind":"debuff", "remaining":8.5, "stack_count":2, "glyph":"☠"},
 			{"id":"haste", "name":"Haste", "kind":"buff", "remaining":12.0, "stack_count":1, "glyph":"✦"}
@@ -52,7 +52,7 @@ func _run() -> void:
 	hud.set_status_effects(many)
 	check(hud.status_effect_strip.get_child_count() == 6, "Maximum five effect icons and +N overflow")
 	hud.set_status_effects([])
-	check(not hud.status_effect_strip.visible and hud.hero_detail.visible, "No effects means no status row")
+	check(not hud.status_effect_strip.visible and not hud.hero_detail.visible, "Empty effects never bring back the equipped-weapon text")
 	check(hud.minimap != null and hud.joystick != null and hud.smart_button != null, "Existing movement and combat controls preserved")
 	game.queue_free()
 	await process_frame
