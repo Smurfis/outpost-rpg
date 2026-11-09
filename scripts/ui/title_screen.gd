@@ -468,7 +468,7 @@ func _menu_button(caption: String, action: Callable, kind: String = "wood") -> B
 	output.custom_minimum_size = Vector2(0, 50)
 	SKIN.apply_button(output, kind)
 	output.focus_mode = Control.FOCUS_ALL
-	output.add_theme_stylebox_override("focus", SKIN.box("wood_selected"))
+	output.add_theme_stylebox_override("focus", SKIN.translucent_surface(false, true))
 	output.pressed.connect(action)
 	return output
 
@@ -477,8 +477,8 @@ func _menu_field(placeholder: String, starting: String = "") -> LineEdit:
 	output.placeholder_text = placeholder
 	output.text = starting
 	output.custom_minimum_size = Vector2(0, 47)
-	output.add_theme_stylebox_override("normal", SKIN.box("parchment"))
-	output.add_theme_stylebox_override("focus", SKIN.box("parchment_light"))
+	output.add_theme_stylebox_override("normal", SKIN.translucent_surface(true))
+	output.add_theme_stylebox_override("focus", SKIN.translucent_surface(true, true))
 	output.add_theme_color_override("font_color", Color("3e281d"))
 	output.add_theme_color_override("font_placeholder_color", Color("836c54"))
 	output.add_theme_font_size_override("font_size", 19)

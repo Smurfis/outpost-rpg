@@ -84,21 +84,21 @@ func _ready() -> void:
 	var bag := Button.new()
 	bag.text = "BAG"
 	bag.custom_minimum_size = Vector2(66, 48)
-	SKIN.apply_button(bag, "wood")
+	SKIN.apply_translucent_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
 	header_buttons["bag"] = bag
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
 	gear.custom_minimum_size = Vector2(67, 48)
-	SKIN.apply_button(gear, "wood")
+	SKIN.apply_translucent_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
 	header_buttons["equipment"] = gear
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
 	craft.custom_minimum_size = Vector2(74, 48)
-	SKIN.apply_button(craft, "wood")
+	SKIN.apply_translucent_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
 	header_buttons["craft"] = craft
 	header.add_child(craft)
@@ -129,7 +129,7 @@ func _ready() -> void:
 	panes.add_theme_constant_override("separation", 8)
 	panes.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var surface := PanelContainer.new()
-	surface.add_theme_stylebox_override("panel", SKIN.modal_section(true))
+	surface.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	surface.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(surface)
 	surface.add_child(panes)
@@ -250,7 +250,7 @@ func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	var container := PanelContainer.new()
 	# Text in these nested detail cards is cream/gold, so use dark carved
 	# wood instead of a light item-card surface with unreadable cream text.
-	container.add_theme_stylebox_override("panel", SKIN.modal_section())
+	container.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	target.add_child(container)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
@@ -448,7 +448,7 @@ func _render_bag() -> void:
 		tab.text = {"all": "ALL", "material": "MATS", "equipment": "GEAR", "consumable": "FOOD"}[category]
 		tab.custom_minimum_size = Vector2(60, 42)
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		SKIN.apply_button(tab, "wood_selected" if bag_filter == category else "wood")
+		SKIN.apply_translucent_button(tab, "wood_selected" if bag_filter == category else "wood")
 		tab.add_theme_font_size_override("font_size", 15)
 		tab.pressed.connect(_set_bag_filter.bind(category))
 		filters.add_child(tab)
@@ -478,7 +478,7 @@ func _render_bag() -> void:
 		slot.tooltip_text = item.replace("_", " ").capitalize() + " x%d" % qty
 		slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			slot.add_theme_stylebox_override(state, SKIN.box("parchment_light") if item == selected_bag_id else SKIN.box("item"))
+			slot.add_theme_stylebox_override(state, SKIN.translucent_surface(true, item == selected_bag_id or state in ["hover", "pressed"], true))
 		slot.pressed.connect(_bag_select.bind(item))
 		grid.add_child(slot)
 		var art: TextureRect = _icon(item, 45)
@@ -507,7 +507,7 @@ func _render_bag() -> void:
 			var gold_outline := Panel.new()
 			gold_outline.name = "SelectedItemBorder"
 			gold_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			gold_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+			gold_outline.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, true, true))
 			slot.add_child(gold_outline)
 			gold_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		if game.is_equipped(item):
@@ -542,7 +542,7 @@ func _render_bag() -> void:
 		var assign := Button.new()
 		assign.text = "ASSIGN TO " + slot.to_upper() + " RADIAL"
 		assign.custom_minimum_size = Vector2(0, 48)
-		SKIN.apply_button(assign, "wood")
+		SKIN.apply_translucent_button(assign, "wood")
 		assign.pressed.connect(_assign_quick.bind(slot, focused))
 		detail.add_child(assign)
 		var use_button := Button.new()
@@ -561,7 +561,7 @@ func _render_bag() -> void:
 	var gear_button := Button.new()
 	gear_button.text = "VIEW EQUIPMENT"
 	gear_button.custom_minimum_size = Vector2(0, 48)
-	SKIN.apply_button(gear_button, "wood")
+	SKIN.apply_translucent_button(gear_button, "wood")
 	gear_button.pressed.connect(_switch_equipment)
 	detail.add_child(gear_button)
 
@@ -637,7 +637,7 @@ func _render_equipment() -> void:
 			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize() + ("  %s" % "★".repeat(int(game.bag_quality.get(item_id, 0))) if CARRY.is_bag(item_id) else "")
 			option.custom_minimum_size = Vector2(0, 50)
 			option.disabled = game.is_equipped(item_id)
-			SKIN.apply_button(option, "wood_selected" if game.is_equipped(item_id) else "green")
+			SKIN.apply_translucent_button(option, "wood_selected" if game.is_equipped(item_id) else "green")
 			option.pressed.connect(_equip_click.bind(item_id))
 			holder.add_child(option)
 	_render_preview()
@@ -708,7 +708,7 @@ func _render_craft_steps() -> void:
 		var card := PanelContainer.new()
 		card.name = "CraftStage_%d" % (index + 1)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.add_theme_stylebox_override("panel", SKIN.box("wood_selected" if index == active else "wood"))
+		card.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, index == active, true))
 		craft_stage_strip.add_child(card)
 		var text_label := _label(["1  SELECT", "2  PREPARE", "3  WORK", "4  COLLECT"][index], 15, SKIN.GOLD if index == active else SKIN.CREAM)
 		text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -769,7 +769,7 @@ func _render_craft() -> void:
 		choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		choose.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			choose.add_theme_stylebox_override(state, SKIN.box("parchment_light") if selected_id == id else SKIN.box("item"))
+			choose.add_theme_stylebox_override(state, SKIN.translucent_surface(true, selected_id == id or state in ["hover", "pressed"], true))
 		choose.disabled = not game.crafting.is_empty()
 		choose.pressed.connect(_recipe_change.bind(id))
 		recipes_list.add_child(choose)
@@ -931,7 +931,7 @@ func _render_prepare() -> void:
 		var available: bool = owned >= needed
 		var slot := Button.new()
 		slot.custom_minimum_size = Vector2(0, 56)
-		SKIN.apply_button(slot, "wood_selected" if loaded_now else "parchment_light")
+		SKIN.apply_translucent_button(slot, "wood_selected" if loaded_now else "parchment_light")
 		slot.disabled = not available or game.owns_unique(product_id)
 		slot.text = ("✓ LOADED   " if loaded_now else "LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
 		slot.pressed.connect(_toggle_ingredient.bind(id))
@@ -956,7 +956,7 @@ func _render_prepare() -> void:
 	var back := Button.new()
 	back.text = "BACK TO RECIPES"
 	back.custom_minimum_size = Vector2(0, 42)
-	SKIN.apply_button(back, "wood")
+	SKIN.apply_translucent_button(back, "wood")
 	back.pressed.connect(_back_to_browse)
 	details.add_child(back)
 	if not game.near_station(selected_station):

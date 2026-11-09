@@ -36,7 +36,7 @@ func _ready() -> void:
 	add_child(shell)
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var dim := ColorRect.new()
-	dim.color = Color(0.01, 0.02, 0.025, 0.87)
+	dim.color = Color(0.01, 0.02, 0.025, 0.58)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	shell.add_child(dim)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -45,7 +45,7 @@ func _ready() -> void:
 	panel.anchor_right = 0.84
 	panel.anchor_top = 0.07
 	panel.anchor_bottom = 0.94
-	panel.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	panel.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	shell.add_child(panel)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -161,9 +161,7 @@ func _button(value: String, callback: Callable) -> Button:
 	result.text = value
 	result.custom_minimum_size = Vector2(0, 48)
 	result.add_theme_font_size_override("font_size", 16)
-	result.add_theme_stylebox_override("normal", _style(Color("304b4c"), Color("667e76")))
-	result.add_theme_stylebox_override("hover", _style(Color("45685d"), Color("dbc99a")))
-	SKIN.apply_button(result, "wood")
+	SKIN.apply_translucent_button(result, "wood")
 	result.pressed.connect(callback)
 	return result
 

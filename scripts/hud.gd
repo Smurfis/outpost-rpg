@@ -310,7 +310,7 @@ func _ready() -> void:
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "◈ WALLET ▾"
 	wallet_collapse.tooltip_text = "Expand or collapse your wallet"
-	SKIN.apply_button(wallet_collapse, "wood")
+	SKIN.apply_translucent_button(wallet_collapse, "wood")
 	wallet_collapse.focus_mode = Control.FOCUS_NONE
 	# Native GUI events may consume release before HUD._input on Android.
 	# These three top-right buttons are routed only by HUD._input.
@@ -345,7 +345,7 @@ func _ready() -> void:
 	wallet_resource_count.visible = false
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
-	SKIN.apply_button(wallet_bag, "wood")
+	SKIN.apply_translucent_button(wallet_bag, "wood")
 	wallet_bag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# _action("bag") adds a native pressed signal; disconnect it so a
 	# synthetic Android mouse event cannot call _bag twice after _input.
@@ -372,7 +372,7 @@ func _ready() -> void:
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
-	SKIN.apply_button(quest_toggle, "wood")
+	SKIN.apply_translucent_button(quest_toggle, "wood")
 	root.add_child(quest_toggle)
 	_anchors(quest_toggle, 0.028, 0.174, 0.117, 0.222)
 	quest_toggle.pressed.connect(_toggle_quest)
@@ -383,7 +383,7 @@ func _ready() -> void:
 	quest.clip_text = true
 	quest_detail_back = _panel(0.021, 0.236, 0.354, 0.444)
 	quest_detail_back.name = "QuestJournal"
-	quest_detail_back.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	quest_detail_back.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	quest_detail_back.visible = false
 	quest_detail = _label("", 16, SKIN.INK, 0.039, 0.250, 0.334, 0.428)
 	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -394,7 +394,7 @@ func _ready() -> void:
 	# Centered below the journal, not overlapping quest text. One notice at a time.
 	toast_panel = _panel(0.355, 0.225, 0.682, 0.295)
 	toast_panel.name = "LootQuestToast"
-	toast_panel.add_theme_stylebox_override("panel", SKIN.box("toast"))
+	toast_panel.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	toast_panel.visible = false
 	toast_label = _label("", 16, SKIN.INK, 0.371, 0.228, 0.665, 0.290)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -452,7 +452,7 @@ func _ready() -> void:
 	gathered_collapse.text = "▾"
 	gathered_collapse.tooltip_text = "Collapse or expand recently gathered materials"
 	gathered_collapse.custom_minimum_size = Vector2(30.0, 30.0)
-	SKIN.apply_button(gathered_collapse, "wood")
+	SKIN.apply_translucent_button(gathered_collapse, "wood")
 	gathered_collapse.add_theme_font_size_override("font_size", 15)
 	gathered_collapse.mouse_filter = Control.MOUSE_FILTER_STOP
 	gathered_collapse.pressed.connect(_toggle_gathered)
@@ -533,7 +533,7 @@ func _ready() -> void:
 	top_menu_close_button.visible = false
 	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
-	SKIN.apply_button(menu_button, "wood")
+	SKIN.apply_translucent_button(menu_button, "wood")
 	menu_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Deliberately no button_down/hold handlers: a single tap is sufficient.
 	# Click routing is centralised with WALLET and BAG to avoid double toggles.
@@ -543,7 +543,7 @@ func _ready() -> void:
 	var multiplayer_entry := Button.new()
 	multiplayer_entry.name = "CoopEntryButton"
 	multiplayer_entry.text = "CO-OP"
-	SKIN.apply_button(multiplayer_entry, "wood")
+	SKIN.apply_translucent_button(multiplayer_entry, "wood")
 	root.add_child(multiplayer_entry)
 	_anchors(multiplayer_entry, 0.895, 0.405, 0.984, 0.482)
 	multiplayer_entry.pressed.connect(_open_coop)
@@ -553,7 +553,7 @@ func _ready() -> void:
 	var bag_entry := Button.new()
 	bag_entry.name = "BagMenuButton"
 	bag_entry.text = "BAG"
-	SKIN.apply_button(bag_entry, "wood")
+	SKIN.apply_translucent_button(bag_entry, "wood")
 	root.add_child(bag_entry)
 	_anchors(bag_entry, 0.895, 0.405, 0.984, 0.482)
 	bag_entry.pressed.connect(func() -> void:
@@ -564,7 +564,7 @@ func _ready() -> void:
 	var skill_entry := Button.new()
 	skill_entry.name = "SkillMenuButton"
 	skill_entry.text = "SKILLS"
-	SKIN.apply_button(skill_entry, "wood")
+	SKIN.apply_translucent_button(skill_entry, "wood")
 	root.add_child(skill_entry)
 	_anchors(skill_entry, 0.695, 0.500, 0.787, 0.575)
 	skill_entry.pressed.connect(_show_skill_details)
@@ -572,7 +572,7 @@ func _ready() -> void:
 	var journal_entry := Button.new()
 	journal_entry.name = "JournalMenuButton"
 	journal_entry.text = "JOURNAL"
-	SKIN.apply_button(journal_entry, "wood")
+	SKIN.apply_translucent_button(journal_entry, "wood")
 	root.add_child(journal_entry)
 	_anchors(journal_entry, 0.796, 0.500, 0.888, 0.575)
 	journal_entry.pressed.connect(_open_journal)
@@ -583,7 +583,7 @@ func _ready() -> void:
 	exit_entry.name = "ExitDoorMenuButton"
 	exit_entry.text = "SAVE & EXIT"
 	exit_entry.tooltip_text = "Save / leave Outpost"
-	SKIN.apply_button(exit_entry, "wood")
+	SKIN.apply_translucent_button(exit_entry, "wood")
 	# The icon lives inside the Button instead of contributing to its minimum
 	# width, keeping all six slots inside the menu on narrower phones.
 	var door_path: String = "res://assets/ui/icons/exit_door.svg"
@@ -1089,7 +1089,7 @@ func _build_skill_details() -> void:
 	var close := Button.new()
 	close.name = "CloseSkills"
 	close.text = "CLOSE"
-	SKIN.apply_button(close, "wood")
+	SKIN.apply_translucent_button(close, "wood")
 	skill_detail_panel.add_child(close)
 	close.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	close.offset_left = 20
@@ -1183,7 +1183,7 @@ func _build_control_settings() -> void:
 	var dismiss := Button.new()
 	dismiss.name = "CloseControlSettings"
 	dismiss.text = "CLOSE SETTINGS"
-	SKIN.apply_button(dismiss, "wood")
+	SKIN.apply_translucent_button(dismiss, "wood")
 	dismiss.custom_minimum_size = Vector2(0, 48)
 	dismiss.pressed.connect(func() -> void:
 		_save_character_name()
@@ -1731,7 +1731,7 @@ func _anchors(n: Control, left: float, top: float, right: float, bottom: float) 
 func _panel(left: float, top: float, right: float, bottom: float) -> Panel:
 	var n := Panel.new()
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	n.add_theme_stylebox_override("panel", SKIN.box("hud"))
+	n.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	root.add_child(n)
 	_anchors(n, left, top, right, bottom)
 	return n
@@ -1784,7 +1784,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		button.add_theme_stylebox_override("disabled", disabled)
 	else:
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			button.add_theme_stylebox_override(state, SKIN.box("wood_selected") if state in ["hover", "pressed"] else SKIN.box("item") if state == "disabled" else SKIN.box("wood"))
+			button.add_theme_stylebox_override(state, SKIN.translucent_surface(false, state in ["hover", "pressed"], true))
 	root.add_child(button)
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
@@ -1887,7 +1887,7 @@ func _build_quick_tray() -> void:
 	quick_tray = Panel.new()
 	quick_tray.name = "ConsumableHoldSlider"
 	quick_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	quick_tray.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	quick_tray.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	root.add_child(quick_tray)
 	_anchors(quick_tray, 0.650, 0.527, 0.888, 0.824)
 	quick_tray.visible = false
@@ -2040,7 +2040,7 @@ func _build_smart_tray() -> void:
 	smart_tray = Panel.new()
 	smart_tray.name = "QuickToolSlider"
 	smart_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	smart_tray.add_theme_stylebox_override("panel", SKIN.box("wood"))
+	smart_tray.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	root.add_child(smart_tray)
 	_anchors(smart_tray, 0.788, 0.206, 0.985, 0.731)
 	smart_tray.visible = false
@@ -2073,7 +2073,7 @@ func _open_smart_tray() -> void:
 		row.custom_minimum_size = Vector2(0, 40)
 		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		SKIN.apply_button(row, "wood")
+		SKIN.apply_translucent_button(row, "wood")
 		smart_tool_list.add_child(row)
 		smart_tool_rows.append(row)
 		var icon := TextureRect.new()
@@ -2099,7 +2099,7 @@ func _mark_smart_option(index: int) -> void:
 	for i in range(smart_tool_rows.size()):
 		var row: Button = smart_tool_rows[i]
 		var selected: bool = i == chosen
-		row.add_theme_stylebox_override("normal", SKIN.box("wood_selected") if selected else SKIN.box("item"))
+		row.add_theme_stylebox_override("normal", SKIN.translucent_surface(false, selected, true))
 		row.add_theme_color_override("font_color", SKIN.CREAM)
 
 func _drag_smart_slider(pointer: Vector2) -> void:

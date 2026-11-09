@@ -80,7 +80,7 @@ func _ready() -> void:
 	layout.add_child(equipment_toggle)
 	var equipment_section := PanelContainer.new()
 	equipment_section.name = "CharacterEquipmentSection"
-	equipment_section.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	equipment_section.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	equipment_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_child(equipment_section)
 	equipment_body = VBoxContainer.new()
@@ -128,7 +128,7 @@ func _ready() -> void:
 
 	var bag_area := PanelContainer.new()
 	bag_area.name = "CarriedItems"
-	bag_area.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	bag_area.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	bag_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(bag_area)
 	scroll = TOUCH_SCROLL.new()
@@ -229,7 +229,7 @@ func _text(value: String, font_size: int = 16, color: Color = Color.WHITE, expan
 func _button(value: String, skin_name: String) -> Button:
 	var button := Button.new()
 	button.text = value
-	SKIN.apply_button(button, skin_name)
+	SKIN.apply_translucent_button(button, skin_name)
 	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return button
 
@@ -300,7 +300,7 @@ func refresh() -> void:
 	if equipment_expanded:
 		_render_equipment()
 	for id in filter_buttons:
-		SKIN.apply_button(filter_buttons[id], "wood_selected" if id == filter_kind else "wood")
+		SKIN.apply_translucent_button(filter_buttons[id], "wood_selected" if id == filter_kind else "wood")
 		filter_buttons[id].add_theme_font_size_override("font_size", 14)
 	_refresh_load()
 	_render_items()
@@ -462,7 +462,7 @@ func _render_items() -> void:
 		placeholder.name = "EmptyInventorySlot"
 		placeholder.custom_minimum_size = Vector2(slot_px, slot_px)
 		placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		placeholder.add_theme_stylebox_override("panel", SKIN.box("item"))
+		placeholder.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, false, true))
 		inventory_grid.add_child(placeholder)
 
 func _select_item(id: String) -> void:
