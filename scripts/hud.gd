@@ -1567,6 +1567,9 @@ func _refresh_status_mode_buttons() -> void:
 func _settings_button_at(position: Vector2) -> BaseButton:
 	if control_settings_close_button != null and control_settings_close_button.get_global_rect().grow(7.0).has_point(position):
 		return control_settings_close_button
+	var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+	if scroll == null or not scroll.get_global_rect().has_point(position):
+		return null
 	for button in settings_touch_buttons:
 		if button == control_settings_close_button or not button.is_visible_in_tree() or button.disabled:
 			continue
