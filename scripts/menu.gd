@@ -279,7 +279,7 @@ func open(page: String) -> void:
 		emergency_close.move_to_front()
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
-	if page == "bag" or page == "equipment":
+	if page in ["bag", "equipment", "storage"]:
 		shell.visible = false
 		inventory_window.open_page(page)
 		return
@@ -302,6 +302,12 @@ func open(page: String) -> void:
 	if page == "craft" and game.crafting.is_empty() and completed_id == "":
 		craft_step = "browse"
 	refresh()
+
+func open_storage(label: String, contents: Dictionary) -> void:
+	# Display-only adapter for future real chest/bag storage providers.
+	# Transfers require persistent authoritative storage; not mocked here.
+	inventory_window.set_storage_view(label, contents)
+	open("storage")
 
 func close_page() -> void:
 	visible = false
@@ -334,6 +340,13 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		pressed = (event as InputEventMouseButton).pressed
 		pointer = (event as InputEventMouseButton).position
+	# Physical Android tap routing for the red X; GUI pressed/released can
+	# be swallowed by the fullscreen inventory shade. Always close on DOWN.
+	var inventory_x: Button = inventory_window.inventory_close_button if inventory_window != null else null
+	if pressed and current_page in ["bag", "equipment", "storage"] and inventory_window.visible and inventory_x != null and inventory_x.get_global_rect().grow(8.0).has_point(pointer):
+		close_page()
+		get_viewport().set_input_as_handled()
+		return
 	if pressed and ((emergency_close != null and emergency_close.visible and emergency_close.get_global_rect().grow(10.0).has_point(pointer)) or (current_page == "craft" and dismiss_button != null and dismiss_button.get_global_rect().grow(8.0).has_point(pointer))):
 		close_page()
 		get_viewport().set_input_as_handled()

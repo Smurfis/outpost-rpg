@@ -168,7 +168,7 @@ func _run() -> void:
 	verify(hud.quest.text == "Gather wood and stone", "Quest ticker shows a concise actionable clause")
 	verify(hud.quest_detail.text.contains("then craft a spear"), "Full untruncated objective remains available in journal")
 	verify(not hud.hint.visible, "Generic exploration text stays hidden")
-	verify(not hud.mana_bar.visible and not hud.mana_numbers.visible, "Nonfunctional MP placeholder does not consume HUD space")
+	verify(hud.mana_bar.visible and hud.mana_numbers.visible and hud.mana_numbers.text.contains("35 / 35"), "Real weapon-skill MP pool appears beneath health")
 	var status: Panel = controls.get_node_or_null("HeroStatusFrame") as Panel
 	var portrait: TextureRect = controls.get_node_or_null("HeroPortrait") as TextureRect
 	var wallet: Panel = controls.get_node_or_null("ResourceQuickChips") as Panel

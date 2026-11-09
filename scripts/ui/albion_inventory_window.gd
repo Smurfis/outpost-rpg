@@ -17,6 +17,17 @@ var item_card: PanelContainer
 var item_info: VBoxContainer
 var equipment_body: Control
 var equipment_toggle: Button
+var equipment_section: PanelContainer
+var equipment_scroll: ScrollContainer
+var bag_area: PanelContainer
+var storage_row: HBoxContainer
+var storage_panel: PanelContainer
+var storage_grid: GridContainer
+var storage_scroll: ScrollContainer
+var storage_contents: Dictionary = {}
+var storage_label: String = ""
+var storage_mode: bool = false
+var header_label: Label
 var inventory_grid: GridContainer
 var scroll: ScrollContainer
 var bag_weight_label: Label
@@ -24,7 +35,7 @@ var bag_meter: ProgressBar
 var overflow_button: Button
 var inventory_close_button: Button
 var filter_buttons: Dictionary = {}
-var filter_kind: String = "all"
+var filter_kind: String = "character"
 var sort_kind: String = "name"
 var selected_id: String = ""
 var selected_slot: String = ""
@@ -60,7 +71,8 @@ func _ready() -> void:
 
 	var heading := HBoxContainer.new()
 	layout.add_child(heading)
-	heading.add_child(_text("◈  INVENTORY", 23, SKIN.GOLD, true))
+	header_label = _text("◈  CHARACTER", 23, SKIN.GOLD, true)
+	heading.add_child(header_label)
 	# Crafting belongs to the real station: inventory must not expose a
 	# remote five-station hub or switch players away from their item tooltip.
 	var close := Button.new()
@@ -78,15 +90,23 @@ func _ready() -> void:
 	equipment_toggle.custom_minimum_size = Vector2(0, 38)
 	equipment_toggle.pressed.connect(_toggle_equipment)
 	layout.add_child(equipment_toggle)
-	var equipment_section := PanelContainer.new()
+	equipment_section = PanelContainer.new()
 	equipment_section.name = "CharacterEquipmentSection"
 	equipment_section.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	equipment_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.add_child(equipment_section)
+	# Keep the avatar / gear section independently scrollable so it cannot
+	# push the actual inventory grid off a short landscape phone screen.
+	equipment_scroll = TOUCH_SCROLL.new()
+	equipment_scroll.name = "CharacterEquipmentScroll"
+	equipment_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	equipment_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	equipment_scroll.custom_minimum_size = Vector2(0, 148)
+	equipment_section.add_child(equipment_scroll)
 	equipment_body = VBoxContainer.new()
 	equipment_body.name = "EquippedSlots"
 	(equipment_body as VBoxContainer).add_theme_constant_override("separation", 2)
-	equipment_section.add_child(equipment_body)
+	equipment_scroll.add_child(equipment_body)
 
 	var weight_block := VBoxContainer.new()
 	weight_block.add_theme_constant_override("separation", 2)
@@ -110,8 +130,8 @@ func _ready() -> void:
 	controls.name = "BagFilters"
 	controls.add_theme_constant_override("separation", 3)
 	layout.add_child(controls)
-	for filter_id in ["all", "material", "equipment", "consumable"]:
-		var tab := _button({"all":"ALL", "material":"MATS", "equipment":"GEAR", "consumable":"FOOD"}[filter_id], "wood")
+	for filter_id in ["character", "resource", "all"]:
+		var tab := _button({"character":"CHARACTER", "resource":"RESOURCES", "all":"ALL"}[filter_id], "wood")
 		tab.name = "BagFilter_" + filter_id
 		tab.custom_minimum_size = Vector2(48, 39)
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -119,6 +139,8 @@ func _ready() -> void:
 		tab.pressed.connect(_change_filter.bind(filter_id))
 		filter_buttons[filter_id] = tab
 		controls.add_child(tab)
+		if filter_id == "all":
+			tab.visible = false # ALL belongs only to chest/bag transfer view
 	var sort_button := _button("SORT", "wood")
 	sort_button.name = "BagSortButton"
 	sort_button.custom_minimum_size = Vector2(62, 39)
@@ -126,14 +148,21 @@ func _ready() -> void:
 	sort_button.pressed.connect(_cycle_sort)
 	controls.add_child(sort_button)
 
-	var bag_area := PanelContainer.new()
+	storage_row = HBoxContainer.new()
+	storage_row.name = "InventoryStorageColumns"
+	storage_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	storage_row.add_theme_constant_override("separation", 9)
+	layout.add_child(storage_row)
+	bag_area = PanelContainer.new()
 	bag_area.name = "CarriedItems"
 	bag_area.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	bag_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(bag_area)
+	bag_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	storage_row.add_child(bag_area)
 	scroll = TOUCH_SCROLL.new()
 	scroll.name = "BagScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	bag_area.add_child(scroll)
 	inventory_grid = GridContainer.new()
@@ -142,6 +171,31 @@ func _ready() -> void:
 	inventory_grid.add_theme_constant_override("h_separation", 4)
 	inventory_grid.add_theme_constant_override("v_separation", 4)
 	scroll.add_child(inventory_grid)
+	storage_panel = PanelContainer.new()
+	storage_panel.name = "ChestStoragePanel"
+	storage_panel.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
+	storage_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	storage_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	storage_row.add_child(storage_panel)
+	storage_panel.visible = false
+	var storage_stack := VBoxContainer.new()
+	storage_stack.name = "ChestContentsStack"
+	storage_panel.add_child(storage_stack)
+	var storage_header := _text("CONTAINER CONTENTS", 16, SKIN.INK)
+	storage_header.name = "ChestContentsHeader"
+	storage_stack.add_child(storage_header)
+	storage_scroll = TOUCH_SCROLL.new()
+	storage_scroll.name = "ChestContentsScroll"
+	storage_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	storage_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	storage_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	storage_stack.add_child(storage_scroll)
+	storage_grid = GridContainer.new()
+	storage_grid.name = "ChestItemsGrid"
+	storage_grid.columns = 4
+	storage_grid.add_theme_constant_override("h_separation", 4)
+	storage_grid.add_theme_constant_override("v_separation", 4)
+	storage_scroll.add_child(storage_grid)
 	overflow_button = _button("", "green")
 	overflow_button.name = "RecoverStoredLoot"
 	overflow_button.custom_minimum_size = Vector2(0, 36)
@@ -168,18 +222,29 @@ func _ready() -> void:
 
 func open_page(page: String) -> void:
 	visible = true
+	storage_mode = page == "storage"
 	if page == "equipment":
 		equipment_expanded = true
-		filter_kind = "equipment"
+		filter_kind = "character"
 		selected_slot = "weapon"
 	elif page == "bag":
-		filter_kind = "all"
+		equipment_expanded = true
+		filter_kind = "character"
 		selected_slot = ""
-	# The two entry points share one actual layout, not two competing modals.
+	elif storage_mode:
+		filter_kind = "all"
+		equipment_expanded = false
+		selected_slot = ""
 	_layout_windows()
 	if inventory_close_button != null:
 		inventory_close_button.move_to_front()
 	refresh()
+
+func set_storage_view(label: String, contents: Dictionary) -> void:
+	# Read-only until a real, persistent storage service exposes transfers.
+	# The inventory must not create or destroy items from a visual preview.
+	storage_label = label.strip_edges().substr(0, 40)
+	storage_contents = contents.duplicate(true)
 
 func close_page() -> void:
 	item_card.visible = false
@@ -189,7 +254,7 @@ func _layout_windows() -> void:
 	if window == null:
 		return
 	var bounds: Vector2 = get_viewport().get_visible_rect().size
-	var width_px: float = minf(500.0, maxf(330.0, bounds.x * 0.38))
+	var width_px: float = minf(900.0, bounds.x - 24.0) if storage_mode else minf(500.0, maxf(330.0, bounds.x * 0.38))
 	width_px = minf(width_px, bounds.x - 24.0)
 	var height_px: float = maxf(220.0, bounds.y - 20.0)
 	window.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
@@ -204,8 +269,7 @@ func _layout_windows() -> void:
 		item_card.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 		item_card.position = Vector2(left_x, minf(80.0, bounds.y * 0.12))
 		item_card.size = Vector2(minf(detail_width, maxf(210.0, window.position.x - left_x - 6.0)), 0.0)
-	if bounds.y < 560.0 and equipment_expanded:
-		equipment_expanded = false
+	# No involuntary collapse: the avatar section has its own scrollbar.
 	# Rebuild responsive columns whenever the viewport size changes.
 	if visible:
 		refresh()
@@ -266,17 +330,28 @@ func _cycle_sort() -> void:
 	refresh()
 
 func _kind(id: String) -> String:
-	if CARRY.is_bag(id) or game.equipment_slot(id) != "":
-		return "equipment"
 	if id in CONSUMABLES:
 		return "consumable"
+	if CARRY.is_bag(id) or game.equipment_slot(id) != "" or id.contains("ring") or id.contains("amulet") or id.contains("necklace"):
+		return "equipment"
 	return "material"
+
+func _matches_filter(id: String) -> bool:
+	var kind: String = _kind(id)
+	match filter_kind:
+		"character", "all":
+			return kind != "material" if filter_kind == "character" else true
+		"resource", "material":
+			return kind == "material"
+		"equipment", "consumable":
+			return kind == filter_kind
+	return false
 
 func _ordered_items() -> Array[String]:
 	var ids: Array[String] = []
 	for raw_id in game.inventory:
 		var id: String = str(raw_id)
-		if int(game.inventory.get(id, 0)) > 0 and (filter_kind == "all" or _kind(id) == filter_kind):
+		if int(game.inventory.get(id, 0)) > 0 and _matches_filter(id):
 			ids.append(id)
 	ids.sort_custom(_item_before)
 	return ids
@@ -295,13 +370,22 @@ func _item_before(a: String, b: String) -> bool:
 func refresh() -> void:
 	if not visible or window == null:
 		return
-	equipment_toggle.text = "EQUIPMENT  ▴" if equipment_expanded else "EQUIPMENT  ▾"
-	(equipment_body.get_parent() as Control).visible = equipment_expanded
-	if equipment_expanded:
+	header_label.text = "◈  " + ("STORAGE" if storage_mode else "RESOURCES" if filter_kind in ["resource", "material"] else "CHARACTER")
+	equipment_toggle.visible = not storage_mode and filter_kind not in ["resource", "material"]
+	equipment_section.visible = equipment_toggle.visible and equipment_expanded
+	if equipment_section.visible:
 		_render_equipment()
+	storage_panel.visible = storage_mode
+	if storage_mode:
+		var header: Label = storage_panel.find_child("ChestContentsHeader", true, false) as Label
+		if header != null:
+			header.text = storage_label.to_upper() if not storage_label.is_empty() else "CONTAINER CONTENTS"
+		_render_storage()
 	for id in filter_buttons:
 		SKIN.apply_translucent_button(filter_buttons[id], "wood_selected" if id == filter_kind else "wood")
 		filter_buttons[id].add_theme_font_size_override("font_size", 14)
+		if id == "all":
+			filter_buttons[id].visible = storage_mode
 	_refresh_load()
 	_render_items()
 	_render_details()
@@ -418,12 +502,36 @@ func _refresh_load() -> void:
 	overflow_button.visible = stored > 0
 	overflow_button.text = "RECOVER STORED LOOT (%d)" % stored
 
+func _render_storage() -> void:
+	_clear(storage_grid)
+	var stored_keys: Array[String] = []
+	for key in storage_contents:
+		if int(storage_contents[key]) > 0:
+			stored_keys.append(str(key))
+	stored_keys.sort()
+	for id in stored_keys:
+		var cell := PanelContainer.new()
+		cell.name = "ChestItem_" + id
+		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, false, true))
+		storage_grid.add_child(cell)
+		var stack := VBoxContainer.new()
+		cell.add_child(stack)
+		stack.add_child(_icon(id, 35))
+		var number := _text("×%d" % int(storage_contents[id]), 12, SKIN.CREAM)
+		number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stack.add_child(number)
+		cell.tooltip_text = id.replace("_", " ").capitalize()
+	if stored_keys.is_empty():
+		storage_grid.add_child(_text("Storage empty", 14, SKIN.INK))
+
 func _render_items() -> void:
 	_clear(inventory_grid)
 	var width_px: float = window.size.x
-	inventory_grid.columns = 6 if width_px >= 460.0 else 5 if width_px >= 390.0 else 4
+	inventory_grid.columns = 4 if storage_mode else 6 if width_px >= 460.0 else 5 if width_px >= 390.0 else 4
 	var column_count: int = inventory_grid.columns
-	var slot_px: float = floorf((width_px - 42.0 - float(column_count - 1) * 4.0) / float(column_count))
+	var available_width: float = (width_px * 0.5 - 29.0) if storage_mode else width_px - 42.0
+	var slot_px: float = floorf((available_width - float(column_count - 1) * 4.0) / float(column_count))
 	slot_px = clampf(slot_px, 54.0, 72.0)
 	var ids: Array[String] = _ordered_items()
 	for id in ids:

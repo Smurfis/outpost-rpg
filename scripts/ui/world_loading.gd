@@ -18,6 +18,9 @@ var _started: bool = false
 var _cancel_requested: bool = false
 
 func _ready() -> void:
+	# The title uses temporary artboard aspect scaling. Loading and world
+	# must use the whole landscape window, including extra-wide Androids.
+	get_tree().root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	layer = 100
 	_build_screen()
 	call_deferred("_begin_world_generation")

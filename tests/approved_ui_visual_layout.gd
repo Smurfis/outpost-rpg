@@ -47,8 +47,9 @@ func _run() -> void:
 	verify(game.hud.quest.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "Single-line quest truncates safely instead of overflowing")
 	var hotbar: Panel = hud.get_node_or_null("FunctionalHotbar") as Panel
 	verify(hotbar != null, "Dedicated framed hotbar")
-	for key in ["bag", "craft", "gear"]:
+	for key in ["bag", "gear"]:
 		verify(hud.get_node_or_null("Action_" + key) != null, "Hotbar real button " + key)
+	verify(hud.get_node_or_null("Action_craft") == null and hud.get_node_or_null("SettingsMenuButton") != null, "No remote Craft; real settings replaces menu shortcut")
 	verify(hud.get_node_or_null("TorchQuickSlot") != null, "Offhand torch remains accessible")
 	for key in ["skill_1", "skill_2", "skill_3", "potion", "consumable", "interact"]:
 		var action: Button = hud.get_node_or_null("Action_" + key) as Button
@@ -68,7 +69,7 @@ func _run() -> void:
 	var radial: Control = hud.get_node_or_null("RadialLevelFrame") as Control
 	verify(radial != null and radial.get_node_or_null("LevelNumber") != null, "Reusable radial art remains available for future skill-level popups")
 	verify(radial != null and not radial.visible, "Oversized character-level radial does not cover gameplay")
-	verify(game.hud.xp_level_badge.visible, "Compact numeric character level belongs inside the bottom-edge XP strip")
+	verify(game.hud.xp_level_badge.visible, "Compact numeric character level belongs beside portrait, not inside XP")
 	var coop: Button = hud.get_node_or_null("CoopEntryButton") as Button
 	verify(coop != null and coop.pressed.is_connected(game.hud._open_coop), "Co-op remains usable")
 	game.hud.render_status(67.0, {"wood": 8, "stone": 5, "hide": 3, "coins": 12}, 52, 0, "spear", "Gather more wood", "Nearby: a tree")
@@ -91,16 +92,19 @@ func _run() -> void:
 	verify(game.menu.current_page == "bag", "Bag opens from old gameplay API")
 	var inv = game.menu.inventory_window
 	verify(inv != null and inv.visible and not game.menu.shell.visible, "Separate right-side inventory opens instead of old crafting panel")
-	var filter_all: Button = inv.get_node_or_null("InventoryWindow/InventoryLayout/BagFilters/BagFilter_all") as Button
-	verify(filter_all != null, "Inventory keeps real materials, gear and food category filters")
-	inv._change_filter("material")
-	verify(inv.filter_kind == "material" and inv.inventory_grid.get_node_or_null("Item_wood") != null, "Material filter displays actual carried materials")
-	inv._change_filter("all")
+	var character_tab: Button = inv.get_node_or_null("InventoryWindow/InventoryLayout/BagFilters/BagFilter_character") as Button
+	var resources_tab: Button = inv.get_node_or_null("InventoryWindow/InventoryLayout/BagFilters/BagFilter_resource") as Button
+	verify(character_tab != null and resources_tab != null, "Inventory has distinct Character and Resources tabs")
+	inv._change_filter("resource")
+	verify(inv.filter_kind == "resource" and inv.inventory_grid.get_node_or_null("Item_wood") != null, "Resources tab displays actual carried materials")
+	inv._change_filter("character")
 	verify(inv.bag_meter != null and inv.bag_meter.get_theme_stylebox("fill") is StyleBoxFlat, "Real bag load meter remains visible")
 	var grid: GridContainer = inv.inventory_grid
 	verify(grid != null and grid.columns >= 4 and grid.columns <= 6, "Inventory grid adapts to landscape phone widths")
 	if grid != null:
-		verify(grid.get_node_or_null("Item_wood") != null, "Carried items have interactive icon tiles")
+		verify(grid.get_node_or_null("Item_wood") == null, "Character tab does not mix raw wood with equipment")
+		inv._change_filter("resource")
+		verify(grid.get_node_or_null("Item_wood") != null, "Resources tab exposes real materials")
 		inv._select_item("wood")
 		verify(inv.selected_id == "wood" and inv.item_card.visible, "Item selection opens functional detail pane")
 		verify(inv.get_node_or_null("InventoryWindow/InventoryLayout/CharacterEquipmentSection") != null, "Inventory displays collapsible equipment silhouette")

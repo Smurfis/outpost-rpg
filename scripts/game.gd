@@ -49,6 +49,9 @@ var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of chara
 var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
 var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
+const MAX_MANA: float = 35.0
+const MANA_REGEN_PER_SECOND: float = 2.5
+var mana: float = MAX_MANA
 var weapon_enchants: Dictionary = {} # Owned weapon-id -> fire.
 var quick_slots: Dictionary = {"potion":"", "consumable":""}
 var kills: int = 0
@@ -63,6 +66,8 @@ var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
 func _ready() -> void:
+	# Preserve fullscreen content scale on phones with extra-wide displays.
+	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	_register_keys()
 	_load_recipes()
 	_lighting()
@@ -149,6 +154,7 @@ func _process(delta: float) -> void:
 	gather_delay = maxf(0.0, gather_delay - delta)
 	for id in skill_cooldowns:
 		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
+	mana = minf(MAX_MANA, mana + MANA_REGEN_PER_SECOND * delta)
 	world_time += delta
 	_camera(delta)
 	if day_night != null and hud != null:
@@ -1072,6 +1078,9 @@ func gain_gathering_skill(resource_id: String, amount: int) -> void:
 func current_weapon_id() -> String:
 	return str(equipment.get("weapon", "training_blade"))
 
+func mana_limit() -> float:
+	return MAX_MANA
+
 func mastery_rank(weapon_id: String = "") -> int:
 	var id: String = current_weapon_id() if weapon_id == "" else weapon_id
 	return LEVELS.mastery_rank(int(weapon_mastery_xp.get(id, 0)))
@@ -1105,9 +1114,15 @@ func use_weapon_skill(slot: int) -> bool:
 	var target = _nearest_enemy()
 	if target == null:
 		return false
+	var mana_cost: float = 6.0 + 3.0 * float(slot)
+	if mana < mana_cost:
+		if hud != null:
+			hud.toast("Need %d MP for this ability." % int(mana_cost))
+		return false
 	var weapon: String = current_weapon_id()
 	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
 	attack_delay = 0.55
 	hero.swing()
@@ -1251,7 +1266,7 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -1266,6 +1281,7 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)
 	night_quote_seen = bool(data.get("night_quote_seen", false))
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
 		for key in data.get("weapon_mastery_xp", {}):
