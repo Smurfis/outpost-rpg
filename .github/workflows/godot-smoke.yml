@@ -223,6 +223,13 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TRANSLUCENT UI:' ui-translucent-v2.log; then exit 1; fi
           grep -q "TRANSLUCENT UI RESULT: 0 failures" ui-translucent-v2.log
 
+      - name: Verify transparent player portrait, golden player name and low-clutter Quest panel
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_portrait_gold_quest_glass.gd 2>&1 | tee hud-portrait-gold.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTRAIT GOLD:' hud-portrait-gold.log; then exit 1; fi
+          grep -q "PORTRAIT GOLD RESULT: 0 failures" hud-portrait-gold.log
+
       - name: Verify approved portrait HUD, working hotbar and compact inventory/crafting
         run: |
           set -o pipefail
