@@ -497,6 +497,17 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(x, y + crown_height, z), Vector3(1.72, 0.91, 1.55), crown_tile, crown_tile, 3, tint)
 			PIXELS.box(st, Vector3(x + 0.33, y + crown_height + 0.59, z - 0.16), Vector3(1.23, 0.71, 1.26), crown_tile, crown_tile, 3, tint)
 			PIXELS.box(st, Vector3(x - 0.44, y + crown_height + 0.26, z + 0.43), Vector3(0.81, 0.61, 0.93), crown_tile, crown_tile, 3, tint)
+		elif i % 7 == 4:
+			# Amanita-style mushroom cluster: cream stems, red stepped caps and
+			# pale speckles. All pieces join the existing chunk decoration mesh.
+			for mushroom in range(2):
+				var mx: float = x + float(mushroom) * 0.32
+				var mz: float = z + float(mushroom) * -0.21
+				var scale_factor: float = 1.0 if mushroom == 0 else 0.72
+				PIXELS.box(st, Vector3(mx, y + 0.12 * scale_factor, mz), Vector3(0.13, 0.24, 0.13) * scale_factor, 5, 5)
+				PIXELS.box(st, Vector3(mx, y + 0.27 * scale_factor, mz), Vector3(0.43, 0.15, 0.40) * scale_factor, 14, 14)
+				PIXELS.box(st, Vector3(mx, y + 0.36 * scale_factor, mz), Vector3(0.25, 0.08, 0.25) * scale_factor, 14, 14)
+				PIXELS.box(st, Vector3(mx - 0.11 * scale_factor, y + 0.356 * scale_factor, mz + 0.08 * scale_factor), Vector3(0.065, 0.025, 0.065) * scale_factor, 12, 12)
 		elif i % 3 == 0:
 			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), PIXELS.foliage_tile_at(x, z, world_seed), PIXELS.foliage_tile_at(x, z, world_seed), 3, PIXELS.foliage_tint_at(x, z, world_seed))
 		else:
