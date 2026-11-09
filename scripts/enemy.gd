@@ -19,6 +19,7 @@ var hit_lift: float = 0.0
 var visual_step_offset: Vector3 = Vector3.ZERO
 var burn_left: float = 0.0
 var burn_tick: float = 0.0
+var burn_flame: Node3D
 
 func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	game = game_ref
@@ -94,10 +95,15 @@ func _physics_process(delta: float) -> void:
 			hit_lift = 0.0
 			burn_left = 0.0
 			burn_tick = 0.0
+			if burn_flame != null:
+				burn_flame.visible = false
 			visual_step_offset = Vector3.ZERO
 			collision_layer = 2
 			collision_mask = 1
 		return
+	# Flames mirror the existing fiery-weapon status; the damage model is unchanged.
+	if burn_flame != null:
+		burn_flame.visible = burn_left > 0.0
 	# Fire continues to damage the creature without extending combat cooldown.
 	if burn_left > 0.0:
 		burn_left = maxf(0.0, burn_left - delta)
@@ -154,6 +160,19 @@ func ignite(seconds: float = 4.0) -> void:
 	if alive:
 		burn_left = maxf(burn_left, clampf(seconds, 0.0, 12.0))
 		burn_tick = 0.0
+		if burn_flame == null:
+			var preset_path: String = "res://addons/pyrolux_fx/presets/3d/fire_torch.tscn"
+			if ResourceLoader.exists(preset_path):
+				var flame_scene: PackedScene = load(preset_path) as PackedScene
+				if flame_scene != null:
+					burn_flame = flame_scene.instantiate() as Node3D
+					if burn_flame != null:
+						burn_flame.name = "PyroLuxBurnEffect"
+						burn_flame.position = Vector3(0, 0.35, 0)
+						burn_flame.scale = Vector3.ONE * 0.55
+						add_child(burn_flame)
+		if burn_flame != null:
+			burn_flame.visible = true
 
 func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 	if not alive:
