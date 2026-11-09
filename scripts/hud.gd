@@ -230,7 +230,7 @@ func _ready() -> void:
 	portrait_back.name = "HeroPortraitFrame"
 	hero_portrait_frame = portrait_back
 	var portrait_ring := StyleBoxFlat.new()
-	portrait_ring.bg_color = Color(0.10, 0.09, 0.10, 0.20)
+	portrait_ring.bg_color = Color(0.10, 0.09, 0.10, 0.11)
 	portrait_ring.border_color = Color("#e9ba61")
 	portrait_ring.set_border_width_all(4)
 	portrait_ring.set_corner_radius_all(100)
@@ -1171,77 +1171,149 @@ func _show_skill_details() -> void:
 	skill_detail_panel.visible = true
 
 func _build_control_settings() -> void:
-	control_settings_panel = _panel(0.329, 0.155, 0.689, 0.850)
+	# Keep the title/close control fixed; scroll the actual options on short
+	# Android screens so Close never ends up below the visible viewport.
+	control_settings_panel = _panel(0.275, 0.085, 0.725, 0.895)
 	control_settings_panel.name = "InGameControlSettings"
 	control_settings_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	control_settings_panel.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	control_settings_panel.visible = false
+	var heading := Label.new()
+	heading.name = "SettingsTitle"
+	heading.text = "OUTPOST  •  CONTROLS"
+	heading.add_theme_font_size_override("font_size", 23)
+	heading.add_theme_color_override("font_color", SKIN.GOLD)
+	heading.position = Vector2(19, 13)
+	heading.size = Vector2(420, 40)
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	control_settings_panel.add_child(heading)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ControlSettingsScroll"
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 18
+	scroll.offset_top = 61
+	scroll.offset_right = -18
+	scroll.offset_bottom = -16
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	control_settings_panel.add_child(scroll)
 	var stack := VBoxContainer.new()
 	stack.name = "SettingsFields"
-	stack.add_theme_constant_override("separation", 6)
-	control_settings_panel.add_child(stack)
-	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	stack.offset_left = 20
-	stack.offset_top = 18
-	stack.offset_right = -20
-	stack.offset_bottom = -18
-	var heading := Label.new()
-	heading.text = "OUTPOST  •  CONTROLS"
-	heading.add_theme_font_size_override("font_size", 21)
-	heading.add_theme_color_override("font_color", SKIN.GOLD)
-	stack.add_child(heading)
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_theme_constant_override("separation", 8)
+	scroll.add_child(stack)
+	var explanation := Label.new()
+	explanation.text = "Movement & touch controls"
+	explanation.add_theme_color_override("font_color", SKIN.GOLD)
+	explanation.add_theme_font_size_override("font_size", 17)
+	stack.add_child(explanation)
+
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
-	floating_mode_toggle.text = "Dynamic thumbstick (tap lower-left anywhere)"
-	floating_mode_toggle.add_theme_font_size_override("font_size", 17)
+	floating_mode_toggle.text = "Dynamic thumbstick"
+	floating_mode_toggle.add_theme_font_size_override("font_size", 16)
+	floating_mode_toggle.custom_minimum_size.y = 39
 	floating_mode_toggle.toggled.connect(_set_floating_mode)
 	stack.add_child(floating_mode_toggle)
-	var note := Label.new()
-	note.text = "Off: fixed classic joystick. On: joystick teleports to your first touch in the lower-left, then follows your thumb."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.add_theme_font_size_override("font_size", 15)
-	note.add_theme_color_override("font_color", SKIN.CREAM)
-	stack.add_child(note)
+	settings_touch_buttons.append(floating_mode_toggle)
+
 	adaptive_joystick_toggle = CheckButton.new()
 	adaptive_joystick_toggle.name = "AdaptiveJoystickToggle"
-	adaptive_joystick_toggle.text = "Adaptive joystick (recentre near your thumb)"
-	adaptive_joystick_toggle.add_theme_font_size_override("font_size", 15)
+	adaptive_joystick_toggle.text = "Adaptive joystick near thumb"
+	adaptive_joystick_toggle.add_theme_font_size_override("font_size", 16)
+	adaptive_joystick_toggle.custom_minimum_size.y = 39
 	adaptive_joystick_toggle.toggled.connect(_set_adaptive_joystick)
 	stack.add_child(adaptive_joystick_toggle)
+	settings_touch_buttons.append(adaptive_joystick_toggle)
+
 	sticky_movement_toggle = CheckButton.new()
 	sticky_movement_toggle.name = "StickyMovementToggle"
-	sticky_movement_toggle.text = "Sticky movement (keep walking on finger lift)"
-	sticky_movement_toggle.add_theme_font_size_override("font_size", 17)
+	sticky_movement_toggle.text = "Sticky movement until STOP"
+	sticky_movement_toggle.add_theme_font_size_override("font_size", 16)
+	sticky_movement_toggle.custom_minimum_size.y = 39
 	sticky_movement_toggle.toggled.connect(_set_sticky_movement)
 	stack.add_child(sticky_movement_toggle)
-	var sticky_hint := Label.new()
-	sticky_hint.text = "With Sticky on, tap STOP near the thumbstick to stand still. Menus and backgrounding always stop movement."
-	sticky_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sticky_hint.add_theme_font_size_override("font_size", 15)
-	sticky_hint.add_theme_color_override("font_color", SKIN.CREAM)
-	stack.add_child(sticky_hint)
+	settings_touch_buttons.append(sticky_movement_toggle)
+
+	var status_header := Label.new()
+	status_header.name = "StatusDisplayHeader"
+	status_header.text = "STATUS VALUES  •  CHOOSE ONE PER BAR"
+	status_header.add_theme_font_size_override("font_size", 17)
+	status_header.add_theme_color_override("font_color", SKIN.GOLD)
+	stack.add_child(status_header)
+	var status_info := Label.new()
+	status_info.text = "Numbers show current / maximum. Percent shows progress. Off hides only the text, keeping your bars visible."
+	status_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_info.add_theme_color_override("font_color", SKIN.CREAM)
+	status_info.add_theme_font_size_override("font_size", 14)
+	stack.add_child(status_info)
+	for stat in ["health", "mana", "xp"]:
+		var heading_row := Label.new()
+		heading_row.text = stat.to_upper()
+		heading_row.add_theme_color_override("font_color", SKIN.CREAM)
+		heading_row.add_theme_font_size_override("font_size", 15)
+		stack.add_child(heading_row)
+		var choices := HBoxContainer.new()
+		choices.name = stat.capitalize() + "ReadoutChoices"
+		choices.add_theme_constant_override("separation", 7)
+		stack.add_child(choices)
+		for mode in ["text", "percent", "off"]:
+			var mode_button := Button.new()
+			mode_button.name = stat.capitalize() + mode.capitalize() + "Mode"
+			mode_button.text = mode.to_upper()
+			mode_button.custom_minimum_size.y = 42
+			mode_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			mode_button.add_theme_font_size_override("font_size", 14)
+			mode_button.pressed.connect(_set_status_text_mode.bind(stat, mode))
+			choices.add_child(mode_button)
+			settings_touch_buttons.append(mode_button)
+			status_mode_buttons[stat + ":" + mode] = mode_button
+
 	var name_title := Label.new()
 	name_title.text = "Character display name (local)"
 	name_title.add_theme_color_override("font_color", SKIN.CREAM)
-	name_title.add_theme_font_size_override("font_size", 16)
+	name_title.add_theme_font_size_override("font_size", 15)
 	stack.add_child(name_title)
 	name_edit = LineEdit.new()
 	name_edit.name = "CharacterDisplayNameInput"
 	name_edit.placeholder_text = "Adventurer"
 	name_edit.max_length = 18
+	name_edit.custom_minimum_size.y = 42
 	name_edit.text_submitted.connect(func(_value: String) -> void: _save_character_name())
 	name_edit.focus_exited.connect(_save_character_name)
 	stack.add_child(name_edit)
+
+	var swim_preview := Button.new()
+	swim_preview.name = "PreviewSwimmingParticles"
+	swim_preview.text = "TEST SWIMMING + SPLASH PARTICLES"
+	SKIN.apply_translucent_button(swim_preview, "wood_selected")
+	swim_preview.custom_minimum_size.y = 48
+	swim_preview.pressed.connect(_preview_swimming_fx)
+	stack.add_child(swim_preview)
+	settings_touch_buttons.append(swim_preview)
+
 	var dismiss := Button.new()
 	dismiss.name = "CloseControlSettings"
-	dismiss.text = "CLOSE SETTINGS"
+	dismiss.text = "DONE  •  BACK TO GAME"
 	SKIN.apply_translucent_button(dismiss, "wood")
-	dismiss.custom_minimum_size = Vector2(0, 48)
-	dismiss.pressed.connect(func() -> void:
-		_save_character_name()
-		control_settings_panel.visible = false
-	)
+	dismiss.custom_minimum_size.y = 48
+	dismiss.pressed.connect(_close_control_settings)
 	stack.add_child(dismiss)
+	settings_touch_buttons.append(dismiss)
+
+	control_settings_close_button = Button.new()
+	control_settings_close_button.name = "CloseInGameSettings"
+	SKIN.apply_close_button(control_settings_close_button, 43.0)
+	control_settings_close_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	control_settings_close_button.anchor_left = 1.0
+	control_settings_close_button.anchor_right = 1.0
+	control_settings_close_button.offset_left = -53.0
+	control_settings_close_button.offset_right = -10.0
+	control_settings_close_button.offset_top = 9.0
+	control_settings_close_button.offset_bottom = 52.0
+	control_settings_close_button.pressed.connect(_close_control_settings)
+	control_settings_panel.add_child(control_settings_close_button)
+	settings_touch_buttons.append(control_settings_close_button)
+	_refresh_status_mode_buttons()
 
 func _build_leave_menu() -> void:
 	# Android modal: translucent shade behind a solid, clearly bounded
@@ -1450,7 +1522,122 @@ func _show_control_settings() -> void:
 	_set_top_menu(false)
 	skill_detail_panel.visible = false
 	control_settings_panel.visible = not control_settings_panel.visible
+	if control_settings_panel.visible:
+		control_settings_panel.move_to_front()
 	_reset_touch()
+
+func _close_control_settings() -> void:
+	if control_settings_panel == null:
+		return
+	_save_character_name()
+	control_settings_panel.visible = false
+	settings_touch_finger = -1
+	settings_touch_candidate = null
+	settings_touch_mouse_echo_until = Time.get_ticks_msec() + 370
+	_reset_touch()
+
+
+func _preview_swimming_fx() -> void:
+	if game != null and game.hero != null and game.hero.has_method("preview_swimming_fx"):
+		game.hero.preview_swimming_fx()
+		_close_control_settings()
+
+
+func _set_status_text_mode(stat: String, mode: String) -> void:
+	if stat not in ["health", "mana", "xp"] or mode not in ["text", "percent", "off"]:
+		return
+	status_text_modes[stat] = mode
+	_refresh_status_mode_buttons()
+	_save_control_prefs()
+
+
+func _refresh_status_mode_buttons() -> void:
+	for stat in ["health", "mana", "xp"]:
+		var selected: String = str(status_text_modes.get(stat, "text"))
+		for mode in ["text", "percent", "off"]:
+			var button: Button = status_mode_buttons.get(stat + ":" + mode) as Button
+			if button == null:
+				continue
+			var active: bool = mode == selected
+			button.text = ("✓  " if active else "○  ") + ("NUMBERS" if mode == "text" else "PERCENT" if mode == "percent" else "OFF")
+			SKIN.apply_translucent_button(button, "wood_selected" if active else "wood")
+			button.add_theme_font_size_override("font_size", 13)
+
+
+func _settings_button_at(position: Vector2) -> BaseButton:
+	if control_settings_close_button != null and control_settings_close_button.get_global_rect().grow(7.0).has_point(position):
+		return control_settings_close_button
+	for button in settings_touch_buttons:
+		if button == control_settings_close_button or not button.is_visible_in_tree() or button.disabled:
+			continue
+		if button.get_global_rect().has_point(position):
+			return button
+	return null
+
+
+func _handle_settings_touch(event: InputEvent) -> void:
+	# Android sometimes routes GUI touch release to the scrolling parent
+	# instead of Button. Dispatch actual settings controls at HUD input level,
+	# but leave ScrollContainer drags and LineEdit typing to Godot.
+	if event.is_action_pressed("ui_cancel"):
+		_close_control_settings()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed and settings_touch_finger < 0:
+			settings_touch_candidate = _settings_button_at(touch.position)
+			if settings_touch_candidate != null:
+				settings_touch_finger = touch.index
+				settings_touch_start = touch.position
+				get_viewport().set_input_as_handled()
+		elif not touch.pressed and touch.index == settings_touch_finger:
+			var action: BaseButton = settings_touch_candidate
+			var activate: bool = action != null and action == _settings_button_at(touch.position) and touch.position.distance_to(settings_touch_start) < 32.0
+			settings_touch_candidate = null
+			settings_touch_finger = -1
+			settings_touch_mouse_echo_until = Time.get_ticks_msec() + 420
+			get_viewport().set_input_as_handled()
+			if activate:
+				_activate_settings_button(action)
+	elif event is InputEventScreenDrag:
+		var drag: InputEventScreenDrag = event
+		if drag.index == settings_touch_finger and drag.position.distance_to(settings_touch_start) >= 32.0:
+			settings_touch_candidate = null
+			settings_touch_finger = -1
+	elif event is InputEventMouseButton:
+		var click: InputEventMouseButton = event
+		if click.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if Time.get_ticks_msec() < settings_touch_mouse_echo_until:
+			get_viewport().set_input_as_handled()
+			return
+		if click.pressed:
+			settings_touch_candidate = _settings_button_at(click.position)
+			if settings_touch_candidate != null:
+				settings_touch_start = click.position
+				get_viewport().set_input_as_handled()
+		elif settings_touch_candidate != null:
+			var action: BaseButton = settings_touch_candidate
+			var activate: bool = action == _settings_button_at(click.position) and click.position.distance_to(settings_touch_start) < 32.0
+			settings_touch_candidate = null
+			get_viewport().set_input_as_handled()
+			if activate:
+				_activate_settings_button(action)
+
+
+func _activate_settings_button(action: BaseButton) -> void:
+	if action == floating_mode_toggle:
+		floating_mode_toggle.set_pressed_no_signal(not floating_mode_toggle.button_pressed)
+		_set_floating_mode(floating_mode_toggle.button_pressed)
+	elif action == adaptive_joystick_toggle:
+		_set_adaptive_joystick(not adaptive_joystick_enabled)
+	elif action == sticky_movement_toggle:
+		sticky_movement_toggle.set_pressed_no_signal(not sticky_movement_toggle.button_pressed)
+		_set_sticky_movement(sticky_movement_toggle.button_pressed)
+	else:
+		action.pressed.emit()
+
 
 func _set_floating_mode(enabled: bool) -> void:
 	floating_joystick_enabled = enabled
@@ -1483,6 +1670,9 @@ func _save_character_name() -> void:
 func _load_control_prefs() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONTROL_PREFS) == OK:
+		for stat in ["health", "mana", "xp"]:
+			var saved: String = str(config.get_value("status_text", stat, "text"))
+			status_text_modes[stat] = saved if saved in ["text", "percent", "off"] else "text"
 		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
 		adaptive_joystick_enabled = bool(config.get_value("controls", "adaptive_joystick", false))
 		sticky_movement_enabled = bool(config.get_value("controls", "sticky_movement", false))
@@ -1493,6 +1683,7 @@ func _load_control_prefs() -> void:
 	adaptive_joystick_toggle.set_pressed_no_signal(adaptive_joystick_enabled)
 	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
+	_refresh_status_mode_buttons()
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
@@ -1500,6 +1691,8 @@ func _save_control_prefs() -> void:
 	config.set_value("controls", "adaptive_joystick", adaptive_joystick_enabled)
 	config.set_value("controls", "sticky_movement", sticky_movement_enabled)
 	config.set_value("profile", "display_name", player_display_name)
+	for stat in ["health", "mana", "xp"]:
+		config.set_value("status_text", stat, status_text_modes.get(stat, "text"))
 	config.save(CONTROL_PREFS)
 
 func _place_px(control: Control, screen: Vector2, region: Rect2) -> void:
@@ -1697,19 +1890,19 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
 	var rects: Dictionary = {
-		"status": Rect2(16, 15, 350, 112),
+		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
 		"portrait": Rect2(26, 24, 80, 80),
 		"sigil": Rect2(93, 90, 19, 20),
 		"portrait_level": Rect2(17, 89, 39, 27),
 		"portrait_badge": Rect2(17, 89, 39, 27),
-		"name": Rect2(117, 20, 236, 25),
-		"health": Rect2(117, 49, 236, 20),
-		"health_text": Rect2(118, 50, 234, 18),
-		"mana": Rect2(117, 76, 236, 18),
-		"mana_text": Rect2(118, 76, 234, 17),
-		"weapon": Rect2(117, 78, 236, 22),
-		"effects": Rect2(117, 99, 236, 22),
+		"name": Rect2(117, 20, 220, 25),
+		"health": Rect2(117, 49, 220, 20),
+		"health_text": Rect2(118, 50, 218, 18),
+		"mana": Rect2(117, 76, 220, 18),
+		"mana_text": Rect2(118, 76, 218, 17),
+		"weapon": Rect2(117, 78, 220, 22),
+		"effects": Rect2(117, 99, 220, 22),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
@@ -2564,6 +2757,9 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if control_settings_panel != null and control_settings_panel.visible:
+		_handle_settings_touch(event)
+		return
 	# Leave-game has priority over every gameplay and synthetic UI event.
 	if leave_menu_panel != null and leave_menu_panel.visible:
 		_handle_leave_menu_input(event)
@@ -2743,7 +2939,8 @@ func set_trained_skill(skill_id: String, total_skill_xp: int) -> void:
 
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
 	status.text = player_display_name
-	health_numbers.text = "HP %d / 100" % int(ceilf(hp))
+	health_numbers.visible = status_text_modes["health"] != "off"
+	health_numbers.text = ("%d%%" % roundi(hp)) if status_text_modes["health"] == "percent" else "HP %d / 100" % int(ceilf(hp))
 	if bag_weight_label != null and game != null:
 		var max_load: float = maxf(1.0, game.bag_capacity())
 		var current_load: float = game.bag_load()
@@ -2758,7 +2955,8 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		xp_bar.value = clampf(float(level_data.get("current", 0)) * 100.0 / required, 0.0, 100.0)
 		var current_xp: int = int(level_data.get("current", 0))
 		var required_xp: int = maxi(1, roundi(required))
-		xp_level_label.text = "%d / %d" % [current_xp, required_xp]
+		xp_level_label.visible = status_text_modes["xp"] != "off"
+		xp_level_label.text = ("%d%%" % roundi(xp_bar.value)) if status_text_modes["xp"] == "percent" else "%d / %d" % [current_xp, required_xp]
 
 		xp_level_badge.text = str(rank)
 		if radial_level != null:
@@ -2770,7 +2968,8 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		var available_mana: float = clampf(float(game.mana), 0.0, float(game.mana_limit()))
 		mana_bar.max_value = float(game.mana_limit())
 		mana_bar.value = available_mana
-		mana_numbers.text = "MP %d / %d" % [ceili(available_mana), roundi(float(game.mana_limit()))]
+		mana_numbers.visible = status_text_modes["mana"] != "off"
+		mana_numbers.text = ("%d%%" % roundi(mana_bar.value * 100.0 / maxf(1.0, mana_bar.max_value))) if status_text_modes["mana"] == "percent" else "MP %d / %d" % [ceili(available_mana), roundi(float(game.mana_limit()))]
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:
