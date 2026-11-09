@@ -59,6 +59,7 @@ func _run() -> void:
 	var boar := Node.new()
 	boar.name = "WildBoar"
 	game.add_child(boar)
+	boar.add_to_group("wild_boars")
 	verify(game.enemy_display_name(boar) == "Wild boar", "Real wild boars keep their proper species label")
 	boar.queue_free()
 

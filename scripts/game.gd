@@ -604,7 +604,7 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Enemy"
 	if enemy.is_in_group("dungeon_guardians"):
 		return str(enemy.get("display_name"))
-	if enemy.name == "WildBoar":
+	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
 		return "Wild boar"
 	return enemy.name.replace("_", " ").capitalize()
 

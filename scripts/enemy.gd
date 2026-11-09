@@ -54,6 +54,7 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 			_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, -0.55), Color("51382f"))
 			_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
 	add_to_group("enemies")
+	add_to_group("wild_boars")
 
 func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
 	var n := MeshInstance3D.new()
