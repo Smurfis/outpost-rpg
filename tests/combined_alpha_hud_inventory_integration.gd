@@ -32,7 +32,7 @@ func _run() -> void:
 	check(hud.root.get_node_or_null("Action_craft") == null, "General Menu contains no remote Craft shortcut")
 	var zone = hud.zone_pill
 	check(zone != null and zone.get_global_rect().end.y <= hud.minimap.get_global_rect().position.y, "Area label sits above minimap, not over it")
-	check(absf(hud.xp_bar.get_global_rect().end.y - get_viewport().get_visible_rect().size.y) < 1.5, "Character XP remains attached to bottom edge")
+	check(absf(hud.xp_bar.get_global_rect().end.y - game.get_viewport().get_visible_rect().size.y) < 1.5, "Character XP remains attached to bottom edge")
 	var food: Button = hud.quick_buttons["consumable"] as Button
 	var potion: Button = hud.quick_buttons["potion"] as Button
 	var torch: Button = hud.torch_button
