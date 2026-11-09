@@ -237,13 +237,12 @@ func _ready() -> void:
 	health_bar = _meter(0.094, 0.061, 0.269, 0.090, Color("#d74c43"))
 	health_numbers = _label("100 / 100 HP", 15, Color("#fff1db"), 0.095, 0.062, 0.267, 0.087)
 	health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mana_bar = _meter(0.065, 0.089, 0.235, 0.110, Color("#417cdb"))
-	mana_bar.value = 0.0 # Reserved for real mana support; no fictitious MP values.
-	mana_numbers = _label("MP —", 13, Color("#d8e6ff"), 0.070, 0.089, 0.230, 0.110)
+	# Real rechargeable mana, consumed by active combat skills.
+	mana_bar = _meter(0.094, 0.095, 0.269, 0.120, Color("#417cdb"))
+	mana_bar.name = "PlayerManaBar"
+	mana_numbers = _label("MP 35 / 35", 12, Color("#d8e6ff"), 0.095, 0.096, 0.267, 0.118)
+	mana_numbers.name = "PlayerManaNumbers"
 	mana_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Mana is not implemented yet: never dedicate a visible line to "MP —".
-	mana_bar.visible = false
-	mana_numbers.visible = false
 	xp_bar = _meter(0.0, 0.975, 1.0, 1.0, Color("#a86ed7"))
 	xp_bar.name = "CharacterLevelXP"
 	var xp_background := StyleBoxFlat.new()
@@ -547,8 +546,16 @@ func _ready() -> void:
 	menu_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Deliberately no button_down/hold handlers: a single tap is sufficient.
 	# Click routing is centralised with WALLET and BAG to avoid double toggles.
-	craft_button = _action("craft", "CRAFT", 0.695, 0.405, 0.787, 0.482, "slot")
-	top_menu_actions.append(craft_button)
+	# Crafting stays tied to real workstations. The sixth menu action is
+	# actual controls settings, not a remote crafting shortcut.
+	var settings_entry := Button.new()
+	settings_entry.name = "SettingsMenuButton"
+	settings_entry.text = "SETTINGS"
+	SKIN.apply_translucent_button(settings_entry, "wood")
+	root.add_child(settings_entry)
+	_anchors(settings_entry, 0.695, 0.405, 0.787, 0.482)
+	settings_entry.pressed.connect(_show_control_settings)
+	top_menu_actions.append(settings_entry)
 	top_menu_actions.append(_action("gear", "GEAR", 0.796, 0.405, 0.888, 0.482, "slot"))
 	var multiplayer_entry := Button.new()
 	multiplayer_entry.name = "CoopEntryButton"
@@ -1483,10 +1490,11 @@ func _layout_touch_hud() -> void:
 	# Make room for the location banner ABOVE (not on top of) the live map.
 	var map_top: float = 58.0 * scale
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
-	var zone_top: float = 16.0 * scale
-	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 34.0 * scale))
-	_place_px(zone_pill_text, screen, Rect2(screen.x - edge - map_side + 7.0 * scale, zone_top + 2.0 * scale,
-			map_side - 14.0 * scale, 30.0 * scale))
+	# The zone pill now sits just two scaled pixels above the round map.
+	var zone_top: float = map_top - 32.0 * scale
+	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 30.0 * scale))
+	_place_px(zone_pill_text, screen, Rect2(screen.x - edge - map_side + 7.0 * scale, zone_top + 1.0 * scale,
+			map_side - 14.0 * scale, 28.0 * scale))
 	_place_px(zone_banner, screen, Rect2((screen.x - 440.0 * scale) * 0.5,
 			110.0 * scale, 440.0 * scale, 38.0 * scale))
 	var map_bottom: float = map_top + map_side
@@ -1560,14 +1568,15 @@ func _layout_touch_hud() -> void:
 				Vector2(menu_col_width, row_height)))
 	# Every circular holder is actually square; the centre-to-centre gaps
 	# leave distinct hit targets even with two fingers on a small phone.
+	# Lower smart Interact near full-width XP; keep distinct finger hitboxes.
 	_radial_px(smart_button, screen,
-			Vector2(screen.x - 90.0 * scale, screen.y - 168.0 * scale), 59.0 * scale)
+			Vector2(screen.x - 90.0 * scale, screen.y - 106.0 * scale), 59.0 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(126.0, 287.0, 37.0), # POWER centered above CRAFT/INTERACT
-		Vector3(205.0, 204.0, 37.0), # CLEAVE compact to the left
-		Vector3(205.0, 121.0, 37.0), # SUNDER below CLEAVE
-		Vector3(531.0, 82.0, 32.0),  # heal/food immediately LEFT of Torch
-		Vector3(613.0, 82.0, 32.0)   # potion immediately LEFT of Heal
+		Vector3(126.0, 287.0, 37.0), # POWER above Interact
+		Vector3(205.0, 204.0, 37.0), # CLEAVE left of Interact
+		Vector3(205.0, 121.0, 37.0), # SUNDER by Interact
+		Vector3(380.0, 83.0, 30.0),  # food/heal close to combat
+		Vector3(451.0, 83.0, 30.0)   # potion beside heal
 	]
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	for index in range(keys.size()):
@@ -1575,7 +1584,7 @@ func _layout_touch_hud() -> void:
 		_radial_px(quick_buttons[keys[index]], screen,
 				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
 	_radial_px(torch_button, screen,
-			Vector2(screen.x - 382.0 * scale, screen.y - 82.0 * scale), 32.0 * scale)
+			Vector2(screen.x - 309.0 * scale, screen.y - 83.0 * scale), 30.0 * scale)
 	if stop_sticky_button != null:
 		_place_px(stop_sticky_button, screen, Rect2(24.0 * scale, screen.y - 237.0 * scale, 118.0 * scale, 48.0 * scale))
 	# Follow the action target without obscuring the on-screen controls.
@@ -1589,7 +1598,7 @@ func _layout_touch_hud() -> void:
 	var tool_height: float = 238.0 * scale
 	_place_px(smart_tray, screen, Rect2(
 			screen.x - edge - tool_width,
-			screen.y - 168.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
+			screen.y - 106.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
 			tool_width, tool_height))
 	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
@@ -1653,7 +1662,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
 	var rects: Dictionary = {
-		"status": Rect2(16, 15, 338, 94),
+		"status": Rect2(16, 15, 338, 108),
 		"portrait_frame": Rect2(22, 21, 76, 78),
 		"portrait": Rect2(27, 25, 66, 70),
 		"sigil": Rect2(77, 79, 26, 25),
@@ -1661,8 +1670,10 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"name": Rect2(110, 22, 230, 25),
 		"health": Rect2(110, 51, 229, 21),
 		"health_text": Rect2(111, 52, 227, 19),
+		"mana": Rect2(110, 77, 229, 18),
+		"mana_text": Rect2(111, 77, 227, 17),
 		"weapon": Rect2(111, 80, 231, 22),
-		"effects": Rect2(110, 77, 231, 28),
+		"effects": Rect2(110, 99, 231, 22),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
@@ -1670,7 +1681,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
-		"weight": Rect2(17, 112, 352, 24),
+		"weight": Rect2(375, 112, 295, 24),
 		"quest_frame": Rect2(16, 143, 347, 52),
 		"quest_button": Rect2(23, 151, 109, 37),
 		"quest": Rect2(140, 150, 216, 38),
@@ -1686,6 +1697,8 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"name": status,
 		"health": health_bar,
 		"health_text": health_numbers,
+		"mana": mana_bar,
+		"mana_text": mana_numbers,
 		"weapon": hero_detail,
 		"effects": status_effect_strip,
 		"wallet": wallet_frame,
@@ -2716,6 +2729,11 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		status.text = player_display_name
 		_refresh_quick_radials()
 	health_bar.value = clampf(hp, 0.0, 100.0)
+	if game != null and mana_bar != null:
+		var available_mana: float = clampf(float(game.mana), 0.0, float(game.mana_limit()))
+		mana_bar.max_value = float(game.mana_limit())
+		mana_bar.value = available_mana
+		mana_numbers.text = "MP %d / %d" % [ceili(available_mana), roundi(float(game.mana_limit()))]
 	if torch_button != null:
 		torch_button.disabled = int(inventory.get("torch", 0)) <= 0
 	for key in items:

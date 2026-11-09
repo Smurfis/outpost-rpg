@@ -69,6 +69,7 @@ func _run() -> void:
 	var carried: PanelContainer = inventory.window.find_child("CarriedItems", true, false) as PanelContainer
 	surface(equipment, "Equipment section", true)
 	surface(carried, "Carried-item grid", true)
+	inventory._change_filter("resource")
 	var item: Button = inventory.inventory_grid.get_node_or_null("Item_wood") as Button
 	check(item != null and item.get_theme_stylebox("normal") is StyleBoxFlat, "Real inventory item retains tap action with flat frame")
 	var empty: Panel = inventory.inventory_grid.find_child("EmptyInventorySlot", true, false) as Panel
