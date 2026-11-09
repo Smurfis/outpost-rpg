@@ -584,10 +584,10 @@ func _build_settings() -> void:
 	stack.add_child(tips)
 	var updates_frame := PanelContainer.new()
 	updates_frame.name = "AndroidUpdateSectionFrame"
-	updates_frame.add_theme_stylebox_override("panel", SKIN.modal_section())
+	updates_frame.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, true))
 	stack.add_child(updates_frame)
 	var updates_stack := VBoxContainer.new()
-	updates_stack.add_theme_constant_override("separation", 3)
+	updates_stack.add_theme_constant_override("separation", 8)
 	updates_frame.add_child(updates_stack)
 	updates_stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 19))
 	var channels := HBoxContainer.new()
@@ -596,10 +596,14 @@ func _build_settings() -> void:
 	updates_stack.add_child(channels)
 	_channel_stable_button = _menu_button("STABLE", _select_update_channel.bind("stable"))
 	_channel_stable_button.name = "StableChannel"
+	SKIN.apply_translucent_button(_channel_stable_button, "wood")
+	_channel_stable_button.custom_minimum_size.y = 47
 	_channel_stable_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	channels.add_child(_channel_stable_button)
 	_channel_alpha_button = _menu_button("ALPHA TEST", _select_update_channel.bind("alpha"))
 	_channel_alpha_button.name = "AlphaChannel"
+	SKIN.apply_translucent_button(_channel_alpha_button, "wood")
+	_channel_alpha_button.custom_minimum_size.y = 47
 	_channel_alpha_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	channels.add_child(_channel_alpha_button)
 	_channel_note = _menu_label("", 16)
@@ -623,10 +627,14 @@ func _build_settings() -> void:
 	updates_stack.add_child(update_row)
 	_update_button = _menu_button("CHECK FOR UPDATES", _check_updates_only)
 	_update_button.name = "CheckForUpdates"
+	SKIN.apply_translucent_button(_update_button, "wood")
+	_update_button.custom_minimum_size.y = 55
 	_update_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	update_row.add_child(_update_button)
 	_download_button = _menu_button("DOWNLOAD / INSTALL", _check_or_download_update, "wood_selected")
 	_download_button.name = "DownloadUpdate"
+	SKIN.apply_translucent_button(_download_button, "wood_selected")
+	_download_button.custom_minimum_size.y = 55
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
@@ -639,13 +647,14 @@ func _build_settings() -> void:
 	_download_progress_bar.name = "AndroidDownloadProgress"
 	_download_progress_bar.max_value = 100.0
 	_download_progress_bar.show_percentage = false
-	_download_progress_bar.custom_minimum_size = Vector2(0, 13)
-	_download_progress_bar.add_theme_stylebox_override("background", SKIN.flat("inset"))
+	_download_progress_bar.custom_minimum_size = Vector2(0, 20)
+	_download_progress_bar.add_theme_stylebox_override("background", SKIN.translucent_surface(false))
 	_download_progress_bar.add_theme_stylebox_override("fill", SKIN.flat("wood_selected"))
 	_download_progress_bar.visible = false
 	updates_stack.add_child(_download_progress_bar)
 	_cancel_download_button = _menu_button("CANCEL DOWNLOAD", _cancel_update_download, "red")
 	_cancel_download_button.name = "CancelAPKDownload"
+	SKIN.apply_translucent_button(_cancel_download_button, "red")
 	_cancel_download_button.custom_minimum_size = Vector2(0, 36)
 	_cancel_download_button.visible = false
 	updates_stack.add_child(_cancel_download_button)
@@ -751,9 +760,11 @@ func _select_update_channel(channel: String) -> void:
 
 func _refresh_channel_buttons() -> void:
 	if _channel_stable_button != null:
-		SKIN.apply_button(_channel_stable_button, "wood_selected" if _selected_channel == "stable" else "wood")
+		SKIN.apply_translucent_button(_channel_stable_button, "wood_selected" if _selected_channel == "stable" else "wood")
+		_channel_stable_button.text = ("✓  " if _selected_channel == "stable" else "○  ") + "STABLE"
 	if _channel_alpha_button != null:
-		SKIN.apply_button(_channel_alpha_button, "wood_selected" if _selected_channel == "alpha" else "wood")
+		SKIN.apply_translucent_button(_channel_alpha_button, "wood_selected" if _selected_channel == "alpha" else "wood")
+		_channel_alpha_button.text = ("✓  " if _selected_channel == "alpha" else "○  ") + "ALPHA TEST"
 	if _channel_note != null:
 		var current: String = _updater.installed_channel() if _updater != null else "stable"
 		_channel_note.text = "INSTALLED: %s  •  INSTALLS SIDE BY SIDE, SAVES STAY SEPARATE." % current.to_upper()
