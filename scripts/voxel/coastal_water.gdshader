@@ -29,10 +29,10 @@ void fragment() {
 	float t = TIME * wave_speed;
 
 	// Broad, slowly travelling blue patches instead of uniform stripes.
-	float swells = sin(p.x * 0.78 + p.y * 0.37 + t * 0.70);
-	swells += 0.60 * sin(p.y * 1.14 - p.x * 0.48 - t * 0.56);
-	swells += 0.25 * sin((p.x + p.y) * 2.05 + t * 0.32);
-	float water_band = step(-0.20, swells);
+	float ripples = sin(p.x * 0.78 + p.y * 0.37 + t * 0.70);
+	ripples += 0.60 * sin(p.y * 1.14 - p.x * 0.48 - t * 0.56);
+	ripples += 0.25 * sin((p.x + p.y) * 2.05 + t * 0.32);
+	float water_band = step(-0.20, ripples);
 	vec3 pigment = mix(ocean_deep.rgb, ocean_swell.rgb, water_band * 0.82);
 
 	// Broken cyan currents, with hashed gaps so they resemble clusters of
@@ -47,7 +47,7 @@ void fragment() {
 	// Sparse glimmer pixels use discrete time so highlights pulse instead
 	// of sliding continuously across every pixel on weak mobile hardware.
 	float sparkle = step(0.976, cell_hash(floor(cell / 2.0) + vec2(floor(t * 1.1), 17.0)));
-	float foam_mask = sparkle * step(0.1, swells) * highlight_strength;
+	float foam_mask = sparkle * step(0.1, ripples) * highlight_strength;
 	pigment = mix(pigment, ocean_foam.rgb, foam_mask * 0.84);
 
 	ALBEDO = pigment;
