@@ -203,7 +203,7 @@ func _ready() -> void:
 	var status_frame: Panel = _panel(0.018, 0.019, 0.279, 0.139)
 	status_frame.name = "HeroStatusFrame"
 	hero_status_frame = status_frame
-	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.65, 0.42))
+	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.18, 0.14))
 	var sigil := TextureRect.new()
 	sigil.name = "OutpostSigil"
 	hero_sigil = sigil
@@ -219,7 +219,7 @@ func _ready() -> void:
 	var portrait_back: Panel = _panel(0.022, 0.027, 0.089, 0.131)
 	portrait_back.name = "HeroPortraitFrame"
 	hero_portrait_frame = portrait_back
-	portrait_back.add_theme_stylebox_override("panel", _hud_glass(0.26, 0.53))
+	portrait_back.add_theme_stylebox_override("panel", _hud_glass(0.09, 0.58))
 	var hero_portrait := TextureRect.new()
 	hero_portrait.name = "HeroPortrait"
 	hero_portrait_art = hero_portrait
@@ -231,7 +231,10 @@ func _ready() -> void:
 	root.add_child(hero_portrait)
 	_anchors(hero_portrait, 0.026, 0.031, 0.085, 0.126)
 	root.move_child(sigil, root.get_child_count() - 1)
-	status = _label("Adventurer", 18, Color("#fff1c7"), 0.094, 0.026, 0.269, 0.058)
+	status = _label("Adventurer", 20, SKIN.GOLD, 0.094, 0.026, 0.269, 0.058)
+	status.name = "PlayerGoldName"
+	status.add_theme_color_override("font_outline_color", Color("#171114"))
+	status.add_theme_constant_override("outline_size", 2)
 	status.clip_text = true
 	status.autowrap_mode = TextServer.AUTOWRAP_OFF
 	health_bar = _meter(0.094, 0.061, 0.269, 0.090, Color("#d74c43"))
@@ -377,15 +380,21 @@ func _ready() -> void:
 	# announcing the finished starter quest.
 	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
-	quest_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	# Quest background follows the unobtrusive transparent player card.
+	quest_frame.add_theme_stylebox_override("panel", _hud_glass(0.20, 0.12))
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
 	SKIN.apply_translucent_button(quest_toggle, "wood")
+	quest_toggle.add_theme_color_override("font_color", SKIN.GOLD)
+	quest_toggle.add_theme_color_override("font_hover_color", SKIN.GOLD.lightened(0.13))
+	quest_toggle.add_theme_color_override("font_pressed_color", SKIN.GOLD)
 	root.add_child(quest_toggle)
 	_anchors(quest_toggle, 0.028, 0.174, 0.117, 0.222)
 	quest_toggle.pressed.connect(_toggle_quest)
-	quest = _label("Gather wood and stone", 16, Color("#ffe6bb"), 0.127, 0.173, 0.334, 0.224)
+	quest = _label("Gather wood and stone", 16, SKIN.GOLD, 0.127, 0.173, 0.334, 0.224)
+	quest.add_theme_color_override("font_outline_color", Color("#171114"))
+	quest.add_theme_constant_override("outline_size", 2)
 	quest.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	quest.autowrap_mode = TextServer.AUTOWRAP_OFF
 	quest.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1662,18 +1671,18 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
 	var rects: Dictionary = {
-		"status": Rect2(16, 15, 338, 108),
+		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 21, 76, 78),
 		"portrait": Rect2(27, 25, 66, 70),
 		"sigil": Rect2(77, 79, 26, 25),
 		"portrait_level": Rect2(18, 83, 34, 23),
-		"name": Rect2(110, 22, 230, 25),
-		"health": Rect2(110, 51, 229, 21),
-		"health_text": Rect2(111, 52, 227, 19),
-		"mana": Rect2(110, 77, 229, 18),
-		"mana_text": Rect2(111, 77, 227, 17),
-		"weapon": Rect2(111, 80, 231, 22),
-		"effects": Rect2(110, 99, 231, 22),
+		"name": Rect2(103, 22, 225, 25),
+		"health": Rect2(103, 51, 225, 20),
+		"health_text": Rect2(104, 52, 223, 18),
+		"mana": Rect2(103, 76, 225, 17),
+		"mana_text": Rect2(104, 76, 223, 16),
+		"weapon": Rect2(103, 80, 225, 22),
+		"effects": Rect2(103, 98, 225, 22),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
