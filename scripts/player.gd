@@ -20,6 +20,7 @@ var right_leg: Node3D
 var shield_mesh: MeshInstance3D
 var torch_mesh: MeshInstance3D
 var torch_light: OmniLight3D
+var torch_flame: Node3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
 var tool_mesh: MeshInstance3D
@@ -225,13 +226,29 @@ func _build_torch() -> void:
 	torch_light.omni_attenuation = 1.2
 	torch_light.shadow_enabled = false
 	torch_mesh.add_child(torch_light)
+	# Use the packaged PyroLux flame on the existing wrist-attached torch.
+	# Keep the old emissive cube + light as a fallback for source checkouts.
+	var preset_path: String = "res://addons/pyrolux_fx/presets/3d/fire_torch.tscn"
+	if ResourceLoader.exists(preset_path):
+		var flame_scene: PackedScene = load(preset_path) as PackedScene
+		if flame_scene != null:
+			torch_flame = flame_scene.instantiate() as Node3D
+			if torch_flame != null:
+				torch_flame.name = "PyroLuxTorchFlame"
+				torch_flame.position = Vector3(0, 0.79, 0)
+				torch_flame.scale = Vector3.ONE * 0.70
+				torch_mesh.add_child(torch_flame)
+				ember.visible = false
+				torch_light.visible = false
 	set_torch(false)
 
 func set_torch(equipped: bool) -> void:
 	if torch_mesh != null:
 		torch_mesh.visible = equipped
 	if torch_light != null:
-		torch_light.visible = equipped
+		torch_light.visible = equipped and torch_flame == null
+	if torch_flame != null:
+		torch_flame.visible = equipped
 
 func set_cloak(equipped: bool) -> void:
 	if cloak_pivot != null:
