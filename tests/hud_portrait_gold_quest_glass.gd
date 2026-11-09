@@ -54,7 +54,7 @@ func _run() -> void:
 	verify(absf(h.position.x - m.position.x) <= 1.0, "Mana and HP share one aligned left edge")
 	verify(absf(h.size.x - m.size.x) <= 1.0, "HP and Mana have matching compact widths")
 	verify(h.end.y < m.position.y, "Mana sits beneath health, not on top of it")
-	verify(m.visible and hud.mana_numbers.visible, "Real weapon-skill mana still appears")
+	verify(mana.visible and hud.mana_numbers.visible, "Real weapon-skill mana still appears")
 	verify(status.get_global_rect().end.x < game.get_viewport().get_visible_rect().size.x * 0.30, "Character chrome stays compact on mobile")
 
 	var q_style: StyleBox = q_panel.get_theme_stylebox("panel")
