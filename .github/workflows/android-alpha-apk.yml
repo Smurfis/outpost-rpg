@@ -32,14 +32,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
-          curl --fail --location --retry 3 -o godot.zip "$base/Godot_v4.7.2-stable_linux.x86_64.zip"
+          # Both sources are official Godot 4.7.2 stable GitHub releases,
+          # containing identical assets/digests. A temporary GitHub 504 on
+          # godot-builds must not prevent an otherwise-good Alpha export.
+          primary='https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable'
+          mirror='https://github.com/godotengine/godot/releases/download/4.7.2-stable'
+          fetch_godot_asset() {
+            local asset="$1" destination="$2" digest="$3"
+            if ! curl --fail --location --retry 2 --retry-all-errors --retry-delay 2 --max-time 240 \
+                --output "$destination" "$primary/$asset"; then
+              echo "::warning::Godot builds download failed for $asset; retrying from official godot release."
+              curl --fail --location --retry 4 --retry-all-errors --retry-delay 3 --max-time 240 \
+                --output "$destination" "$mirror/$asset"
+            fi
+            echo "$digest  $destination" | sha256sum --check --status || {
+              echo "::error::Godot 4.7.2 checksum mismatch for $asset"
+              exit 1
+            }
+          }
+          fetch_godot_asset 'Godot_v4.7.2-stable_linux.x86_64.zip' godot.zip \
+            'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4'
           unzip -q godot.zip
           chmod +x Godot_v4.7.2-stable_linux.x86_64
           template_dir="$HOME/.local/share/godot/export_templates/4.7.2.stable"
           mkdir -p "$template_dir"
-          curl --fail --location --retry 3 -o "$template_dir/android_debug.apk" "$base/Godot_v4.7.2-stable_android_debug.perfetto.apk"
-          curl --fail --location --retry 3 -o "$template_dir/android_release.apk" "$base/Godot_v4.7.2-stable_android_release.perfetto.apk"
+          fetch_godot_asset 'Godot_v4.7.2-stable_android_debug.perfetto.apk' "$template_dir/android_debug.apk" \
+            '7e480a90a763bbef7af2d9cc2873b094cc278d1ed26c13c0d2e72a36e4c815d0'
+          fetch_godot_asset 'Godot_v4.7.2-stable_android_release.perfetto.apk' "$template_dir/android_release.apk" \
+            'b0cf10a91cb901e52225fa5bce8f885655f2472effb652cf40d8b8b97b0dec4a'
           printf '4.7.2.stable\n' > "$template_dir/version.txt"
       - name: Generate tent launcher PNGs from checked-in artwork
         shell: bash
