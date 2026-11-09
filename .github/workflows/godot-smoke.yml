@@ -216,6 +216,13 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TRANSLUCENT UI:' ui-translucent-v2.log; then exit 1; fi
           grep -q "TRANSLUCENT UI RESULT: 0 failures" ui-translucent-v2.log
 
+      - name: Verify shared MMORPG item tiles, neutral rarity frames and quantity badges
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/mmorpg_item_tile_v2.gd 2>&1 | tee mmorpg-item-tile.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ITEM TILE:' mmorpg-item-tile.log; then exit 1; fi
+          grep -q "ITEM TILE RESULT: 0 failures" mmorpg-item-tile.log
+
       - name: Verify approved portrait HUD, working hotbar and compact inventory/crafting
         run: |
           set -o pipefail

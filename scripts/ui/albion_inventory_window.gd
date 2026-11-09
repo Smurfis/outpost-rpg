@@ -4,6 +4,7 @@ extends Control
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
+const ITEM_TILE = preload("res://scripts/ui/mmorpg_item_tile.gd")
 const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage"]
 const SLOT_NAMES: Dictionary = {
 	"weapon":"MAIN HAND", "offhand":"OFF HAND", "back":"CLOAK", "bag":"BACKPACK",
@@ -429,6 +430,8 @@ func _render_items() -> void:
 	for id in ids:
 		var tile := _button("", "wood_selected" if id == selected_id else "wood")
 		tile.name = "Item_" + id
+		# Inventory stores counts, not rarity metadata. Unknown = neutral.
+		ITEM_TILE.apply_item_frame(tile, -1, id == selected_id)
 		tile.custom_minimum_size = Vector2(slot_px, slot_px)
 		tile.tooltip_text = _item_tip(id)
 		tile.pressed.connect(_select_item.bind(id))
@@ -440,15 +443,7 @@ func _render_items() -> void:
 		image.anchor_bottom = 0.85
 		image.custom_minimum_size = Vector2.ZERO
 		tile.add_child(image)
-		var count := _text(str(int(game.inventory[id])), 14, SKIN.CREAM)
-		count.name = "ItemCount"
-		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		count.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		count.offset_left = 4.0
-		count.offset_right = -4.0
-		count.offset_top = -23.0
-		tile.add_child(count)
+		ITEM_TILE.add_quantity_badge(tile, int(game.inventory[id]))
 		if game.is_equipped(id):
 			var worn := _text("◆", 15, SKIN.GOLD)
 			worn.name = "EquippedMarker"

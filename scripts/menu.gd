@@ -773,13 +773,24 @@ func _render_craft() -> void:
 		choose.disabled = not game.crafting.is_empty()
 		choose.pressed.connect(_recipe_change.bind(id))
 		recipes_list.add_child(choose)
+		# Same neutral-rarity icon frame used by inventory and item receipts.
+		# The recipe card itself stays light so its black text remains legible.
+		var icon_panel := Panel.new()
+		icon_panel.name = "RecipeItemRarityFrame"
+		icon_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_panel.add_theme_stylebox_override("panel", ITEM_TILE.icon_frame(-1))
+		icon_panel.anchor_left = 0.01
+		icon_panel.anchor_right = 0.20
+		icon_panel.anchor_top = 0.12
+		icon_panel.anchor_bottom = 0.88
+		choose.add_child(icon_panel)
 		var art: TextureRect = _icon(result_id, 60)
 		art.custom_minimum_size = Vector2.ZERO
-		art.anchor_left = 0.01
-		art.anchor_right = 0.20
-		art.anchor_top = 0.12
-		art.anchor_bottom = 0.88
-		choose.add_child(art)
+		art.anchor_left = 0.08
+		art.anchor_right = 0.92
+		art.anchor_top = 0.08
+		art.anchor_bottom = 0.92
+		icon_panel.add_child(art)
 		# The item-card texture is light parchment. Dark ink stays legible in
 		# both selected and unselected states (the old cream text vanished).
 		var foreground: Color = SKIN.INK
