@@ -53,6 +53,39 @@ func _run() -> void:
 		check(water != null, "Coastal water effect remains available")
 		if water != null:
 			check(water.position.y < biome._tile_height(0, 0), "Water surface remains below the starter island")
+
+		# Water-cell foam used to render as tinted rectangular patches. Confirm
+		# coastal overlays contain feathered vertex colours and follow grid edges.
+		biome.update_streaming_for(Vector3(79.0, 0.0, 68.0))
+		var surf: MeshInstance3D = null
+		for item in biome.get_children():
+			if item is MeshInstance3D and str(item.name).begins_with("ShoreFoam_"):
+				surf = item as MeshInstance3D
+				break
+		check(surf != null and surf.mesh != null, "Surf exists near the real island shoreline")
+		if surf != null and surf.mesh != null:
+			var surface_arrays: Array = surf.mesh.surface_get_arrays(0)
+			var vertices: PackedVector3Array = surface_arrays[Mesh.ARRAY_VERTEX]
+			var colors: PackedColorArray = surface_arrays[Mesh.ARRAY_COLOR]
+			check(colors.size() == vertices.size() and colors.size() > 0,
+				"Shore foam provides actual per-vertex fade data")
+			var transparent_edge: bool = false
+			var soft_foam: bool = false
+			var narrow_coast: bool = true
+			var bluish_white: bool = true
+			for i in range(colors.size()):
+				transparent_edge = transparent_edge or colors[i].a <= 0.01
+				soft_foam = soft_foam or colors[i].a > 0.2 and colors[i].a < 0.7
+				bluish_white = bluish_white and colors[i].b >= colors[i].g and colors[i].g > colors[i].r
+				var vertex: Vector3 = vertices[i]
+				if minf(absf(vertex.x - roundf(vertex.x)), absf(vertex.z - roundf(vertex.z))) > 0.34:
+					narrow_coast = false
+			check(transparent_edge and soft_foam, "Surf blends away instead of showing hard-edged boxes")
+			check(bluish_white, "Surf tint is cool white, not a murky green overlay")
+			check(narrow_coast, "Surf strips hug coastline edges rather than filling water cells")
+			check(surf.material_override is StandardMaterial3D
+				and (surf.material_override as StandardMaterial3D).vertex_color_use_as_albedo,
+				"Android foam material respects vertex-colour transparency")
 	game.queue_free()
 	await process_frame
 	print("OPAQUE TERRAIN RESULT: %d failure(s)" % failures)

@@ -518,37 +518,62 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		return null
 	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
 
+func _shore_foam_vertex(st: SurfaceTool, point: Vector2, opacity: float) -> void:
+	# Vertex alpha feathers the strip into the ocean. Colours stay cool-white,
+	# never the opaque pale-green squares from the earlier foam implementation.
+	st.set_color(Color(0.82, 0.95, 1.0, opacity))
+	st.add_vertex(Vector3(point.x, SEA_LEVEL + 0.035, point.y))
+
+
+func _append_shore_foam_edge(st: SurfaceTool, edge_start: Vector2, edge_end: Vector2,
+		water_direction: Vector2, x: int, z: int, side: int) -> void:
+	# Three short sections keep the surf slightly uneven while preserving one
+	# batched mesh per chunk. Both endpoints of adjoining sections agree, so
+	# there are no cracks or flickering seams as the player rotates the camera.
+	const SEGMENTS: int = 3
+	for segment in range(SEGMENTS):
+		var t0: float = float(segment) / float(SEGMENTS)
+		var t1: float = float(segment + 1) / float(SEGMENTS)
+		var shore_a: Vector2 = edge_start.lerp(edge_end, t0) + water_direction * 0.018
+		var shore_b: Vector2 = edge_start.lerp(edge_end, t1) + water_direction * 0.018
+		var seed_a: int = posmod(x * 17 + z * 29 + side * 13 + segment * 7, 6)
+		var seed_b: int = posmod(x * 17 + z * 29 + side * 13 + (segment + 1) * 7, 6)
+		var width_a: float = 0.13 + 0.027 * float(seed_a)
+		var width_b: float = 0.13 + 0.027 * float(seed_b)
+		var water_a: Vector2 = shore_a + water_direction * width_a
+		var water_b: Vector2 = shore_b + water_direction * width_b
+		_shore_foam_vertex(st, shore_a, 0.54)
+		_shore_foam_vertex(st, shore_b, 0.54)
+		_shore_foam_vertex(st, water_b, 0.0)
+		_shore_foam_vertex(st, shore_a, 0.54)
+		_shore_foam_vertex(st, water_b, 0.0)
+		_shore_foam_vertex(st, water_a, 0.0)
+
+
 func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# One batched, semi-transparent strip mesh per coastal chunk. It marks
-	# *water* cells bordering solid land, not the old square world boundary.
+	# The old single translucent quad covered much of each shoreline water
+	# cell, producing obvious green/blue rectangular boxes on Android.
+	# Only emit thin feathered foam following the actual land/water cell edges.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var count: int = 0
+	var edge_count: int = 0
 	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
 		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
 			if _land_cell(x, z):
 				continue
-			var land_east: bool = _land_cell(x + 1, z)
-			var land_west: bool = _land_cell(x - 1, z)
-			var land_south: bool = _land_cell(x, z + 1)
-			var land_north: bool = _land_cell(x, z - 1)
-			if not (land_east or land_west or land_south or land_north):
-				continue
-			var cx: float = float(x) + 0.5
-			var cz: float = float(z) + 0.5
-			var half_x: float = 0.28 if land_east or land_west else 0.42
-			var half_z: float = 0.28 if land_south or land_north else 0.42
-			var offset_x: float = 0.23 if land_east else -0.23 if land_west else 0.0
-			var offset_z: float = 0.23 if land_south else -0.23 if land_north else 0.0
-			var y: float = SEA_LEVEL + 0.032
-			var a := Vector3(cx + offset_x - half_x, y, cz + offset_z - half_z)
-			var b := Vector3(cx + offset_x - half_x, y, cz + offset_z + half_z)
-			var c := Vector3(cx + offset_x + half_x, y, cz + offset_z + half_z)
-			var d := Vector3(cx + offset_x + half_x, y, cz + offset_z - half_z)
-			for vertex in [a, b, c, a, c, d]:
-				st.add_vertex(vertex)
-			count += 1
-	if count == 0:
+			if _land_cell(x + 1, z):
+				_append_shore_foam_edge(st, Vector2(x + 1, z), Vector2(x + 1, z + 1), Vector2(-1, 0), x, z, 0)
+				edge_count += 1
+			if _land_cell(x - 1, z):
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x, z + 1), Vector2(1, 0), x, z, 1)
+				edge_count += 1
+			if _land_cell(x, z + 1):
+				_append_shore_foam_edge(st, Vector2(x, z + 1), Vector2(x + 1, z + 1), Vector2(0, -1), x, z, 2)
+				edge_count += 1
+			if _land_cell(x, z - 1):
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x + 1, z), Vector2(0, 1), x, z, 3)
+				edge_count += 1
+	if edge_count == 0:
 		return null
 	var foam := MeshInstance3D.new()
 	foam.name = "ShoreFoam_%d_%d" % [chunk_x, chunk_z]
@@ -558,7 +583,8 @@ func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.albedo_color = Color(0.77, 0.88, 0.77, 0.53)
+	material.vertex_color_use_as_albedo = true
+	material.albedo_color = Color.WHITE
 	foam.material_override = material
 	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return foam
