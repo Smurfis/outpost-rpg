@@ -177,7 +177,7 @@ func _run() -> void:
 		verify(status.get_global_rect().encloses(hud.hero_detail.get_global_rect()), "Mastery line stays inside status frame")
 		var player_style: StyleBoxFlat = status.get_theme_stylebox("panel") as StyleBoxFlat
 		verify(player_style != null and player_style.bg_color.a < 0.80 and player_style.border_width_left <= 2, "HP/name backing is translucent with a slim border, not opaque wood")
-		verify(absf(status.size.x - 338.0) < 3.0, "Portrait and health frame remains compact on standard Android landscape")
+		verify(absf(status.size.x - 326.0) < 3.0, "Portrait and health frame remains compact on standard Android landscape")
 	if wallet != null:
 		var wallet_style: StyleBoxFlat = wallet.get_theme_stylebox("panel") as StyleBoxFlat
 		verify(wallet_style != null and wallet_style.bg_color.a < 0.65, "Wallet is a lightweight translucent chip")
@@ -189,7 +189,7 @@ func _run() -> void:
 	# Check the px-layout parameters, not a single fixed percentage at 16:9.
 	hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
 	if status != null and wallet != null:
-		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 405.6) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
+		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 391.2) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
 		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 330.0) < 2.0, "At 20:9 wallet flyout stays exactly 275 scaled pixels wide")
 		hud._toggle_wallet()
 		verify(hud.wallet_frame.visible, "Expanded wallet is visible at 20:9")
