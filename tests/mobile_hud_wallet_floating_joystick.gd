@@ -30,7 +30,7 @@ func _run() -> void:
 	verify(bag != null, "Live bag action attached to wallet")
 	verify(hud_root.get_node_or_null("CharacterLevelBadge") != null, "Level badge is left of screen-wide XP meter")
 	var badge: Label = hud_root.get_node_or_null("CharacterLevelBadge") as Label
-	verify(badge != null and badge.visible and hud.xp_bar.get_global_rect().encloses(badge.get_global_rect()), "Compact level number is overlaid inside the full-width XP strip")
+	verify(badge != null and badge.visible and hud.hero_portrait_frame.get_global_rect().grow(12.0).intersects(badge.get_global_rect()) and not hud.xp_bar.get_global_rect().intersects(badge.get_global_rect()), "Character level badge sits beside portrait, not inside bottom XP")
 	verify(hud_root.get_node_or_null("LastTrackedResourceCount") != null, "One tracked resource instead of four permanent materials")
 	hud.render_status(83.0, {"wood": 8, "stone": 5, "coins": 147}, 40, 0, "training_blade", "Find iron", "")
 	verify(hud.wallet_coin.text.contains("147"), "Wallet shows the actual currency owned")

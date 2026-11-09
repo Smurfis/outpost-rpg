@@ -265,12 +265,22 @@ func _ready() -> void:
 	xp_bar_divisions.name = "CharacterXPDivisions"
 	xp_bar.add_child(xp_bar_divisions)
 	xp_bar_divisions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	xp_level_badge = _label("Lv. 1", 13, Color("#ffe8ab"), 0.055, 0.975, 0.12, 1.0)
+	# Character rank belongs by the portrait, never printed redundantly
+	# inside the full-width bottom XP strip. Skill rank uses its own orb.
+	xp_level_badge = _label("1", 14, Color("#ffe8ab"), 0.017, 0.110, 0.047, 0.146)
 	xp_level_badge.name = "CharacterLevelBadge"
 	xp_level_badge.visible = true
-	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	xp_level_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	xp_level_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	xp_level_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	xp_level_badge.autowrap_mode = TextServer.AUTOWRAP_OFF
+	var rank_frame := StyleBoxFlat.new()
+	rank_frame.bg_color = Color(0.12, 0.10, 0.10, 0.85)
+	rank_frame.border_color = Color(0.91, 0.72, 0.36, 0.83)
+	rank_frame.set_border_width_all(1)
+	rank_frame.set_corner_radius_all(11)
+	rank_frame.set_content_margin_all(1)
+	xp_level_badge.add_theme_stylebox_override("normal", rank_frame)
 	# Preserve the radial component for future gathering/skill level-up
 	# feedback, but never draw the oversized circle on the persistent HUD.
 	radial_level = RADIAL_LEVEL.new()
@@ -1608,9 +1618,9 @@ func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
 	_place_px(xp_bar, screen, Rect2(0.0, y, screen.x, height_px))
 	_place_px(trained_skill_orb, screen, Rect2(10.0 * scale, y - 41.0 * scale,
 			52.0 * scale, 52.0 * scale))
-	_place_px(xp_level_badge, screen, Rect2(68.0 * scale, y, 69.0 * scale, height_px))
-	_place_px(xp_level_label, screen, Rect2(147.0 * scale, y,
-			maxf(1.0, screen.x - 255.0 * scale), height_px))
+	# Keep actual XP reading centred along the uninterrupted bottom strip.
+	# The portrait rank badge is placed by _layout_player_chrome_for_size.
+	_place_px(xp_level_label, screen, Rect2(0.0, y, screen.x, height_px))
 
 func _hud_glass(opacity: float, border_alpha: float) -> StyleBoxFlat:
 	# The actual UI art stays transparent and separately editable; this is
@@ -1647,6 +1657,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"portrait_frame": Rect2(22, 21, 76, 78),
 		"portrait": Rect2(27, 25, 66, 70),
 		"sigil": Rect2(77, 79, 26, 25),
+		"portrait_level": Rect2(18, 83, 34, 23),
 		"name": Rect2(110, 22, 230, 25),
 		"health": Rect2(110, 51, 229, 21),
 		"health_text": Rect2(111, 52, 227, 19),
@@ -1671,6 +1682,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"portrait_frame": hero_portrait_frame,
 		"portrait": hero_portrait_art,
 		"sigil": hero_sigil,
+		"portrait_level": xp_level_badge,
 		"name": status,
 		"health": health_bar,
 		"health_text": health_numbers,
@@ -2698,7 +2710,7 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 		var required_xp: int = maxi(1, roundi(required))
 		xp_level_label.text = "%d / %d" % [current_xp, required_xp]
 
-		xp_level_badge.text = "Lv. %d" % rank
+		xp_level_badge.text = str(rank)
 		if radial_level != null:
 			radial_level.call("update_level", rank, xp_bar.value / 100.0)
 		status.text = player_display_name
