@@ -167,6 +167,16 @@ var top_chrome_mouse_origin: Vector2 = Vector2.ZERO
 var top_chrome_ignore_mouse_until: int = 0
 var player_display_name: String = "Adventurer"
 var control_settings_panel: Panel
+var control_settings_close_button: Button
+var settings_close_finger: int = -1
+var settings_ignore_mouse_until: int = 0
+var status_text_modes: Dictionary = {"health": "text", "mana": "text", "xp": "text"}
+var status_mode_buttons: Dictionary = {}
+var settings_touch_buttons: Array[BaseButton] = []
+var settings_touch_finger: int = -1
+var settings_touch_candidate: BaseButton
+var settings_touch_start: Vector2 = Vector2.ZERO
+var settings_touch_mouse_echo_until: int = 0
 var leave_menu_shade: ColorRect
 var leave_menu_panel: PanelContainer
 var leave_menu_info: Label
@@ -203,7 +213,7 @@ func _ready() -> void:
 	var status_frame: Panel = _panel(0.018, 0.019, 0.279, 0.139)
 	status_frame.name = "HeroStatusFrame"
 	hero_status_frame = status_frame
-	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.18, 0.14))
+	status_frame.add_theme_stylebox_override("panel", _hud_glass(0.03, 0.0))
 	var sigil := TextureRect.new()
 	sigil.name = "OutpostSigil"
 	hero_sigil = sigil
@@ -219,11 +229,21 @@ func _ready() -> void:
 	var portrait_back: Panel = _panel(0.022, 0.027, 0.089, 0.131)
 	portrait_back.name = "HeroPortraitFrame"
 	hero_portrait_frame = portrait_back
-	portrait_back.add_theme_stylebox_override("panel", _hud_glass(0.09, 0.58))
+	var portrait_ring := StyleBoxFlat.new()
+	portrait_ring.bg_color = Color(0.10, 0.09, 0.10, 0.20)
+	portrait_ring.border_color = Color("#e9ba61")
+	portrait_ring.set_border_width_all(4)
+	portrait_ring.set_corner_radius_all(100)
+	portrait_ring.set_content_margin_all(0)
+	portrait_ring.anti_aliasing = true
+	portrait_back.add_theme_stylebox_override("panel", portrait_ring)
 	var hero_portrait := TextureRect.new()
 	hero_portrait.name = "HeroPortrait"
 	hero_portrait_art = hero_portrait
 	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v2.svg") as Texture2D
+	var portrait_mask := ShaderMaterial.new()
+	portrait_mask.shader = load("res://assets/ui/icons/portrait_circle.gdshader") as Shader
+	hero_portrait.material = portrait_mask
 	hero_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	hero_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	hero_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -282,7 +302,13 @@ func _ready() -> void:
 	rank_frame.set_border_width_all(1)
 	rank_frame.set_corner_radius_all(11)
 	rank_frame.set_content_margin_all(1)
-	xp_level_badge.add_theme_stylebox_override("normal", rank_frame)
+	var level_frame := Panel.new()
+	level_frame.name = "CharacterLevelBadgeFrame"
+	level_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	level_frame.add_theme_stylebox_override("panel", rank_frame)
+	root.add_child(level_frame)
+	root.move_child(level_frame, xp_level_badge.get_index())
+	xp_level_badge.set_meta("badge_frame", level_frame)
 	# Preserve the radial component for future gathering/skill level-up
 	# feedback, but never draw the oversized circle on the persistent HUD.
 	radial_level = RADIAL_LEVEL.new()
@@ -1579,13 +1605,13 @@ func _layout_touch_hud() -> void:
 	# leave distinct hit targets even with two fingers on a small phone.
 	# Lower smart Interact near full-width XP; keep distinct finger hitboxes.
 	_radial_px(smart_button, screen,
-			Vector2(screen.x - 90.0 * scale, screen.y - 106.0 * scale), 59.0 * scale)
+			Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale), 59.0 * 1.05 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(126.0, 287.0, 37.0), # POWER above Interact
-		Vector3(205.0, 204.0, 37.0), # CLEAVE left of Interact
-		Vector3(205.0, 121.0, 37.0), # SUNDER by Interact
-		Vector3(380.0, 83.0, 30.0),  # food/heal close to combat
-		Vector3(451.0, 83.0, 30.0)   # potion beside heal
+		Vector3(126.0, 287.0, 37.0 * 1.03), # POWER above Interact
+		Vector3(205.0, 204.0, 37.0 * 1.03), # CLEAVE left of Interact
+		Vector3(205.0, 121.0, 37.0 * 1.03), # SUNDER by Interact
+		Vector3(380.0, 83.0, 30.0 * 1.03),  # food/heal close to combat
+		Vector3(451.0, 83.0, 30.0 * 1.03)   # potion beside heal
 	]
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	for index in range(keys.size()):
@@ -1593,7 +1619,7 @@ func _layout_touch_hud() -> void:
 		_radial_px(quick_buttons[keys[index]], screen,
 				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
 	_radial_px(torch_button, screen,
-			Vector2(screen.x - 309.0 * scale, screen.y - 83.0 * scale), 30.0 * scale)
+			Vector2(screen.x - 309.0 * scale, screen.y - 83.0 * scale), 30.0 * 1.03 * scale)
 	if stop_sticky_button != null:
 		_place_px(stop_sticky_button, screen, Rect2(24.0 * scale, screen.y - 237.0 * scale, 118.0 * scale, 48.0 * scale))
 	# Follow the action target without obscuring the on-screen controls.
@@ -1607,7 +1633,7 @@ func _layout_touch_hud() -> void:
 	var tool_height: float = 238.0 * scale
 	_place_px(smart_tray, screen, Rect2(
 			screen.x - edge - tool_width,
-			screen.y - 106.0 * scale - 59.0 * scale - tool_height - 9.0 * scale,
+			screen.y - 120.0 * scale - 59.0 * 1.05 * scale - tool_height - 9.0 * scale,
 			tool_width, tool_height))
 	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
@@ -1671,18 +1697,19 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
 	var rects: Dictionary = {
-		"status": Rect2(16, 15, 326, 108),
-		"portrait_frame": Rect2(22, 21, 76, 78),
-		"portrait": Rect2(27, 25, 66, 70),
-		"sigil": Rect2(77, 79, 26, 25),
-		"portrait_level": Rect2(18, 83, 34, 23),
-		"name": Rect2(103, 22, 225, 25),
-		"health": Rect2(103, 51, 225, 20),
-		"health_text": Rect2(104, 52, 223, 18),
-		"mana": Rect2(103, 76, 225, 17),
-		"mana_text": Rect2(104, 76, 223, 16),
-		"weapon": Rect2(103, 80, 225, 22),
-		"effects": Rect2(103, 98, 225, 22),
+		"status": Rect2(16, 15, 350, 112),
+		"portrait_frame": Rect2(22, 20, 88, 88),
+		"portrait": Rect2(26, 24, 80, 80),
+		"sigil": Rect2(93, 90, 19, 20),
+		"portrait_level": Rect2(17, 89, 39, 27),
+		"portrait_badge": Rect2(17, 89, 39, 27),
+		"name": Rect2(117, 20, 236, 25),
+		"health": Rect2(117, 49, 236, 20),
+		"health_text": Rect2(118, 50, 234, 18),
+		"mana": Rect2(117, 76, 236, 18),
+		"mana_text": Rect2(118, 76, 234, 17),
+		"weapon": Rect2(117, 78, 236, 22),
+		"effects": Rect2(117, 99, 236, 22),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
@@ -1703,6 +1730,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"portrait": hero_portrait_art,
 		"sigil": hero_sigil,
 		"portrait_level": xp_level_badge,
+		"portrait_badge": xp_level_badge.get_meta("badge_frame") as Panel,
 		"name": status,
 		"health": health_bar,
 		"health_text": health_numbers,
