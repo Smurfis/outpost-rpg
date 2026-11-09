@@ -10,3 +10,7 @@ export_presets.cfg
 *.jks
 *.p12
 .launcher-venv/
+
+# PyroLux Lite license permits game use but not redistribution of addon sources.
+/addons/pyrolux_fx/
+/pyrolux_lite_demo/
