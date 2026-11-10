@@ -26,6 +26,7 @@ var torch_flame: Node3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
 var tool_mesh: MeshInstance3D
+var held_tool_id: String = ""
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
@@ -172,24 +173,51 @@ func set_weapon(id: String) -> void:
 		sword_mesh.scale = Vector3(0.76, 0.76, 0.76)
 		sword_mesh.material_override = _material(Color("b2b6a9"))
 
-## Swaps the visible grip item, leaving the actual weapon slot and combat
-## statistics unchanged. A selected pickaxe or axe is visibly held.
+## The quick-tool selection controls the *visible* wrist-held mesh.
+## The weapon slot, damage, and harvesting stats still belong to game.gd.
+## Reuse the current mesh when refreshing equipment to avoid GPU churn.
 func set_held_tool(tool_id: String) -> void:
 	if sword_mesh == null or weapon_grip == null:
+		return
+	var is_gather_tool: bool = tool_id == "axe" or tool_id == "pickaxe"
+	if is_gather_tool:
+		# Point the head down/forward from the right wrist, clear of the torso.
+		weapon_grip.rotation = Vector3(PI + 0.52, -0.08, 0.19)
+	else:
+		weapon_grip.rotation = Vector3(PI + (0.85 if tool_id == "spear" else 0.64), 0.05, 0.29)
+	if is_gather_tool and held_tool_id == tool_id and is_instance_valid(tool_mesh):
+		sword_mesh.visible = false
 		return
 	if tool_mesh != null and is_instance_valid(tool_mesh):
 		weapon_grip.remove_child(tool_mesh)
 		tool_mesh.queue_free()
-		tool_mesh = null
-	sword_mesh.visible = tool_id not in ["axe", "pickaxe"]
-	if tool_id in ["axe", "pickaxe"] and game != null and bool(game.get("voxel_art_enabled")):
-		tool_mesh = VOXEL_CHARACTER.create_part("hand_axe" if tool_id == "axe" else "hand_pickaxe")
-		if tool_mesh != null:
-			tool_mesh.name = "Held" + tool_id.capitalize()
-			tool_mesh.scale = Vector3.ONE * 0.82
-			weapon_grip.add_child(tool_mesh)
+	tool_mesh = null
+	held_tool_id = ""
+	sword_mesh.visible = true
+	if not is_gather_tool:
+		return
+	var pixel_mode: bool = game != null and bool(game.get("voxel_art_enabled"))
+	var replacement: MeshInstance3D = null
+	if pixel_mode:
+		replacement = VOXEL_CHARACTER.create_part("hand_" + tool_id)
 	else:
-		sword_mesh.visible = true
+		# Real original OBJ models also work in the non-voxel fallback mode.
+		var model_path: String = MODEL_ROOT + "hand_" + tool_id + ".obj"
+		if ResourceLoader.exists(model_path):
+			var mesh: Mesh = load(model_path) as Mesh
+			if mesh != null:
+				replacement = MeshInstance3D.new()
+				replacement.mesh = mesh
+	if replacement == null:
+		# Missing imported art must never leave the player weaponless.
+		return
+	tool_mesh = replacement
+	tool_mesh.name = "Held" + tool_id.capitalize()
+	tool_mesh.position = Vector3(0.0, -0.02, -0.05)
+	tool_mesh.scale = Vector3.ONE * (0.88 if tool_id == "axe" else 0.84)
+	weapon_grip.add_child(tool_mesh)
+	held_tool_id = tool_id
+	sword_mesh.visible = false
 
 func set_spear(equipped: bool) -> void:
 	set_weapon("spear" if equipped else "training_blade")
