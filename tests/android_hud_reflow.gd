@@ -1,6 +1,6 @@
 extends SceneTree
 ## Real touch-layout collision checks for Outpost's landscape HUD.
-## Complements existing tool-slider / orbit / multiplayer gameplay tests.
+## Complements dedicated tool-swap / orbit / multiplayer gameplay tests.
 var failures: int = 0
 
 func _initialize() -> void:
@@ -43,7 +43,7 @@ func _run() -> void:
 	if smart != null:
 		verify(absf(smart.size.x - smart.size.y) <= 2.0 and smart.size.x >= 110.0, "Main tool selector is a real square, finger-sized target")
 		verify(smart.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Input remains handled by main smart-tool swipe handler")
-		verify(smart.get_node_or_null("ToolSwipeChevron") != null, "Main tool still shows drag affordance")
+		verify(smart.get_node_or_null("ToolSwipeChevron") == null and hud.tool_swap_button != null, "Interact has no drag affordance; TOOLS is its own visible button")
 
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	var right_buttons: Array[Control] = []
@@ -221,7 +221,7 @@ func _run() -> void:
 	# Gameplay API remains untouched.
 	game.inventory["pickaxe"] = 1
 	verify(game.select_quick_tool("pickaxe"), "Original held-tool selection still equips owned pickaxe")
-	verify(game.hud.smart_button != null and game.hud.smart_tray != null, "Swipe tray remains available")
+	verify(game.hud.smart_button != null and game.hud.tool_swap_button != null and not game.hud.smart_tray.visible, "Independent TOOLS action replaces obsolete swipe tray")
 	game.queue_free()
 	await process_frame
 	print("HUD REFLOW RESULT: %d failures" % failures)
