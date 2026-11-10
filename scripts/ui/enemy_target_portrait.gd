@@ -132,14 +132,18 @@ func _rarity_for(target: Node) -> String:
         return "elite"
     if target.is_in_group("rare_enemies"):
         return "rare"
-    for field_name in ["rarity_tier", "enemy_rarity", "rarity"]:
+    for field_name in ["enemy_rarity", "rarity", "rarity_tier"]:
         var value: Variant = _field(target, field_name)
         if value is String and str(value).to_lower() in ["normal", "rare", "elite"]:
             return str(value).to_lower()
     return "normal"
 
 func set_target(target: Node, label_text: String = "") -> void:
-    if not is_instance_valid(target) or target == null or not target.is_inside_tree() or not target.visible:
+    if not is_instance_valid(target) or target == null or not target.is_inside_tree():
+        clear_target()
+        return
+    var target_visible: Variant = _field(target, "visible")
+    if target_visible is bool and not bool(target_visible):
         clear_target()
         return
     var alive: Variant = _field(target, "alive")
@@ -191,7 +195,7 @@ func _reflow() -> void:
     _put(portrait_art, Rect2(7, 9, 68, 68), factor)
     _put(portrait_inner_ring, Rect2(4, 6, 74, 74), factor)
     _put(portrait_frame, Rect2(0, 2, 82, 82), factor)
-    _put(name_label, Rect2(93, 7, 202, 29), factor)
+    _put(name_label, Rect2(93, 7, 179, 29), factor)
     _put(level_label, Rect2(278, 8, 42, 27), factor)
     _put(health_bar, Rect2(93, 38, 222, 23), factor)
     _put(health_label, Rect2(97, 39, 212, 21), factor)
