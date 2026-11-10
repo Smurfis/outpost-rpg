@@ -22,8 +22,8 @@ def smooth(t: float) -> float:
 
 
 def repair() -> None:
-    if MARKER.exists():
-        print("Already prepared clean Alpha title background")
+    if MARKER.exists() and MARKER.read_text().strip() == "alpha-title-clean-v2":
+        print("Already prepared clean Alpha title background v2")
         return
     image = Image.open(FILE).convert("RGB")
     if image.size != (1280, 720):
@@ -57,10 +57,38 @@ def repair() -> None:
             old = original[x, y]
             pixels[x, y] = tuple(int(old[c] * (1.0 - mix_amount) + donor[c] * mix_amount) for c in range(3))
 
+    # The approved title background also has two *baked-in*, blurry matte
+    # rectangles at the top, just outside the separately drawn Outpost crest.
+    # These are visible in the 20:9 Android screenshot as opaque brown bands
+    # beside the logo (the wide panorama horizontally stretches the PNG).
+    # Work in native 1280x720 source pixels, not phone screenshot pixels.
+    # Each patch borrows actual scenery from either side of the affected area;
+    # feathering all edges keeps the painted border and sky continuous.
+    # This is a build-time art repair; the original PNG stays tracked in Git.
+    for x0, x1 in ((393, 505), (790, 885)):
+        for y in range(0, 91):
+            vertical = smooth((90.0 - y) / 27.0)
+            for x in range(x0, x1):
+                horizontal = smooth((x - x0) / 16.0) * smooth((x1 - 1 - x) / 16.0)
+                amount = horizontal * vertical
+                if amount <= 0.0:
+                    continue
+                t = smooth((x - x0) / float(x1 - x0))
+                # Sample well outside the original matte. Using different
+                # columns retains the underlying pixel-art texture, instead
+                # of introducing another single-colour rectangle.
+                donor_left_x = max(0, x0 - 3 - int((x - x0) * 0.50))
+                donor_right_x = min(1279, x1 + 3 + int((x1 - x) * 0.50))
+                left = original[donor_left_x, y]
+                right = original[donor_right_x, y]
+                old = original[x, y]
+                donor = tuple(round(left[c] * (1.0 - t) + right[c] * t) for c in range(3))
+                pixels[x, y] = tuple(round(old[c] * (1.0 - amount) + donor[c] * amount) for c in range(3))
+
     clean.save(FILE, optimize=True)
     MARKER.parent.mkdir(parents=True, exist_ok=True)
     MARKER.write_text("Inpainted baked button backdrop slots for this Alpha build.\n")
-    print("Alpha title background regenerated: no permanent shadow rectangles behind reusable buttons.")
+    print("Alpha title background regenerated: repaired button shadows and two upper logo-side mattes.")
 
 
 if __name__ == "__main__":
