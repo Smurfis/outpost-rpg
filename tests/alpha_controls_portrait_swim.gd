@@ -125,6 +125,24 @@ func _run() -> void:
 		for legacy in legacy_parts:
 			all_hidden = all_hidden and not (legacy as MeshInstance3D).visible
 		verify(all_hidden, "%s legacy flame and smoke/shapes disappear behind PyroLux" % station_key)
+	# This is the actual Android smart Interact touch route, not a direct
+	# call to menu.open(). A harvestable next to the loom previously stole
+	# the context and made CRAFT appear completely unresponsive.
+	game.hero.global_position = game.station_positions["loom"] + Vector3(0.0, 0.35, 0.0)
+	verify(game._nearest_resource() != null, "Loom regression location has a nearby gatherable")
+	verify(str(game.smart_context().get("kind", "")) == "craft", "Station CRAFT outranks harvestables in interaction radius")
+	var interact_point: Vector2 = hud.smart_button.get_global_rect().get_center()
+	tap(hud, interact_point, 73)
+	verify(game.menu.visible and game.menu.current_page == "craft" and game.menu.selected_station == "loom",
+		"Single Android Interact tap opens the correct loom crafting recipes")
+	game.menu.close_page()
+	for station_id in ["workbench", "forge", "campfire"]:
+		game.hero.global_position = game.station_positions[station_id] + Vector3(0.0, 0.35, 0.0)
+		verify(str(game.smart_context().get("kind", "")) == "craft", "Interact identifies " + station_id + " at station")
+		tap(hud, interact_point, 74)
+		verify(game.menu.visible and game.menu.current_page == "craft" and game.menu.selected_station == station_id,
+			"Interact touch opens " + station_id + " instead of another station or an inert button")
+		game.menu.close_page()
 	game.queue_free()
 	await process_frame
 
