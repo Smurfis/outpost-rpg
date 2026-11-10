@@ -68,6 +68,7 @@ jobs:
           python3 -m venv .launcher-venv
           .launcher-venv/bin/python -m pip install --disable-pip-version-check cairosvg Pillow
           .launcher-venv/bin/python tools/generate_android_launcher_icons.py
+          .launcher-venv/bin/python tests/android_launcher_approved.py
           # Erase flat opaque slots already painted into the TITLE BACKDROP.
           # The separate button PNG masking is handled by the merged PR #66.
           .launcher-venv/bin/python tools/clean_title_background.py
