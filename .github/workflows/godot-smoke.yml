@@ -26,6 +26,12 @@ jobs:
             echo "Runtime script errors detected"
             exit 1
           fi
+      - name: Verify transparent loading artwork and preserved live controls
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/world_loading_transparent.gd 2>&1 | tee transparent-loading.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TRANSPARENT LOADING:' transparent-loading.log; then exit 1; fi
+          grep -q "TRANSPARENT LOADING RESULT: 0 failures" transparent-loading.log
       - name: Exercise Play button through incremental world generation
         run: |
           set -o pipefail
