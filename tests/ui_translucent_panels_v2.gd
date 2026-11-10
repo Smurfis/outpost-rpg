@@ -47,7 +47,10 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	var hud = game.hud
-	surface(hud.quest_detail_back, "Expanded quest journal", true)
+	check(hud.quest_detail_back.get_theme_stylebox("panel") is StyleBoxEmpty,
+		"Expanded Quest objective has no opaque panel, by user request")
+	check(hud.quest_frame.get_theme_stylebox("panel") is StyleBoxEmpty,
+		"Collapsed Quest header is fully transparent")
 	surface(hud.toast_panel, "Context toast", true)
 	surface(hud.quick_tray, "Consumable quick tray")
 	surface(hud.smart_tray, "Tool-selection tray")
