@@ -1,6 +1,7 @@
 extends Node3D
 ## Ten harvestables; optional voxel art changes visuals, never harvesting rules.
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var kind: String = "wood"
 var active: bool = true
@@ -54,7 +55,10 @@ func _model(id: String, size_factor: Vector3) -> void:
 	var model: MeshInstance3D
 	if _is_voxel_skin():
 		if id == "oak_tree":
-			model = VOXEL_PROPS.tree()
+			# Deterministic species based on world position. Harvesting remains
+			# handled by this resource node; only the mesh/material changes.
+			model = FOLIAGE.tree(FOLIAGE.species_at(global_position.x, global_position.z),
+				posmod(roundi(global_position.x * 7.0 + global_position.z * 11.0), 3))
 		elif id == "rock_deposit":
 			model = VOXEL_PROPS.rock()
 	if model == null:
