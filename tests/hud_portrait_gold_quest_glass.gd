@@ -50,7 +50,7 @@ func _run() -> void:
 	var p: Rect2 = portrait.get_global_rect()
 	var h: Rect2 = hp.get_global_rect()
 	var m: Rect2 = mana.get_global_rect()
-	verify(h.position.x >= p.end.x and h.position.x - p.end.x <= 11.0, "HP starts immediately alongside portrait")
+	verify(h.position.x >= p.end.x - 5.0 and h.position.x - p.end.x <= 11.0, "HP docks to portrait rim, allowing a deliberate three-pixel overlap")
 	verify(absf(h.position.x - m.position.x) <= 1.0, "Mana and HP share one aligned left edge")
 	verify(absf(h.size.x - m.size.x) <= 1.0, "HP and Mana have matching compact widths")
 	verify(h.end.y < m.position.y, "Mana sits beneath health, not on top of it")
@@ -58,16 +58,27 @@ func _run() -> void:
 	verify(status.get_global_rect().end.x < game.get_viewport().get_visible_rect().size.x * 0.30, "Character chrome stays compact on mobile")
 
 	var q_style: StyleBox = q_panel.get_theme_stylebox("panel")
-	verify(q_style is StyleBoxFlat, "Quest uses texture-free alpha-blended frame")
-	if q_style is StyleBoxFlat:
-		verify((q_style as StyleBoxFlat).bg_color.a <= 0.25, "Quest card is transparent over gameplay")
+	verify(q_style is StyleBoxEmpty, "Quest is entirely frameless with only one thin gold underline")
+	verify(hud.quest_rule != null and hud.quest_rule.color.a < 0.50, "Quest underline is faint gold")
 	verify(q_label.get_theme_color("font_color") == SKIN.GOLD, "Quest objective uses the gold inventory/character text")
 	verify(q_label.get_theme_constant("outline_size") >= 2, "Quest objective remains legible on grass")
 	verify(hud.quest_toggle.get_theme_color("font_color") == SKIN.GOLD, "Quest toggle matches gold style")
-	hud.quest_toggle.pressed.emit()
-	verify(hud.quest_detail.visible and hud.quest_detail_back.visible, "Quest still expands through the original functional button")
-	hud.quest_toggle.pressed.emit()
-	verify(not hud.quest_detail.visible, "Quest collapses through the original button")
+	var quest_pos: Vector2 = hud.quest_toggle.get_global_rect().get_center()
+	for index in range(2):
+		var touch_down := InputEventScreenTouch.new()
+		touch_down.index = 26
+		touch_down.position = quest_pos
+		touch_down.pressed = true
+		hud._input(touch_down)
+		var touch_up := InputEventScreenTouch.new()
+		touch_up.index = 26
+		touch_up.position = quest_pos
+		touch_up.pressed = false
+		hud._input(touch_up)
+		if index == 0:
+			verify(hud.quest_detail.visible and hud.quest_detail_back.visible, "Quest expands on real Android touch")
+		else:
+			verify(not hud.quest_detail.visible, "Second Android touch collapses quest")
 
 	verify(absf(hud.xp_bar.get_global_rect().end.y - game.get_viewport().get_visible_rect().size.y) < 1.1, "XP remains flush to the bottom, untouched")
 	verify(game.menu.inventory_window != null and game.mana_limit() == 35.0, "Integrated inventory and mana systems are preserved")
