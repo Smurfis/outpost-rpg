@@ -657,17 +657,23 @@ func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
 			if _land_cell(x, z):
 				continue
-			count += 1
 			var a := Vector3(float(x), 0.0, float(z))
 			var b := Vector3(float(x), 0.0, float(z + 1))
 			var c := Vector3(float(x + 1), 0.0, float(z + 1))
 			var d := Vector3(float(x + 1), 0.0, float(z))
-			st.add_vertex(a)
-			st.add_vertex(b)
-			st.add_vertex(c)
-			st.add_vertex(a)
-			st.add_vertex(c)
-			st.add_vertex(d)
+			# On a curving coast, the tile centre may be offshore while a
+			# triangle crosses the dry half of that cell. Cull each half
+			# using its own centroid, preventing blue sea bleed over sand.
+			if not is_land_at((a.x + b.x + c.x) / 3.0, (a.z + b.z + c.z) / 3.0):
+				st.add_vertex(a)
+				st.add_vertex(b)
+				st.add_vertex(c)
+				count += 1
+			if not is_land_at((a.x + c.x + d.x) / 3.0, (a.z + c.z + d.z) / 3.0):
+				st.add_vertex(a)
+				st.add_vertex(c)
+				st.add_vertex(d)
+				count += 1
 	if count == 0:
 		return null
 	var surface := MeshInstance3D.new()
