@@ -2164,28 +2164,28 @@ func _layout_touch_hud() -> void:
 				menu_origin + Vector2(24.0 * scale + float(column) * (menu_col_width + gutter),
 						99.0 * scale + float(row_index) * (row_height + 11.0 * scale)),
 				Vector2(menu_col_width, row_height)))
-	# Every circular holder is actually square; the centre-to-centre gaps
-	# leave distinct hit targets even with two fingers on a small phone.
-	# Lower smart Interact near full-width XP; keep distinct finger hitboxes.
-	_radial_px(smart_button, screen,
-			Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale), 59.0 * 1.05 * scale)
+	# Position the three combat skills relative to the INTERACT centre,
+	# not independently from the viewport corner.  Equal-radius arc and
+	# equal spacing keep their carved medallions aligned around its left rim.
+	# Android finger hitboxes never overlap TOOLS, Interact, TORCH or XP.
+	var interact_center := Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale)
+	_radial_px(smart_button, screen, interact_center, 59.0 * 1.05 * scale)
 	_radial_px(tool_swap_button, screen,
-			Vector2(screen.x - 90.0 * scale, screen.y - 221.0 * scale), 24.0 * scale)
-	# A compact, slightly lower three-skill arc around Interact.  Keep
-	# each square Android touch target distinct from TOOLS and its neighbours.
-	# Consumables stay put near TORCH, safely above the full-width XP strip.
-	var combat: Array[Vector3] = [
-		Vector3(164.0, 270.0, 37.0 * 1.03), # HEROIC: lower and clear of TOOLS
-		Vector3(199.0, 190.0, 37.0 * 1.03), # CLEAVE: tucked closer to Interact
-		Vector3(199.0, 110.0, 37.0 * 1.03), # BREAK: just left of Interact
-		Vector3(380.0, 83.0, 30.0 * 1.03),  # food/heal close to combat
-		Vector3(451.0, 83.0, 30.0 * 1.03)   # potion beside heal
+			interact_center + Vector2(0.0, -101.0) * scale, 24.0 * scale)
+	var combat_offsets: Array[Vector2] = [
+		Vector2(-90.0, -120.0), # HEROIC: upper-left
+		Vector2(-145.0, -39.0), # CLEAVE: directly left, slightly above
+		Vector2(-138.0, 59.0)   # BREAK: lower-left, clear of XP and TORCH
 	]
-	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
-	for index in range(keys.size()):
-		var spec: Vector3 = combat[index]
-		_radial_px(quick_buttons[keys[index]], screen,
-				Vector2(screen.x - spec.x * scale, screen.y - spec.y * scale), spec.z * scale)
+	var combat_skills: Array[String] = ["skill_1", "skill_2", "skill_3"]
+	for index in range(combat_skills.size()):
+		_radial_px(quick_buttons[combat_skills[index]], screen,
+				interact_center + combat_offsets[index] * scale, 37.0 * 1.03 * scale)
+	# Keep food/heal and potion next to TORCH; they are not combat skills.
+	_radial_px(quick_buttons["consumable"], screen,
+			Vector2(screen.x - 380.0 * scale, screen.y - 83.0 * scale), 30.0 * 1.03 * scale)
+	_radial_px(quick_buttons["potion"], screen,
+			Vector2(screen.x - 451.0 * scale, screen.y - 83.0 * scale), 30.0 * 1.03 * scale)
 	_radial_px(torch_button, screen,
 			Vector2(screen.x - 309.0 * scale, screen.y - 83.0 * scale), 30.0 * 1.03 * scale)
 	if stop_sticky_button != null:
