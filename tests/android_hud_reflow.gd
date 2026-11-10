@@ -179,10 +179,10 @@ func _run() -> void:
 		verify(player_style != null and player_style.bg_color.a < 0.80 and player_style.border_width_left <= 2, "HP/name backing is translucent with a slim border, not opaque wood")
 		verify(absf(status.size.x - 326.0) < 3.0, "Portrait and health frame remains compact on standard Android landscape")
 	if wallet != null:
-		var wallet_style: StyleBoxFlat = wallet.get_theme_stylebox("panel") as StyleBoxFlat
-		verify(wallet_style != null and wallet_style.bg_color.a < 0.65, "Wallet is a lightweight translucent chip")
-		verify(absf(wallet.size.x - 275.0) < 3.0, "Expanded wallet is a fixed-width Android overlay")
-		verify(wallet.get_global_rect().position.x > status.get_global_rect().end.x, "Wallet flyout does not cover the hero portrait or HP")
+		verify(not wallet.visible and not hud.wallet_collapse.visible, "Wallet has no floating background or toggle control")
+		verify(hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Real currencies display as a horizontal row")
+		verify(hud.wallet_coin.get_global_rect().position.x > status.get_global_rect().end.x,
+			"Horizontal wallet starts after hero portrait/HP")
 	if portrait != null and status != null:
 		verify(status.get_global_rect().encloses(portrait.get_global_rect()), "Independent hero portrait stays inside slim status frame")
 	# Simulate ultra-wide coordinates without changing gameplay or the viewport.
@@ -190,13 +190,20 @@ func _run() -> void:
 	hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
 	if status != null and wallet != null:
 		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 391.2) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
-		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 330.0) < 2.0, "At 20:9 wallet flyout stays exactly 275 scaled pixels wide")
+		var previous_end: float = (hud.wallet_coin.anchor_right) * 2400.0
+		for key in ["copper", "silver", "gold", "gems"]:
+			var currency: Label = hud.wallet_currency_rows[key] as Label
+			verify(absf(currency.anchor_top - hud.wallet_coin.anchor_top) < 0.001,
+				"At 20:9 " + key + " remains in one horizontal currency row")
+			verify(currency.anchor_left * 2400.0 >= previous_end - 1.5,
+				"At 20:9 " + key + " does not overlap previous currency")
+			previous_end = currency.anchor_right * 2400.0
 		hud._toggle_wallet()
-		verify(hud.wallet_frame.visible, "Expanded wallet is visible at 20:9")
+		verify(not hud.wallet_frame.visible and hud.wallet_coin.visible,
+			"Obsolete wallet tap cannot create an opaque flyout")
 		hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
-		verify(absf((wallet.anchor_right - wallet.anchor_left) * 2400.0 - 330.0) < 2.0, "Wallet flyout width does not drift when toggled")
-		hud._toggle_wallet()
-		verify(not hud.wallet_frame.visible, "Wallet closes without resizing the surrounding HUD")
+		verify((hud.wallet_currency_rows["gems"] as Label).anchor_right * 2400.0 <= 2400.0,
+			"At 20:9 the passive currency display remains within the viewport")
 	hud._layout_touch_hud()
 
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")

@@ -30,6 +30,8 @@ func _run() -> void:
 	hud.record_loot("wood", 3)
 	await process_frame
 	verify(hud.loot_feed_panel.visible and hud.loot_feed_rows.visible, "Actual grant keeps the compact item feed below Quests")
+	verify(hud.loot_feed_panel.get_theme_stylebox("panel") is StyleBoxEmpty, "Loot and combat feed have no opaque rectangle or border")
+	verify(not hud.loot_feed_title.visible, "No permanent loot/combat heading clutters the screen")
 	verify(not hud.gathered_panel.visible and hud.loot_feed_panel.get_global_rect().position.y >= hud.quest_frame.get_global_rect().end.y, "No persistent Last Gathered card; item feed remains below Quest")
 	verify(hud.loot_feed_entries.size() == 1, "One grant creates one bounded receipt")
 	verify(hud.loot_icon_controls.size() == 1, "Item receipt has exactly one tappable icon")
@@ -75,6 +77,27 @@ func _run() -> void:
 	verify(hud.loot_feed_rows.get_child(0).get_node_or_null("LootReceiptText").text == "Boar defeated", "Combat line renders without pretending it was a loot drop")
 	hud.record_loot("iron", 1)
 	verify(hud.loot_feed_entries.size() == 3, "Log caps at three receipts for mobile readability")
+	hud.record_loot("iron", 4)
+	verify(hud.loot_feed_entries.size() == 3 and int(hud.loot_feed_entries[0].get("amount", 0)) == 5,
+		"Successive loot grants stack in one iron counter instead of duplicate labels")
+	verify(hud.loot_feed_rows.get_child(0).get_node_or_null("LootReceiptText").text.contains("×5 Iron"),
+		"Stacked item caption matches actual accumulated quantity")
+	hud.record_combat_event("Boar defeated")
+	hud.record_combat_event("Boar defeated")
+	verify(str(hud.loot_feed_entries[0].get("kind", "")) == "combat"
+		and int(hud.loot_feed_entries[0].get("count", 0)) == 3,
+		"Repeated identical combat events share one incrementing counter")
+	verify(hud.loot_feed_rows.get_child(0).get_node_or_null("LootReceiptText").text.contains("×3"),
+		"Repeated combat text displays incremented count")
+	hud._advance_loot_feed(2.95)
+	verify(hud.loot_feed_entries.size() > 0 and hud.loot_feed_rows.get_child(0).modulate.a > 0.95,
+		"Loot/combat text stays fully legible for 3 seconds after last increment")
+	hud._advance_loot_feed(0.30)
+	verify(hud.loot_feed_rows.get_child(0).modulate.a < 0.85 and hud.loot_feed_rows.get_child(0).modulate.a > 0.0,
+		"Old loot and combat notifications fade after 3 seconds of inactivity")
+	hud._advance_loot_feed(0.40)
+	verify(hud.loot_feed_entries.is_empty() and not hud.loot_feed_rows.visible,
+		"Idle notifications clear completely after the short fade")
 
 	var desc: String = VIEW.description("stone", game.recipes)
 	verify(not desc.is_empty(), "Item descriptions come from recipes with honest fallback")

@@ -43,7 +43,7 @@ func _run() -> void:
 	var menu_button: Button = holder.get_node_or_null("TopRightMenuButton") as Button
 	var wallet_button: Button = holder.get_node_or_null("WalletCollapse") as Button
 	var bag_button: Button = holder.get_node_or_null("Action_bag") as Button
-	verify(menu_button != null and wallet_button != null and bag_button != null, "MENU / WALLET / BAG have actual individual touch surfaces")
+	verify(menu_button != null and wallet_button != null and bag_button != null, "MENU and BAG remain available; obsolete wallet dropdown reference is retained")
 	if menu_button == null or wallet_button == null or bag_button == null:
 		quit(1)
 		return
@@ -71,10 +71,10 @@ func _run() -> void:
 	hud._input(echo)
 	verify(hud.top_menu_open, "Synthetic Android mouse echo press+release cannot close the freshly opened modal")
 	hud._set_top_menu(false)
-	_tap(hud, wallet_button, 17)
-	verify(hud.wallet_open and hud.wallet_frame.visible, "One WALLET tap expands currency panel")
-	_tap(hud, wallet_button, 18)
-	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Second WALLET tap collapses once, not twice")
+	verify(not wallet_button.visible and not hud.wallet_frame.visible, "Wallet is no longer a clickable dropdown or opaque popup")
+	verify(hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Horizontal currency strip is always present")
+	hud._toggle_wallet()
+	verify(not hud.wallet_open and hud.wallet_coin.visible, "Compatibility wallet toggle cannot hide currency totals")
 
 	_tap(hud, bag_button, 19)
 	verify(game.menu.visible and game.menu.current_page == "bag", "One BAG tap opens real inventory")
