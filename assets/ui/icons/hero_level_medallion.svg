@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" shape-rendering="crispEdges">
+<!-- Portrait-level coin: number drawn by the existing live HUD Label. -->
+<circle cx="32" cy="32" r="29" fill="#281e1b" stroke="#5d321b" stroke-width="5"/>
+<circle cx="32" cy="32" r="26" fill="none" stroke="#e9b54d" stroke-width="5"/>
+<circle cx="32" cy="32" r="21" fill="#222426" stroke="#ffe1a0" stroke-width="2"/>
+<path d="M15 13L20 7L25 12L22 17Z M49 13L44 7L39 12L42 17Z" fill="#fff0a4"/>
+<path d="M21 54L32 59L43 54L39 51L32 54L25 51Z" fill="#c18a3b"/>
+</svg>
