@@ -134,6 +134,8 @@ var loot_feed_panel: Panel
 var loot_feed_title: Label
 var loot_feed_rows: VBoxContainer
 var loot_feed_entries: Array[Dictionary] = []
+const LOOT_FEED_LINGER_SECONDS: float = 3.0
+const LOOT_FEED_FADE_SECONDS: float = 0.55
 var loot_icon_controls: Array[Button] = []
 var loot_tooltip_panel: Panel
 var loot_tooltip_name: Label
@@ -355,9 +357,11 @@ func _ready() -> void:
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "◈ WALLET ▾"
-	wallet_collapse.tooltip_text = "Expand or collapse your wallet"
+	wallet_collapse.tooltip_text = "Currency totals appear directly in the horizontal wallet readout"
 	SKIN.apply_translucent_button(wallet_collapse, "wood")
 	wallet_collapse.focus_mode = Control.FOCUS_NONE
+	wallet_collapse.visible = false
+	wallet_collapse.disabled = true
 	# Native GUI events may consume release before HUD._input on Android.
 	# These three top-right buttons are routed only by HUD._input.
 	wallet_collapse.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -514,7 +518,7 @@ func _ready() -> void:
 	# One consistent utility-card material, not another bulky HUD window.
 	loot_feed_panel = _panel(0.81, 0.56, 0.98, 0.75)
 	loot_feed_panel.name = "LootCombatFeed"
-	loot_feed_panel.add_theme_stylebox_override("panel", HUD_V2.utility_card())
+	loot_feed_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	loot_feed_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	loot_feed_panel.visible = false
 	loot_feed_title = _label("LOOT & COMBAT", 12, SKIN.GOLD, 0.81, 0.56, 0.98, 0.60)
@@ -841,29 +845,83 @@ func _refresh_gathered_card() -> void:
 	gathered_content.text = "\n".join(rows)
 
 func record_loot(item_id: String, quantity: int, item_rarity: int = -1) -> void:
-	# Item rarity is unknown until authoritative item metadata supplies it.
-	# A dungeon's portal rarity does NOT automatically imply item rarity.
+	# The feed is an ephemeral on-screen counter, NOT an inventory. A second
+	# grant of the same item increments its existing receipt and starts
+	# another 3-second window rather than painting another grey notification.
 	if quantity <= 0 or item_id.is_empty() or loot_feed_panel == null:
 		return
+	var quality: int = clampi(item_rarity, -1, 4)
+	for i in range(loot_feed_entries.size()):
+		var old: Dictionary = loot_feed_entries[i]
+		if str(old.get("kind", "")) == "item" and str(old.get("id", "")) == item_id:
+			old["amount"] = int(old.get("amount", 0)) + quantity
+			old["ttl"] = LOOT_FEED_LINGER_SECONDS
+			old["at"] = Time.get_ticks_msec()
+			if quality >= 0:
+				old["rarity"] = quality
+			loot_feed_entries.remove_at(i)
+			loot_feed_entries.push_front(old)
+			_refresh_loot_feed()
+			return
 	loot_feed_entries.push_front({
 		"kind": "item", "id": item_id, "amount": quantity,
-		"rarity": clampi(item_rarity, -1, 4), "at": Time.get_ticks_msec()
+		"rarity": quality, "at": Time.get_ticks_msec(),
+		"ttl": LOOT_FEED_LINGER_SECONDS
 	})
 	if loot_feed_entries.size() > 3:
 		loot_feed_entries.resize(3)
 	_refresh_loot_feed()
 	_layout_touch_hud()
 
+
 func record_combat_event(message: String) -> void:
-	if message.strip_edges().is_empty() or loot_feed_panel == null:
+	var clean: String = message.strip_edges()
+	if clean.is_empty() or loot_feed_panel == null:
 		return
+	for i in range(loot_feed_entries.size()):
+		var old: Dictionary = loot_feed_entries[i]
+		if str(old.get("kind", "")) == "combat" and str(old.get("message", "")) == clean:
+			old["count"] = int(old.get("count", 1)) + 1
+			old["ttl"] = LOOT_FEED_LINGER_SECONDS
+			old["at"] = Time.get_ticks_msec()
+			loot_feed_entries.remove_at(i)
+			loot_feed_entries.push_front(old)
+			_refresh_loot_feed()
+			return
 	loot_feed_entries.push_front({
-		"kind": "combat", "message": message, "at": Time.get_ticks_msec()
+		"kind": "combat", "message": clean, "count": 1,
+		"ttl": LOOT_FEED_LINGER_SECONDS, "at": Time.get_ticks_msec()
 	})
 	if loot_feed_entries.size() > 3:
 		loot_feed_entries.resize(3)
 	_refresh_loot_feed()
 	_layout_touch_hud()
+
+
+func _advance_loot_feed(delta: float) -> void:
+	# Keep each receipt opaque for 3 seconds after its most recent count
+	# increment, then fade for half a second. Different items expire
+	# independently; newer drops never keep old text stuck on screen.
+	if loot_feed_entries.is_empty():
+		return
+	var expired: bool = false
+	for i in range(loot_feed_entries.size() - 1, -1, -1):
+		var entry: Dictionary = loot_feed_entries[i]
+		var lifetime: float = float(entry.get("ttl", LOOT_FEED_LINGER_SECONDS)) - delta
+		entry["ttl"] = lifetime
+		if lifetime <= -LOOT_FEED_FADE_SECONDS:
+			loot_feed_entries.remove_at(i)
+			expired = true
+	if expired:
+		_refresh_loot_feed()
+	if loot_feed_rows == null:
+		return
+	var live_rows: Array[Node] = loot_feed_rows.get_children()
+	for i in range(mini(loot_feed_entries.size(), live_rows.size())):
+		(live_rows[i] as Control).modulate.a = clampf(
+			(float(loot_feed_entries[i].get("ttl", 0.0)) + LOOT_FEED_FADE_SECONDS) / LOOT_FEED_FADE_SECONDS, 0.0, 1.0)
+	if loot_feed_entries.is_empty() and loot_tooltip_panel != null and loot_tooltip_panel.visible:
+		_set_loot_tooltip_visible(false)
 
 func _refresh_loot_feed() -> void:
 	if loot_feed_rows == null:
@@ -874,7 +932,8 @@ func _refresh_loot_feed() -> void:
 		child.queue_free()
 	var showing: bool = not loot_feed_entries.is_empty()
 	loot_feed_panel.visible = showing
-	loot_feed_title.visible = showing
+	# No opaque heading strip. Only floating receipts and their icons.
+	loot_feed_title.visible = false
 	loot_feed_rows.visible = showing
 	for entry in loot_feed_entries:
 		var item_id: String = str(entry.get("id", ""))
@@ -882,7 +941,8 @@ func _refresh_loot_feed() -> void:
 		var count: int = int(entry.get("amount", 0))
 		var is_item: bool = str(entry.get("kind", "item")) == "item"
 		var name_text: String = ITEM_VIEW.display_name(item_id)
-		var title_text: String = "You received ×%d %s" % [count, name_text] if is_item else str(entry.get("message", ""))
+		var times: int = int(entry.get("count", 1))
+		var title_text: String = "You received ×%d %s" % [count, name_text] if is_item else str(entry.get("message", "")) + (" ×%d" % times if times > 1 else "")
 		var line := HBoxContainer.new()
 		line.name = "LootReceipt"
 		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -998,29 +1058,31 @@ func _handle_loot_tooltip_input(event: InputEvent) -> bool:
 	return false
 
 func _toggle_wallet() -> void:
-	if not wallet_open:
-		_set_top_menu(false)
-	wallet_open = not wallet_open
+	# Backward-compatible call: the user approved a passive horizontal
+	# currency strip. Tapping the old Wallet button never opens a flyout.
 	_apply_wallet_layout()
 
+
 func _apply_wallet_layout() -> void:
-	wallet_frame.visible = wallet_open
-	wallet_popup_title.visible = wallet_open
-	wallet_coin.visible = wallet_open
-	wallet_resource_icon.visible = wallet_open
-	wallet_resource_count.visible = wallet_open
+	wallet_open = false
+	wallet_frame.visible = false
+	wallet_popup_title.visible = false
+	wallet_collapse.visible = false
+	wallet_collapse.disabled = true
+	wallet_coin.visible = true
+	wallet_resource_icon.visible = false
+	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
-		(wallet_currency_rows[key] as Label).visible = wallet_open
-	wallet_collapse.text = "◈ WALLET ▴" if wallet_open else "◈ WALLET ▾"
+		(wallet_currency_rows[key] as Label).visible = true
 	_layout_player_chrome()
 
 func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
 		return
-	wallet_coin.text = "COINS     %d" % int(inventory.get("coins", 0))
+	wallet_coin.text = "COINS %d" % int(inventory.get("coins", 0))
 	for key in wallet_currency_rows:
 		var balance: String = str(int(inventory[key])) if inventory.has(key) else "—"
-		(wallet_currency_rows[key] as Label).text = "%s     %s" % [str(key).capitalize(), balance]
+		(wallet_currency_rows[key] as Label).text = "%s %s" % [str(key).to_upper(), balance]
 	for key in inventory:
 		var id: String = str(key)
 		if id in ["coins", "copper", "silver", "gold", "gems", "torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
@@ -1060,9 +1122,7 @@ func _menu_button_pressed() -> void:
 func _set_top_menu(open_menu: bool) -> void:
 	if open_menu:
 		_set_loot_tooltip_visible(false)
-	if open_menu and wallet_open:
-		wallet_open = false
-		_apply_wallet_layout()
+	# Horizontal wallet stays visible while the Menu opens; there is no dropdown.
 	top_menu_open = open_menu
 	top_menu_pressed = false
 	top_menu_panel.visible = open_menu
@@ -1871,8 +1931,8 @@ func _layout_touch_hud() -> void:
 		_place_px(loot_feed_panel, screen, Rect2(receipt_left, loot_top, receipt_width, 89.0 * scale))
 		_place_px(loot_feed_title, screen, Rect2(receipt_left + 9.0 * scale, loot_top + 2.0 * scale,
 				receipt_width - 18.0 * scale, 19.0 * scale))
-		_place_px(loot_feed_rows, screen, Rect2(receipt_left + 8.0 * scale, loot_top + 23.0 * scale,
-				receipt_width - 17.0 * scale, 63.0 * scale))
+		_place_px(loot_feed_rows, screen, Rect2(receipt_left + 4.0 * scale, loot_top + 1.0 * scale,
+				receipt_width - 9.0 * scale, 86.0 * scale))
 		# Tooltip opens towards the centre from the *left* card, instead
 		# of sitting behind right-side combat buttons. All sizes are bounded.
 		var detail_left: float = receipt_left + receipt_width + 10.0 * scale
@@ -1999,6 +2059,9 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * unit, screen.x * 0.23))
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
+	var currency_start: float = maxf(351.0, map_left_base - 560.0)
+	var currency_right: float = map_left_base - 91.0
+	var currency_cell: float = maxf(48.0, (currency_right - currency_start) / 5.0)
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
@@ -2016,7 +2079,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
-		"coins": Rect2(wallet_left + 20, 113, 245, 28),
+		"coins": Rect2(currency_start, 17, currency_cell, 43),
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
@@ -2063,7 +2126,8 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	for i in range(4):
 		var key: String = ["copper", "silver", "gold", "gems"][i]
 		var line: Label = wallet_currency_rows[key] as Label
-		_place_px(line, screen, Rect2(Vector2(wallet_left + 20.0, 145.0 + 29.0 * i) * unit, Vector2(245, 26) * unit))
+		_place_px(line, screen, Rect2(Vector2(currency_start + currency_cell * (float(i) + 1.0), 17.0) * unit,
+				Vector2(currency_cell, 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -2644,6 +2708,7 @@ func _show_zone_name(value: String) -> void:
 		zone_banner_seconds = 2.7
 
 func _process(delta: float) -> void:
+	_advance_loot_feed(delta)
 	# MENU is now tap-to-open; holding is not required to interact.
 	_update_zone_state(delta)
 	if zone_banner_seconds > 0.0:
@@ -2721,7 +2786,7 @@ func _center() -> Vector2:
 	return joystick.get_global_rect().get_center()
 
 func _top_chrome_button_at(pos: Vector2) -> Button:
-	for control in [menu_button, wallet_bag, wallet_collapse]:
+	for control in [menu_button, wallet_bag]:
 		if control != null and control.visible and not control.disabled and control.get_global_rect().has_point(pos):
 			return control
 	return null
