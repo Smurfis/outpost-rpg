@@ -198,6 +198,11 @@ func _process(delta: float) -> void:
 		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
+	# The target frame reflects the same real hostile currently in range for
+	# ATTACK / skills; never a fictional rarity or a second target selection.
+	# Game menus are intentionally free of combat HUD chrome.
+	hud.update_enemy_target(enemy if menu == null or not menu.visible else null,
+		enemy_display_name(enemy) if enemy != null else "")
 
 
 func rotate_camera(direction: int) -> void:
