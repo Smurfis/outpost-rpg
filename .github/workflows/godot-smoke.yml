@@ -196,6 +196,13 @@ jobs:
           timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coastal_beach_biome.gd 2>&1 | tee coastal-beach.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BEACH:' coastal-beach.log; then exit 1; fi
           grep -q "COASTAL BEACH RESULT: 0 failures" coastal-beach.log
+      - name: Prevent infinite swimming falls and ocean rendering through distant unloaded terrain
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 105s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coastal_ocean_swim_safety.gd 2>&1 | tee ocean-swim-safety.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL OCEAN SAFETY:' ocean-swim-safety.log; then exit 1; fi
+          grep -q "OCEAN SAFETY RESULT: 0 failures" ocean-swim-safety.log
+
       - name: Guard against Android water drawing over invisible island terrain
         run: |
           set -o pipefail
