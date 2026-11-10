@@ -25,7 +25,7 @@ func _run() -> void:
 	await process_frame
 	var hud = game.hud
 	var hud_root: Control = hud.root
-	verify(hud_root.get_node_or_null("WalletCollapse") != null, "Wallet starts with a collapse control")
+	verify(hud.wallet_collapse != null and not hud.wallet_collapse.visible, "Old dropdown Wallet button is hidden")
 	var bag: Button = hud_root.get_node_or_null("Action_bag") as Button
 	verify(bag != null, "Live bag action attached to wallet")
 	verify(hud_root.get_node_or_null("CharacterLevelBadge") != null, "Level badge is left of screen-wide XP meter")
@@ -36,21 +36,26 @@ func _run() -> void:
 	verify(hud.wallet_coin.text.contains("147"), "Wallet shows the actual currency owned")
 	hud.render_status(83.0, {"wood": 9, "stone": 5, "coins": 147}, 40, 0, "training_blade", "Find iron", "")
 	verify(hud.wallet_resource_id == "wood" and hud.wallet_resource_count.text.contains("9"), "Recent gather changes the tracked material")
-	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Wallet begins fully collapsed")
+	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Wallet is a permanent transparent strip, not a flyout")
+	verify(hud.wallet_coin.visible and hud.wallet_coin.text.contains("147"), "Coins appear immediately in horizontal wallet")
+	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency")
+	verify(hud.wallet_currency_rows.has("silver") and (hud.wallet_currency_rows["silver"] as Label).visible and (hud.wallet_currency_rows["silver"] as Label).text.contains("—"), "Unavailable silver shows a dash, not fictitious zero")
+	var bounds: Array[Rect2] = []
+	bounds.append(hud.wallet_coin.get_global_rect())
+	for key in ["copper", "silver", "gold", "gems"]:
+		var cell: Label = hud.wallet_currency_rows[key] as Label
+		verify(cell.visible, "Currency appears without a dropdown: " + key)
+		bounds.append(cell.get_global_rect())
+	for i in range(1, bounds.size()):
+		verify(absf(bounds[i].position.y - bounds[0].position.y) < 2.0 and bounds[i].position.x >= bounds[i - 1].end.x - 1.5,
+			"Currency counters are laid out horizontally without overlapping")
 	var old_bag_x: float = bag.anchor_left
 	hud._toggle_wallet()
-	verify(hud.wallet_open and hud.wallet_frame.visible, "Wallet button expands the currency ledger")
-	verify(hud.wallet_coin.visible and hud.wallet_coin.text.contains("147"), "Expanded wallet shows real coins")
-	verify(hud.wallet_resource_count.visible, "Expanded wallet retains tracked material")
-	verify(hud.wallet_currency_rows.has("silver") and (hud.wallet_currency_rows["silver"] as Label).text.contains("—"), "Unimplemented silver is shown as unavailable, not fictitious zero")
-	verify(absf(bag.anchor_left - old_bag_x) < 0.001, "Bag never jumps when wallet opens")
+	verify(hud.wallet_coin.visible and not hud.wallet_frame.visible, "Deprecated wallet toggle never opens an opaque panel")
+	verify(absf(bag.anchor_left - old_bag_x) < 0.001, "Passive wallet never shifts the Bag button")
 	hud._set_top_menu(true)
-	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Opening MENU closes the wallet instead of overlapping it")
+	verify(hud.wallet_coin.visible, "Menu does not hide the horizontal currency display")
 	hud._set_top_menu(false)
-	hud._toggle_wallet()
-	verify(hud.wallet_open and hud.wallet_resource_count.visible, "Wallet can open again")
-	hud._toggle_wallet()
-	verify(not hud.wallet_open, "Second tap collapses the wallet")
 	var top_menu: Button = hud_root.get_node_or_null("TopRightMenuButton") as Button
 	verify(top_menu != null, "One top-right menu replaces button row")
 	var clock: Label = hud_root.get_node_or_null("MinimapFooterClock") as Label
