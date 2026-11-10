@@ -45,6 +45,13 @@ var hero_detail: Label
 var hero_status_frame: Panel
 var hero_portrait_frame: Panel
 var hero_portrait_art: TextureRect
+var enemy_target_hud: Panel
+var enemy_portrait_frame: Panel
+var enemy_portrait_art: TextureRect
+var enemy_name: Label
+var enemy_health_bar: ProgressBar
+var enemy_health_numbers: Label
+var enemy_target_id: int = 0
 var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
@@ -361,6 +368,7 @@ func _ready() -> void:
 	trained_skill_orb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(trained_skill_orb)
 	trained_skill_orb.call("set_skill", "training_blade", 0)
+	_build_enemy_target_hud()
 	hero_detail = _label("", 14, Color("#edc98d"), 0.094, 0.100, 0.268, 0.127)
 	hero_detail.visible = false
 	hero_detail.clip_text = true
@@ -2100,6 +2108,11 @@ func _layout_touch_hud() -> void:
 	# MENU belongs up at the map's top-left shoulder, not detached
 	# beneath the clock. Leave the circular minimap unobstructed.
 	var map_left: float = screen.x - edge - map_side
+	# Target portrait lives beside, not inside, the minimap; it follows
+	# the live player HUD proportions without hiding Bag, Menu or wallet.
+	if enemy_target_hud != null:
+		_place_px(enemy_target_hud, screen, Rect2(map_left - 350.0 * scale,
+			77.0 * scale, 338.0 * scale, 92.0 * scale))
 	# Equal-height carved mobile controls: WALLET / BAG / MENU.
 	# The menu never overlaps the circular map or consumes a combat slot.
 	_place_px(menu_button, screen, Rect2(map_left - 87.0 * scale,
@@ -2220,9 +2233,13 @@ func _layout_touch_hud() -> void:
 	var info_width: float = minf(298.0 * scale, screen.x * 0.30)
 	var info_left: float = (screen.x - info_width) * 0.5
 	var info_y: float = maxf(129.0 * scale, screen.y * 0.175)
+	# Enemy card occupies the upper centre-right.  When targeting, move
+	# short context messages below it rather than covering the portrait.
+	if enemy_target_hud != null and enemy_target_hud.visible:
+		info_y = maxf(info_y, 177.0 * scale)
 	_place_px(context_prompt_frame, screen, Rect2(info_left, info_y, info_width, 32.0 * scale))
 	_place_px(hint, screen, Rect2(info_left + 7.0 * scale, info_y + 2.0 * scale, info_width - 14.0 * scale, 28.0 * scale))
-	var toast_y: float = info_y - 43.0 * scale
+	var toast_y: float = info_y + 38.0 * scale if enemy_target_hud != null and enemy_target_hud.visible else info_y - 43.0 * scale
 	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 33.0 * scale))
 	_place_px(toast_label, screen, Rect2(info_left + 7.0 * scale, toast_y + 1.0 * scale, info_width - 14.0 * scale, 30.0 * scale))
 
@@ -2351,6 +2368,108 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 			var line: Label = wallet_currency_rows[key] as Label
 			_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
 					Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
+
+# A real enemy target HUD, styled after the existing player portrait rather
+# than a generic rectangular overlay.  All pieces are children of one
+# transparent container so visibility, resizing and input work together.
+func _build_enemy_target_hud() -> void:
+	enemy_target_hud = Panel.new()
+	enemy_target_hud.name = "EnemyTargetHUD"
+	enemy_target_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_target_hud.add_theme_stylebox_override("panel", _hud_glass(0.0, 0.0))
+	root.add_child(enemy_target_hud)
+	_anchors(enemy_target_hud, 0.52, 0.11, 0.80, 0.21)
+	enemy_portrait_frame = Panel.new()
+	enemy_portrait_frame.name = "EnemyPortraitFrame"
+	enemy_portrait_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Reuse the actual PLAYER ring style; both portraits have matching
+	# corner radius, gold border, transparent centre and 4px inset.
+	enemy_portrait_frame.add_theme_stylebox_override("panel",
+		hero_portrait_frame.get_theme_stylebox("panel").duplicate(true) as StyleBox)
+	enemy_target_hud.add_child(enemy_portrait_frame)
+	_anchors(enemy_portrait_frame, 0.0, 0.0, 88.0 / 338.0, 88.0 / 92.0)
+	enemy_portrait_art = TextureRect.new()
+	enemy_portrait_art.name = "EnemyPortrait"
+	enemy_portrait_art.texture = load("res://assets/ui/icons/enemy_boar_portrait.svg") as Texture2D
+	var portrait_mask := ShaderMaterial.new()
+	portrait_mask.shader = load("res://assets/ui/icons/portrait_circle.gdshader") as Shader
+	enemy_portrait_art.material = portrait_mask
+	enemy_portrait_art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	enemy_portrait_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	enemy_portrait_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	enemy_portrait_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_target_hud.add_child(enemy_portrait_art)
+	_anchors(enemy_portrait_art, 4.0 / 338.0, 4.0 / 92.0, 84.0 / 338.0, 84.0 / 92.0)
+	enemy_name = Label.new()
+	enemy_name.name = "EnemyDisplayName"
+	enemy_name.text = "Wild boar"
+	enemy_name.add_theme_font_size_override("font_size", 20)
+	enemy_name.add_theme_color_override("font_color", SKIN.GOLD)
+	enemy_name.add_theme_color_override("font_outline_color", Color("#171114"))
+	enemy_name.add_theme_constant_override("outline_size", 2)
+	enemy_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	enemy_name.clip_text = true
+	enemy_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	enemy_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_target_hud.add_child(enemy_name)
+	_anchors(enemy_name, 95.0 / 338.0, 5.0 / 92.0, 1.0, 34.0 / 92.0)
+	enemy_health_bar = ProgressBar.new()
+	enemy_health_bar.name = "EnemyHealthBar"
+	enemy_health_bar.max_value = 100.0
+	enemy_health_bar.value = 100.0
+	enemy_health_bar.show_percentage = false
+	enemy_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_health_bar.add_theme_stylebox_override("background",
+		health_bar.get_theme_stylebox("background").duplicate(true) as StyleBox)
+	enemy_health_bar.add_theme_stylebox_override("fill",
+		health_bar.get_theme_stylebox("fill").duplicate(true) as StyleBox)
+	enemy_target_hud.add_child(enemy_health_bar)
+	_anchors(enemy_health_bar, 95.0 / 338.0, 41.0 / 92.0, 1.0, 64.0 / 92.0)
+	enemy_health_numbers = Label.new()
+	enemy_health_numbers.name = "EnemyHealthNumbers"
+	enemy_health_numbers.add_theme_font_size_override("font_size", 15)
+	enemy_health_numbers.add_theme_color_override("font_color", Color("#fff1db"))
+	enemy_health_numbers.add_theme_color_override("font_outline_color", Color("#1b1110"))
+	enemy_health_numbers.add_theme_constant_override("outline_size", 1)
+	enemy_health_numbers.text = "HP 32 / 32"
+	enemy_health_numbers.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	enemy_health_numbers.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	enemy_health_numbers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_target_hud.add_child(enemy_health_numbers)
+	_anchors(enemy_health_numbers, 97.0 / 338.0, 42.0 / 92.0, 1.0, 63.0 / 92.0)
+	enemy_target_hud.visible = false
+
+func set_enemy_target(enemy: Node) -> void:
+	if enemy_target_hud == null:
+		return
+	var shown: bool = enemy != null and is_instance_valid(enemy)
+	if shown:
+		shown = bool(enemy.get("alive")) and (enemy.get("hp") is float or enemy.get("hp") is int)
+	if not shown:
+		var was_visible: bool = enemy_target_hud.visible
+		enemy_target_hud.visible = false
+		enemy_target_id = 0
+		if was_visible:
+			_layout_touch_hud()
+		return
+	var hit_points: float = maxf(0.0, float(enemy.get("hp")))
+	var full_health: Variant = enemy.get("max_hp")
+	var maximum: float = maxf(1.0, float(full_health)) if full_health is float or full_health is int else maxf(1.0, hit_points)
+	if hit_points <= 0.0:
+		set_enemy_target(null)
+		return
+	var next_id: int = enemy.get_instance_id()
+	if next_id != enemy_target_id:
+		enemy_target_id = next_id
+		enemy_name.text = game.enemy_display_name(enemy) if game != null else enemy.name.capitalize()
+		var portrait_path: String = "res://assets/ui/icons/enemy_guardian_portrait.svg" if enemy.is_in_group("dungeon_guardians") else "res://assets/ui/icons/enemy_boar_portrait.svg"
+		enemy_portrait_art.texture = load(portrait_path) as Texture2D
+	enemy_health_bar.max_value = maximum
+	enemy_health_bar.value = clampf(hit_points, 0.0, maximum)
+	enemy_health_numbers.text = "HP %d / %d" % [ceili(hit_points), ceili(maximum)]
+	if not enemy_target_hud.visible:
+		enemy_target_hud.visible = true
+		_layout_touch_hud()
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
