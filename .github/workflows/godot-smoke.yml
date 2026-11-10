@@ -56,6 +56,13 @@ jobs:
           timeout --signal=TERM --kill-after=5s 50s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_updater.gd 2>&1 | tee android-updater.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ANDROID UPDATER:' android-updater.log; then exit 1; fi
           grep -q "ANDROID UPDATER RESULT: 0 failures" android-updater.log
+      - name: Validate dedicated tool swap, smart-action hold and transparent Quest dropdown
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 70s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_tool_swap_quest_touch.gd 2>&1 | tee tool-quest.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD TOOLS:' tool-quest.log; then exit 1; fi
+          grep -q "HUD TOOLS RESULT: 0 failures" tool-quest.log
+
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
