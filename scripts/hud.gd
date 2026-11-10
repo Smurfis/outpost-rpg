@@ -2,6 +2,9 @@ extends CanvasLayer
 ## Outpost mobile HUD: compact live panels, gold-ringed touch actions and a
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const ACTION_FRAME_ROOT := "res://assets/ui/action_buttons/"
+const ACTION_RADIAL = preload("res://scripts/ui/action_cooldown_ring.gd")
+const ACTION_SKILL_LEVELS = preload("res://scripts/progression/character_levels.gd")
 const HUD_V2 = preload("res://scripts/ui/hud_v2_components.gd")
 const ITEM_VIEW = preload("res://scripts/ui/outpost_item_view.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
@@ -2194,23 +2197,13 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		heal_button = button
 	SKIN.apply_button(button, "wood")
 	if kind == "round":
-		var normal: StyleBoxFlat = SKIN.flat("hud")
-		# No heavy gold donut around the touch controls: understated
-		# translucent frame leaves actual icon and ability art prominent.
-		normal.bg_color = Color(0.14, 0.11, 0.12, 0.77)
-		normal.border_color = Color(0.83, 0.67, 0.44, 0.37)
-		normal.set_border_width_all(2)
-		normal.set_corner_radius_all(95)
-		var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-		pressed.bg_color = Color(0.48, 0.31, 0.19, 0.90)
-		pressed.border_color = Color(1.0, 0.90, 0.65, 0.58)
-		var disabled: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-		disabled.bg_color = Color("#342d29")
-		disabled.border_color = Color("#81725e")
-		button.add_theme_stylebox_override("normal", normal)
-		button.add_theme_stylebox_override("hover", normal)
-		button.add_theme_stylebox_override("pressed", pressed)
-		button.add_theme_stylebox_override("disabled", disabled)
+		# Texture-only wooden coin: uninterrupted upper gold rim, no rope,
+		# side flanges, tabs or opaque rectangular backdrop.
+		for frame_state in ["normal", "hover", "pressed", "disabled"]:
+			var coin := StyleBoxTexture.new()
+			var asset: String = "inactive.svg" if frame_state == "disabled" else "pressed.svg" if frame_state == "pressed" else "active.svg"
+			coin.texture = load(ACTION_FRAME_ROOT + asset) as Texture2D
+			button.add_theme_stylebox_override(frame_state, coin)
 	else:
 		for state in ["normal", "hover", "pressed", "disabled"]:
 			button.add_theme_stylebox_override(state, SKIN.translucent_surface(false, state in ["hover", "pressed"], true))
@@ -2218,7 +2211,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
 	art_icon.name = "ActionIcon"
-	var icon_path: String = "res://assets/ui/icons/" + key + ".png"
+	var icon_path: String = ACTION_FRAME_ROOT + "hand.svg" if key == "interact" else ACTION_FRAME_ROOT + "red_potion.svg" if key == "potion" else "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
 		var ui_icon: String = "res://assets/ui/icons/" + key + ".svg"
 		if ResourceLoader.exists(ui_icon):
@@ -2259,6 +2252,19 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 		art_icon.anchor_bottom = 0.63
 		caption.anchor_top = 0.66
 		caption.anchor_bottom = 0.92
+		# The central context art takes the whole button, not an extra hand
+		# sitting below the combat tools or a wordy interact tooltip.
+		if key == "interact":
+			caption.text = ""
+			art_icon.anchor_left = 0.19
+			art_icon.anchor_right = 0.81
+			art_icon.anchor_top = 0.17
+			art_icon.anchor_bottom = 0.83
+		var cooldown_overlay: Control = ACTION_RADIAL.new()
+		cooldown_overlay.name = "CooldownRing"
+		cooldown_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(cooldown_overlay)
+		cooldown_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if key == "torch":
 		torch_label = caption
 		button.pressed.connect(_toggle_torch)
@@ -2447,23 +2453,37 @@ func _refresh_quick_radials() -> void:
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
 		if label != null:
 			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["POWER", "CLEAVE", "SUNDER"][i] if unlocked else "LOCK"
+		var ring: Control = button.get_node_or_null("CooldownRing") as Control
+		if ring != null:
+			ring.call("set_cooldown", time_left, ACTION_SKILL_LEVELS.cooldown_for_skill(skill))
+		var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
+		if art != null:
+			art.modulate = Color("#88848a") if button.disabled else Color.WHITE
 	for kind in ["potion", "consumable"]:
 		var button: Button = quick_buttons.get(kind) as Button
 		if button == null:
 			continue
 		var item: String = str(game.quick_slots.get(kind, ""))
-		if int(game.inventory.get(item, 0)) <= 0:
+		var quantity: int = int(game.inventory.get(item, 0))
+		if quantity <= 0:
 			item = ""
+			quantity = 0
+		var time_left: float = float(game.quick_use_cooldowns.get(kind, 0.0))
+		var can_heal: bool = game.hero != null and game.hero.health < 99.9
+		button.disabled = item == "" or time_left > 0.0 or not can_heal
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
 		if label != null:
-			label.text = "EMPTY" if item == "" else item.to_upper()
-		button.modulate = Color("#b9afae") if item == "" else Color.WHITE
-		if quick_icon_cache.get(kind, "-") != item:
-			quick_icon_cache[kind] = item
-			var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
-			if art != null:
-				var icon_id: String = item if item != "" else "heart" if kind == "potion" else "meal"
-				art.texture = load("res://assets/icons/" + icon_id + ".svg") as Texture2D
+			label.text = "x%d" % quantity if quantity > 0 else "EMPTY"
+		var ring: Control = button.get_node_or_null("CooldownRing") as Control
+		if ring != null:
+			ring.call("set_cooldown", time_left, game.QUICK_USE_COOLDOWN)
+		var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
+		if art != null:
+			art.modulate = Color("#858188") if button.disabled else Color.WHITE
+			if quick_icon_cache.get(kind, "-") != item:
+				quick_icon_cache[kind] = item
+				var icon_path: String = ACTION_FRAME_ROOT + "red_potion.svg" if kind == "potion" else "res://assets/icons/" + ("meal" if item == "" else item) + ".svg"
+				art.texture = load(icon_path) as Texture2D
 
 func _build_smart_tray() -> void:
 	smart_tray = Panel.new()
@@ -2608,18 +2628,26 @@ func _refresh_smart_button() -> void:
 	if game == null or smart_button == null:
 		return
 	var context: Dictionary = game.smart_context()
-	var title: Label = smart_button.get_node_or_null("ActionLabel") as Label
+	var requested: String = str(context.get("icon", "hand"))
+	if requested not in ["hand", "sword", "axe", "pickaxe"]:
+		requested = "hand"
 	var icon: TextureRect = smart_button.get_node_or_null("ActionIcon") as TextureRect
-	if title != null:
-		title.text = str(context.get("label", "INTERACT"))
-	var requested: String = str(context.get("icon", "gather"))
 	if icon != null and requested != smart_icon_id:
 		smart_icon_id = requested
-		var path: String = "res://assets/ui/icons/" + requested + ".png"
-		if not ResourceLoader.exists(path):
-			path = "res://assets/icons/" + requested + ".svg"
-		if ResourceLoader.exists(path):
-			icon.texture = load(path) as Texture2D
+		icon.texture = load(ACTION_FRAME_ROOT + requested + ".svg") as Texture2D
+	var title: Label = smart_button.get_node_or_null("ActionLabel") as Label
+	if title != null:
+		title.text = ""
+	var kind: String = str(context.get("kind", "none"))
+	# An idle smart button remains swipable for owned-tool selection; the
+	# visual greying must not disable the existing hold-and-slide input.
+	var time_left: float = game.attack_delay if kind == "attack" else game.gather_delay if kind == "gather" else 0.0
+	var total: float = 0.55 if kind == "attack" else 0.33 if kind == "gather" else 1.0
+	var available: bool = kind != "none" and time_left <= 0.0
+	smart_button.modulate = Color.WHITE if available else Color("#858188")
+	var ring: Control = smart_button.get_node_or_null("CooldownRing") as Control
+	if ring != null:
+		ring.call("set_cooldown", time_left, total)
 
 func _toggle_quest() -> void:
 	quest_expanded = not quest_expanded

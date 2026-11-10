@@ -54,6 +54,9 @@ const MANA_REGEN_PER_SECOND: float = 2.5
 var mana: float = MAX_MANA
 var weapon_enchants: Dictionary = {} # Owned weapon-id -> fire.
 var quick_slots: Dictionary = {"potion":"", "consumable":""}
+# Runtime-only recovery time: drawn as a genuine radial on the matching HUD slot.
+const QUICK_USE_COOLDOWN: float = 4.0
+var quick_use_cooldowns: Dictionary = {"potion": 0.0, "consumable": 0.0}
 var kills: int = 0
 var spear_crafted: bool = false
 var attack_delay: float = 0.0
@@ -154,6 +157,8 @@ func _process(delta: float) -> void:
 	gather_delay = maxf(0.0, gather_delay - delta)
 	for id in skill_cooldowns:
 		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
+	for slot in quick_use_cooldowns:
+		quick_use_cooldowns[slot] = maxf(0.0, float(quick_use_cooldowns[slot]) - delta)
 	mana = minf(MAX_MANA, mana + MANA_REGEN_PER_SECOND * delta)
 	world_time += delta
 	_camera(delta)
@@ -773,25 +778,25 @@ func select_quick_tool(item_id: String) -> bool:
 	return true
 
 func smart_context() -> Dictionary:
-	# Within the working range, the actual crafting station must win over
-	# nearby harvestable nodes (especially by the loom and forge). Otherwise
-	# the same Interact tap silently gathers/attacks instead of opening craft.
+	# One smart action, showing its REAL current intent; never a redundant
+	# permanent hand beneath the sword/axe/pickaxe. The art is not a tooltip.
 	var workshop: String = closest_station()
 	if workshop != "":
-		return {"kind":"craft", "label":"CRAFT", "icon":"craft"}
+		return {"kind": "craft", "label": "CRAFT", "icon": "hand"}
 	var resource = _nearest_resource()
 	var enemy = _nearest_enemy()
 	var combat_tool: bool = active_quick_tool in ["training_blade", "spear", "iron_blade", "shield"]
 	if enemy != null and (resource == null or combat_tool):
-		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	if resource != null:
-		var resource_tool: String = "axe" if str(resource.kind) == "wood" else "pickaxe" if str(resource.kind) in ["stone", "iron", "coal"] else "satchel"
-		return {"kind":"gather", "label":"GATHER", "icon":resource_tool if active_quick_tool == resource_tool else "gather"}
+		var kind: String = str(resource.kind)
+		var tool_icon: String = "axe" if kind == "wood" else "pickaxe" if kind in ["stone", "iron", "coal"] else "hand"
+		return {"kind": "gather", "label": "GATHER", "icon": tool_icon}
 	if enemy != null:
-		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
-		return {"kind":"torch", "label":"TORCH", "icon":"torch"}
-	return {"kind":"none", "label":"INTERACT", "icon":active_quick_tool if active_quick_tool != "training_blade" else "gather"}
+		return {"kind": "torch", "label": "TORCH", "icon": "hand"}
+	return {"kind": "none", "label": "INTERACT", "icon": "hand"}
 
 func smart_interact() -> void:
 	if menu != null and menu.visible:
@@ -1175,6 +1180,8 @@ func set_quick_consumable(slot: String, item_id: String) -> bool:
 func use_quick_consumable(slot: String) -> bool:
 	if slot not in ["potion", "consumable"]:
 		return false
+	if float(quick_use_cooldowns.get(slot, 0.0)) > 0.0:
+		return false
 	var item: String = str(quick_slots.get(slot, ""))
 	if item == "" or int(inventory.get(item, 0)) <= 0:
 		return false
@@ -1182,6 +1189,8 @@ func use_quick_consumable(slot: String) -> bool:
 		return false
 	var amount: float = 65.0 if item == "tonic" else 75.0 if item == "stew" else 40.0
 	consume(item, amount)
+	# Recovery starts only after an item actually heals, not on an empty tap.
+	quick_use_cooldowns[slot] = QUICK_USE_COOLDOWN
 	if int(inventory.get(item, 0)) <= 0:
 		quick_slots[slot] = ""
 		_save()
