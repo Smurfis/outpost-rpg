@@ -49,8 +49,43 @@ func _run() -> void:
 	verify(hud.skill_slot_rows.size() == 3, "Skill page has three framed ability slots")
 	verify(hud.skill_slot_rows[0].text.contains("POWER STRIKE") and hud.skill_slot_rows[0].text.contains("UNLOCKED"), "Existing first ability is live and unlocked")
 	verify(hud.skill_slot_rows[2].text.contains("RANK 5"), "Third ability correctly displays actual unlock rank")
-	hud.skill_detail_panel.visible = false
+	verify(hud.trained_skill_orb.get_parent() == hud.skill_detail_panel and hud.trained_skill_orb.is_visible_in_tree(),
+		"Real trained sword XP icon is visible ONLY inside Skills modal")
+	verify(hud.skills_close_button != null and hud.skills_close_x != null and hud.skills_close_x.is_visible_in_tree(),
+		"Both bottom CLOSE and top-right red X exist on Skills")
+	# Android touch path must activate the actual close button rather than
+	# depending on a native GUI pressed event that the HUD consumes.
+	var bottom_close_point: Vector2 = hud.skills_close_button.get_global_rect().get_center()
+	_touch(hud, true, bottom_close_point, 40)
+	verify(hud.skill_detail_panel.visible, "Touch-down alone does not dismiss the Skills panel")
+	_touch(hud, false, bottom_close_point, 40)
+	verify(not hud.skill_detail_panel.visible and not hud.trained_skill_orb.is_visible_in_tree(),
+		"One press/release on bottom CLOSE dismisses Skills and hides mastery icon")
+	hud._show_skill_details()
+	var x_point: Vector2 = hud.skills_close_x.get_global_rect().get_center()
+	_touch(hud, true, x_point, 41)
+	_touch(hud, false, x_point, 41)
+	verify(not hud.skill_detail_panel.visible, "One Android tap on Skills red X closes immediately")
+	hud._show_skill_details()
+	_touch(hud, true, bottom_close_point, 42)
+	_touch(hud, false, bottom_close_point + Vector2(70, -100), 42)
+	verify(hud.skill_detail_panel.visible, "Dragging away from CLOSE doesn't falsely close Skills")
+	# KEY_BACK / Escape is a supported alternative for Android hardware keys.
+	var cancel := InputEventAction.new()
+	cancel.action = "ui_cancel"
+	cancel.pressed = true
+	hud._input(cancel)
+	verify(not hud.skill_detail_panel.visible, "Escape / Android Back closes Skills")
 
+	hud._set_movement_stick_size(120.0)
+	verify(is_equal_approx(hud.movement_stick_scale, 1.20), "Joystick size settings apply 120 percent")
+	verify(is_equal_approx(hud.joystick.size.x, 148.0 * 1.2) and is_equal_approx(hud.knob.size.x, 55.0 * 1.2),
+		"Both larger outer ring and thumb scale consistently")
+	verify(is_equal_approx(hud.knob.position.x, (hud.joystick.size.x - hud.knob.size.x) * 0.5),
+		"Enlarged joystick thumb remains correctly centered at neutral")
+	verify(hud.joystick.get_global_rect().end.y < hud.xp_bar.get_global_rect().position.y,
+		"Large joystick stays clear of bottom XP strip")
+	verify(not hud.trained_skill_orb.is_visible_in_tree(), "No stray sword/attack XP icon visible under joystick during gameplay")
 	hud._set_floating_mode(false)
 	hud._set_adaptive_joystick(true)
 	verify(hud.adaptive_joystick_enabled and hud.adaptive_joystick_toggle.button_pressed, "Adaptive joystick setting is on and reflected in controls")
