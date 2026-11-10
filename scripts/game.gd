@@ -164,7 +164,10 @@ func _process(delta: float) -> void:
 	# Swimming now handles the shore and surface. Only recover if the hero
 	# somehow falls below the seabed; don't teleport normal swimmers home.
 	# Dungeon instances remain isolated from overworld depth checks.
-	if voxel_art_enabled and chunk_streaming_enabled and not hero.swimming and hero.global_position.y < -7.0 and absf(hero.global_position.x) < 96.0 and absf(hero.global_position.z) < 96.0:
+	# Failsafe for players that were already outside the submerged map
+	# before upgrading an Alpha build. Private dungeons are far away and
+	# must never be affected by this overworld-only recovery.
+	if voxel_art_enabled and chunk_streaming_enabled and not hero.swimming and hero.global_position.y < -9.0 and absf(hero.global_position.x) < 110.0 and absf(hero.global_position.z) < 110.0:
 		hero.global_position = Vector3(0, 0.35, 0)
 		hero.velocity = Vector3.ZERO
 		hero.knockback_velocity = Vector3.ZERO
@@ -369,10 +372,17 @@ func _world() -> void:
 	# underneath its centre; outside it the chunk trimeshes own collision.
 	var half_extent: float = 96.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
 	var span: float = half_extent * 2.0
-	_wall(Vector3(-half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
-	_wall(Vector3(half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
-	_wall(Vector3(0, 2.0, -half_extent), Vector3(span, 6.0, 0.5))
-	_wall(Vector3(0, 2.0, half_extent), Vector3(span, 6.0, 0.5))
+	# Originally the border collider ended at Y=-1, above the sea level
+	# (-2.82). The swimmer could pass beneath the wall into an unmeshed
+	# infinite ocean, where swimming deactivated and gravity never stopped.
+	# Extend only the streamed-island barriers below the actual seabed.
+	var sea_border: bool = voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled
+	var boundary_y: float = -7.0 if sea_border else 2.0
+	var boundary_height: float = 24.0 if sea_border else 6.0
+	_wall(Vector3(-half_extent, boundary_y, 0), Vector3(0.5, boundary_height, span))
+	_wall(Vector3(half_extent, boundary_y, 0), Vector3(0.5, boundary_height, span))
+	_wall(Vector3(0, boundary_y, -half_extent), Vector3(span, boundary_height, 0.5))
+	_wall(Vector3(0, boundary_y, half_extent), Vector3(span, boundary_height, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
 	if voxel_art_enabled:
