@@ -80,6 +80,12 @@ var toast_panel: Panel
 var items: Dictionary = {}
 var joystick: Panel
 var knob: Panel
+var movement_stick_scale: float = 1.0
+var movement_stick_slider: HSlider
+var movement_stick_size_label: Label
+const STICK_BASE_DIAMETER: float = 148.0
+const STICK_THUMB_DIAMETER: float = 55.0
+const STICK_INPUT_RADIUS: float = 55.0
 var move_vector := Vector2.ZERO
 var finger := -1
 var mouse_stick := false
@@ -300,7 +306,7 @@ func _ready() -> void:
 	rank_frame.bg_color = Color(0.12, 0.10, 0.10, 0.85)
 	rank_frame.border_color = Color(0.91, 0.72, 0.36, 0.83)
 	rank_frame.set_border_width_all(1)
-	rank_frame.set_corner_radius_all(11)
+	rank_frame.set_corner_radius_all(100)
 	rank_frame.set_content_margin_all(1)
 	var level_frame := Panel.new()
 	level_frame.name = "CharacterLevelBadgeFrame"
@@ -1209,12 +1215,46 @@ func _build_control_settings() -> void:
 
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
-	floating_mode_toggle.text = "Dynamic thumbstick"
+	floating_mode_toggle.text = "Dynamic movement stick (appears at touch)"
 	floating_mode_toggle.add_theme_font_size_override("font_size", 16)
 	floating_mode_toggle.custom_minimum_size.y = 39
 	floating_mode_toggle.toggled.connect(_set_floating_mode)
 	stack.add_child(floating_mode_toggle)
 	settings_touch_buttons.append(floating_mode_toggle)
+	var stick_size_row := HBoxContainer.new()
+	stick_size_row.name = "MovementStickSizeRow"
+	stick_size_row.add_theme_constant_override("separation", 9)
+	stack.add_child(stick_size_row)
+	var stick_size_title := Label.new()
+	stick_size_title.text = "Movement stick size"
+	stick_size_title.add_theme_font_size_override("font_size", 16)
+	stick_size_title.add_theme_color_override("font_color", SKIN.CREAM)
+	stick_size_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stick_size_row.add_child(stick_size_title)
+	movement_stick_size_label = Label.new()
+	movement_stick_size_label.name = "MovementStickSizeValue"
+	movement_stick_size_label.text = "100%"
+	movement_stick_size_label.add_theme_color_override("font_color", SKIN.GOLD)
+	movement_stick_size_label.add_theme_font_size_override("font_size", 17)
+	stick_size_row.add_child(movement_stick_size_label)
+	movement_stick_slider = HSlider.new()
+	movement_stick_slider.name = "MovementStickSizeSlider"
+	movement_stick_slider.min_value = 80.0
+	movement_stick_slider.max_value = 150.0
+	movement_stick_slider.step = 5.0
+	movement_stick_slider.value = 100.0
+	movement_stick_slider.custom_minimum_size = Vector2(0, 42)
+	movement_stick_slider.mouse_filter = Control.MOUSE_FILTER_STOP
+	movement_stick_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	movement_stick_slider.add_theme_stylebox_override("slider", SKIN.translucent_surface(false))
+	movement_stick_slider.value_changed.connect(_set_movement_stick_size)
+	stack.add_child(movement_stick_slider)
+	var movement_note := Label.new()
+	movement_note.text = "Fixed: lower-left ring. Dynamic: appears where you touch the left movement area."
+	movement_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	movement_note.add_theme_font_size_override("font_size", 13)
+	movement_note.add_theme_color_override("font_color", SKIN.CREAM)
+	stack.add_child(movement_note)
 
 	adaptive_joystick_toggle = CheckButton.new()
 	adaptive_joystick_toggle.name = "AdaptiveJoystickToggle"
@@ -1644,8 +1684,33 @@ func _activate_settings_button(action: BaseButton) -> void:
 
 func _set_floating_mode(enabled: bool) -> void:
 	floating_joystick_enabled = enabled
+	if floating_mode_toggle != null:
+		floating_mode_toggle.set_pressed_no_signal(enabled)
 	_reset_touch()
 	_save_control_prefs()
+
+
+func _set_movement_stick_size(value: float) -> void:
+	movement_stick_scale = clampf(roundf(value / 5.0) * 0.05, 0.8, 1.5)
+	if movement_stick_size_label != null:
+		movement_stick_size_label.text = "%d%%" % roundi(movement_stick_scale * 100.0)
+	_apply_movement_stick_size()
+	_save_control_prefs()
+
+
+func _apply_movement_stick_size() -> void:
+	if joystick == null or knob == null:
+		return
+	joystick.size = Vector2.ONE * STICK_BASE_DIAMETER * movement_stick_scale
+	knob.size = Vector2.ONE * STICK_THUMB_DIAMETER * movement_stick_scale
+	var ring: StyleBoxFlat = joystick.get_theme_stylebox("panel") as StyleBoxFlat
+	if ring != null:
+		ring.set_corner_radius_all(1000)
+	var thumb: StyleBoxFlat = knob.get_theme_stylebox("panel") as StyleBoxFlat
+	if thumb != null:
+		thumb.set_corner_radius_all(1000)
+	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0 * movement_stick_scale * movement_stick_scale
+	_position_stick()
 
 func _set_adaptive_joystick(enabled: bool) -> void:
 	adaptive_joystick_enabled = enabled
@@ -1679,10 +1744,14 @@ func _load_control_prefs() -> void:
 		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
 		adaptive_joystick_enabled = bool(config.get_value("controls", "adaptive_joystick", false))
 		sticky_movement_enabled = bool(config.get_value("controls", "sticky_movement", false))
+		movement_stick_scale = clampf(float(config.get_value("controls", "movement_stick_scale", 1.0)), 0.8, 1.5)
 		player_display_name = str(config.get_value("profile", "display_name", "Adventurer")).strip_edges()
 		if player_display_name.is_empty():
 			player_display_name = "Adventurer"
 	floating_mode_toggle.set_pressed_no_signal(floating_joystick_enabled)
+	movement_stick_slider.set_value_no_signal(movement_stick_scale * 100.0)
+	movement_stick_size_label.text = "%d%%" % roundi(movement_stick_scale * 100.0)
+	_apply_movement_stick_size()
 	adaptive_joystick_toggle.set_pressed_no_signal(adaptive_joystick_enabled)
 	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
@@ -1691,6 +1760,7 @@ func _load_control_prefs() -> void:
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
+	config.set_value("controls", "movement_stick_scale", movement_stick_scale)
 	config.set_value("controls", "adaptive_joystick", adaptive_joystick_enabled)
 	config.set_value("controls", "sticky_movement", sticky_movement_enabled)
 	config.set_value("profile", "display_name", player_display_name)
@@ -1897,8 +1967,8 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"portrait_frame": Rect2(22, 20, 88, 88),
 		"portrait": Rect2(26, 24, 80, 80),
 		"sigil": Rect2(93, 90, 19, 20),
-		"portrait_level": Rect2(17, 89, 39, 27),
-		"portrait_badge": Rect2(17, 89, 39, 27),
+		"portrait_level": Rect2(89, 94, 30, 30),
+		"portrait_badge": Rect2(89, 94, 30, 30),
 		"name": Rect2(117, 20, 220, 25),
 		"health": Rect2(117, 49, 220, 20),
 		"health_text": Rect2(118, 50, 218, 18),
@@ -2583,7 +2653,7 @@ func _position_stick() -> void:
 		joystick.visible = finger >= 0 or mouse_stick or (sticky_movement_enabled and move_vector.length_squared() > 0.001)
 		return
 	joystick.visible = true
-	joystick.position = Vector2(26.0, screen.y - 177.0)
+	joystick.position = Vector2(26.0, screen.y - joystick.size.y - 29.0)
 
 func _floating_zone(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
@@ -2593,17 +2663,20 @@ func _adaptive_stick_zone(pos: Vector2) -> bool:
 	if floating_joystick_enabled or not adaptive_joystick_enabled:
 		return false
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	return pos.x < screen.x * 0.35 and pos.y > screen.y * 0.35 and pos.distance_to(_center()) <= 162.0
+	return pos.x < screen.x * 0.35 and pos.y > screen.y * 0.35 and pos.distance_to(_center()) <= 162.0 * movement_stick_scale
 
 func _start_adaptive_stick(pos: Vector2) -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	var target := Vector2(clampf(pos.x, 72.0, screen.x * 0.35 - 48.0),
-			clampf(pos.y, screen.y * 0.38, screen.y - 80.0))
+	var margin: float = joystick.size.x * 0.5 + 8.0
+	var target := Vector2(clampf(pos.x, margin, maxf(margin, screen.x * 0.35 - margin)),
+			clampf(pos.y, screen.y * 0.38, screen.y - margin))
 	joystick.position = target - joystick.size * 0.5
 
 func _start_floating_stick(pos: Vector2) -> void:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
-	var center: Vector2 = Vector2(clampf(pos.x, 74.0, screen.x * 0.35 - 48.0), clampf(pos.y, screen.y * 0.38, screen.y - 83.0))
+	var margin: float = joystick.size.x * 0.5 + 8.0
+	var center: Vector2 = Vector2(clampf(pos.x, margin, maxf(margin, screen.x * 0.35 - margin)),
+			clampf(pos.y, screen.y * 0.38, screen.y - margin))
 	joystick.position = center - joystick.size * 0.5
 	joystick.visible = true
 
@@ -2867,7 +2940,7 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.relative.x)
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 or _adaptive_stick_zone(event.position)))):
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 * movement_stick_scale * movement_stick_scale or _adaptive_stick_zone(event.position)))):
 			finger = event.index
 			mouse_stick = false
 			if floating_joystick_enabled:
@@ -2880,7 +2953,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag and event.index == finger:
 		_stick(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 or _adaptive_stick_zone(event.position)))):
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 * movement_stick_scale or _adaptive_stick_zone(event.position)))):
 			mouse_stick = true
 			if floating_joystick_enabled:
 				_start_floating_stick(event.position)
@@ -2930,9 +3003,10 @@ func _notification(what: int) -> void:
 func _stick(pos: Vector2) -> void:
 	if floating_joystick_enabled:
 		var travel: Vector2 = pos - _center()
-		if travel.length() > 55.0:
-			joystick.position += travel.normalized() * (travel.length() - 55.0)
-	move_vector = ((pos - _center()) / 55.0).limit_length(1.0)
+		var radius: float = STICK_INPUT_RADIUS * movement_stick_scale
+		if travel.length() > radius:
+			joystick.position += travel.normalized() * (travel.length() - radius)
+	move_vector = ((pos - _center()) / (STICK_INPUT_RADIUS * movement_stick_scale)).limit_length(1.0)
 
 func set_trained_skill(skill_id: String, total_skill_xp: int) -> void:
 	# Ring progress is real: 60 XP per gathering/weapon mastery rank.
