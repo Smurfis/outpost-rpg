@@ -86,9 +86,8 @@ func _run() -> void:
 	var old_floating: bool = hud.floating_joystick_enabled
 	tap(hud, hud.floating_mode_toggle.get_global_rect().get_center(), 53)
 	verify(hud.floating_joystick_enabled != old_floating, "Dynamic joystick CheckButton accepts actual touch")
-	hud._set_floating_mode(true)
-	hud._start_floating_stick(Vector2(140, 400))
-	verify(hud.joystick.visible and hud._center().distance_to(Vector2(140, 400)) < 1.0, "Dynamic movement appears on first movement-area touch")
+	# Actual movement touches are tested once Controls is dismissed below.
+	# A hidden gameplay joystick is expected WHILE Settings is open.
 	hud._set_floating_mode(old_floating)
 	hud.floating_mode_toggle.set_pressed_no_signal(old_floating)
 
@@ -109,6 +108,18 @@ func _run() -> void:
 	verify(game.hero.swim_preview_seconds > 0.0, "Controls can trigger real swim stroke preview")
 	verify(get_nodes_in_group("outpost_swim_particles").size() > 0, "Preview emits batched splash particles")
 	verify(not hud.control_settings_panel.visible, "Preview closes Controls for unobstructed view")
+	hud._set_floating_mode(true)
+	var moving_touch := InputEventScreenTouch.new()
+	moving_touch.index = 91
+	moving_touch.pressed = true
+	moving_touch.position = Vector2(140, 400)
+	hud._input(moving_touch)
+	verify(hud.finger == 91 and hud.joystick.visible, "Dynamic movement appears on first movement-area touch during gameplay")
+	verify(hud.joystick.position.distance_to(moving_touch.position - hud.joystick.size * 0.5) < 2.0,
+		"Dynamic movement ring is centered on that touch in the lower-left movement zone")
+	moving_touch.pressed = false
+	hud._input(moving_touch)
+	hud._set_floating_mode(old_floating)
 	game.hero.global_position = Vector3(95.0, -3.15, 0.0)
 	verify(game.hero._detect_surface_swimming(), "Coastline ocean is identified as swimmable water")
 	verify(not game.get_node("VoxelAtmosphere").is_land_at(95.0, 0.0), "Swimming only activates outside true land")
