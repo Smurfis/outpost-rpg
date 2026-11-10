@@ -3,9 +3,13 @@ const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 ## Simple boar with pursuit, melee range damage and respawn.
 const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const MAX_HEALTH: float = 32.0
 var hero
 var game
-var hp := 32.0
+var max_hp: float = MAX_HEALTH
+var hp: float = MAX_HEALTH
+# Future champion spawns may assign rare/elite; all existing boars remain normal.
+@export_enum("normal", "rare", "elite") var rarity_tier: String = "normal"
 var alive := true
 var cooldown := 1.5
 var respawn := 0.0
@@ -88,7 +92,7 @@ func _physics_process(delta: float) -> void:
 		respawn -= delta
 		if respawn <= 0.0:
 			alive = true
-			hp = 32.0
+			hp = max_hp
 			global_position = spawn_pos
 			visible = true
 			knockback_velocity = Vector3.ZERO
