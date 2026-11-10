@@ -2171,10 +2171,13 @@ func _layout_touch_hud() -> void:
 			Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale), 59.0 * 1.05 * scale)
 	_radial_px(tool_swap_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 221.0 * scale), 24.0 * scale)
+	# A compact, slightly lower three-skill arc around Interact.  Keep
+	# each square Android touch target distinct from TOOLS and its neighbours.
+	# Consumables stay put near TORCH, safely above the full-width XP strip.
 	var combat: Array[Vector3] = [
-		Vector3(126.0, 287.0, 37.0 * 1.03), # POWER above Interact
-		Vector3(205.0, 204.0, 37.0 * 1.03), # CLEAVE left of Interact
-		Vector3(205.0, 121.0, 37.0 * 1.03), # SUNDER by Interact
+		Vector3(164.0, 270.0, 37.0 * 1.03), # HEROIC: lower and clear of TOOLS
+		Vector3(199.0, 190.0, 37.0 * 1.03), # CLEAVE: tucked closer to Interact
+		Vector3(199.0, 110.0, 37.0 * 1.03), # BREAK: just left of Interact
 		Vector3(380.0, 83.0, 30.0 * 1.03),  # food/heal close to combat
 		Vector3(451.0, 83.0, 30.0 * 1.03)   # potion beside heal
 	]
