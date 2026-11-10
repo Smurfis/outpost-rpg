@@ -4,6 +4,8 @@ const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 var station_id: String = "workbench"
 var activity: float = 0.0
 var effect: MeshInstance3D
+var legacy_fire_parts: Array[MeshInstance3D] = []
+var pyrolux_fire: Node3D
 var time: float = 0.0
 var station_label: Label3D
 const STATION_LABEL_RADIUS: float = 7.0
@@ -124,8 +126,9 @@ func _build() -> void:
 			_block(Vector3(2.0, 0.31, 0.43), Vector3(0, 1.28, 0.87), Color("9c9082"))
 			_block(Vector3(0.95, 2.08, 0.76), Vector3(0, 1.82, 0.92), Color("756f68"))
 			_block(Vector3(1.12, 0.22, 0.94), Vector3(0, 2.91, 0.92), Color("aaa29a"))
-			_glow_block(Vector3(1.47, 0.15, 1.00), Vector3(0, 0.75, -0.12), Color("eb6a2b"))
+			legacy_fire_parts.append(_glow_block(Vector3(1.47, 0.15, 1.00), Vector3(0, 0.75, -0.12), Color("eb6a2b")))
 			effect = _glow_block(Vector3(0.61, 0.49, 0.44), Vector3(0, 1.02, -0.20), Color("ffb24d"))
+			legacy_fire_parts.append(effect)
 			_block(Vector3(0.89, 0.55, 0.64), Vector3(0, 0.30, -1.65), Color("67645f"))
 			_block(Vector3(1.35, 0.21, 0.71), Vector3(0, 0.71, -1.65), Color("88929a"))
 			_block(Vector3(0.40, 0.17, 0.34), Vector3(0, 0.87, -1.65), Color("a9b2b6"))
@@ -154,10 +157,18 @@ func _build() -> void:
 				_rod(0.30, 0.28, 0.24, Vector3(cos(a) * 0.9, 0.12, sin(a) * 0.9), Color("a9a19a"))
 			_block(Vector3(1.65, 0.16, 0.25), Vector3(0, 0.28, 0), Color("6b4c32"))
 			_block(Vector3(0.25, 0.16, 1.65), Vector3(0, 0.30, 0), Color("805636"))
+			# A simple primitive flame + odd grey smoke cylinder existed before
+			# PyroLux. Keep them only as no-addon fallbacks, never draw both.
 			effect = _rod(0.40, 0.0, 0.8, Vector3(0, 0.68, 0), Color("f2a649"))
-			_rod(0.73, 0.73, 0.25, Vector3(0, 1.18, 0), Color("525d5d"))
+			effect.name = "LegacyCampfireFlame"
+			legacy_fire_parts.append(effect)
+			var old_smoke: MeshInstance3D = _rod(0.73, 0.73, 0.25, Vector3(0, 1.18, 0), Color("525d5d"))
+			old_smoke.name = "LegacyCampfireSmoke"
+			legacy_fire_parts.append(old_smoke)
 			for x in [-0.62, 0.62]:
-				_rod(0.07, 0.07, 0.56, Vector3(x, 1.25, 0), Color("555d5a"))
+				var old_post: MeshInstance3D = _rod(0.07, 0.07, 0.56, Vector3(x, 1.25, 0), Color("555d5a"))
+				old_post.name = "LegacyCampfireSmokePost"
+				legacy_fire_parts.append(old_post)
 			_label("CAMPFIRE • CRAFTING STATION", Color("f2c583"))
 	# PyroLux fire is loaded dynamically so the source tree still opens before
 	# installing the licensed addon. The Alpha APK installs it before export.
@@ -169,20 +180,31 @@ func _build() -> void:
 				var fire: Node3D = fire_scene.instantiate() as Node3D
 				if fire != null:
 					fire.name = "PyroLuxFlames"
+					pyrolux_fire = fire
 					fire.position = Vector3(0, 0.36, 0) if station_id == "campfire" else Vector3(0, 0.89, -0.20)
 					fire.scale = Vector3.ONE * (0.62 if station_id == "campfire" else 0.44)
 					add_child(fire)
-					# The older primitive fire is only a fallback when the addon is absent.
-					if effect != null:
-						effect.visible = false
-	if effect != null:
+					# Remove ALL legacy fire VFX, not just the orange flame cone:
+					# the forge had a second glow tile and the campfire still
+					# showed the old grey cylinder/posts behind PyroLux.
+					# Keep logs, stones and real crafting station geometry.
+					_disable_legacy_fire_vfx()
+	if effect != null and pyrolux_fire == null:
 		effect.position.y += 0.01
+
+func _disable_legacy_fire_vfx() -> void:
+	# Used by PyroLux integration and callable in headless regression tests
+	# without redistributing the licensed add-on into GitHub.
+	for old_part in legacy_fire_parts:
+		if is_instance_valid(old_part):
+			old_part.visible = false
+
 
 func set_activity(progress: float) -> void:
 	activity = progress
 
 func stroke() -> void:
-	if effect != null:
+	if effect != null and pyrolux_fire == null:
 		var tween := create_tween()
 		tween.tween_property(effect, "scale", Vector3(1.18, 1.27, 1.18), 0.08)
 		tween.tween_property(effect, "scale", Vector3.ONE, 0.18)
@@ -193,8 +215,8 @@ func _process(delta: float) -> void:
 		var world: Node = get_parent()
 		var adventurer: Node3D = world.get("hero") as Node3D if world != null else null
 		station_label.visible = adventurer != null and Vector2(adventurer.global_position.x - global_position.x, adventurer.global_position.z - global_position.z).length_squared() < STATION_LABEL_RADIUS * STATION_LABEL_RADIUS
-	if effect != null and station_id in ["forge", "campfire", "enchanting"]:
+	if effect != null and pyrolux_fire == null and station_id in ["forge", "campfire", "enchanting"]:
 		effect.scale.x = 1.0 + 0.06 * sin(time * 6.0)
 		effect.scale.z = 1.0 + 0.06 * sin(time * 6.0)
-	if activity > 0.0 and effect != null:
+	if activity > 0.0 and effect != null and pyrolux_fire == null:
 		effect.rotation.y += delta * 0.24
