@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
+<!-- Transparent-centre laurel frame: HUD stays visible behind the portrait. -->
+<circle cx="64" cy="64" r="56" fill="none" stroke="#322113" stroke-width="8"/>
+<circle cx="64" cy="64" r="51" fill="none" stroke="#b47728" stroke-width="5"/>
+<circle cx="64" cy="64" r="47" fill="none" stroke="#f8d88a" stroke-width="3"/>
+<circle cx="64" cy="64" r="44" fill="none" stroke="#714522" stroke-width="2"/>
+<path d="M54 8L64 3L74 8L68 12L60 12Z M54 120L64 125L74 120L68 116L60 116Z" fill="#f6d48a" stroke="#7e4f22" stroke-width="2"/>
+<g fill="#e2ab48" stroke="#78461d" stroke-width="1.3">
+<path d="M20 18L11 16L13 26L23 31Z"/><path d="M14 29L6 31L12 40L22 41Z"/><path d="M10 43L4 48L13 55L22 51Z"/><path d="M10 57L3 64L14 70L22 64Z"/><path d="M12 72L7 80L19 83L24 76Z"/><path d="M18 87L16 97L28 97L30 89Z"/><path d="M27 102L28 112L40 108L39 100Z"/>
+<path d="M108 18L117 16L115 26L105 31Z"/><path d="M114 29L122 31L116 40L106 41Z"/><path d="M118 43L124 48L115 55L106 51Z"/><path d="M118 57L125 64L114 70L106 64Z"/><path d="M116 72L121 80L109 83L104 76Z"/><path d="M110 87L112 97L100 97L98 89Z"/><path d="M101 102L100 112L88 108L89 100Z"/>
+</g>
+<path d="M17 30C5 57 20 90 43 110M111 30C123 57 108 90 85 110" fill="none" stroke="#f8d478" stroke-width="3"/>
+</svg>
