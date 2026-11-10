@@ -99,6 +99,17 @@ var attack_button: Button
 var craft_button: Button
 var heal_button: Button
 var smart_button: Button
+var tool_swap_button: Button
+var tool_swap_finger: int = -1
+var tool_swap_mouse: bool = false
+var tool_swap_origin: Vector2 = Vector2.ZERO
+var tool_swap_ignore_mouse_until: int = 0
+var quest_rule: ColorRect
+var quest_touch_finger: int = -1
+var quest_touch_origin: Vector2 = Vector2.ZERO
+var quest_mouse_down: bool = false
+var quest_mouse_origin: Vector2 = Vector2.ZERO
+var quest_ignore_mouse_until: int = 0
 var smart_tray: Panel
 var smart_tool_list: VBoxContainer
 var smart_tool_rows: Array[Button] = []
@@ -466,17 +477,25 @@ func _ready() -> void:
 	quest_frame = _panel(0.018, 0.166, 0.344, 0.230)
 	quest_frame.name = "QuestBanner"
 	# Quest background follows the unobtrusive transparent player card.
-	quest_frame.add_theme_stylebox_override("panel", _hud_glass(0.20, 0.12))
+	quest_frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	quest_rule = ColorRect.new()
+	quest_rule.name = "QuestGoldUnderline"
+	quest_rule.color = Color(0.87, 0.69, 0.38, 0.42)
+	quest_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(quest_rule)
 	quest_toggle = Button.new()
 	quest_toggle.name = "QuestToggle"
 	quest_toggle.text = "QUESTS ▾"
 	SKIN.apply_translucent_button(quest_toggle, "wood")
+	for state_name in ["normal", "hover", "pressed", "disabled", "focus"]:
+		quest_toggle.add_theme_stylebox_override(state_name, StyleBoxEmpty.new())
+	quest_toggle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	quest_toggle.add_theme_color_override("font_color", SKIN.GOLD)
 	quest_toggle.add_theme_color_override("font_hover_color", SKIN.GOLD.lightened(0.13))
 	quest_toggle.add_theme_color_override("font_pressed_color", SKIN.GOLD)
 	root.add_child(quest_toggle)
 	_anchors(quest_toggle, 0.028, 0.174, 0.117, 0.222)
-	quest_toggle.pressed.connect(_toggle_quest)
+	# Input routed through _handle_quest_input on mobile.
 	quest = _label("Gather wood and stone", 16, SKIN.GOLD, 0.127, 0.173, 0.334, 0.224)
 	quest.add_theme_color_override("font_outline_color", Color("#171114"))
 	quest.add_theme_constant_override("outline_size", 2)
@@ -486,11 +505,11 @@ func _ready() -> void:
 	quest.clip_text = true
 	quest_detail_back = _panel(0.021, 0.236, 0.354, 0.444)
 	quest_detail_back.name = "QuestJournal"
-	quest_detail_back.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
+	quest_detail_back.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	quest_detail_back.visible = false
-	quest_detail = _label("", 16, SKIN.INK, 0.039, 0.250, 0.334, 0.428)
-	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	quest_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	quest_detail = _label("", 16, Color("#f1e7cf"), 0.039, 0.250, 0.334, 0.428)
+	quest_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	quest_detail.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	quest_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	quest_detail.visible = false
 
@@ -755,32 +774,14 @@ func _ready() -> void:
 	smart_button = _action("interact", "INTERACT", 0.895, 0.740, 0.986, 0.941, "round")
 	smart_button.name = "Action_interact"
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Always-visible tiny upward cue retains the slider affordance after
-	# temporary tutorial text disappears; never intercepts touch gestures.
-	var chevron := Label.new()
-	chevron.name = "ToolSwipeChevron"
-	chevron.text = "↑"
-	chevron.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	chevron.add_theme_color_override("font_color", SKIN.GOLD)
-	chevron.add_theme_font_size_override("font_size", 17)
-	chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	smart_button.add_child(chevron)
-	chevron.anchor_left = 0.76
-	chevron.anchor_right = 0.97
-	chevron.anchor_top = 0.02
-	chevron.anchor_bottom = 0.26
-	var swipe_hint := Label.new()
-	swipe_hint.name = "QuickToolGestureHint"
-	swipe_hint.text = "HOLD ↑ TOOLS"
-	swipe_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	swipe_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	swipe_hint.add_theme_color_override("font_color", Color("#ffdea0"))
-	swipe_hint.add_theme_font_size_override("font_size", 13)
-	swipe_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tool_gesture_hint = swipe_hint
-	root.add_child(swipe_hint)
-	_anchors(swipe_hint, 0.890, 0.696, 0.990, 0.740)
+	# Dedicated tools selector: short/long pressing Interact can only act.
+	tool_swap_button = _action("tool_swap", "TOOLS", 0.900, 0.645, 0.958, 0.725, "round")
+	tool_swap_button.name = "Action_tool_swap"
+	tool_swap_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tool_swap_button.tooltip_text = "Tap to cycle equipped tools"
+	# Legacy selector remains hidden for old scenes/tests, never opened.
 	_build_smart_tray()
+	_refresh_tool_swap_button()
 	_build_quick_tray()
 	# Context prompts live near the bottom center, only when something
 	# is actually usable. Generic explore prose never occupies the playfield.
@@ -2085,10 +2086,10 @@ func _layout_touch_hud() -> void:
 	# phones with wider aspect ratios. Footer and menu sit directly below it.
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * scale, screen.x * 0.23))
 	# Make room for the location banner ABOVE (not on top of) the live map.
-	var map_top: float = 58.0 * scale
+	var map_top: float = 54.0 * scale
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
 	# The zone pill now sits just two scaled pixels above the round map.
-	var zone_top: float = map_top - 32.0 * scale
+	var zone_top: float = map_top - 30.0 * scale
 	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 30.0 * scale))
 	_place_px(zone_pill_text, screen, Rect2(screen.x - edge - map_side + 7.0 * scale, zone_top + 1.0 * scale,
 			map_side - 14.0 * scale, 28.0 * scale))
@@ -2101,8 +2102,8 @@ func _layout_touch_hud() -> void:
 	var map_left: float = screen.x - edge - map_side
 	# Equal-height carved mobile controls: WALLET / BAG / MENU.
 	# The menu never overlaps the circular map or consumes a combat slot.
-	_place_px(menu_button, screen, Rect2(map_left - 86.0 * scale,
-			16.0 * scale, 78.0 * scale, 50.0 * scale))
+	_place_px(menu_button, screen, Rect2(map_left - 87.0 * scale,
+			11.0 * scale, 58.0 * scale, 58.0 * scale))
 	var footer_top: float = map_bottom - 7.0 * scale
 	_place_px(clock_footer, screen, Rect2(map_left + 14.0 * scale,
 			footer_top, map_side - 28.0 * scale, 35.0 * scale))
@@ -2168,6 +2169,8 @@ func _layout_touch_hud() -> void:
 	# Lower smart Interact near full-width XP; keep distinct finger hitboxes.
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale), 59.0 * 1.05 * scale)
+	_radial_px(tool_swap_button, screen,
+			Vector2(screen.x - 90.0 * scale, screen.y - 221.0 * scale), 24.0 * scale)
 	var combat: Array[Vector3] = [
 		Vector3(126.0, 287.0, 37.0 * 1.03), # POWER above Interact
 		Vector3(205.0, 204.0, 37.0 * 1.03), # CLEAVE left of Interact
@@ -2280,13 +2283,13 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"portrait_frame": Rect2(22, 20, 88, 88),
 		"portrait": Rect2(26, 24, 80, 80),
 		"sigil": Rect2(93, 90, 19, 20),
-		"portrait_level": Rect2(89, 94, 30, 30),
-		"portrait_badge": Rect2(89, 94, 30, 30),
-		"name": Rect2(117, 20, 220, 25),
-		"health": Rect2(117, 49, 220, 20),
-		"health_text": Rect2(118, 50, 218, 18),
-		"mana": Rect2(117, 76, 220, 18),
-		"mana_text": Rect2(118, 76, 218, 17),
+		"portrait_level": Rect2(89, 79, 30, 30),
+		"portrait_badge": Rect2(89, 79, 30, 30),
+		"name": Rect2(108, 20, 220, 25),
+		"health": Rect2(108, 49, 228, 20),
+		"health_text": Rect2(109, 50, 226, 18),
+		"mana": Rect2(108, 76, 228, 18),
+		"mana_text": Rect2(109, 76, 226, 17),
 		"weapon": Rect2(117, 78, 220, 22),
 		"effects": Rect2(117, 99, 220, 22),
 		"wallet": Rect2(wallet_left, 75, 275, 248),
@@ -2295,13 +2298,14 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"coins": Rect2(currency_start + 31.0, 17.0, maxf(22.0, currency_cell - 34.0), 43.0),
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
-		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
+		"bag": Rect2(map_left_base - 156.0, 11, 58, 58),
 		"weight": Rect2(375, 112, 295, 24),
 		"quest_frame": Rect2(16, 143, 347, 52),
+		"quest_rule": Rect2(25, 192, 335, 1.4),
 		"quest_button": Rect2(23, 151, 109, 37),
 		"quest": Rect2(140, 150, 216, 38),
-		"journal_frame": Rect2(19, 202, 375, 143),
-		"journal_text": Rect2(34, 215, 345, 119)
+		"journal_frame": Rect2(24, 200, 350, 102),
+		"journal_text": Rect2(35, 208, 329, 87)
 	}
 	var pairs: Dictionary = {
 		"status": hero_status_frame,
@@ -2326,6 +2330,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"bag": wallet_bag,
 		"weight": bag_weight_label,
 		"quest_frame": quest_frame,
+		"quest_rule": quest_rule,
 		"quest_button": quest_toggle,
 		"quest": quest,
 		"journal_frame": quest_detail_back,
@@ -2463,7 +2468,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
 	art_icon.name = "ActionIcon"
-	var matching_icon: String = "hand" if key == "interact" else "red_potion" if key == "potion" else "backpack" if key == "bag" else "armour" if key == "gear" else "menu" if key == "menu" else "heroic_strike" if key == "skill_1" else "cleave" if key == "skill_2" else "armor_break" if key == "skill_3" else ""
+	var matching_icon: String = "sword" if key == "tool_swap" else "hand" if key == "interact" else "red_potion" if key == "potion" else "backpack" if key == "bag" else "armour" if key == "gear" else "menu" if key == "menu" else "heroic_strike" if key == "skill_1" else "cleave" if key == "skill_2" else "armor_break" if key == "skill_3" else ""
 	var icon_path: String = ACTION_FRAME_ROOT + matching_icon + ".svg" if matching_icon != "" else "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
 		var ui_icon: String = "res://assets/ui/icons/" + key + ".svg"
@@ -2838,47 +2843,156 @@ func _cancel_smart_hold() -> void:
 	if smart_tray != null:
 		smart_tray.visible = false
 
+func _cycle_quick_tool() -> void:
+	if game == null:
+		return
+	var owned: Array[String] = game.available_quick_tools()
+	if owned.is_empty():
+		return
+	var index: int = (owned.find(str(game.active_quick_tool)) + 1) % owned.size()
+	var item: String = owned[index]
+	if game.select_quick_tool(item):
+		_refresh_tool_swap_button()
+		_refresh_smart_button()
+		toast("Tool: " + item.replace("_", " ").capitalize())
+
+
+func _refresh_tool_swap_button() -> void:
+	if tool_swap_button == null or game == null:
+		return
+	var item: String = str(game.active_quick_tool)
+	var icon: String = "axe" if item == "axe" else "pickaxe" if item == "pickaxe" else "sword" if item in ["training_blade", "iron_blade", "spear"] else "hand"
+	var art: TextureRect = tool_swap_button.get_node_or_null("ActionIcon") as TextureRect
+	var filename: String = ACTION_FRAME_ROOT + icon + ".svg"
+	if art != null and (art.texture == null or art.texture.resource_path != filename):
+		art.texture = load(filename) as Texture2D
+	tool_swap_button.tooltip_text = "Swap tools (current: " + item.replace("_", " ").capitalize() + ")"
+	var caption: Label = tool_swap_button.get_node_or_null("ActionLabel") as Label
+	if caption != null:
+		caption.text = "TOOLS"
+
+
+func _handle_tool_swap_input(event: InputEvent) -> bool:
+	if tool_swap_button == null or game == null:
+		return false
+	var bounds: Rect2 = tool_swap_button.get_global_rect().grow(4.0)
+	if event is InputEventScreenTouch:
+		if event.pressed and tool_swap_finger < 0 and bounds.has_point(event.position):
+			tool_swap_finger = event.index
+			tool_swap_origin = event.position
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and event.index == tool_swap_finger:
+			tool_swap_finger = -1
+			tool_swap_ignore_mouse_until = Time.get_ticks_msec() + 420
+			if bounds.has_point(event.position) and event.position.distance_to(tool_swap_origin) < 35.0:
+				_cycle_quick_tool()
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventScreenDrag and event.index == tool_swap_finger:
+		get_viewport().set_input_as_handled()
+		return true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < tool_swap_ignore_mouse_until:
+			get_viewport().set_input_as_handled()
+			return true
+		if event.pressed and not tool_swap_mouse and bounds.has_point(event.position):
+			tool_swap_mouse = true
+			tool_swap_origin = event.position
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and tool_swap_mouse:
+			tool_swap_mouse = false
+			if bounds.has_point(event.position) and event.position.distance_to(tool_swap_origin) < 35.0:
+				_cycle_quick_tool()
+			get_viewport().set_input_as_handled()
+			return true
+	return false
+
+
 func _handle_smart_input(event: InputEvent) -> bool:
 	if smart_button == null or game == null:
 		return false
 	if (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible):
 		_cancel_smart_hold()
 		return false
+	var bounds: Rect2 = smart_button.get_global_rect().grow(5.0)
+	# A tap performs the action immediately. A hold repeats attacks/gathering.
+	# Neither gesture opens the old Training Blade selector.
 	if event is InputEventScreenTouch:
-		if event.pressed and smart_hold_finger < 0 and not smart_hold_mouse and smart_button.get_global_rect().grow(6.0).has_point(event.position):
+		if event.pressed and smart_hold_finger < 0 and not smart_hold_mouse and bounds.has_point(event.position):
 			smart_hold_finger = event.index
 			smart_hold_origin = event.position
 			smart_hold_seconds = 0.0
+			game.smart_interact()
 			get_viewport().set_input_as_handled()
 			return true
 		if not event.pressed and event.index == smart_hold_finger:
-			# Android sometimes emits a synthetic mouse click after a touch.
-			smart_ignore_mouse_until = Time.get_ticks_msec() + 220
-			_finish_smart_hold()
+			smart_ignore_mouse_until = Time.get_ticks_msec() + 420
+			_cancel_smart_hold()
 			get_viewport().set_input_as_handled()
 			return true
 	elif event is InputEventScreenDrag and event.index == smart_hold_finger:
-		_drag_smart_slider(event.position)
 		get_viewport().set_input_as_handled()
 		return true
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if Time.get_ticks_msec() < smart_ignore_mouse_until:
-			return false
-		if event.pressed and not smart_hold_mouse and smart_hold_finger < 0 and smart_button.get_global_rect().grow(6.0).has_point(event.position):
+			get_viewport().set_input_as_handled()
+			return true
+		if event.pressed and not smart_hold_mouse and smart_hold_finger < 0 and bounds.has_point(event.position):
 			smart_hold_mouse = true
 			smart_hold_origin = event.position
 			smart_hold_seconds = 0.0
+			game.smart_interact()
 			get_viewport().set_input_as_handled()
 			return true
 		if not event.pressed and smart_hold_mouse:
-			_finish_smart_hold()
+			_cancel_smart_hold()
 			get_viewport().set_input_as_handled()
 			return true
 	elif event is InputEventMouseMotion and smart_hold_mouse:
-		_drag_smart_slider(event.position)
 		get_viewport().set_input_as_handled()
 		return true
 	return false
+
+
+func _handle_quest_input(event: InputEvent) -> bool:
+	if quest_toggle == null or not quest_toggle.visible:
+		return false
+	var bounds: Rect2 = quest_toggle.get_global_rect().grow(5.0)
+	if event is InputEventScreenTouch:
+		if event.pressed and quest_touch_finger < 0 and bounds.has_point(event.position):
+			quest_touch_finger = event.index
+			quest_touch_origin = event.position
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and event.index == quest_touch_finger:
+			quest_touch_finger = -1
+			quest_ignore_mouse_until = Time.get_ticks_msec() + 420
+			if bounds.has_point(event.position) and event.position.distance_to(quest_touch_origin) < 35.0:
+				_toggle_quest()
+			get_viewport().set_input_as_handled()
+			return true
+	elif event is InputEventScreenDrag and event.index == quest_touch_finger:
+		get_viewport().set_input_as_handled()
+		return true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if Time.get_ticks_msec() < quest_ignore_mouse_until:
+			get_viewport().set_input_as_handled()
+			return true
+		if event.pressed and not quest_mouse_down and bounds.has_point(event.position):
+			quest_mouse_down = true
+			quest_mouse_origin = event.position
+			get_viewport().set_input_as_handled()
+			return true
+		if not event.pressed and quest_mouse_down:
+			quest_mouse_down = false
+			if bounds.has_point(event.position) and event.position.distance_to(quest_mouse_origin) < 35.0:
+				_toggle_quest()
+			get_viewport().set_input_as_handled()
+			return true
+	return false
+
 
 func _refresh_smart_button() -> void:
 	if game == null or smart_button == null:
@@ -2895,8 +3009,9 @@ func _refresh_smart_button() -> void:
 	if title != null:
 		title.text = ""
 	var kind: String = str(context.get("kind", "none"))
-	# An idle smart button remains swipable for owned-tool selection; the
-	# visual greying must not disable the existing hold-and-slide input.
+	# When no action is in range, dim the Interact art but keep it receptive
+	# to a tap as context changes. Tool selection uses its own button.
+	_refresh_tool_swap_button()
 	var time_left: float = game.attack_delay if kind == "attack" else game.gather_delay if kind == "gather" else 0.0
 	var total: float = 0.55 if kind == "attack" else 0.33 if kind == "gather" else 1.0
 	var available: bool = kind != "none" and time_left <= 0.0
@@ -2928,9 +3043,10 @@ func _update_quest_tracker(objective: String) -> void:
 	objective_is_complete = lower.contains("quest finished") or lower.contains("quest complete") or lower.contains("quest completed")
 	var should_show: bool = not objective_is_complete and text_value != ""
 	quest_frame.visible = should_show
+	quest_rule.visible = should_show
 	quest.visible = should_show
 	quest.text = _quest_headline(text_value)
-	quest_detail.text = text_value if text_value != "" else "No active quest."
+	quest_detail.text = "•  " + text_value if text_value != "" else "No active quest."
 	quest_toggle.text = "CLOSE ▴" if quest_expanded else "✓ QUESTS" if objective_is_complete else "QUESTS ▾"
 
 func _update_context_prompt(helper: String) -> void:
@@ -3007,10 +3123,14 @@ func _process(delta: float) -> void:
 				tool_gesture_hint.visible = false
 			if camera_gesture_hint != null:
 				camera_gesture_hint.visible = false
-	if (smart_hold_finger >= 0 or smart_hold_mouse) and not smart_tray_open:
+	# Holding Interact repeats real attacks/gathers through cooldown checks.
+	# It no longer opens the Training Blade selector after 0.34 seconds.
+	if (smart_hold_finger >= 0 or smart_hold_mouse) and game != null:
 		smart_hold_seconds += delta
-		if smart_hold_seconds >= 0.34:
-			_open_smart_tray()
+		if smart_hold_seconds >= 0.38:
+			smart_hold_seconds = 0.16
+			if str(game.smart_context().get("kind", "")) in ["attack", "gather"]:
+				game.smart_interact()
 	if camera_drag_finger >= 0 and not camera_hold_ready:
 		camera_hold_seconds += delta
 		if camera_hold_seconds >= 0.82:
@@ -3258,6 +3378,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if _handle_top_chrome_input(event):
 		return
+	if _handle_quest_input(event):
+		return
+	if _handle_tool_swap_input(event):
+		return
 	if _handle_loot_tooltip_input(event):
 		return
 	if _touch_menu_navigation(event):
@@ -3377,6 +3501,10 @@ func _stop_sticky_movement() -> void:
 func _reset_touch() -> void:
 	_cancel_smart_hold()
 	_cancel_quick_hold()
+	tool_swap_finger = -1
+	tool_swap_mouse = false
+	quest_touch_finger = -1
+	quest_mouse_down = false
 	camera_drag_finger = -1
 	camera_hold_seconds = 0.0
 	camera_hold_ready = false
