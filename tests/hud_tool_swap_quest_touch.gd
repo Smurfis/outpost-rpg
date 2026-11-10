@@ -66,9 +66,22 @@ func _run() -> void:
 			verify(not skill_rect.intersects(skills[j].get_global_rect()), "Skills %d and %d have distinct touch targets" % [i + 1, j + 1])
 	var screen: Vector2 = hud.get_viewport().get_visible_rect().size
 	var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
-	verify(skills[0].get_global_rect().get_center().y >
-		smart.get_global_rect().get_center().y - 160.0 * scale,
-		"Heroic Strike sits in lower, compact arc above Interact")
+	var interact_center: Vector2 = smart.get_global_rect().get_center()
+	var centres: Array[Vector2] = []
+	for skill in skills:
+		centres.append(skill.get_global_rect().get_center())
+		verify(not skill.get_global_rect().intersects(hud.torch_button.get_global_rect()),
+			"Combat medallion does not overlap TORCH")
+	var radius: float = interact_center.distance_to(centres[0])
+	for i in range(centres.size()):
+		verify(absf(interact_center.distance_to(centres[i]) - radius) < 3.0 * scale,
+			"Combat skill %d follows the same Interact-centred arc" % (i + 1))
+	verify(radius > 140.0 * scale and radius < 160.0 * scale,
+		"Skill arc is compact relative to the main Interact button")
+	verify(absf(centres[0].distance_to(centres[1]) - centres[1].distance_to(centres[2])) < 3.0 * scale,
+		"Heroic, Cleave and Break are evenly spaced around Interact")
+	verify(centres[0].y < centres[1].y and centres[1].y < centres[2].y,
+		"Combat skill order follows a neat descending left-side arc")
 	verify(not hud.smart_tray_open and not hud.smart_tray.visible, "Old Training Blade popup is hidden at startup")
 	var touch := InputEventScreenTouch.new()
 	touch.index = 37
