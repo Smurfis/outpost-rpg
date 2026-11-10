@@ -763,7 +763,12 @@ func select_quick_tool(item_id: String) -> bool:
 	return true
 
 func smart_context() -> Dictionary:
-	# Context is derived only from live proximity and active equipment.
+	# Within the working range, the actual crafting station must win over
+	# nearby harvestable nodes (especially by the loom and forge). Otherwise
+	# the same Interact tap silently gathers/attacks instead of opening craft.
+	var workshop: String = closest_station()
+	if workshop != "":
+		return {"kind":"craft", "label":"CRAFT", "icon":"craft"}
 	var resource = _nearest_resource()
 	var enemy = _nearest_enemy()
 	var combat_tool: bool = active_quick_tool in ["training_blade", "spear", "iron_blade", "shield"]
@@ -774,8 +779,6 @@ func smart_context() -> Dictionary:
 		return {"kind":"gather", "label":"GATHER", "icon":resource_tool if active_quick_tool == resource_tool else "gather"}
 	if enemy != null:
 		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
-	if closest_station() != "":
-		return {"kind":"craft", "label":"CRAFT", "icon":"craft"}
 	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
 		return {"kind":"torch", "label":"TORCH", "icon":"torch"}
 	return {"kind":"none", "label":"INTERACT", "icon":active_quick_tool if active_quick_tool != "training_blade" else "gather"}
@@ -790,7 +793,10 @@ func smart_interact() -> void:
 		"gather":
 			gather()
 		"craft":
-			craft()
+			# Resolve station again at the instant of the tap. A stale CRAFT
+			# label must never open a different station or a generic recipe.
+			if closest_station() != "":
+				show_crafting()
 		"torch":
 			toggle_torch()
 		_:
