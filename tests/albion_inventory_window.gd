@@ -43,6 +43,36 @@ func _run() -> void:
 	verify(inventory_x != null and inventory_x.get_global_rect().get_center().x >= panel.window.get_global_rect().get_center().x, "Inventory X is attached to top-right of real inventory window")
 	verify(panel.bag_meter.value > 0.0 and panel.bag_meter.max_value == game.bag_capacity(), "Capacity meter displays existing carry system")
 	verify(panel.equipment_body.find_child("EquipmentSlot_weapon", true, false) != null, "Character equipment slots are actionable")
+	verify(panel.window.get_global_rect().end.y <= game.get_viewport().get_visible_rect().size.y - 14.0,
+		"Compact inventory fits inside the Android landscape viewport")
+	verify(panel.inventory_grid.get_child_count() <= 18, "Short Character inventory has at most three rows, not 24 placeholder boxes")
+	for equip_id in ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage"]:
+		var equip_slot: Button = panel.equipment_body.find_child("EquipmentSlot_" + equip_id, true, false) as Button
+		verify(equip_slot != null and equip_slot.is_visible_in_tree(), "Every character equipment slot is visible: " + equip_id)
+		if equip_slot != null:
+			verify(equip_slot.get_global_rect().end.y <= panel.equipment_scroll.get_global_rect().end.y + 2.0,
+				"Gear icon does not clip under avatar scroll area: " + equip_id)
+	var starter_slot: Button = panel.equipment_body.find_child("EquipmentSlot_weapon", true, false) as Button
+	verify(starter_slot != null and starter_slot.get_node_or_null("GearIcon") != null, "Equipped starter sword uses actual sword art instead of flag placeholder")
+	if starter_slot != null:
+		starter_slot.pressed.emit()
+		verify(panel.item_card.visible and panel.selected_id == "training_blade", "Tapping equipped training sword identifies it as the starter weapon")
+	panel._change_filter("character")
+	game.inventory["axe"] = 1
+	game.inventory["pickaxe"] = 1
+	panel.refresh()
+	var axe_slot: Button = panel.equipment_body.find_child("EquipmentSlot_tool_wood", true, false) as Button
+	var pick_slot: Button = panel.equipment_body.find_child("EquipmentSlot_tool_mining", true, false) as Button
+	verify(axe_slot != null and pick_slot != null, "Separate woodcutting and mining gear icons exist")
+	if axe_slot != null:
+		verify(axe_slot._can_drop_data(Vector2.ZERO, {"source":"outpost_character_inventory", "item_id":"axe"}), "Woodcutting slot accepts dragged crafted axe")
+		verify(not axe_slot._can_drop_data(Vector2.ZERO, {"source":"outpost_character_inventory", "item_id":"pickaxe"}), "Woodcutting slot rejects incompatible pickaxe")
+		axe_slot._drop_data(Vector2.ZERO, {"source":"outpost_character_inventory", "item_id":"axe"})
+		verify(game.equipment["tool_wood"] == "axe", "Dropping axe equips the real item")
+	if pick_slot != null:
+		pick_slot._drop_data(Vector2.ZERO, {"source":"outpost_character_inventory", "item_id":"pickaxe"})
+		verify(game.equipment["tool_mining"] == "pickaxe", "Dropping pickaxe equips the real item")
+	panel.refresh()
 	panel._change_filter("resource")
 	verify(panel.inventory_grid.get_node_or_null("Item_wood") != null and panel.inventory_grid.get_node_or_null("Item_spear") == null, "Resources tab contains wood but not weapons")
 	panel._change_filter("character")

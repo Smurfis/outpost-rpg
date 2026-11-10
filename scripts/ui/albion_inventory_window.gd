@@ -4,6 +4,7 @@ extends Control
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
+const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
 const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage"]
 const SLOT_NAMES: Dictionary = {
 	"weapon":"MAIN HAND", "offhand":"OFF HAND", "back":"CLOAK", "bag":"BACKPACK",
@@ -101,7 +102,7 @@ func _ready() -> void:
 	equipment_scroll.name = "CharacterEquipmentScroll"
 	equipment_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	equipment_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	equipment_scroll.custom_minimum_size = Vector2(0, 148)
+	equipment_scroll.custom_minimum_size = Vector2(0, 173)
 	equipment_section.add_child(equipment_scroll)
 	equipment_body = VBoxContainer.new()
 	equipment_body.name = "EquippedSlots"
@@ -205,7 +206,8 @@ func _ready() -> void:
 	)
 	overflow_button.visible = false
 	layout.add_child(overflow_button)
-	layout.add_child(_text("Tap to inspect  •  Items auto-stack", 13, SKIN.CREAM))
+	# Controls already communicate tap-to-inspect; the redundant footer was
+	# pushing the panel beyond the safe area on short landscape screens.
 
 	item_card = PanelContainer.new()
 	item_card.name = "InventoryItemDetails"
@@ -256,9 +258,9 @@ func _layout_windows() -> void:
 	var bounds: Vector2 = get_viewport().get_visible_rect().size
 	var width_px: float = minf(900.0, bounds.x - 24.0) if storage_mode else minf(500.0, maxf(330.0, bounds.x * 0.38))
 	width_px = minf(width_px, bounds.x - 24.0)
-	var height_px: float = maxf(220.0, bounds.y - 20.0)
+	var height_px: float = minf(bounds.y - 28.0, maxf(500.0, bounds.y * 0.88))
 	window.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	window.position = Vector2(bounds.x - width_px - 10.0, 10.0)
+	window.position = Vector2(bounds.x - width_px - 10.0, maxf(10.0, bounds.y * 0.025))
 	window.size = Vector2(width_px, height_px)
 	if inventory_close_button != null:
 		inventory_close_button.position = window.position + Vector2(width_px - 58.0, 9.0)
@@ -304,7 +306,8 @@ func _clear(node: Node) -> void:
 
 func _icon(item_id: String, size_px: float) -> TextureRect:
 	var rect := TextureRect.new()
-	var path: String = "res://assets/icons/" + item_id + ".svg"
+	var actual_icon: String = "iron_blade" if item_id == "training_blade" else item_id
+	var path: String = "res://assets/icons/" + actual_icon + ".svg"
 	if not ResourceLoader.exists(path):
 		path = "res://assets/icons/flag.svg"
 	rect.texture = load(path) as Texture2D
@@ -392,51 +395,103 @@ func refresh() -> void:
 
 func _render_equipment() -> void:
 	_clear(equipment_body)
-	var title := _text("YOUR ADVENTURER  •  LV. %d" % game.character_level(), 15, SKIN.INK)
+	var title := _text("EQUIPPED GEAR  •  LV. %d  •  TAP OR DRAG" % game.character_level(), 13, SKIN.INK)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	equipment_body.add_child(title)
+	# Avatar on the left; a compact 3×3 slot grid on the right. Seven real
+	# equipment positions now fit without an invisible fourth row or dragging
+	# the Character panel below the phone's lower safe area.
 	var band := HBoxContainer.new()
+	band.name = "CharacterEquipmentBand"
 	band.alignment = BoxContainer.ALIGNMENT_CENTER
-	band.add_theme_constant_override("separation", 6)
+	band.add_theme_constant_override("separation", 8)
 	equipment_body.add_child(band)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 2)
-	band.add_child(left)
-	for slot in ["weapon", "offhand", "tool_wood"]:
-		left.add_child(_gear_button(slot))
-	var center := VBoxContainer.new()
-	band.add_child(center)
-	_add_avatar(center)
-	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", 2)
-	band.add_child(right)
-	for slot in ["back", "bag", "tool_mining"]:
-		right.add_child(_gear_button(slot))
-	var extra := _button("FORAGING  " + _equipped_name("tool_forage"), "parchment_light")
-	extra.name = "EquipmentSlot_tool_forage"
-	extra.custom_minimum_size = Vector2(0, 32)
-	extra.add_theme_font_size_override("font_size", 13)
-	extra.pressed.connect(_gear_clicked.bind("tool_forage"))
-	equipment_body.add_child(extra)
+	var avatar := VBoxContainer.new()
+	avatar.name = "CharacterPreview"
+	band.add_child(avatar)
+	_add_avatar(avatar)
+	var slots := GridContainer.new()
+	slots.name = "CharacterGearGrid"
+	slots.columns = 3
+	slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slots.add_theme_constant_override("h_separation", 4)
+	slots.add_theme_constant_override("v_separation", 2)
+	band.add_child(slots)
+	for slot in EQUIPMENT_SLOTS:
+		var gear: Button = _gear_button(slot)
+		gear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slots.add_child(gear)
 
 func _gear_button(slot: String) -> Button:
 	var id: String = str(game.equipment.get(slot, ""))
-	var button := _button("", "wood_selected" if slot == selected_slot else "wood")
+	var button: Button = EQUIP_DRAG.new() as Button
 	button.name = "EquipmentSlot_" + slot
-	button.custom_minimum_size = Vector2(54, 51)
-	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to view compatible equipment")
+	button.custom_minimum_size = Vector2(53, 44)
+	SKIN.apply_translucent_button(button, "wood_selected" if slot == selected_slot else "wood")
+	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to inspect or drag a compatible item here")
 	button.pressed.connect(_gear_clicked.bind(slot))
-	if id != "":
-		var art: TextureRect = _icon(id, 37)
-		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		art.offset_left = 6
-		art.offset_top = 4
-		art.offset_right = -6
-		art.offset_bottom = -6
-		button.add_child(art)
-	else:
-		button.text = "+"
+	button.set("game_ref", game)
+	button.set("target_slot", slot)
+	button.set("item_id", id)
+	button.set("on_item_dropped", Callable(self, "_drop_equipment_item").bind(slot))
+	# All seven slots remain visible even when tools are not yet crafted.
+	# Empty slots show recognisable ghost silhouettes (not anonymous pluses).
+	var placeholder_icons: Dictionary = {
+		"weapon": "training_blade", "offhand": "shield", "back": "cloak",
+		"bag": "backpack_t1", "tool_wood": "axe", "tool_mining": "pickaxe",
+		"tool_forage": "satchel"
+	}
+	var art_id: String = id if id != "" else str(placeholder_icons.get(slot, "flag"))
+	var icon: TextureRect = _icon(art_id, 30)
+	icon.name = "GearIcon"
+	icon.custom_minimum_size = Vector2.ZERO
+	icon.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	icon.anchor_left = 0.16
+	icon.anchor_right = 0.84
+	icon.anchor_top = 0.04
+	icon.anchor_bottom = 0.65
+	icon.offset_left = 0
+	icon.offset_right = 0
+	icon.offset_top = 0
+	icon.offset_bottom = 0
+	if id.is_empty():
+		icon.modulate = Color(1.0, 1.0, 1.0, 0.32)
+	button.add_child(icon)
+	var small: Label = _text({
+		"weapon":"SWORD", "offhand":"OFFHAND", "back":"CLOAK",
+		"bag":"BAG", "tool_wood":"AXE", "tool_mining":"PICKAXE",
+		"tool_forage":"FORAGING"
+	}.get(slot, slot), 10, SKIN.CREAM)
+	small.name = "GearSlotName"
+	small.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	small.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	small.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	small.offset_top = -16.0
+	small.offset_bottom = -2.0
+	button.add_child(small)
+	if id.is_empty():
+		var plus := _text("+", 12, SKIN.GOLD)
+		plus.name = "UnfilledGearHint"
+		plus.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		plus.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		plus.offset_left = -15.0
+		plus.offset_right = -3.0
+		plus.offset_top = 0.0
+		plus.offset_bottom = 16.0
+		button.add_child(plus)
 	return button
+
+
+func _drop_equipment_item(id: String, target_slot: String) -> void:
+	if id.is_empty() or str(game.equipment_slot(id)) != target_slot or int(game.inventory.get(id, 0)) < 1:
+		return
+	if not game.is_equipped(id):
+		if not game.equip_item(id):
+			return
+	selected_slot = target_slot
+	selected_id = id
+	filter_kind = "character"
+	refresh()
 
 func _equipped_name(slot: String) -> String:
 	var id: String = str(game.equipment.get(slot, ""))
@@ -448,11 +503,11 @@ func _add_avatar(parent: Node) -> void:
 		return
 	var container := SubViewportContainer.new()
 	container.name = "LiveAdventurerPreview"
-	container.custom_minimum_size = Vector2(116, 162)
+	container.custom_minimum_size = Vector2(104, 132)
 	container.stretch = true
 	parent.add_child(container)
 	var view := SubViewport.new()
-	view.size = Vector2i(192, 246)
+	view.size = Vector2i(176, 216)
 	view.transparent_bg = true
 	view.own_world_3d = true
 	view.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
@@ -465,7 +520,7 @@ func _add_avatar(parent: Node) -> void:
 	scene.add_child(preview_rig)
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 2.8
+	camera.size = 3.05
 	camera.position = Vector3(3.3, 2.0, 4.3)
 	scene.add_child(camera)
 	camera.look_at(Vector3(0, 0.98, 0))
@@ -478,10 +533,13 @@ func _add_avatar(parent: Node) -> void:
 func _gear_clicked(slot: String) -> void:
 	selected_slot = slot
 	var item: String = str(game.equipment.get(slot, ""))
-	if item == "" or item == "training_blade":
-		filter_kind = "equipment"
+	if item == "":
+		# Keep the Character tab visible; users can choose items directly
+		# below and tap Equip, or drag the tile into the slot.
+		filter_kind = "character"
 		selected_id = ""
 	else:
+		filter_kind = "character"
 		selected_id = item
 	refresh()
 
@@ -535,7 +593,10 @@ func _render_items() -> void:
 	slot_px = clampf(slot_px, 54.0, 72.0)
 	var ids: Array[String] = _ordered_items()
 	for id in ids:
-		var tile := _button("", "wood_selected" if id == selected_id else "wood")
+		var tile: Button = EQUIP_DRAG.new() as Button
+		SKIN.apply_translucent_button(tile, "wood_selected" if id == selected_id else "wood")
+		tile.set("game_ref", game)
+		tile.set("item_id", id)
 		tile.name = "Item_" + id
 		tile.custom_minimum_size = Vector2(slot_px, slot_px)
 		tile.tooltip_text = _item_tip(id)
@@ -563,7 +624,9 @@ func _render_items() -> void:
 			worn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			worn.position = Vector2(3.0, 0.0)
 			tile.add_child(worn)
-	var minimum_tiles: int = 24
+	# Two tidy rows of empty slots, instead of 24 grey boxes pushing
+	# the character's equipment section off a landscape phone screen.
+	var minimum_tiles: int = 8 if not storage_mode else 12
 	var target_count: int = maxi(minimum_tiles, ceili(float(ids.size()) / float(column_count)) * column_count)
 	for _i in range(target_count - ids.size()):
 		var placeholder := Panel.new()
@@ -601,7 +664,7 @@ func _item_tip(id: String) -> String:
 
 func _render_details() -> void:
 	_clear(item_info)
-	item_card.visible = selected_id != "" and int(game.inventory.get(selected_id, 0)) > 0
+	item_card.visible = selected_id != "" and (int(game.inventory.get(selected_id, 0)) > 0 or (selected_id == "training_blade" and selected_slot == "weapon"))
 	if not item_card.visible:
 		return
 	var top := HBoxContainer.new()
@@ -620,7 +683,7 @@ func _render_details() -> void:
 	var attrs := VBoxContainer.new()
 	heading.add_child(attrs)
 	attrs.add_child(_text(selected_id.replace("_", " ").capitalize(), 18, SKIN.CREAM))
-	attrs.add_child(_text(_kind(selected_id).to_upper() + "  ×%d" % int(game.inventory[selected_id]), 15, SKIN.GOLD))
+	attrs.add_child(_text("STARTER WEAPON  •  EQUIPPED" if selected_id == "training_blade" else _kind(selected_id).to_upper() + "  ×%d" % int(game.inventory.get(selected_id, 0)), 15, SKIN.GOLD))
 	var weight: float = CARRY.weight(selected_id, game.equipped_bag_id(), game.equipped_bag_stars())
 	item_info.add_child(_text("WEIGHT  %.2f each" % weight, 15, SKIN.CREAM))
 	if CARRY.is_bag(selected_id):
@@ -628,13 +691,13 @@ func _render_details() -> void:
 		item_info.add_child(_text("T%d  %s  •  +%.0f carry" % [CARRY.tier(selected_id), "★".repeat(stars), CARRY.capacity(selected_id, stars) - CARRY.BASE_CAPACITY], 15, SKIN.GOLD))
 		if CARRY.specialty(selected_id) != "":
 			item_info.add_child(_text("Specialty: " + CARRY.specialty(selected_id).capitalize(), 14, SKIN.CREAM))
-	var description := "Found while exploring Outpost."
+	var description := "Your starting sword. Replace it with a crafted weapon when ready." if selected_id == "training_blade" else "Found while exploring Outpost."
 	for recipe in game.recipes:
 		if str(recipe.get("result", "")) == selected_id:
 			description = str(recipe.get("desc", description))
 			break
 	item_info.add_child(_text(description, 15, SKIN.CREAM))
-	if _kind(selected_id) == "equipment":
+	if _kind(selected_id) == "equipment" and selected_id != "training_blade":
 		var equipped: bool = game.is_equipped(selected_id)
 		var gear_action := _button("UNEQUIP" if equipped else "EQUIP", "green")
 		gear_action.custom_minimum_size = Vector2(0, 48)
