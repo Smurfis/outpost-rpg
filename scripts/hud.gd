@@ -83,7 +83,7 @@ var toast_panel: Panel
 var items: Dictionary = {}
 var joystick: Panel
 var knob: Panel
-var movement_stick_scale: float = 1.0
+var movement_stick_scale: float = 1.20
 var movement_stick_slider: HSlider
 var movement_stick_size_label: Label
 var settings_slider_finger: int = -1
@@ -206,6 +206,15 @@ var leave_ignore_synthetic_mouse_until: int = 0
 var floating_mode_toggle: CheckButton
 var name_edit: LineEdit
 var skill_detail_panel: Panel
+var skills_close_button: Button
+var skills_close_x: Button
+var skills_touch_finger: int = -1
+var skills_touch_candidate: Button
+var skills_touch_origin: Vector2 = Vector2.ZERO
+var skills_mouse_down: bool = false
+var skills_mouse_candidate: Button
+var skills_mouse_origin: Vector2 = Vector2.ZERO
+var skills_ignore_mouse_until: int = 0
 var skill_detail_text: Label
 var skill_mastery_bar: ProgressBar
 var skill_slot_rows: Array[Label] = []
@@ -1262,7 +1271,92 @@ func _build_skill_details() -> void:
 	close.offset_top = -58
 	close.offset_right = -20
 	close.offset_bottom = -14
-	close.pressed.connect(func() -> void: skill_detail_panel.visible = false)
+	close.pressed.connect(_close_skill_details)
+	skills_close_button = close
+	# The Skills page should close as reliably as Controls and Leave Outpost:
+	# a top-right red X plus the bottom CLOSE button share one handler.
+	skills_close_x = Button.new()
+	skills_close_x.name = "CloseSkillsX"
+	SKIN.apply_close_button(skills_close_x, 43.0)
+	skills_close_x.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	skills_close_x.offset_left = -53.0
+	skills_close_x.offset_right = -10.0
+	skills_close_x.offset_top = 9.0
+	skills_close_x.offset_bottom = 52.0
+	skills_close_x.pressed.connect(_close_skill_details)
+	skill_detail_panel.add_child(skills_close_x)
+	# This is the little sword/mastery orb that looked like a stray ATTACK
+	# button behind the joystick. Retain real mastery XP, but show it only
+	# where it belongs: inside the Skills panel, beside its header.
+	trained_skill_orb.reparent(skill_detail_panel)
+	trained_skill_orb.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	trained_skill_orb.offset_left = -112.0
+	trained_skill_orb.offset_right = -60.0
+	trained_skill_orb.offset_top = 8.0
+	trained_skill_orb.offset_bottom = 60.0
+
+
+func _close_skill_details() -> void:
+	if skill_detail_panel == null:
+		return
+	skill_detail_panel.visible = false
+	skills_touch_finger = -1
+	skills_touch_candidate = null
+	skills_mouse_down = false
+	skills_mouse_candidate = null
+	skills_ignore_mouse_until = Time.get_ticks_msec() + 375
+	_reset_touch()
+
+
+func _skills_close_at(pos: Vector2) -> Button:
+	if skills_close_x != null and skills_close_x.is_visible_in_tree() and skills_close_x.get_global_rect().grow(7.0).has_point(pos):
+		return skills_close_x
+	if skills_close_button != null and skills_close_button.is_visible_in_tree() and skills_close_button.get_global_rect().grow(7.0).has_point(pos):
+		return skills_close_button
+	return null
+
+
+func _handle_skill_details_input(event: InputEvent) -> void:
+	# The regular Button.pressed signal may never receive a complete Android
+	# tap after HUD._input consumes the event. Handle down/up as one modal
+	# gesture BEFORE any gameplay/quick-action touch handlers.
+	get_viewport().set_input_as_handled()
+	if event.is_action_pressed("ui_cancel"):
+		_close_skill_details()
+		return
+	if event is InputEventScreenTouch:
+		var touch: InputEventScreenTouch = event
+		if touch.pressed and skills_touch_finger < 0:
+			skills_touch_finger = touch.index
+			skills_touch_origin = touch.position
+			skills_touch_candidate = _skills_close_at(touch.position)
+		elif not touch.pressed and touch.index == skills_touch_finger:
+			var close_target: Button = skills_touch_candidate
+			var activate: bool = close_target != null and close_target == _skills_close_at(touch.position) and touch.position.distance_to(skills_touch_origin) < 44.0
+			skills_touch_finger = -1
+			skills_touch_candidate = null
+			if activate:
+				_close_skill_details()
+	elif event is InputEventScreenDrag:
+		var drag: InputEventScreenDrag = event
+		if drag.index == skills_touch_finger and drag.position.distance_to(skills_touch_origin) >= 44.0:
+			skills_touch_candidate = null
+	elif event is InputEventMouseButton:
+		var click: InputEventMouseButton = event
+		if click.button_index != MOUSE_BUTTON_LEFT or Time.get_ticks_msec() < skills_ignore_mouse_until:
+			return
+		if click.pressed:
+			skills_mouse_down = true
+			skills_mouse_origin = click.position
+			skills_mouse_candidate = _skills_close_at(click.position)
+		elif skills_mouse_down:
+			var close_target: Button = skills_mouse_candidate
+			var activate: bool = close_target != null and close_target == _skills_close_at(click.position) and click.position.distance_to(skills_mouse_origin) < 44.0
+			skills_mouse_down = false
+			skills_mouse_candidate = null
+			if activate:
+				_close_skill_details()
+
 
 func _show_skill_details() -> void:
 	_set_top_menu(false)
@@ -1283,6 +1377,8 @@ func _show_skill_details() -> void:
 		row.text = "◆  %s   •   %s" % [names[i], "UNLOCKED" if unlocked else "RANK %d REQUIRED" % required[i]]
 		row.add_theme_color_override("font_color", SKIN.GOLD if unlocked else SKIN.CREAM)
 	skill_detail_panel.visible = true
+	skill_detail_panel.move_to_front()
+	_reset_touch()
 
 func _build_control_settings() -> void:
 	# Keep the title/close control fixed; scroll the actual options on short
@@ -1852,7 +1948,7 @@ func _apply_movement_stick_size() -> void:
 	var thumb: StyleBoxFlat = knob.get_theme_stylebox("panel") as StyleBoxFlat
 	if thumb != null:
 		thumb.set_corner_radius_all(1000)
-	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0 * movement_stick_scale * movement_stick_scale
+	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0 * movement_stick_scale
 	_position_stick()
 
 func _set_adaptive_joystick(enabled: bool) -> void:
@@ -1887,7 +1983,16 @@ func _load_control_prefs() -> void:
 		floating_joystick_enabled = bool(config.get_value("controls", "floating_joystick", false))
 		adaptive_joystick_enabled = bool(config.get_value("controls", "adaptive_joystick", false))
 		sticky_movement_enabled = bool(config.get_value("controls", "sticky_movement", false))
-		movement_stick_scale = clampf(float(config.get_value("controls", "movement_stick_scale", 1.0)), 0.8, 1.5)
+		movement_stick_scale = clampf(float(config.get_value("controls", "movement_stick_scale", 1.20)), 0.8, 1.5)
+		# Older Alphas saved 100% as the default. Upgrade only that legacy
+		# default once to the newly requested 120%, preserving explicit
+		# smaller/larger settings and all later slider selections.
+		if not bool(config.get_value("controls", "stick_default_enlarged_v2", false)):
+			if is_equal_approx(movement_stick_scale, 1.0):
+				movement_stick_scale = 1.20
+			config.set_value("controls", "movement_stick_scale", movement_stick_scale)
+			config.set_value("controls", "stick_default_enlarged_v2", true)
+			config.save(CONTROL_PREFS)
 		player_display_name = str(config.get_value("profile", "display_name", "Adventurer")).strip_edges()
 		if player_display_name.is_empty():
 			player_display_name = "Adventurer"
@@ -1902,6 +2007,7 @@ func _load_control_prefs() -> void:
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
+	config.set_value("controls", "stick_default_enlarged_v2", true)
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
 	config.set_value("controls", "movement_stick_scale", movement_stick_scale)
 	config.set_value("controls", "adaptive_joystick", adaptive_joystick_enabled)
@@ -2069,8 +2175,8 @@ func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
 	var height_px: float = clampf(18.0 * scale, 17.0, 23.0)
 	var y: float = screen.y - height_px
 	_place_px(xp_bar, screen, Rect2(0.0, y, screen.x, height_px))
-	_place_px(trained_skill_orb, screen, Rect2(10.0 * scale, y - 41.0 * scale,
-			52.0 * scale, 52.0 * scale))
+	# Weapon / gathering mastery now lives in the Skills modal, never
+	# under the enlarged movement joystick on the bottom-left of the HUD.
 	# Keep actual XP reading centred along the uninterrupted bottom strip.
 	# The portrait rank badge is placed by _layout_player_chrome_for_size.
 	_place_px(xp_level_label, screen, Rect2(0.0, y, screen.x, height_px))
@@ -2852,7 +2958,7 @@ func _process(delta: float) -> void:
 		if quick_hold_seconds >= 0.36:
 			_open_quick_tray()
 	_position_stick()
-	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0
+	knob.position = (joystick.size - knob.size) * 0.5 + move_vector * 45.0 * movement_stick_scale
 	gathered_update_delay += delta
 	if gathered_update_delay >= 1.0:
 		gathered_update_delay = 0.0
@@ -3051,6 +3157,14 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if skill_detail_panel != null and skill_detail_panel.visible:
+		_handle_skill_details_input(event)
+		return
+	# A touch that just closed Skills can echo as an Android synthetic mouse
+	# event; never let that echo activate a skill/action underneath.
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() < skills_ignore_mouse_until:
+		get_viewport().set_input_as_handled()
+		return
 	if control_settings_panel != null and control_settings_panel.visible:
 		_handle_settings_touch(event)
 		return
@@ -3158,7 +3272,7 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.relative.x)
 		return
 	if event is InputEventScreenTouch:
-		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 * movement_stick_scale * movement_stick_scale or _adaptive_stick_zone(event.position)))):
+		if event.pressed and finger == -1 and ((floating_joystick_enabled and _floating_zone(event.position)) or (not floating_joystick_enabled and (event.position.distance_to(_center()) < 104.0 * movement_stick_scale or _adaptive_stick_zone(event.position)))):
 			finger = event.index
 			mouse_stick = false
 			if floating_joystick_enabled:
