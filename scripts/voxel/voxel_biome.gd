@@ -4,6 +4,7 @@ extends Node3D
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const HARVESTABLE = preload("res://scripts/resource_node.gd")
 const WILD_BOAR = preload("res://scripts/enemy.gd")
 const WATER_SHADER = preload("res://scripts/voxel/coastal_water.gdshader")
@@ -401,6 +402,11 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		if decor != null:
 			add_child(decor)
 			members.append(decor)
+		# Tree silhouettes are a separate single-surface batch, not one node per tree.
+		var foliage: MeshInstance3D = _chunk_foliage(chunk_x, chunk_z)
+		if foliage != null:
+			add_child(foliage)
+			members.append(foliage)
 		var surf: MeshInstance3D = _shore_foam(chunk_x, chunk_z)
 		if surf != null:
 			add_child(surf)
@@ -498,14 +504,9 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		placed += 1
 		var y: float = surface_y_at(x, z)
 		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
-			# Original hand-stacked trees; no new scene nodes/draw calls.
-			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
-			var crown_tile: int = PIXELS.foliage_tile_at(x, z, world_seed)
-			var crown_height: float = 1.66 + float(i % 2) * 0.27
-			PIXELS.box(st, Vector3(x, y + 0.80, z), Vector3(0.42, 1.60, 0.46), 8, 8)
-			PIXELS.box(st, Vector3(x, y + crown_height, z), Vector3(1.72, 0.91, 1.55), crown_tile, crown_tile, 3, tint)
-			PIXELS.box(st, Vector3(x + 0.33, y + crown_height + 0.59, z - 0.16), Vector3(1.23, 0.71, 1.26), crown_tile, crown_tile, 3, tint)
-			PIXELS.box(st, Vector3(x - 0.44, y + crown_height + 0.26, z + 0.43), Vector3(0.81, 0.61, 0.93), crown_tile, crown_tile, 3, tint)
+			# Matching tree placement is emitted by _chunk_foliage with the
+			# dedicated padded tree atlas (never duplicate terrain-atlas crowns).
+			continue
 		elif i in [4, 11, 15]:
 			# Compact, deterministic voxel mushroom clusters share the exact
 			# silhouette of the gatherable mushrooms, without extra nodes.
@@ -519,6 +520,28 @@ func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	if placed == 0:
 		return null
 	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
+
+func _chunk_foliage(chunk_x: int, chunk_z: int) -> MeshInstance3D:
+	# Same deterministic sample positions as _chunk_decoration. No new
+	# per-tree nodes: each loaded chunk gets at most ONE foliage draw call.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
+	var count: int = 0
+	for i in range(18):
+		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
+		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
+		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
+			continue
+		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
+			var y: float = surface_y_at(x, z)
+			var species: int = FOLIAGE.species_at(x, z, world_seed)
+			FOLIAGE.append_tree(st, Vector3(x, y, z), species, 0.58, i)
+			count += 1
+	if count == 0:
+		return null
+	return FOLIAGE.batched(st, "ChunkFoliage_%d_%d" % [chunk_x, chunk_z])
 
 func _shore_foam_vertex(st: SurfaceTool, point: Vector2, opacity: float) -> void:
 	# Vertex alpha feathers the strip into the ocean. Colours stay cool-white,
@@ -738,6 +761,9 @@ func _make_fields_scenery() -> void:
 	# Individual harvestables/collisions belong to the future chunk streamer.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var foliage_st := SurfaceTool.new()
+	foliage_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var foliage_count: int = 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = world_seed + 1903
 	for i in range(85):
@@ -747,12 +773,9 @@ func _make_fields_scenery() -> void:
 			continue
 		var y: float = surface_y_at(x, z)
 		if i % 4 == 0:
-			var tint: Color = PIXELS.foliage_tint_at(x, z, world_seed)
-			var crown_tile: int = PIXELS.foliage_tile_at(x, z, world_seed)
-			PIXELS.box(st, Vector3(x, y + 0.75, z), Vector3(0.45, 1.45, 0.48), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), crown_tile, crown_tile, 3, tint)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), crown_tile, crown_tile, 3, tint)
-			PIXELS.box(st, Vector3(x - 0.52, y + 1.91, z + 0.54), Vector3(0.95, 0.64, 0.85), crown_tile, crown_tile, 3, tint)
+			FOLIAGE.append_tree(foliage_st, Vector3(x, y, z),
+				FOLIAGE.species_at(x, z, world_seed), 0.62, i)
+			foliage_count += 1
 		elif i % 4 == 1:
 			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
 			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
@@ -760,3 +783,5 @@ func _make_fields_scenery() -> void:
 			PIXELS.box(st, Vector3(x, y + 0.28, z), Vector3(0.88, 0.58, 0.82), 9, 10)
 			PIXELS.box(st, Vector3(x + 0.28, y + 0.43, z), Vector3(0.75, 0.69, 0.85), 1, 9)
 	add_child(PIXELS.as_instance(st, "FieldsBatchedScenery"))
+	if foliage_count > 0:
+		add_child(FOLIAGE.batched(foliage_st, "FieldsBatchedFoliage"))
