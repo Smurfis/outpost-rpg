@@ -5,8 +5,7 @@ const GAME_SCENE: String = "res://scenes/main.tscn"
 const TITLE_SCENE: String = "res://scenes/ui/title_screen.tscn"
 const SCENERY: String = "res://assets/ui/title/title_background.png"
 const FALLBACK_SCENERY: String = "res://assets/ui/title/title_backdrop.svg"
-const CREST: String = "res://assets/ui/title/outpost_logo.png"
-const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const CREST: String = "res://assets/ui/title/outpost_loading_logo.png"
 const READY_PAUSE_FRAMES: int = 2
 
 var _progress: ProgressBar
@@ -51,36 +50,25 @@ func _build_screen() -> void:
 		scenic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		page.add_child(scenic)
 
-	var veil := ColorRect.new()
-	veil.name = "DuskVeil"
-	veil.color = Color(0.03, 0.026, 0.075, 0.51)
-	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	page.add_child(veil)
-
-	# Keep the approved scenery but use the same translucent wood/bronze
-	# frame as the Menu and Changelog. The world load remains cancellable.
+	# The backdrop must remain completely visible: no dusk tint, no modal
+	# frame, no rectangular texture behind the independent transparent logo.
+	# CenterContainer retains the responsive landscape/ultrawide positioning.
 	var middle := CenterContainer.new()
 	middle.name = "LoadingCenter"
 	middle.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	page.add_child(middle)
-	var loading_frame := PanelContainer.new()
-	loading_frame.name = "WorldLoadingFrame"
-	var glass := SKIN.modal_panel()
-	glass.bg_color = Color(0.17, 0.11, 0.10, 0.80)
-	loading_frame.add_theme_stylebox_override("panel", glass)
-	middle.add_child(loading_frame)
 	var column := VBoxContainer.new()
 	column.name = "LoadingStack"
-	column.custom_minimum_size = Vector2(450, 400)
+	column.custom_minimum_size = Vector2(530, 0)
 	column.add_theme_constant_override("separation", 12)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	loading_frame.add_child(column)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	middle.add_child(column)
 
 	var crest := TextureRect.new()
 	crest.name = "OutpostLoadingCrest"
-	crest.custom_minimum_size = Vector2(245, 185)
+	crest.custom_minimum_size = Vector2(370, 277)
 	crest.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	crest.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	crest.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -105,11 +93,18 @@ func _build_screen() -> void:
 	_progress.min_value = 0
 	_progress.max_value = 100
 	_progress.value = 0
-	_progress.custom_minimum_size = Vector2(420, 25)
+	_progress.custom_minimum_size = Vector2(500, 27)
 	_progress.show_percentage = false
-	var rail: StyleBoxFlat = SKIN.flat("inset")
-	var filled: StyleBoxFlat = SKIN.flat("wood_selected")
-	filled.bg_color = Color("#eabf70")
+	_progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The slim progress rail is the only colored backing in this overlay.
+	var rail := StyleBoxFlat.new()
+	rail.bg_color = Color(0.16, 0.09, 0.08, 0.64)
+	rail.border_color = Color("e2ad64")
+	rail.set_border_width_all(2)
+	rail.set_corner_radius_all(6)
+	var filled := StyleBoxFlat.new()
+	filled.bg_color = Color("f0c16e")
+	filled.set_corner_radius_all(5)
 	_progress.add_theme_stylebox_override("background", rail)
 	_progress.add_theme_stylebox_override("fill", filled)
 	column.add_child(_progress)
@@ -127,9 +122,17 @@ func _build_screen() -> void:
 	_cancel_button = Button.new()
 	_cancel_button.name = "CancelLoading"
 	_cancel_button.text = "CANCEL  •  RETURN TO TITLE"
-	_cancel_button.custom_minimum_size = Vector2(300, 58)
+	_cancel_button.custom_minimum_size = Vector2(310, 48)
 	_cancel_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	SKIN.apply_button(_cancel_button, "wood")
+	_cancel_button.flat = true
+	# Keep Android cancellation available without introducing another box.
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		_cancel_button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	_cancel_button.add_theme_font_size_override("font_size", 15)
+	_cancel_button.add_theme_color_override("font_color", Color("ffe7bf"))
+	_cancel_button.add_theme_color_override("font_hover_color", Color("ffffff"))
+	_cancel_button.add_theme_color_override("font_pressed_color", Color("f0c16e"))
+	_cancel_button.add_theme_color_override("font_disabled_color", Color("afaa9e"))
 	_cancel_button.pressed.connect(_cancel_to_title)
 	column.add_child(_cancel_button)
 
