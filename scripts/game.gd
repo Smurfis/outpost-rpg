@@ -930,10 +930,18 @@ func equip_item(item_id: String) -> bool:
 	var slot: String = equipment_slot(item_id)
 	if slot == "":
 		return false
-	if is_equipped(item_id):
+	var removing: bool = is_equipped(item_id)
+	if removing:
 		equipment[slot] = "training_blade" if slot == "weapon" else ""
 	else:
 		equipment[slot] = item_id
+	# Equipping an axe/pickaxe from Gear should actually put it in the hand.
+	# Removing it should put away the model, without deleting inventory.
+	if item_id in ["axe", "pickaxe"]:
+		if removing and active_quick_tool == item_id:
+			active_quick_tool = str(equipment.get("weapon", "training_blade"))
+		elif not removing:
+			active_quick_tool = item_id
 	_apply_equipment()
 	_save()
 	_refresh_menu()
