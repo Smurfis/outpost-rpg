@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Remove the original title screenshot's painted grey/black button slots.
+"""Repair the approved title background's baked-in screenshot mattes.
 
 PR #66 already handles independent button PNG transparency and their moving
 glints. This repairs the *different* problem underneath them: the approved
-1280x720 background PNG contains large baked dark/blurred slot rectangles.
+1280x720 background PNG contains large baked dark/blurred slot rectangles,\nplus two top-edge brown smudges beside the separately rendered crest.
 The Alpha Android build runs this once before Godot imports the textures.
 Stable is unaffected, and all original source art stays in Git.
 """
@@ -87,7 +87,7 @@ def repair() -> None:
 
     clean.save(FILE, optimize=True)
     MARKER.parent.mkdir(parents=True, exist_ok=True)
-    MARKER.write_text("Inpainted baked button backdrop slots for this Alpha build.\n")
+    MARKER.write_text("alpha-title-clean-v2")
     print("Alpha title background regenerated: repaired button shadows and two upper logo-side mattes.")
 
 
