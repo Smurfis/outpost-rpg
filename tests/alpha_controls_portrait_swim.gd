@@ -1,0 +1,112 @@
+extends SceneTree
+## Android regression: portrait/labels, Settings touch + persistence, swimming,
+## crest matte and updater controls. Deliberately no APK/saves are modified.
+var failures: int = 0
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func verify(ok: bool, label: String) -> void:
+	if ok:
+		print("PASS ALPHA UI SWIM: " + label)
+	else:
+		failures += 1
+		push_error("FAIL ALPHA UI SWIM: " + label)
+
+func tap(hud: Node, point: Vector2, touch_id: int) -> void:
+	var down := InputEventScreenTouch.new()
+	down.pressed = true
+	down.index = touch_id
+	down.position = point
+	hud._input(down)
+	var up := InputEventScreenTouch.new()
+	up.pressed = false
+	up.index = touch_id
+	up.position = point
+	hud._input(up)
+
+func _run() -> void:
+	root.set_meta("outpost_new_adventure", true)
+	var source: PackedScene = load("res://scenes/main.tscn")
+	verify(source != null, "Main game imports")
+	if source == null:
+		quit(1)
+		return
+	var game = source.instantiate()
+	root.add_child(game)
+	await process_frame
+	var hud = game.hud
+	var portrait: TextureRect = hud.hero_portrait_art
+	verify(portrait != null and portrait.material is ShaderMaterial, "Hero has a genuine circular artwork mask")
+	if portrait != null and portrait.material is ShaderMaterial:
+		verify((portrait.material as ShaderMaterial).shader.code.contains("circular_alpha"), "Portrait square backing is clipped to circular art")
+	var gold_ring: StyleBoxFlat = hud.hero_portrait_frame.get_theme_stylebox("panel") as StyleBoxFlat
+	verify(gold_ring != null and gold_ring.get_corner_radius(CORNER_TOP_LEFT) > 50, "Portrait has visible gold circular frame")
+	verify(hud.root.get_node_or_null("CharacterLevelBadgeFrame") != null, "Level badge has real panel artwork")
+	verify(hud.health_bar.get_global_rect().position.x - hud.hero_portrait_frame.get_global_rect().end.x <= 11.0, "HP remains close to portrait")
+
+	hud._layout_touch_hud()
+	var smart: Button = hud.smart_button
+	var action: Button = hud.quick_buttons["skill_1"] as Button
+	verify(smart.size.x >= 122.0 and smart.size.y >= 122.0, "Interact is five percent larger")
+	verify(action.size.x >= 75.0, "Combat ability grows three percent without shifting position")
+	verify(smart.get_global_rect().end.y < hud.xp_bar.get_global_rect().position.y, "Raised Interact remains clear of bottom XP")
+
+	hud._show_control_settings()
+	await process_frame
+	verify(hud.control_settings_panel.visible, "Settings opens from game")
+	verify(hud.control_settings_panel.get_node_or_null("ControlSettingsScroll") != null, "Controls settings content scrolls on small phones")
+	var close: Button = hud.control_settings_close_button
+	verify(close != null and close.is_visible_in_tree(), "Permanent red X stays visible in Settings")
+	if close != null:
+		tap(hud, close.get_global_rect().get_center(), 52)
+		verify(not hud.control_settings_panel.visible, "One Android finger tap closes Settings")
+	hud._show_control_settings()
+	await process_frame
+	var old_floating: bool = hud.floating_joystick_enabled
+	tap(hud, hud.floating_mode_toggle.get_global_rect().get_center(), 53)
+	verify(hud.floating_joystick_enabled != old_floating, "Dynamic joystick CheckButton accepts actual touch")
+	hud._set_floating_mode(old_floating)
+	hud.floating_mode_toggle.set_pressed_no_signal(old_floating)
+
+	hud._set_status_text_mode("health", "percent")
+	hud._set_status_text_mode("mana", "off")
+	hud._set_status_text_mode("xp", "percent")
+	hud.render_status(50.0, game.inventory, 0, 0, "training_blade", "", "")
+	verify(hud.health_numbers.text == "50%" and hud.health_numbers.visible, "Health percentage shows real HP")
+	verify(not hud.mana_numbers.visible and hud.mana_bar.visible, "Mana OFF hides text without hiding bar")
+	verify(hud.xp_level_label.text.contains("%") and hud.xp_bar.visible, "XP percentage works without hiding bottom strip")
+	verify(hud.status_mode_buttons.has("health:text") and hud.status_mode_buttons.has("health:percent") and hud.status_mode_buttons.has("health:off"), "Every stat has Numbers, Percent and Off choices")
+	hud._save_control_prefs()
+	var config := ConfigFile.new()
+	verify(config.load(hud.CONTROL_PREFS) == OK and str(config.get_value("status_text", "health", "")) == "percent", "Text-mode selection persists to preferences")
+	for stat in ["health", "mana", "xp"]:
+		hud._set_status_text_mode(stat, "text")
+	hud._preview_swimming_fx()
+	verify(game.hero.swim_preview_seconds > 0.0, "Controls can trigger real swim stroke preview")
+	verify(get_nodes_in_group("outpost_swim_particles").size() > 0, "Preview emits batched splash particles")
+	verify(not hud.control_settings_panel.visible, "Preview closes Controls for unobstructed view")
+	game.hero.global_position = Vector3(95.0, -3.15, 0.0)
+	verify(game.hero._detect_surface_swimming(), "Coastline ocean is identified as swimmable water")
+	verify(not game.get_node("VoxelAtmosphere").is_land_at(95.0, 0.0), "Swimming only activates outside true land")
+	game.queue_free()
+	await process_frame
+
+	var title_scene: PackedScene = load("res://scenes/ui/title_screen.tscn")
+	verify(title_scene != null, "Title screen imports with improved crest matte")
+	if title_scene != null:
+		var title = title_scene.instantiate()
+		root.add_child(title)
+		await process_frame
+		var crest: Control = title.get_node_or_null("Artboard/OutpostLogo") as Control
+		verify(crest != null and crest.material is ShaderMaterial, "Original Outpost crest keeps its shader")
+		if crest != null and crest.material is ShaderMaterial:
+			verify((crest.material as ShaderMaterial).shader.code.contains("blue_sky"), "Title crest removes painted side-sky opacity")
+		var check_button: Button = title.get("_update_button") as Button
+		verify(check_button != null and check_button.get_theme_stylebox("normal") is StyleBoxFlat, "Update actions use gold-translucent controls")
+		var stable_button: Button = title.get("_channel_stable_button") as Button
+		verify(stable_button != null and stable_button.text.contains("STABLE"), "Stable/Alpha update selector exists")
+		title.queue_free()
+		await process_frame
+	print("ALPHA UI SWIM RESULT: %d failures" % failures)
+	quit(0 if failures == 0 else 1)

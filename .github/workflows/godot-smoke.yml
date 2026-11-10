@@ -265,6 +265,13 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WORLD SKILL HUD:' hud-world-skill.log; then exit 1; fi
           grep -q "WORLD SKILL HUD RESULT: 0 failures" hud-world-skill.log
 
+      - name: Validate circular portrait, Android Controls touch, status modes, swimming FX and title updater
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 75s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_controls_portrait_swim.gd 2>&1 | tee alpha-controls-swim.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ALPHA UI SWIM:' alpha-controls-swim.log; then exit 1; fi
+          grep -q "ALPHA UI SWIM RESULT: 0 failures" alpha-controls-swim.log
+
       - name: Verify real Android HUD hitboxes, map and responsive menu spacing
         run: |
           set -o pipefail

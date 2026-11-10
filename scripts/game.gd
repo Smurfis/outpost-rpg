@@ -161,14 +161,14 @@ func _process(delta: float) -> void:
 		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
 		return
-	# The new coast has real drops into deep water. Until a boat/swimming
-	# controller is built, recover the player instead of trapping them below
-	# an opaque ocean surface. Never affect isolated dungeon coordinates.
-	if voxel_art_enabled and chunk_streaming_enabled and hero.global_position.y < -3.60 and absf(hero.global_position.x) < 96.0 and absf(hero.global_position.z) < 96.0:
+	# Swimming now handles the shore and surface. Only recover if the hero
+	# somehow falls below the seabed; don't teleport normal swimmers home.
+	# Dungeon instances remain isolated from overworld depth checks.
+	if voxel_art_enabled and chunk_streaming_enabled and not hero.swimming and hero.global_position.y < -7.0 and absf(hero.global_position.x) < 96.0 and absf(hero.global_position.z) < 96.0:
 		hero.global_position = Vector3(0, 0.35, 0)
 		hero.velocity = Vector3.ZERO
 		hero.knockback_velocity = Vector3.ZERO
-		hud.toast("Deep water! A boat is needed to leave the island.")
+		hud.toast("Recovered from beneath the seabed.")
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
