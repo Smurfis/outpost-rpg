@@ -3,6 +3,7 @@ extends Area3D
 signal selected(entrance: Area3D)
 const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const VORTEX = preload("res://scripts/dungeons/pixel_portal_vortex.gdshader")
 var entrance_id: String = ""
 var chunk_id: String = ""
 var quality: int = 0
@@ -46,13 +47,24 @@ func configure(id: String, owner_chunk: String, tier: int) -> void:
 	PIXELS.box(st, Vector3(0, 5.03, 0), Vector3(4.9, 0.76, 1.28), 12, 4)
 	PIXELS.box(st, Vector3(0, 5.48, 0), Vector3(2.05, 0.24, 1.43), 7, 12)
 	PIXELS.box(st, Vector3(0, 5.76, 0), Vector3(0.80, 0.40, 0.92), 13, 12)
+	# Layered ruin fragments, moss and low flowering plants add depth to the
+	# portal without changing its collision shape or entrance/click logic.
+	for side in [-1.0, 1.0]:
+		PIXELS.box(st, Vector3(side * 2.46, 0.17, -0.51), Vector3(0.64, 0.33, 0.51), 4, 12)
+		PIXELS.box(st, Vector3(side * 2.31, 0.59, -0.57), Vector3(0.41, 0.22, 0.21), 7, 7)
+		PIXELS.box(st, Vector3(side * 2.0, 3.92, -0.62), Vector3(0.19, 0.38, 0.17), 7, 7)
+		PIXELS.box(st, Vector3(side * 2.65, 0.26, -0.74), Vector3(0.29, 0.36, 0.38), 9, 9)
+		PIXELS.box(st, Vector3(side * 2.65, 0.53, -0.74), Vector3(0.20, 0.12, 0.21), 14, 14)
 	add_child(PIXELS.as_instance(st, "VoxelStoneMonument"))
 
 	var gate_mesh := BoxMesh.new()
 	gate_mesh.size = Vector3(3.0, 3.9, 0.13)
 	orb = _add_mesh(gate_mesh, Vector3(0, 2.5, 0), RARITY.color(quality))
 	orb.name = "RarityGate"
-	orb.material_override = _emissive(RARITY.color(quality), 1.75, 0.65)
+	var vortex_material := ShaderMaterial.new()
+	vortex_material.shader = VORTEX
+	vortex_material.set_shader_parameter("portal_color", RARITY.color(quality))
+	orb.material_override = vortex_material
 	var inner := BoxMesh.new()
 	inner.size = Vector3(2.46, 3.24, 0.12)
 	aura = _add_mesh(inner, Vector3(0, 2.5, -0.1), RARITY.color(quality))

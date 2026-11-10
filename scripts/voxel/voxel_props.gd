@@ -21,6 +21,13 @@ static func tree(tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstan
 	PIXELS.box(st, Vector3(-1.09, 3.15, -0.42), Vector3(0.98, 0.66, 1.04), foliage_tile, foliage_tile, 3, tint)
 	PIXELS.box(st, Vector3(1.11, 3.53, 0.43), Vector3(1.04, 0.75, 0.90), foliage_tile, foliage_tile, 3, tint)
 	PIXELS.box(st, Vector3(-0.14, 4.57, 0.08), Vector3(1.05, 0.45, 1.11), foliage_tile, foliage_tile, 3, tint)
+	# Break up squared crown corners and add little roots and bright crown tips.
+	# These remain inside the SAME mesh, so mobile batching is unchanged.
+	PIXELS.box(st, Vector3(-1.30, 3.04, 0.38), Vector3(0.60, 0.40, 0.70), foliage_tile, foliage_tile, 3, tint)
+	PIXELS.box(st, Vector3(1.30, 3.12, -0.27), Vector3(0.66, 0.48, 0.62), foliage_tile, foliage_tile, 3, tint)
+	PIXELS.box(st, Vector3(0.50, 4.52, -0.40), Vector3(0.84, 0.42, 0.80), 1, foliage_tile, 3, tint)
+	PIXELS.box(st, Vector3(-0.39, 0.12, 0.15), Vector3(0.48, 0.23, 0.75), 8, 8)
+	PIXELS.box(st, Vector3(0.36, 0.10, -0.11), Vector3(0.46, 0.20, 0.65), 8, 8)
 	return PIXELS.as_instance(st, "VoxelTree")
 
 static func pine_tree(tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
@@ -42,6 +49,11 @@ static func rock(kind: String = "stone") -> MeshInstance3D:
 	PIXELS.box(st, Vector3(-0.35, 0.33, 0.02), Vector3(1.06, 0.67, 0.94), top, side)
 	PIXELS.box(st, Vector3(0.32, 0.42, -0.12), Vector3(0.9, 0.83, 0.81), side, side)
 	PIXELS.box(st, Vector3(0.1, 0.24, 0.44), Vector3(0.87, 0.48, 0.56), side, side)
+	# Faceted silhouette, smaller supporting stones and mossy top. Avoid
+	# smooth spheres or separate draw-call meshes.
+	PIXELS.box(st, Vector3(-0.71, 0.18, -0.21), Vector3(0.39, 0.37, 0.49), side, side)
+	PIXELS.box(st, Vector3(0.72, 0.17, 0.20), Vector3(0.37, 0.32, 0.41), side, side)
+	PIXELS.box(st, Vector3(-0.05, 0.70, -0.12), Vector3(0.48, 0.16, 0.41), 7 if kind == "stone" else side, side)
 	# Iron gets a separate silver/white metal vein rather than tile 13
 	# (purple MAGIC CRYSTAL, which should never be used for iron).
 	if kind == "iron":
@@ -78,8 +90,12 @@ static func bush(has_berries: bool) -> MeshInstance3D:
 	PIXELS.box(st, Vector3(-0.36, 0.33, -0.12), Vector3(0.85, 0.66, 0.92), 9, 10)
 	PIXELS.box(st, Vector3(0.28, 0.45, 0.05), Vector3(1.01, 0.9, 0.95), 9, 9)
 	PIXELS.box(st, Vector3(-0.01, 0.62, -0.10), Vector3(0.83, 0.70, 0.84), 1, 9)
+	# Rounded-by-steps layered foliage like the approved hedgerow reference.
+	PIXELS.box(st, Vector3(-0.49, 0.45, 0.30), Vector3(0.57, 0.58, 0.58), 9, 10)
+	PIXELS.box(st, Vector3(0.48, 0.62, -0.27), Vector3(0.66, 0.55, 0.61), 1, 9)
+	PIXELS.box(st, Vector3(-0.08, 0.94, 0.03), Vector3(0.58, 0.23, 0.66), 1, 9)
 	if has_berries:
-		for p in [Vector3(-0.45, 0.68, 0.43), Vector3(0.48, 0.79, -0.25), Vector3(0.1, 0.97, 0.19)]:
+		for p in [Vector3(-0.45, 0.68, 0.43), Vector3(0.48, 0.79, -0.25), Vector3(0.1, 0.97, 0.19), Vector3(-0.21, 0.95, -0.28)]:
 			PIXELS.box(st, p, Vector3.ONE * 0.22, 14, 14)
 	return PIXELS.as_instance(st, "VoxelBerryBush" if has_berries else "VoxelFiberBush")
 
