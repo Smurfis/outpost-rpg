@@ -20,6 +20,14 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(-0.52, 1.52, -0.01), Vector3(0.26, 0.26, 0.58), 11, 8)
 			PIXELS.box(st, Vector3(0.52, 1.52, -0.01), Vector3(0.26, 0.26, 0.58), 11, 8)
 			PIXELS.box(st, Vector3(-0.26, 1.35, -0.315), Vector3(0.13, 0.60, 0.055), 8, 8)
+			# Visible green collar, cloth folds, gold buckle and a compact leather
+			# travelling pack; still part of the original animated torso mesh.
+			PIXELS.box(st, Vector3(0, 1.65, -0.16), Vector3(0.57, 0.10, 0.33), 1, 10)
+			PIXELS.box(st, Vector3(0.25, 1.20, -0.30), Vector3(0.09, 0.43, 0.05), 7, 1)
+			PIXELS.box(st, Vector3(0.0, 0.91, -0.365), Vector3(0.20, 0.13, 0.075), 5, 5)
+			PIXELS.box(st, Vector3(0, 1.24, 0.42), Vector3(0.69, 0.72, 0.36), 8, 8)
+			PIXELS.box(st, Vector3(0, 1.52, 0.63), Vector3(0.73, 0.15, 0.14), 11, 8)
+			PIXELS.box(st, Vector3(0, 1.19, 0.64), Vector3(0.38, 0.12, 0.10), 5, 8)
 		"adventurer_head":
 			# Pixel-sculpted face, dark hair and two square dark eyes (faces -Z).
 			PIXELS.box(st, Vector3(0, 0, 0), Vector3(0.61, 0.58, 0.56), 5, 5)
@@ -34,14 +42,26 @@ static func create_part(part_name: String) -> MeshInstance3D:
 			PIXELS.box(st, Vector3(-0.27, -0.07, -0.315), Vector3(0.08, 0.07, 0.035), 14, 14)
 			PIXELS.box(st, Vector3(0.27, -0.07, -0.315), Vector3(0.08, 0.07, 0.035), 14, 14)
 			PIXELS.box(st, Vector3(0.0, -0.12, -0.319), Vector3(0.06, 0.05, 0.045), 8, 8)
+			# Character pass: a stepped chestnut quiff and square side locks,
+			# echoing the ranger portrait without altering head rig placement.
+			PIXELS.box(st, Vector3(0.01, 0.39, -0.05), Vector3(0.78, 0.16, 0.65), 8, 8)
+			PIXELS.box(st, Vector3(-0.20, 0.32, -0.29), Vector3(0.35, 0.15, 0.16), 8, 8)
+			PIXELS.box(st, Vector3(0.12, 0.28, -0.32), Vector3(0.23, 0.13, 0.13), 8, 8)
+			PIXELS.box(st, Vector3(-0.38, 0.11, -0.03), Vector3(0.11, 0.40, 0.48), 8, 8)
+			PIXELS.box(st, Vector3(0.38, 0.10, -0.02), Vector3(0.11, 0.36, 0.47), 8, 8)
+			# Slightly wider pale cheeks, with the existing eye positions intact.
+			PIXELS.box(st, Vector3(-0.25, -0.06, -0.337), Vector3(0.08, 0.08, 0.04), 14, 14)
+			PIXELS.box(st, Vector3(0.25, -0.06, -0.337), Vector3(0.08, 0.08, 0.04), 14, 14)
 		"adventurer_arm":
 			PIXELS.box(st, Vector3(0, -0.28, 0), Vector3(0.42, 0.61, 0.42), 2, 10)
 			PIXELS.box(st, Vector3(0, -0.12, 0), Vector3(0.49, 0.16, 0.48), 10, 10)
 			PIXELS.box(st, Vector3(0, -0.60, 0), Vector3(0.31, 0.20, 0.31), 8, 5)
+			PIXELS.box(st, Vector3(0, -0.39, -0.23), Vector3(0.32, 0.13, 0.06), 11, 8)
 		"adventurer_leg":
 			PIXELS.box(st, Vector3(0, -0.33, 0), Vector3(0.39, 0.73, 0.42), 10, 10)
 			PIXELS.box(st, Vector3(0, -0.69, -0.03), Vector3(0.42, 0.22, 0.49), 8, 8)
 			PIXELS.box(st, Vector3(0, -0.56, -0.14), Vector3(0.43, 0.11, 0.30), 11, 8)
+			PIXELS.box(st, Vector3(0, -0.76, -0.14), Vector3(0.45, 0.13, 0.53), 8, 8)
 		"steel_sword":
 			# Matching pixel-atlas blade, gold crossguard and leather-wrapped grip.
 			# Blade points +Y locally; WeaponGrip aims it down/forward in-game.
