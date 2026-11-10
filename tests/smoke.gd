@@ -29,6 +29,9 @@ func _test_game() -> void:
 	check(game.stations.size() == 5, "Five interactive 3D stations including enchanting bench exist")
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Starting equipment defaults to the training blade")
 	check(game.hero.visual.get_child_count() >= 7, "Modular player 3D model assembled")
+	for tool_id in ["axe", "pickaxe"]:
+		var model: Mesh = load("res://assets/models/hand_" + tool_id + ".obj") as Mesh
+		check(model != null and model.get_surface_count() > 0, "Original 3D held " + tool_id + " model imports")
 	var mesh_assets: Array = ["oak_tree", "rock_deposit", "supply_crate"]
 	var loaded_count: int = 0
 	for asset in mesh_assets:
@@ -65,11 +68,18 @@ func _test_game() -> void:
 		game.inventory["axe"] = 1
 		check(game.equip_item("axe"), "Woodcutter axe can be equipped")
 		check(game.is_equipped("axe"), "Axe appears in the woodcutting equipment slot")
+		check(game.active_quick_tool == "axe", "Equipping an axe selects the held tool")
+		check(game.hero.held_tool_id == "axe" and game.hero.tool_mesh != null, "Axe mesh attaches to right hand")
+		check(not game.hero.sword_mesh.visible, "Holding axe hides the sword model")
+		var held_axe: MeshInstance3D = game.hero.tool_mesh
+		game.hero.set_held_tool("axe")
+		check(game.hero.tool_mesh == held_axe, "Re-selecting axe does not rebuild wrist mesh")
 		var wood_before_axe: int = int(game.inventory.get("wood", 0))
 		game.gather_delay = 0.0
 		game.gather()
 		check(int(game.inventory.get("wood", 0)) == wood_before_axe + 2, "Equipped axe doubles wood harvest")
 		check(game.equip_item("axe"), "Equipped axe can be removed")
+		check(game.hero.tool_mesh == null and game.hero.sword_mesh.visible, "Removing axe restores sword visibility")
 		game.gather_delay = 0.0
 		var wood_without_axe: int = int(game.inventory.get("wood", 0))
 		game.gather()
@@ -110,6 +120,15 @@ func _test_game() -> void:
 	check(game.begin_craft("pickaxe"), "Can start another recipe after axe is already owned")
 	game.cancel_craft()
 	check(game.crafting.is_empty(), "Work can be cancelled")
+	# Owned gathering tools cycle through the existing multi-interact selector.
+	game.inventory["pickaxe"] = 1
+	check(game.select_quick_tool("pickaxe"), "Quick selector accepts owned pickaxe")
+	check(game.hero.held_tool_id == "pickaxe" and game.hero.tool_mesh != null, "Pickaxe replaces wrist-held tool")
+	check(not game.hero.sword_mesh.visible, "Pickaxe hides sword while held")
+	check(game.equip_item("pickaxe"), "Equipped pickaxe can be put away")
+	check(game.hero.tool_mesh == null and game.hero.sword_mesh.visible, "Putting pickaxe away restores sword")
+	game.inventory["pickaxe"] = 0
+	check(not game.select_quick_tool("pickaxe"), "Unowned pickaxe cannot be selected")
 	check(int(game.inventory.get("wood", 0)) == 4, "Cancellation never consumes ingredients")
 	game.show_inventory()
 	check(game.menu.visible and game.menu.current_page == "bag", "Inventory tab opens")
