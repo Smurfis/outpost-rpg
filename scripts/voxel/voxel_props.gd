@@ -1,38 +1,21 @@
 extends RefCounted
 ## Single-draw-call textured mesh props, safe to hide for gathering respawn.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 
-static func tree(tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
-	# Layered square canopies and bark branches: chunky readable silhouette
-	# similar to the approved mobile isometric reference. ONE mesh per tree.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	PIXELS.box(st, Vector3(0, 1.35, 0), Vector3(0.60, 2.70, 0.64), 8, 8)
-	PIXELS.box(st, Vector3(-0.55, 2.40, 0.0), Vector3(1.25, 0.29, 0.29), 8, 8)
-	PIXELS.box(st, Vector3(0.42, 2.90, 0.1), Vector3(0.94, 0.26, 0.29), 8, 8)
-	PIXELS.box(st, Vector3(-0.27, 2.62, 0), Vector3(2.00, 0.95, 2.22), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(0.34, 3.10, 0.08), Vector3(2.65, 1.05, 2.50), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(-0.20, 3.72, 0.0), Vector3(2.26, 0.94, 2.20), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(0.05, 4.22, -0.12), Vector3(1.52, 0.76, 1.60), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(-0.48, 3.26, 0.92), Vector3(0.78, 0.71, 0.75), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(0.89, 2.91, -0.41), Vector3(0.69, 0.66, 1.05), foliage_tile, foliage_tile, 3, tint)
-	# Staggered canopy lobes break the simple rectangular silhouette with no
-	# extra MeshInstance3D nodes, retaining one mobile-friendly draw call.
-	PIXELS.box(st, Vector3(-1.09, 3.15, -0.42), Vector3(0.98, 0.66, 1.04), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(1.11, 3.53, 0.43), Vector3(1.04, 0.75, 0.90), foliage_tile, foliage_tile, 3, tint)
-	PIXELS.box(st, Vector3(-0.14, 4.57, 0.08), Vector3(1.05, 0.45, 1.11), foliage_tile, foliage_tile, 3, tint)
-	return PIXELS.as_instance(st, "VoxelTree")
+static func tree(_tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
+	# Compatibility wrapper for callers using the historical terrain tile IDs.
+	var species: int = FOLIAGE.OAK
+	if foliage_tile == 1:
+		species = FOLIAGE.SUNLIT
+	elif foliage_tile == 14:
+		species = FOLIAGE.BLOSSOM
+	elif foliage_tile in [7, 13]:
+		species = FOLIAGE.TWILIGHT
+	return FOLIAGE.tree(species)
 
-static func pine_tree(tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
-	# Sparse triangular steps, still entirely cubes (no smooth cones).
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	PIXELS.box(st, Vector3(0, 1.80, 0), Vector3(0.52, 3.60, 0.52), 8, 8)
-	for layer in range(4):
-		var extent: float = 2.7 - float(layer) * 0.55
-		PIXELS.box(st, Vector3(0, 1.85 + float(layer) * 0.75, 0),
-			Vector3(extent, 0.82, extent), foliage_tile, foliage_tile, 3, tint)
-	return PIXELS.as_instance(st, "VoxelPineTree")
+static func pine_tree(_tint: Color = Color.WHITE, _foliage_tile: int = 9) -> MeshInstance3D:
+	return FOLIAGE.tree(FOLIAGE.PINE)
 
 static func rock(kind: String = "stone") -> MeshInstance3D:
 	var st := SurfaceTool.new()
@@ -73,15 +56,7 @@ static func rock(kind: String = "stone") -> MeshInstance3D:
 	return PIXELS.as_instance(st, "Voxel" + kind.capitalize())
 
 static func bush(has_berries: bool) -> MeshInstance3D:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	PIXELS.box(st, Vector3(-0.36, 0.33, -0.12), Vector3(0.85, 0.66, 0.92), 9, 10)
-	PIXELS.box(st, Vector3(0.28, 0.45, 0.05), Vector3(1.01, 0.9, 0.95), 9, 9)
-	PIXELS.box(st, Vector3(-0.01, 0.62, -0.10), Vector3(0.83, 0.70, 0.84), 1, 9)
-	if has_berries:
-		for p in [Vector3(-0.45, 0.68, 0.43), Vector3(0.48, 0.79, -0.25), Vector3(0.1, 0.97, 0.19)]:
-			PIXELS.box(st, p, Vector3.ONE * 0.22, 14, 14)
-	return PIXELS.as_instance(st, "VoxelBerryBush" if has_berries else "VoxelFiberBush")
+	return FOLIAGE.bush(has_berries)
 
 ## Fully voxelised red-and-white forest mushrooms, shared by gatherable nodes
 ## and streamed decorative clusters (batched into their existing mesh).
