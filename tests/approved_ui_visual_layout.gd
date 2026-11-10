@@ -56,7 +56,12 @@ func _run() -> void:
 		verify(action != null, "New radial action " + key)
 		if action != null:
 			var shape: StyleBox = action.get_theme_stylebox("normal")
-			verify(shape is StyleBoxFlat and (shape as StyleBoxFlat).corner_radius_top_left >= 60, "Round framed " + key)
+			# Image-backed circular medallions replaced the old flat rounded panels.
+			# Verify actual active and disabled artwork instead of checking corner radii.
+			var inactive: StyleBox = action.get_theme_stylebox("disabled")
+			verify(shape is StyleBoxTexture and (shape as StyleBoxTexture).texture != null
+				and inactive is StyleBoxTexture and (inactive as StyleBoxTexture).texture != null,
+				"Round framed " + key)
 	verify(hud.get_node_or_null("Action_attack") == null and hud.get_node_or_null("Action_gather") == null, "No redundant attack or gather tiles")
 	var main_action: Button = hud.get_node_or_null("Action_interact") as Button
 	verify(main_action != null and main_action.get_node_or_null("ToolSwipeChevron") != null, "Hold-to-select gesture keeps a small always-visible arrow")
