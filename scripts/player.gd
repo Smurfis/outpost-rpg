@@ -298,7 +298,10 @@ func _detect_surface_swimming() -> bool:
 	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
 	if terrain == null or not bool(terrain.get("stream_enabled")):
 		return false
-	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6 and global_position.y > WATER_SURFACE_Y - 5.0
+	# Never switch buoyancy off just because the player was pushed below the
+	# expected five-metre water band. That produced infinite falling if a
+	# streamed collision tile arrived late, or a knockback crossed the band.
+	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6
 
 
 func _physics_process(delta: float) -> void:
@@ -354,10 +357,16 @@ func _physics_process(delta: float) -> void:
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 13.0)
 	var grounded_before_motion: bool = is_on_floor()
 	if swimming:
-		# Soft buoyancy holds the torso near the surface instead of falling
-		# through the opaque ocean plane to the seabed.
+		# In water, stay inside the swimmable band even if the character
+		# entered fast, or an asynchronous coastal chunk had no collision yet.
 		var float_target: float = WATER_SURFACE_Y - 0.78
-		velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 3.0)
+		if global_position.y < WATER_SURFACE_Y - 6.0:
+			# Recovery stays at the SAME ocean coordinates rather than
+			# teleporting to camp or waiting for minutes of slow upward speed.
+			global_position.y = float_target
+			velocity.y = 0.0
+		else:
+			velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 4.5)
 	elif grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
 		velocity.y = 5.1
 	else:
