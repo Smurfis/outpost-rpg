@@ -26,9 +26,8 @@ func _run() -> void:
 	var hud = game.hud
 	check(hud.gathered_panel != null and not hud.gathered_panel.visible, "Last Gathered begins hidden, not decorative dummy data")
 	check(hud.status_effect_strip != null and not hud.status_effect_strip.visible, "Status effect row begins empty")
-	check(hud.quest_frame.get_theme_stylebox("panel") is StyleBoxFlat, "Shared transparent Quest background exists")
-	var style: StyleBoxFlat = hud.quest_frame.get_theme_stylebox("panel") as StyleBoxFlat
-	check(style != null and style.bg_color.a < 0.8, "Quest and Last Gathered are translucent")
+	check(hud.quest_frame.get_theme_stylebox("panel") is StyleBoxEmpty, "Quest background is intentionally invisible")
+	check(hud.quest_rule != null and hud.quest_rule.color.a < 0.5, "Quest uses only faint gold underline")
 	hud.record_gather("wood", 3)
 	check(not hud.gathered_panel.visible and hud.gathered_content.text.contains("Wood ×3"), "Real harvest is tracked without a persistent HUD panel")
 	hud.record_gather("stone", 2)
