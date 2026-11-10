@@ -2200,6 +2200,16 @@ func _layout_touch_hud() -> void:
 	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
 	_layout_leave_menu_for_size(screen, scale)
+	if control_settings_panel != null:
+		# The previous 81%-of-screen anchor made Controls over 1000px
+		# tall on square-ish or high-resolution Android viewports. Its
+		# content then fitted without scrolling, despite lower rows being
+		# unreachable in landscape UI. Cap the modal to a real 590px
+		# layout while keeping it centered and fully on screen.
+		var controls_size := Vector2(minf(640.0 * scale, screen.x * 0.82),
+				minf(590.0 * scale, screen.y * 0.83))
+		_place_px(control_settings_panel, screen,
+				Rect2((screen - controls_size) * 0.5, controls_size))
 	# The bottom-centre prompt was covering consumables and character XP.
 	# Keep short notices together in a compact top-centre stack instead.
 	# Compact top-centre alert stack; reduced in both width and height
