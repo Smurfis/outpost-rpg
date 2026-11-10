@@ -42,6 +42,7 @@ var hero_detail: Label
 var hero_status_frame: Panel
 var hero_portrait_frame: Panel
 var hero_portrait_art: TextureRect
+var hero_portrait_ornament: TextureRect
 var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
@@ -250,7 +251,7 @@ func _ready() -> void:
 	var hero_portrait := TextureRect.new()
 	hero_portrait.name = "HeroPortrait"
 	hero_portrait_art = hero_portrait
-	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v2.svg") as Texture2D
+	hero_portrait.texture = load("res://assets/ui/icons/hero_portrait_v3.svg") as Texture2D
 	var portrait_mask := ShaderMaterial.new()
 	portrait_mask.shader = load("res://assets/ui/icons/portrait_circle.gdshader") as Shader
 	hero_portrait.material = portrait_mask
@@ -260,6 +261,17 @@ func _ready() -> void:
 	hero_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hero_portrait)
 	_anchors(hero_portrait, 0.026, 0.031, 0.085, 0.126)
+	# Separate transparent gold-laurel artwork overlays the portrait mask.
+	# Decorative only: no new touch target and no repositioning of the HUD.
+	hero_portrait_ornament = TextureRect.new()
+	hero_portrait_ornament.name = "HeroPortraitLaurel"
+	hero_portrait_ornament.texture = load("res://assets/ui/icons/portrait_laurel_gold.svg") as Texture2D
+	hero_portrait_ornament.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	hero_portrait_ornament.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hero_portrait_ornament.stretch_mode = TextureRect.STRETCH_SCALE
+	hero_portrait_ornament.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hero_portrait_ornament)
+	_anchors(hero_portrait_ornament, 0.020, 0.025, 0.089, 0.134)
 	root.move_child(sigil, root.get_child_count() - 1)
 	status = _label("Adventurer", 20, SKIN.GOLD, 0.094, 0.026, 0.269, 0.058)
 	status.name = "PlayerGoldName"
@@ -316,6 +328,15 @@ func _ready() -> void:
 	level_frame.name = "CharacterLevelBadgeFrame"
 	level_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	level_frame.add_theme_stylebox_override("panel", rank_frame)
+	var medallion := TextureRect.new()
+	medallion.name = "CharacterLevelMedallionArt"
+	medallion.texture = load("res://assets/ui/icons/hero_level_medallion.svg") as Texture2D
+	medallion.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	medallion.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	medallion.stretch_mode = TextureRect.STRETCH_SCALE
+	medallion.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	level_frame.add_child(medallion)
+	medallion.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(level_frame)
 	root.move_child(level_frame, xp_level_badge.get_index())
 	xp_level_badge.set_meta("badge_frame", level_frame)
@@ -2066,6 +2087,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
 		"portrait": Rect2(26, 24, 80, 80),
+		"portrait_ornament": Rect2(19, 17, 94, 94),
 		"sigil": Rect2(93, 90, 19, 20),
 		"portrait_level": Rect2(89, 94, 30, 30),
 		"portrait_badge": Rect2(89, 94, 30, 30),
@@ -2094,6 +2116,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"status": hero_status_frame,
 		"portrait_frame": hero_portrait_frame,
 		"portrait": hero_portrait_art,
+		"portrait_ornament": hero_portrait_ornament,
 		"sigil": hero_sigil,
 		"portrait_level": xp_level_badge,
 		"portrait_badge": xp_level_badge.get_meta("badge_frame") as Panel,
