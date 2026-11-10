@@ -188,11 +188,17 @@ func _build() -> void:
 					# the forge had a second glow tile and the campfire still
 					# showed the old grey cylinder/posts behind PyroLux.
 					# Keep logs, stones and real crafting station geometry.
-					for old_part in legacy_fire_parts:
-						if is_instance_valid(old_part):
-							old_part.visible = false
+					_disable_legacy_fire_vfx()
 	if effect != null and pyrolux_fire == null:
 		effect.position.y += 0.01
+
+func _disable_legacy_fire_vfx() -> void:
+	# Used by PyroLux integration and callable in headless regression tests
+	# without redistributing the licensed add-on into GitHub.
+	for old_part in legacy_fire_parts:
+		if is_instance_valid(old_part):
+			old_part.visible = false
+
 
 func set_activity(progress: float) -> void:
 	activity = progress
