@@ -190,6 +190,8 @@ var settings_touch_buttons: Array[BaseButton] = []
 var settings_touch_finger: int = -1
 var settings_touch_candidate: BaseButton
 var settings_touch_start: Vector2 = Vector2.ZERO
+var settings_scroll_last_y: float = 0.0
+var settings_scroll_dragging: bool = false
 var settings_touch_mouse_echo_until: int = 0
 var leave_menu_shade: ColorRect
 var leave_menu_panel: PanelContainer
@@ -1422,6 +1424,9 @@ func _build_control_settings() -> void:
 	scroll.offset_right = -18
 	scroll.offset_bottom = -16
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	scroll.clip_contents = true
 	control_settings_panel.add_child(scroll)
 	var stack := VBoxContainer.new()
 	stack.name = "SettingsFields"
@@ -1785,6 +1790,10 @@ func _show_control_settings() -> void:
 	control_settings_panel.visible = not control_settings_panel.visible
 	if control_settings_panel.visible:
 		control_settings_panel.move_to_front()
+		# Open at the top while the fixed red X stays reachable throughout.
+		var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+		if scroll != null:
+			scroll.scroll_vertical = 0
 	_reset_touch()
 
 func _close_control_settings() -> void:
@@ -1794,6 +1803,7 @@ func _close_control_settings() -> void:
 	control_settings_panel.visible = false
 	settings_touch_finger = -1
 	settings_touch_candidate = null
+	settings_scroll_dragging = false
 	settings_slider_finger = -1
 	settings_slider_mouse_down = false
 	settings_touch_mouse_echo_until = Time.get_ticks_msec() + 370
@@ -1859,7 +1869,7 @@ func _handle_settings_touch(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var touch: InputEventScreenTouch = event
-		if touch.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(touch.position):
+		if touch.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(touch.position) and (control_settings_panel.get_node("ControlSettingsScroll") as ScrollContainer).get_global_rect().has_point(touch.position):
 			settings_slider_finger = touch.index
 			_apply_settings_slider_touch(touch.position)
 			get_viewport().set_input_as_handled()
@@ -1871,16 +1881,29 @@ func _handle_settings_touch(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if touch.pressed and settings_touch_finger < 0:
-			settings_touch_candidate = _settings_button_at(touch.position)
-			if settings_touch_candidate != null:
+			var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+			if scroll != null and scroll.get_global_rect().has_point(touch.position):
+				# Capture touch anywhere in the pane, including heading labels,
+				# so swipe scrolling works even when no button was touched.
 				settings_touch_finger = touch.index
 				settings_touch_start = touch.position
+				settings_scroll_last_y = touch.position.y
+				settings_scroll_dragging = false
+				settings_touch_candidate = _settings_button_at(touch.position)
+				get_viewport().set_input_as_handled()
+			elif control_settings_close_button.get_global_rect().grow(8.0).has_point(touch.position):
+				settings_touch_finger = touch.index
+				settings_touch_start = touch.position
+				settings_scroll_last_y = touch.position.y
+				settings_scroll_dragging = false
+				settings_touch_candidate = control_settings_close_button
 				get_viewport().set_input_as_handled()
 		elif not touch.pressed and touch.index == settings_touch_finger:
 			var action: BaseButton = settings_touch_candidate
-			var activate: bool = action != null and action == _settings_button_at(touch.position) and touch.position.distance_to(settings_touch_start) < 32.0
+			var activate: bool = not settings_scroll_dragging and action != null and action == _settings_button_at(touch.position) and touch.position.distance_to(settings_touch_start) < 32.0
 			settings_touch_candidate = null
 			settings_touch_finger = -1
+			settings_scroll_dragging = false
 			settings_touch_mouse_echo_until = Time.get_ticks_msec() + 420
 			get_viewport().set_input_as_handled()
 			if activate:
@@ -1891,9 +1914,16 @@ func _handle_settings_touch(event: InputEvent) -> void:
 			_apply_settings_slider_touch(drag.position)
 			get_viewport().set_input_as_handled()
 			return
-		if drag.index == settings_touch_finger and drag.position.distance_to(settings_touch_start) >= 32.0:
-			settings_touch_candidate = null
-			settings_touch_finger = -1
+		if drag.index == settings_touch_finger:
+			var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+			if drag.position.distance_to(settings_touch_start) >= 12.0:
+				settings_scroll_dragging = true
+				settings_touch_candidate = null
+			if settings_scroll_dragging and scroll != null:
+				scroll.scroll_vertical += roundi(settings_scroll_last_y - drag.position.y)
+			settings_scroll_last_y = drag.position.y
+			get_viewport().set_input_as_handled()
+			return
 	elif event is InputEventMouseButton:
 		var click: InputEventMouseButton = event
 		if click.button_index != MOUSE_BUTTON_LEFT:
