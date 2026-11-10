@@ -65,7 +65,6 @@ func _run() -> void:
 	verify(hud.control_settings_panel.visible, "Settings opens from game")
 	verify(hud.control_settings_panel.get_node_or_null("ControlSettingsScroll") != null, "Controls settings content scrolls on small phones")
 	var scroll: ScrollContainer = hud.control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
-	print("CONTROL SCROLL METRICS panel=", hud.control_settings_panel.size, " scroll=", scroll.size, " max=", scroll.get_v_scroll_bar().max_value, " page=", scroll.get_v_scroll_bar().page, " body_size=", (scroll.get_node("SettingsFields") as Control).size, " body_min=", (scroll.get_node("SettingsFields") as Control).get_combined_minimum_size())
 	verify(scroll != null and scroll.get_v_scroll_bar().max_value > scroll.size.y + 20.0,
 		"Controls content genuinely exceeds its visible frame and can be swiped")
 	var scroll_area: Rect2 = scroll.get_global_rect()
