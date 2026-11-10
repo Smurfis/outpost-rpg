@@ -34,7 +34,7 @@ var bag_quality: Dictionary = {} # One maintained 0-3 star quality per owned bag
 var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "copper": 0, "silver": 0, "gold": 0, "gems": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
 var menu
 var coop
 var recipes: Array = []
