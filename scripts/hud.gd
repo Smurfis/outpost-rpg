@@ -398,7 +398,7 @@ func _ready() -> void:
 	wallet_resource_count.visible = false
 	wallet_bag = _action("bag", "BAG", 0.638, 0.019, 0.699, 0.089, "round")
 	wallet_bag.name = "Action_bag"
-	SKIN.apply_translucent_button(wallet_bag, "wood")
+	# Keep the actual circular image-backed wood-and-gold medallion.
 	wallet_bag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# _action("bag") adds a native pressed signal; disconnect it so a
 	# synthetic Android mouse event cannot call _bag twice after _input.
@@ -592,7 +592,7 @@ func _ready() -> void:
 	top_menu_close_button.visible = false
 	menu_button = _action("menu", "MENU", 0.928, 0.322, 0.989, 0.396, "round")
 	menu_button.name = "TopRightMenuButton"
-	SKIN.apply_translucent_button(menu_button, "wood")
+	# Keep the golden circular button frame; only menu contents use flat slots.
 	menu_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Deliberately no button_down/hold handlers: a single tap is sufficient.
 	# Click routing is centralised with WALLET and BAG to avoid double toggles.
@@ -671,7 +671,17 @@ func _ready() -> void:
 	_anchors(exit_entry, 0.895, 0.500, 0.984, 0.575)
 	exit_entry.pressed.connect(_open_leave_menu)
 	top_menu_actions.append(exit_entry)
+	# Integrate approved matching art into each real menu action, without
+	# creating fake extra tabs or sacrificing their existing pressed signals.
 	for option in top_menu_actions:
+		var art_by_action: Dictionary = {
+			"SettingsMenuButton": "settings", "Action_gear": "armour",
+			"BagMenuButton": "backpack", "SkillMenuButton": "skills",
+			"JournalMenuButton": "quests", "ExitDoorMenuButton": "exit"
+		}
+		var art_id: String = str(art_by_action.get(option.name, ""))
+		if art_id != "":
+			_decorate_menu_action(option, art_id)
 		option.visible = false
 	# The world HUD never shows a giant permanent Gear or Bag panel.
 	# Their existing separate modal pages open only when explicitly requested,
@@ -689,9 +699,9 @@ func _ready() -> void:
 
 	# The single context button replaces redundant ATTACK and GATHER tiles.
 	# Three real weapon-mastery skill holders arc around its upper-left side.
-	quick_buttons["skill_1"] = _action("skill_1", "POWER", 0.819, 0.600, 0.881, 0.712, "round")
+	quick_buttons["skill_1"] = _action("skill_1", "HEROIC", 0.819, 0.600, 0.881, 0.712, "round")
 	quick_buttons["skill_2"] = _action("skill_2", "CLEAVE", 0.755, 0.667, 0.814, 0.779, "round")
-	quick_buttons["skill_3"] = _action("skill_3", "SUNDER", 0.705, 0.760, 0.764, 0.870, "round")
+	quick_buttons["skill_3"] = _action("skill_3", "BREAK", 0.705, 0.760, 0.764, 0.870, "round")
 	# Both utility radials start empty. Tap uses the equipped item; hold and
 	# slide upwards chooses among actually owned consumables.
 	quick_buttons["consumable"] = _action("consumable", "HEAL", 0.773, 0.852, 0.830, 0.947, "round")
@@ -2181,6 +2191,43 @@ func _label(value: String, size: int, color: Color, left: float, top: float, rig
 	_anchors(n, left, top, right, bottom)
 	return n
 
+func _decorate_menu_action(button: Button, icon_id: String) -> void:
+	# Existing six menu destinations stay exactly as before, with stable
+	# names, text, accessibility and touch handlers. Artwork is decorative.
+	var art: TextureRect = button.get_node_or_null("ActionIcon") as TextureRect
+	if art == null:
+		art = button.get_node_or_null("MenuIcon") as TextureRect
+	if art == null:
+		art = button.get_node_or_null("ExitDoorIcon") as TextureRect
+	if art == null:
+		art = TextureRect.new()
+		art.name = "MenuIcon"
+		button.add_child(art)
+	art.texture = load(ACTION_FRAME_ROOT + icon_id + ".svg") as Texture2D
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.anchor_left = 0.055
+	art.anchor_top = 0.12
+	art.anchor_right = 0.30
+	art.anchor_bottom = 0.88
+	art.offset_left = 0.0
+	art.offset_top = 0.0
+	art.offset_right = 0.0
+	art.offset_bottom = 0.0
+	var action_caption: Label = button.get_node_or_null("ActionLabel") as Label
+	if action_caption != null:
+		action_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		action_caption.anchor_left = 0.33
+		action_caption.anchor_right = 0.97
+		action_caption.anchor_top = 0.05
+		action_caption.anchor_bottom = 0.96
+		action_caption.add_theme_font_size_override("font_size", 14)
+	else:
+		button.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		button.add_theme_font_size_override("font_size", 14)
+
 func _action(key: String, label: String, left: float, top: float, right: float, bottom: float, kind: String) -> Button:
 	var button := Button.new()
 	button.text = ""
@@ -2211,7 +2258,8 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
 	art_icon.name = "ActionIcon"
-	var icon_path: String = ACTION_FRAME_ROOT + "hand.svg" if key == "interact" else ACTION_FRAME_ROOT + "red_potion.svg" if key == "potion" else "res://assets/ui/icons/" + key + ".png"
+	var matching_icon: String = "hand" if key == "interact" else "red_potion" if key == "potion" else "backpack" if key == "bag" else "armour" if key == "gear" else "menu" if key == "menu" else "heroic_strike" if key == "skill_1" else "cleave" if key == "skill_2" else "armor_break" if key == "skill_3" else ""
+	var icon_path: String = ACTION_FRAME_ROOT + matching_icon + ".svg" if matching_icon != "" else "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
 		var ui_icon: String = "res://assets/ui/icons/" + key + ".svg"
 		if ResourceLoader.exists(ui_icon):
@@ -2447,12 +2495,15 @@ func _refresh_quick_radials() -> void:
 		if button == null:
 			continue
 		var unlocked: bool = i < game.unlocked_skill_slots()
+		# The last slot remains Sundering Blow mechanically (damage only).
+		# Its Armour Break presentation does not invent a defence debuff.
+		button.tooltip_text = ["Heroic Strike (Power Strike)", "Cleave", "Armour Break (Sundering Blow — damage skill)"][i]
 		var skill: String = ["power_strike", "cleave", "sundering_blow"][i]
 		var time_left: float = float(game.skill_cooldowns.get(skill, 0.0))
 		button.disabled = not unlocked or time_left > 0.0
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
 		if label != null:
-			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["POWER", "CLEAVE", "SUNDER"][i] if unlocked else "LOCK"
+			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["HEROIC", "CLEAVE", "BREAK"][i] if unlocked else "LOCK"
 		var ring: Control = button.get_node_or_null("CooldownRing") as Control
 		if ring != null:
 			ring.call("set_cooldown", time_left, ACTION_SKILL_LEVELS.cooldown_for_skill(skill))
