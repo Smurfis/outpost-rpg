@@ -135,16 +135,16 @@ func _run() -> void:
 	if swap_button != null:
 		var point: Vector2 = swap_button.get_global_rect().get_center()
 		for requested in ["axe", "pickaxe"]:
-			var press := InputEventScreenTouch.new()
-			press.index = 15
-			press.position = point
-			press.pressed = true
-			game.hud._input(press)
-			var release := InputEventScreenTouch.new()
-			release.index = 15
-			release.position = point
-			release.pressed = false
-			game.hud._input(release)
+			var tool_press := InputEventScreenTouch.new()
+			tool_press.index = 15
+			tool_press.position = point
+			tool_press.pressed = true
+			game.hud._input(tool_press)
+			var tool_release := InputEventScreenTouch.new()
+			tool_release.index = 15
+			tool_release.position = point
+			tool_release.pressed = false
+			game.hud._input(tool_release)
 			verify(game.active_quick_tool == requested and game.is_equipped(requested), "TOOLS tap equips owned " + requested)
 		verify(not game.hud.smart_tray_open and not game.hud.smart_tray.visible, "Separate tool swapping never opens the old panel")
 	verify(not game.select_quick_tool("iron_blade"), "Cannot quick-equip unowned weapon")
