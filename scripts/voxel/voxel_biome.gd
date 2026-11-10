@@ -14,6 +14,9 @@ const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
 const STREAM_MAP_HALF: int = 96
+const OCEAN_SWIM_HALF: float = 384.0 # Beyond island terrain, swimmer remains buoyant
+const OCEAN_VISUAL_EXTENT: float = 4096.0 # Far beyond orthographic 120m clip
+const OCEAN_HORIZON_MARGIN: float = 28.0
 const STREAM_RADIUS: int = 3 # Keep 7x7 neighbour chunks around the active player
 const CHUNK_CREATION_BUDGET: int = 2 # Avoid building all terrain in one frame.
 const MOBILE_STREAM_RADIUS: int = 2 # 5x5 around the player on weaker Android GPUs.
@@ -36,6 +39,7 @@ var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
 var _shared_water_material: ShaderMaterial
+var _distant_ocean: MeshInstance3D
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
 var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
@@ -108,6 +112,7 @@ func _process(_delta: float) -> void:
 	if player == null:
 		return
 	var point: Vector3 = player.global_position
+	_update_water_horizon(point)
 	# Entering a private dungeon teleports far beyond the overworld. Do not
 	# unload the entire Fields map merely because the player entered an instance.
 	if absf(point.x) > float(map_half) or absf(point.z) > float(map_half):
@@ -712,16 +717,52 @@ func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	return surface
 
 
+func _add_deep_ocean_quad(st: SurfaceTool, x0: float, x1: float, z0: float, z1: float) -> void:
+	# Exactly the same upward-facing winding and shader as the nearby water.
+	# All four large strips lie OUTSIDE the streamed island square, never
+	# across unloaded inland terrain. The central hole is kept completely dry.
+	var a := Vector3(x0, 0.0, z0)
+	var b := Vector3(x0, 0.0, z1)
+	var c := Vector3(x1, 0.0, z1)
+	var d := Vector3(x1, 0.0, z0)
+	for vertex in [a, b, c, a, c, d]:
+		# Far offshore is deep-blue only; shallow tint comes from true
+		# streamed coastline cells so the seam stays clean.
+		st.set_color(Color(0.0, 0.0, 0.0, 1.0))
+		st.add_vertex(vertex)
+
+
 func _make_water_horizon() -> void:
-	# Compatibility handle for existing gameplay/tests. Intentionally has
-	# NO renderable mesh: the ocean now appears only in streamed coastal tiles.
-	# Keep the original animation shader on the handle for reflection/debug.
+	# Endless-looking ocean must NEVER reuse the previous solid 352x352
+	# overlay across the camp. Four wide surrounding strips instead of a
+	# gigantic plane with land underneath = zero inland sea bleed.
 	var sea := MeshInstance3D.new()
 	sea.name = "DistantWaterHorizon"
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var edge: float = float(map_half)
+	var far: float = OCEAN_VISUAL_EXTENT
+	_add_deep_ocean_quad(st, -far, -edge, -far, far)  # west
+	_add_deep_ocean_quad(st, edge, far, -far, far)    # east
+	_add_deep_ocean_quad(st, -edge, edge, -far, -edge) # north
+	_add_deep_ocean_quad(st, -edge, edge, edge, far)  # south
+	sea.mesh = st.commit()
 	sea.position.y = SEA_LEVEL
 	sea.material_override = _water_material()
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sea.visible = false
 	add_child(sea)
+	_distant_ocean = sea
+
+
+func _update_water_horizon(point: Vector3) -> void:
+	if _distant_ocean == null:
+		return
+	# Only switch on near the true procedural coastline or out at sea.
+	# Camp begins around 90m inland; its distant invisible chunks stay dry.
+	# Private dungeons are outside the swimmable extent and remain isolated.
+	var in_ocean_world: bool = absf(point.x) < OCEAN_SWIM_HALF and absf(point.z) < OCEAN_SWIM_HALF
+	_distant_ocean.visible = in_ocean_world and _coast_margin(point.x, point.z) < OCEAN_HORIZON_MARGIN
 
 func _make_cliff_rim() -> void:
 	var st := SurfaceTool.new()
