@@ -376,8 +376,20 @@ func _world() -> void:
 		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
 	# Make the Fields truly walkable. Keep the original small camp collision
 	# underneath its centre; outside it the chunk trimeshes own collision.
-	var half_extent: float = 96.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
+	var half_extent: float = 384.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
 	var span: float = half_extent * 2.0
+	if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled:
+		# Four inexpensive offshore seabed colliders support the genuinely
+		# swimmable ocean outside the streamed terrain (+/-96). The ocean
+		# remains afloat even if a knockback or delayed tile would otherwise
+		# drop the player into the empty space below open water.
+		var inner: float = 96.0
+		var water_width: float = half_extent - inner
+		var water_center: float = (half_extent + inner) * 0.5
+		_wall(Vector3(-water_center, -7.0, 0.0), Vector3(water_width, 2.0, span))
+		_wall(Vector3(water_center, -7.0, 0.0), Vector3(water_width, 2.0, span))
+		_wall(Vector3(0.0, -7.0, -water_center), Vector3(inner * 2.0, 2.0, water_width))
+		_wall(Vector3(0.0, -7.0, water_center), Vector3(inner * 2.0, 2.0, water_width))
 	# Originally the border collider ended at Y=-1, above the sea level
 	# (-2.82). The swimmer could pass beneath the wall into an unmeshed
 	# infinite ocean, where swimming deactivated and gravity never stopped.
