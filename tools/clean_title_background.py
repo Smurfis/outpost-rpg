@@ -3,7 +3,8 @@
 
 PR #66 already handles independent button PNG transparency and their moving
 glints. This repairs the *different* problem underneath them: the approved
-1280x720 background PNG contains large baked dark/blurred slot rectangles,\nplus two top-edge brown smudges beside the separately rendered crest.
+1280x720 background PNG contains large baked dark/blurred slot rectangles,
+plus two top-edge brown smudges beside the separately rendered crest.
 The Alpha Android build runs this once before Godot imports the textures.
 Stable is unaffected, and all original source art stays in Git.
 """
