@@ -42,8 +42,18 @@ func _run() -> void:
 	var toggle: Button = hud.get_node_or_null("QuestToggle") as Button
 	verify(toggle != null, "Quest banner has functional tap-to-expand")
 	if toggle != null:
-		toggle.pressed.emit()
-	verify(game.hud.quest_detail.visible and game.hud.quest_detail_back.visible, "Quest expands without changing game state")
+		var q_point: Vector2 = toggle.get_global_rect().get_center()
+		var q_down := InputEventScreenTouch.new()
+		q_down.index = 45
+		q_down.position = q_point
+		q_down.pressed = true
+		game.hud._input(q_down)
+		var q_up := InputEventScreenTouch.new()
+		q_up.index = 45
+		q_up.position = q_point
+		q_up.pressed = false
+		game.hud._input(q_up)
+	verify(game.hud.quest_detail.visible and game.hud.quest_detail_back.visible, "Quest expands on real mobile tap")
 	verify(game.hud.quest.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS, "Single-line quest truncates safely instead of overflowing")
 	var hotbar: Panel = hud.get_node_or_null("FunctionalHotbar") as Panel
 	verify(hotbar != null, "Dedicated framed hotbar")
@@ -64,11 +74,11 @@ func _run() -> void:
 				"Round framed " + key)
 	verify(hud.get_node_or_null("Action_attack") == null and hud.get_node_or_null("Action_gather") == null, "No redundant attack or gather tiles")
 	var main_action: Button = hud.get_node_or_null("Action_interact") as Button
-	verify(main_action != null and main_action.get_node_or_null("ToolSwipeChevron") != null, "Hold-to-select gesture keeps a small always-visible arrow")
+	verify(main_action != null and hud.get_node_or_null("Action_tool_swap") != null, "Tool switching uses a separate action, not an Interact hold arrow")
 	game.hud._process(8.5)
 	var tool_hint: Label = hud.get_node_or_null("QuickToolGestureHint") as Label
 	var camera_hint: Label = hud.get_node_or_null("CameraDragHint") as Label
-	verify(tool_hint != null and not tool_hint.visible, "Temporary tool help no longer blocks the world")
+	verify(tool_hint == null or not tool_hint.visible, "Old hold-to-select help no longer blocks the world")
 	verify(camera_hint != null and not camera_hint.visible, "Temporary camera help no longer blocks the world")
 	verify(hud.get_node_or_null("CharacterLevelXP") != null and hud.get_node_or_null("CharacterLevelLabel") != null, "Character XP remains in its bottom bar")
 	var radial: Control = hud.get_node_or_null("RadialLevelFrame") as Control
