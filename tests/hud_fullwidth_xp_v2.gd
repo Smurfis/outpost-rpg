@@ -54,7 +54,9 @@ func _run() -> void:
 		verify(is_equal_approx(bar.anchor_bottom, 1.0), "Correct bottom anchor at %s" % screen)
 		var required_height: float = clampf(18.0 * scale, 17.0, 23.0)
 		verify(absf((bar.anchor_bottom - bar.anchor_top) * screen.y - required_height) < 0.1, "Pixel-sized height on %s" % screen)
-		verify((hud.trained_skill_orb.size.x - 52.0 * scale) < 2.0, "Skill XP radial keeps a compact icon at %s" % screen)
+		verify(hud.trained_skill_orb.get_parent() == hud.skill_detail_panel and not hud.trained_skill_orb.is_visible_in_tree(),
+			"Mastery radial is in the Skills panel, not behind movement joystick at %s" % screen)
+		verify(absf(hud.trained_skill_orb.size.x - 52.0) < 2.0, "Mastery radial is 52px within its own modal")
 	hud._layout_touch_hud()
 	verify(not game.menu.visible and hud.smart_button != null, "Gameplay and smart action are preserved")
 	game.queue_free()
