@@ -102,7 +102,7 @@ func _ready() -> void:
 	equipment_scroll.name = "CharacterEquipmentScroll"
 	equipment_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	equipment_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	equipment_scroll.custom_minimum_size = Vector2(0, 202)
+	equipment_scroll.custom_minimum_size = Vector2(0, 193)
 	equipment_section.add_child(equipment_scroll)
 	equipment_body = VBoxContainer.new()
 	equipment_body.name = "EquippedSlots"
@@ -206,7 +206,8 @@ func _ready() -> void:
 	)
 	overflow_button.visible = false
 	layout.add_child(overflow_button)
-	layout.add_child(_text("Tap to inspect  •  Items auto-stack", 13, SKIN.CREAM))
+	# Controls already communicate tap-to-inspect; the redundant footer was
+	# pushing the panel beyond the safe area on short landscape screens.
 
 	item_card = PanelContainer.new()
 	item_card.name = "InventoryItemDetails"
@@ -404,7 +405,7 @@ func _render_equipment() -> void:
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 2)
 	band.add_child(left)
-	for slot in ["weapon", "offhand", "tool_wood"]:
+	for slot in ["weapon", "offhand", "tool_wood", "tool_forage"]:
 		left.add_child(_gear_button(slot))
 	var center := VBoxContainer.new()
 	band.add_child(center)
@@ -414,16 +415,12 @@ func _render_equipment() -> void:
 	band.add_child(right)
 	for slot in ["back", "bag", "tool_mining"]:
 		right.add_child(_gear_button(slot))
-	var extra := _gear_button("tool_forage")
-	extra.custom_minimum_size = Vector2(0, 34)
-	extra.name = "EquipmentSlot_tool_forage"
-	equipment_body.add_child(extra)
 
 func _gear_button(slot: String) -> Button:
 	var id: String = str(game.equipment.get(slot, ""))
 	var button: Button = EQUIP_DRAG.new() as Button
 	button.name = "EquipmentSlot_" + slot
-	button.custom_minimum_size = Vector2(57, 45) if slot != "tool_forage" else Vector2(0, 34)
+	button.custom_minimum_size = Vector2(57, 41)
 	SKIN.apply_translucent_button(button, "wood_selected" if slot == selected_slot else "wood")
 	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to inspect or drag a compatible item here")
 	button.pressed.connect(_gear_clicked.bind(slot))
@@ -446,7 +443,7 @@ func _gear_button(slot: String) -> Button:
 	icon.anchor_left = 0.16
 	icon.anchor_right = 0.84
 	icon.anchor_top = 0.04
-	icon.anchor_bottom = 0.66 if slot != "tool_forage" else 0.94
+	icon.anchor_bottom = 0.65
 	icon.offset_left = 0
 	icon.offset_right = 0
 	icon.offset_top = 0
@@ -623,7 +620,7 @@ func _render_items() -> void:
 			tile.add_child(worn)
 	# Two tidy rows of empty slots, instead of 24 grey boxes pushing
 	# the character's equipment section off a landscape phone screen.
-	var minimum_tiles: int = 12 if not storage_mode else 12
+	var minimum_tiles: int = 8 if not storage_mode else 12
 	var target_count: int = maxi(minimum_tiles, ceili(float(ids.size()) / float(column_count)) * column_count)
 	for _i in range(target_count - ids.size()):
 		var placeholder := Panel.new()
