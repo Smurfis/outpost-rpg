@@ -83,6 +83,30 @@ static func bush(has_berries: bool) -> MeshInstance3D:
 			PIXELS.box(st, p, Vector3.ONE * 0.22, 14, 14)
 	return PIXELS.as_instance(st, "VoxelBerryBush" if has_berries else "VoxelFiberBush")
 
+## Fully voxelised red-and-white forest mushrooms, shared by gatherable nodes
+## and streamed decorative clusters (batched into their existing mesh).
+static func append_mushroom_cluster(st: SurfaceTool, origin: Vector3, size_factor: float = 1.0, compact: bool = false) -> void:
+	var count: int = 2 if compact else 3
+	var positions: Array[Vector3] = [Vector3(-0.34, 0.0, 0.05), Vector3(0.20, 0.0, -0.16), Vector3(0.48, 0.0, 0.23)]
+	for index in range(count):
+		var s: float = size_factor * (1.0 if index == 0 else 0.74 if index == 1 else 0.88)
+		var pos: Vector3 = origin + positions[index] * size_factor
+		# Pale stem, flat red cap lip, raised crown and cream flecks: unlike
+		# the old smooth cylinders, all geometry uses the shared 16px atlas.
+		PIXELS.box(st, pos + Vector3(0, 0.23 * s, 0), Vector3(0.15, 0.46, 0.16) * s, 5, 5)
+		PIXELS.box(st, pos + Vector3(0, 0.46 * s, 0), Vector3(0.61, 0.15, 0.56) * s, 14, 14)
+		PIXELS.box(st, pos + Vector3(0, 0.57 * s, 0), Vector3(0.43, 0.10, 0.41) * s, 14, 14)
+		PIXELS.box(st, pos + Vector3(-0.12 * s, 0.63 * s, 0.07 * s), Vector3(0.12, 0.035, 0.11) * s, 5, 5)
+		PIXELS.box(st, pos + Vector3(0.14 * s, 0.63 * s, -0.08 * s), Vector3(0.11, 0.035, 0.10) * s, 5, 5)
+		PIXELS.box(st, pos + Vector3(0.24 * s, 0.53 * s, 0.04 * s), Vector3(0.045, 0.05, 0.08) * s, 5, 5)
+
+static func mushrooms() -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	append_mushroom_cluster(st, Vector3.ZERO, 1.0, false)
+	return PIXELS.as_instance(st, "VoxelMushrooms")
+
+
 static func crate() -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)

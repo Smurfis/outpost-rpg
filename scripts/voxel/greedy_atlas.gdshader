@@ -28,11 +28,15 @@ void fragment() {
 	if (id == 3.0 && UV2.y > -1000.0) {
 		vec2 px = floor(UV * 16.0);
 		float grain = pixel_hash(floor(px / 3.0));
-		pigment *= mix(0.82, 1.10, grain);
+		pigment *= mix(0.79, 1.12, grain);
+		// A low-frequency ochre soil seam adds readable layered earth on
+		// exposed faces without a second texture or any terrain mesh changes.
+		float strata = fract(UV.y * 0.83 + floor(UV.x * 0.45) * 0.14);
+		pigment *= mix(1.0, 0.87, step(0.86, strata));
 		// Irregular overhanging grass fringe along the upper edge of a soil
 		// cliff. It follows the true wall top even on merged vertical faces.
 		float fringe = (pixel_hash(vec2(floor(UV.x * 9.0), floor(UV2.y * 7.0))) - 0.5) * 0.13;
-		if (UV.y > UV2.y - 0.14 - fringe) {
+		if (UV.y > UV2.y - 0.19 - fringe) {
 			vec2 grass_uv = (vec2(0.5) + local_uv * 15.0) / 64.0;
 			vec3 grass = texture(atlas_texture, grass_uv).rgb;
 			pigment = mix(pigment, grass * 0.88, 0.92);

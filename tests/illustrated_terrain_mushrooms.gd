@@ -34,5 +34,29 @@ func _run() -> void:
 	_check(shader != null, "Illustrated greedy terrain shader loads")
 	var biome_script = load("res://scripts/voxel/voxel_biome.gd")
 	_check(biome_script != null, "Chunked mushroom biome script parses")
+	var voxel_props = load("res://scripts/voxel/voxel_props.gd")
+	var mushroom_mesh: MeshInstance3D = voxel_props.mushrooms()
+	_check(mushroom_mesh != null and mushroom_mesh.mesh != null, "New mushroom group is a renderable voxel mesh")
+	if mushroom_mesh != null and mushroom_mesh.mesh != null:
+		var arrays: Array = mushroom_mesh.mesh.surface_get_arrays(0)
+		var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+		_check(uv.size() >= 60, "Mushrooms include pixel-atlas stems, caps and contrasting spots")
+	root.set_meta("outpost_new_adventure", true)
+	var game_scene: PackedScene = load("res://scenes/main.tscn")
+	_check(game_scene != null, "Game scene loads for collectible mushroom verification")
+	if game_scene != null:
+		var game = game_scene.instantiate()
+		root.add_child(game)
+		await process_frame
+		var gatherable_count: int = 0
+		for item in get_nodes_in_group("resources"):
+			if item.kind == "mushrooms":
+				gatherable_count += 1
+				var pixel_mesh: MeshInstance3D = item.get_node_or_null("VoxelMushrooms") as MeshInstance3D
+				_check(pixel_mesh != null and pixel_mesh.mesh != null,
+					"Gatherable forest mushrooms use voxel artwork rather than smooth cones")
+		_check(gatherable_count >= 3, "Existing camp mushroom resource locations remain available")
+		game.queue_free()
+		await process_frame
 	print("Illustrated terrain tests: %d failure(s)" % failures)
 	quit(0 if failures == 0 else 1)
