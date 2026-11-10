@@ -351,8 +351,9 @@ func _ready() -> void:
 	root.add_child(status_effect_strip)
 	status_effect_strip.visible = false
 
-	# A compact button expands into a currency ledger. No permanent resource
-	# ribbon obscures the world. The bag and MENU remain separate real inputs.
+	# Passive one-line currency wallet. No dropdown, click target, shaded
+	# panel or resource tracker is displayed over normal gameplay. The bag
+	# and MENU remain independent touch inputs on the minimap shoulder.
 	wallet_frame = _panel(0.302, 0.116, 0.505, 0.470)
 	wallet_frame.name = "ResourceQuickChips"
 	wallet_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
@@ -377,10 +378,27 @@ func _ready() -> void:
 	wallet_popup_title.visible = false
 	wallet_coin = _label("COINS    0", 17, SKIN.GOLD, 0.31, 0.160, 0.48, 0.204)
 	wallet_coin.name = "WalletCoinCount"
+	wallet_coin.autowrap_mode = TextServer.AUTOWRAP_OFF
+	wallet_coin.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	wallet_coin.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wallet_coin.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	wallet_coin.clip_text = true
 	wallet_coin.visible = false
 	for denomination in ["copper", "silver", "gold", "gems"]:
 		var line := _label(denomination.capitalize() + "    —", 15, SKIN.CREAM, 0.31, 0.20, 0.48, 0.24)
 		line.name = "WalletCurrency_" + denomination
+		line.autowrap_mode = TextServer.AUTOWRAP_OFF
+		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		line.clip_text = true
+		var metal: Dictionary = {
+			"copper": Color("#d1a078"),
+			"silver": Color("#d6e0ea"),
+			"gold": Color("#f5ca76"),
+			"gems": Color("#b4dded")
+		}
+		line.add_theme_color_override("font_color", metal[denomination])
 		line.visible = false
 		wallet_currency_rows[denomination] = line
 	wallet_resource_icon = TextureRect.new()
@@ -1089,13 +1107,28 @@ func _apply_wallet_layout() -> void:
 		(wallet_currency_rows[key] as Label).visible = true
 	_layout_player_chrome()
 
+func _short_currency(value: int) -> String:
+	# Stay on one row even for large real balances; the unabridged count is
+	# available in the label tooltip and is never rounded in saved inventory.
+	if value >= 1000000:
+		return "%.1fM" % (float(value) / 1000000.0)
+	if value >= 10000:
+		return "%.1fK" % (float(value) / 1000.0)
+	return str(value)
+
+
 func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
 		return
-	wallet_coin.text = "COINS %d" % int(inventory.get("coins", 0))
+	var coins: int = maxi(0, int(inventory.get("coins", 0)))
+	wallet_coin.text = "COINS %s" % _short_currency(coins)
+	wallet_coin.tooltip_text = "Coins: %d" % coins
 	for key in wallet_currency_rows:
-		var balance: String = str(int(inventory[key])) if inventory.has(key) else "—"
-		(wallet_currency_rows[key] as Label).text = "%s %s" % [str(key).to_upper(), balance]
+		var label: Label = wallet_currency_rows[key] as Label
+		var actual: bool = inventory.has(key)
+		var balance: int = maxi(0, int(inventory.get(key, 0)))
+		label.text = "%s %s" % [str(key).to_upper(), _short_currency(balance) if actual else "—"]
+		label.tooltip_text = "%s: %d" % [str(key).capitalize(), balance] if actual else "%s not yet in wallet" % str(key).capitalize()
 	for key in inventory:
 		var id: String = str(key)
 		if id in ["coins", "copper", "silver", "gold", "gems", "torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
@@ -2064,17 +2097,21 @@ func _layout_player_chrome() -> void:
 	_layout_player_chrome_for_size(screen, scale)
 
 func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
-	# Preserve the existing portrait/HP layout and replace the old long
-	# resource strip with a right-shoulder wallet + bag + compact flyout.
+	# Preserve the portrait/HP and the top-right BAG/MENU controls. Keep
+	# all five currency captions on a single line strictly LEFT of BAG.
 	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
 		return
 	var unit: float = scale
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * unit, screen.x * 0.23))
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
 	var wallet_left: float = map_left_base - 300.0
-	var currency_start: float = maxf(351.0, map_left_base - 560.0)
-	var currency_right: float = map_left_base - 91.0
-	var currency_cell: float = maxf(48.0, (currency_right - currency_start) / 5.0)
+	# Right edge of the five-column strip ends eight virtual pixels before
+	# BAG (whose left edge is map_left_base - 164). Earlier code ended at
+	# map_left_base - 91, drawing GOLD/GEMS UNDER the Bag button.
+	var currency_right: float = map_left_base - 172.0
+	var wallet_width: float = minf(545.0, maxf(0.0, currency_right - 354.0))
+	var currency_start: float = currency_right - wallet_width
+	var currency_cell: float = wallet_width / 5.0
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),

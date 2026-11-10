@@ -49,6 +49,37 @@ func _run() -> void:
 	for i in range(1, bounds.size()):
 		verify(absf(bounds[i].position.y - bounds[0].position.y) < 2.0 and bounds[i].position.x >= bounds[i - 1].end.x - 1.5,
 			"Currency counters are laid out horizontally without overlapping")
+	# Regression from real Android: the fifth currency used to sit underneath
+	# BAG because the wallet row extended into its button rectangle.
+	verify(bounds[4].end.x <= bag.get_global_rect().position.x - 3.0,
+		"Last currency ends before the BAG button; no top-row overlap")
+	verify(bounds[0].position.x >= hud.hero_status_frame.get_global_rect().end.x + 3.0,
+		"Wallet starts after the portrait and HP/MP instead of covering them")
+	for key in ["copper", "silver", "gold", "gems"]:
+		var label: Label = hud.wallet_currency_rows[key] as Label
+		verify(label.autowrap_mode == TextServer.AUTOWRAP_OFF and label.clip_text,
+			"Wallet amount never wraps into a second line: " + key)
+	verify(hud.wallet_coin.autowrap_mode == TextServer.AUTOWRAP_OFF,
+		"Coins also remain a single horizontal counter")
+	# Check logical layout for 16:9 and 20:9 independent of headless window
+	# dimensions; these anchors are consumed by the actual Godot renderer.
+	for virtual_size in [Vector2(1280, 720), Vector2(1600, 720)]:
+		hud._layout_player_chrome_for_size(virtual_size, 1.0)
+		var bag_left: float = bag.anchor_left * virtual_size.x
+		var last_currency: Label = hud.wallet_currency_rows["gems"] as Label
+		var gems_end: float = last_currency.anchor_right * virtual_size.x
+		var coins_left: float = hud.wallet_coin.anchor_left * virtual_size.x
+		var portrait_end: float = hud.hero_status_frame.anchor_right * virtual_size.x
+		verify(gems_end <= bag_left - 4.0 and coins_left >= portrait_end + 3.0,
+			"Wallet never overlaps Bag or portrait at %d×%d" % [int(virtual_size.x), int(virtual_size.y)])
+	hud._layout_player_chrome()
+	hud._refresh_wallet({"coins": 1234567, "copper": 23456, "silver": 0, "gold": 2, "gems": 9})
+	verify(hud.wallet_coin.text.contains("1.2M") and hud.wallet_coin.tooltip_text.contains("1234567"),
+		"Large coin balances shorten in the strip but preserve exact total")
+	verify((hud.wallet_currency_rows["copper"] as Label).text.contains("23.5K")
+		and (hud.wallet_currency_rows["copper"] as Label).tooltip_text.contains("23456"),
+		"Large copper balances stay one-line with exact-count tooltip")
+	hud._refresh_wallet({"wood": 9, "stone": 5, "coins": 147})
 	var old_bag_x: float = bag.anchor_left
 	hud._toggle_wallet()
 	verify(hud.wallet_coin.visible and not hud.wallet_frame.visible, "Deprecated wallet toggle never opens an opaque panel")
