@@ -181,6 +181,9 @@ func _herbs() -> void:
 		_orb(Vector3(x, 1.11, 0), Vector3(0.26, 0.28, 0.26), Color("d5c5a0"))
 
 func _mushrooms() -> void:
+	if _is_voxel_skin():
+		add_child(VOXEL_PROPS.mushrooms())
+		return
 	for p in [Vector3(-0.55, 0, 0.0), Vector3(0.15, 0, 0.2), Vector3(0.65, 0, -0.3)]:
 		var scale_by: float = 1.1 if p.x < 0.0 else 0.80
 		_spike(0.12, 0.10, 0.65 * scale_by, p + Vector3(0, 0.33 * scale_by, 0), Color("dfd3b3"), 6)
