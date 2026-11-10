@@ -39,6 +39,14 @@ func _run() -> void:
 	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Wallet is a permanent transparent strip, not a flyout")
 	verify(hud.wallet_coin.visible and hud.wallet_coin.text.contains("147"), "Coins appear immediately in horizontal wallet")
 	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency")
+	for key in ["coins", "copper", "silver", "gold", "gems"]:
+		verify(game.inventory.has(key) and int(game.inventory[key]) >= 0,
+			"Real persistable player currency account exists: " + key)
+		var icon: TextureRect = hud.wallet_currency_icons.get(key) as TextureRect
+		verify(icon != null and icon.texture != null and icon.visible,
+			"Original transparent pixel currency icon loads and shows horizontally: " + key)
+		if icon != null:
+			verify(icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Currency art never blocks touch: " + key)
 	verify(hud.wallet_currency_rows.has("silver") and (hud.wallet_currency_rows["silver"] as Label).visible and (hud.wallet_currency_rows["silver"] as Label).text.contains("—"), "Unavailable silver shows a dash, not fictitious zero")
 	var bounds: Array[Rect2] = []
 	bounds.append(hud.wallet_coin.get_global_rect())
@@ -46,6 +54,11 @@ func _run() -> void:
 		var cell: Label = hud.wallet_currency_rows[key] as Label
 		verify(cell.visible, "Currency appears without a dropdown: " + key)
 		bounds.append(cell.get_global_rect())
+	for i in range(5):
+		var currency: String = ["coins", "copper", "silver", "gold", "gems"][i]
+		var symbol: TextureRect = hud.wallet_currency_icons[currency] as TextureRect
+		verify(symbol.get_global_rect().end.x <= bounds[i].position.x + 1.0,
+			"Wallet pixel-art symbol stays to the left of its amount: " + currency)
 	for i in range(1, bounds.size()):
 		verify(absf(bounds[i].position.y - bounds[0].position.y) < 2.0 and bounds[i].position.x >= bounds[i - 1].end.x - 1.5,
 			"Currency counters are laid out horizontally without overlapping")

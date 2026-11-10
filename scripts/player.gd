@@ -293,7 +293,10 @@ func _detect_surface_swimming() -> bool:
 	# the private dungeon is never mistaken for a swimmable sea.
 	if game == null or not bool(game.get("chunk_streaming_enabled")):
 		return false
-	if absf(global_position.x) >= 96.0 or absf(global_position.z) >= 96.0:
+	# The ocean extends well beyond the procedural island. Its real floor
+	# and far perimeter are built in game.gd; water buoyancy never shuts off
+	# at the original x/z=96 terrain-streaming boundary.
+	if absf(global_position.x) >= 384.0 or absf(global_position.z) >= 384.0:
 		return false
 	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
 	if terrain == null or not bool(terrain.get("stream_enabled")):

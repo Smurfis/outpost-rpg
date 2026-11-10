@@ -64,6 +64,27 @@ func _run() -> void:
 	await process_frame
 	verify(hud.control_settings_panel.visible, "Settings opens from game")
 	verify(hud.control_settings_panel.get_node_or_null("ControlSettingsScroll") != null, "Controls settings content scrolls on small phones")
+	var scroll: ScrollContainer = hud.control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+	verify(scroll != null and scroll.get_v_scroll_bar().max_value > scroll.size.y + 20.0,
+		"Controls content genuinely exceeds its visible frame and can be swiped")
+	var scroll_area: Rect2 = scroll.get_global_rect()
+	var swipe_pos := Vector2(scroll_area.position.x + 24.0, scroll_area.position.y + scroll_area.size.y * 0.72)
+	var swipe := InputEventScreenTouch.new()
+	swipe.index = 96
+	swipe.pressed = true
+	swipe.position = swipe_pos
+	hud._input(swipe)
+	var swipe_drag := InputEventScreenDrag.new()
+	swipe_drag.index = 96
+	swipe_drag.position = swipe_pos + Vector2(0.0, -180.0)
+	hud._input(swipe_drag)
+	verify(scroll.scroll_vertical > 90, "Real Android swipe scrolls in-game Controls even when starting over a setting row")
+	swipe.pressed = false
+	swipe.position = swipe_drag.position
+	hud._input(swipe)
+	verify(hud.control_settings_panel.visible and scroll.scroll_vertical > 0,
+		"Swipe does not accidentally activate a setting or close Controls")
+	scroll.scroll_vertical = 0
 	verify(hud.floating_mode_toggle.text.contains("Dynamic movement stick"), "Dynamic movement mode is explicit in Controls")
 	verify(hud.movement_stick_slider != null and hud.movement_stick_slider.min_value == 80.0 and hud.movement_stick_slider.max_value == 150.0, "Stick size slider ranges 80% through 150%")
 	var slider_rect: Rect2 = hud.movement_stick_slider.get_global_rect()

@@ -63,6 +63,7 @@ var _ambient_elapsed: float = 0.0
 var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
+var _settings_home_button: Button
 var _adventure_panel: PanelContainer
 var _adventure_dim: ColorRect
 var _adventure_name: LineEdit
@@ -521,7 +522,25 @@ func _build_settings() -> void:
 	(parts["stack"] as VBoxContainer).add_theme_constant_override("separation", 5)
 	_settings_panel = parts["frame"] as PanelContainer
 	_settings_panel.name = "SettingsPanel"
-	var stack: VBoxContainer = parts["stack"] as VBoxContainer
+	# Keep the footer action fixed and clearly clickable on 16:9/20:9
+	# Android screens; older builds placed BACK TO OUTPOST after oversized
+	# update fields and it could end up below the panel or render as a
+	# mismatched parchment placeholder.
+	var frame_stack: VBoxContainer = parts["stack"] as VBoxContainer
+	var scroll := ScrollContainer.new()
+	scroll.name = "TitleSettingsScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	scroll.clip_contents = true
+	frame_stack.add_child(scroll)
+	var stack := VBoxContainer.new()
+	stack.name = "TitleSettingsFields"
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_theme_constant_override("separation", 8)
+	scroll.add_child(stack)
 	stack.add_child(_menu_label("Sound and accessibility", 18))
 	var volume_row := HBoxContainer.new()
 	volume_row.add_theme_constant_override("separation", 12)
@@ -658,7 +677,13 @@ func _build_settings() -> void:
 	_cancel_download_button.custom_minimum_size = Vector2(0, 36)
 	_cancel_download_button.visible = false
 	updates_stack.add_child(_cancel_download_button)
-	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
+	_settings_home_button = _menu_button("RETURN TO HOME", _toggle_settings, "wood_selected")
+	_settings_home_button.name = "ReturnToTitleHome"
+	SKIN.apply_translucent_button(_settings_home_button, "wood_selected")
+	_settings_home_button.custom_minimum_size = Vector2(0, 57)
+	_settings_home_button.add_theme_font_size_override("font_size", 19)
+	_settings_home_button.tooltip_text = "Close Settings and return to the Outpost title menu"
+	frame_stack.add_child(_settings_home_button)
 	_sync_download_ui()
 	_settings_panel.visible = false
 

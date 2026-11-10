@@ -35,7 +35,16 @@ func _run() -> void:
 		quit(1)
 		return
 	var horizon: MeshInstance3D = biome.get_node_or_null("DistantWaterHorizon") as MeshInstance3D
-	check(horizon != null and horizon.mesh == null, "Giant 352-metre ocean plane no longer draws through unloaded island terrain")
+	check(horizon != null and horizon.mesh != null and not horizon.visible,
+		"Endless-looking deep ocean exists but is HIDDEN near camp inland")
+	if horizon != null and horizon.mesh != null:
+		var far_vertices: PackedVector3Array = horizon.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var no_land_overlay: bool = true
+		for i in range(0, far_vertices.size(), 3):
+			var mid: Vector3 = (far_vertices[i] + far_vertices[i + 1] + far_vertices[i + 2]) / 3.0
+			no_land_overlay = no_land_overlay and maxf(absf(mid.x), absf(mid.z)) >= float(biome.map_half)
+		check(no_land_overlay and far_vertices.size() == 24,
+			"Four horizon strips stay strictly OUTSIDE island map, never across unloaded land")
 	check(_ocean_instances(biome).is_empty(), "No distant ocean surfaces appear when starting inland at camp")
 
 	# Approach true offshore cells. Both the top water polygons and the
@@ -45,7 +54,10 @@ func _run() -> void:
 	game.hero.global_position = sample
 	game.hero.velocity = Vector3.ZERO
 	biome.update_streaming_for(sample)
+	biome._update_water_horizon(sample)
 	await physics_frame
+	check(horizon.visible and horizon.material_override is ShaderMaterial,
+		"Approaching shore reveals animated endless ocean beyond streamed water")
 	var ocean: Array[MeshInstance3D] = _ocean_instances(biome)
 	check(not ocean.is_empty(), "Ocean becomes visible once its coastal chunks are streamed")
 	var ocean_material_ok: bool = true
@@ -81,15 +93,17 @@ func _run() -> void:
 
 	# The original border stopped at Y=-1, ABOVE the water. Check both
 	# physical collision and the swimming controller at the real sea depth.
-	var rim_from := Vector3(94.0, biome.SEA_LEVEL - 0.78, 0.5)
-	var rim_to := Vector3(98.0, biome.SEA_LEVEL - 0.78, 0.5)
+	var rim_from := Vector3(382.0, biome.SEA_LEVEL - 0.78, 0.5)
+	var rim_to := Vector3(386.0, biome.SEA_LEVEL - 0.78, 0.5)
 	var rim_hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(rim_from, rim_to, 1))
-	check(not rim_hit.is_empty() and (rim_hit.get("position", Vector3.ZERO) as Vector3).x > 95.0, "Submerged outer wall prevents swimming underneath the island boundary")
+	check(not rim_hit.is_empty() and (rim_hit.get("position", Vector3.ZERO) as Vector3).x > 383.0,
+		"Outer swimmable ocean boundary is far beyond the visible coastline")
 	check(game.hero._detect_surface_swimming(), "Player enters actual swimming state in offshore water")
 	for i in range(80):
 		await physics_frame
 	check(game.hero.global_position.y > biome.SEA_LEVEL - 5.0, "Swimming buoyancy keeps player above seabed over 80 physics frames")
-	check(game.hero.global_position.x < 96.0 and game.hero.global_position.x > -96.0, "Swimmer remains within finite playable ocean")
+	check(game.hero.global_position.x < 384.0 and game.hero.global_position.x > -384.0,
+		"Swimmer stays in enlarged ocean play area instead of falling through old 96m border")
 
 	# Force a position below the former five-metre cut-off to check that the
 	# swimmer recovers at sea rather than accelerating into an infinite void.
@@ -100,11 +114,21 @@ func _run() -> void:
 	check(game.hero.global_position.y > biome.SEA_LEVEL - 2.1, "Underwater failsafe recovers at the same offshore location")
 	check(game.hero.global_position.x > 90.0, "Underwater failsafe does not teleport swimmer back to camp")
 
+	# Test genuinely playable open ocean well past the old terrain-map end.
+	game.hero.global_position = Vector3(160.0, biome.SEA_LEVEL - 0.78, 0.0)
+	game.hero.velocity = Vector3.ZERO
+	check(game.hero._detect_surface_swimming(), "Player can keep swimming 64m beyond original sea border")
+	var deep_floor_hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(
+		PhysicsRayQueryParameters3D.create(Vector3(160.0, -3.2, 0.0), Vector3(160.0, -12.0, 0.0), 1))
+	check(not deep_floor_hit.is_empty(), "Extended open-ocean seabed has real solid collision")
+	await physics_frame
+	check(game.hero.global_position.y > biome.SEA_LEVEL - 4.0, "Buoyancy remains stable beyond terrain-streaming boundary")
 	game.hero.global_position = Vector3(0, 0.35, 0)
+	biome._update_water_horizon(game.hero.global_position)
 	biome.update_streaming_for(game.hero.global_position)
 	await physics_frame
 	check(_ocean_instances(biome).is_empty(), "Leaving shoreline unloads faraway ocean surfaces again")
-	check(horizon.mesh == null, "No persistent giant ocean plane remains after world travel")
+	check(not horizon.visible, "Returning inland hides far horizon again to prevent false water on spawn")
 	game.queue_free()
 	await process_frame
 	print("OCEAN SAFETY RESULT: %d failures" % failures)

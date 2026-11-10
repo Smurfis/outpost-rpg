@@ -122,6 +122,7 @@ var wallet_bag: Button
 var wallet_coin: Label
 var wallet_popup_title: Label
 var wallet_currency_rows: Dictionary = {}
+var wallet_currency_icons: Dictionary = {}
 var wallet_resource_icon: TextureRect
 var wallet_resource_count: Label
 var wallet_resource_id: String = "wood"
@@ -189,6 +190,8 @@ var settings_touch_buttons: Array[BaseButton] = []
 var settings_touch_finger: int = -1
 var settings_touch_candidate: BaseButton
 var settings_touch_start: Vector2 = Vector2.ZERO
+var settings_scroll_last_y: float = 0.0
+var settings_scroll_dragging: bool = false
 var settings_touch_mouse_echo_until: int = 0
 var leave_menu_shade: ColorRect
 var leave_menu_panel: PanelContainer
@@ -410,6 +413,20 @@ func _ready() -> void:
 		line.add_theme_color_override("font_color", metal[denomination])
 		line.visible = false
 		wallet_currency_rows[denomination] = line
+	# Real compact transparent pixel-art currency symbols instead of just
+	# abbreviated uppercase words. They are separate artwork layers and
+	# never carry an opaque circular UI background.
+	for currency_id in ["coins", "copper", "silver", "gold", "gems"]:
+		var wallet_icon := TextureRect.new()
+		wallet_icon.name = "WalletCurrencyIcon_" + currency_id
+		wallet_icon.texture = load("res://assets/icons/" + currency_id + ".svg") as Texture2D
+		wallet_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		wallet_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		wallet_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		wallet_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		wallet_icon.visible = false
+		root.add_child(wallet_icon)
+		wallet_currency_icons[currency_id] = wallet_icon
 	wallet_resource_icon = TextureRect.new()
 	wallet_resource_icon.name = "LastTrackedResourceIcon"
 	wallet_resource_icon.texture = load("res://assets/icons/wood.svg") as Texture2D
@@ -1114,6 +1131,8 @@ func _apply_wallet_layout() -> void:
 	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
 		(wallet_currency_rows[key] as Label).visible = true
+	for key in wallet_currency_icons:
+		(wallet_currency_icons[key] as TextureRect).visible = true
 	_layout_player_chrome()
 
 func _short_currency(value: int) -> String:
@@ -1130,13 +1149,13 @@ func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
 		return
 	var coins: int = maxi(0, int(inventory.get("coins", 0)))
-	wallet_coin.text = "COINS %s" % _short_currency(coins)
+	wallet_coin.text = _short_currency(coins)
 	wallet_coin.tooltip_text = "Coins: %d" % coins
 	for key in wallet_currency_rows:
 		var label: Label = wallet_currency_rows[key] as Label
 		var actual: bool = inventory.has(key)
 		var balance: int = maxi(0, int(inventory.get(key, 0)))
-		label.text = "%s %s" % [str(key).to_upper(), _short_currency(balance) if actual else "—"]
+		label.text = _short_currency(balance) if actual else "—"
 		label.tooltip_text = "%s: %d" % [str(key).capitalize(), balance] if actual else "%s not yet in wallet" % str(key).capitalize()
 	for key in inventory:
 		var id: String = str(key)
@@ -1405,6 +1424,9 @@ func _build_control_settings() -> void:
 	scroll.offset_right = -18
 	scroll.offset_bottom = -16
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	scroll.clip_contents = true
 	control_settings_panel.add_child(scroll)
 	var stack := VBoxContainer.new()
 	stack.name = "SettingsFields"
@@ -1768,6 +1790,10 @@ func _show_control_settings() -> void:
 	control_settings_panel.visible = not control_settings_panel.visible
 	if control_settings_panel.visible:
 		control_settings_panel.move_to_front()
+		# Open at the top while the fixed red X stays reachable throughout.
+		var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+		if scroll != null:
+			scroll.scroll_vertical = 0
 	_reset_touch()
 
 func _close_control_settings() -> void:
@@ -1777,6 +1803,7 @@ func _close_control_settings() -> void:
 	control_settings_panel.visible = false
 	settings_touch_finger = -1
 	settings_touch_candidate = null
+	settings_scroll_dragging = false
 	settings_slider_finger = -1
 	settings_slider_mouse_down = false
 	settings_touch_mouse_echo_until = Time.get_ticks_msec() + 370
@@ -1842,7 +1869,7 @@ func _handle_settings_touch(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var touch: InputEventScreenTouch = event
-		if touch.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(touch.position):
+		if touch.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(touch.position) and (control_settings_panel.get_node("ControlSettingsScroll") as ScrollContainer).get_global_rect().has_point(touch.position):
 			settings_slider_finger = touch.index
 			_apply_settings_slider_touch(touch.position)
 			get_viewport().set_input_as_handled()
@@ -1854,16 +1881,29 @@ func _handle_settings_touch(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if touch.pressed and settings_touch_finger < 0:
-			settings_touch_candidate = _settings_button_at(touch.position)
-			if settings_touch_candidate != null:
+			var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+			if scroll != null and scroll.get_global_rect().has_point(touch.position):
+				# Capture touch anywhere in the pane, including heading labels,
+				# so swipe scrolling works even when no button was touched.
 				settings_touch_finger = touch.index
 				settings_touch_start = touch.position
+				settings_scroll_last_y = touch.position.y
+				settings_scroll_dragging = false
+				settings_touch_candidate = _settings_button_at(touch.position)
+				get_viewport().set_input_as_handled()
+			elif control_settings_close_button.get_global_rect().grow(8.0).has_point(touch.position):
+				settings_touch_finger = touch.index
+				settings_touch_start = touch.position
+				settings_scroll_last_y = touch.position.y
+				settings_scroll_dragging = false
+				settings_touch_candidate = control_settings_close_button
 				get_viewport().set_input_as_handled()
 		elif not touch.pressed and touch.index == settings_touch_finger:
 			var action: BaseButton = settings_touch_candidate
-			var activate: bool = action != null and action == _settings_button_at(touch.position) and touch.position.distance_to(settings_touch_start) < 32.0
+			var activate: bool = not settings_scroll_dragging and action != null and action == _settings_button_at(touch.position) and touch.position.distance_to(settings_touch_start) < 32.0
 			settings_touch_candidate = null
 			settings_touch_finger = -1
+			settings_scroll_dragging = false
 			settings_touch_mouse_echo_until = Time.get_ticks_msec() + 420
 			get_viewport().set_input_as_handled()
 			if activate:
@@ -1874,9 +1914,16 @@ func _handle_settings_touch(event: InputEvent) -> void:
 			_apply_settings_slider_touch(drag.position)
 			get_viewport().set_input_as_handled()
 			return
-		if drag.index == settings_touch_finger and drag.position.distance_to(settings_touch_start) >= 32.0:
-			settings_touch_candidate = null
-			settings_touch_finger = -1
+		if drag.index == settings_touch_finger:
+			var scroll: ScrollContainer = control_settings_panel.get_node_or_null("ControlSettingsScroll") as ScrollContainer
+			if drag.position.distance_to(settings_touch_start) >= 12.0:
+				settings_scroll_dragging = true
+				settings_touch_candidate = null
+			if settings_scroll_dragging and scroll != null:
+				scroll.scroll_vertical += roundi(settings_scroll_last_y - drag.position.y)
+			settings_scroll_last_y = drag.position.y
+			get_viewport().set_input_as_handled()
+			return
 	elif event is InputEventMouseButton:
 		var click: InputEventMouseButton = event
 		if click.button_index != MOUSE_BUTTON_LEFT:
@@ -2153,6 +2200,16 @@ func _layout_touch_hud() -> void:
 	_layout_xp_for_size(screen, scale)
 	_layout_player_chrome_for_size(screen, scale)
 	_layout_leave_menu_for_size(screen, scale)
+	if control_settings_panel != null:
+		# The previous 81%-of-screen anchor made Controls over 1000px
+		# tall on square-ish or high-resolution Android viewports. Its
+		# content then fitted without scrolling, despite lower rows being
+		# unreachable in landscape UI. Cap the modal to a real 590px
+		# layout while keeping it centered and fully on screen.
+		var controls_size := Vector2(minf(640.0 * scale, screen.x * 0.82),
+				minf(590.0 * scale, screen.y * 0.83))
+		_place_px(control_settings_panel, screen,
+				Rect2((screen - controls_size) * 0.5, controls_size))
 	# The bottom-centre prompt was covering consumables and character XP.
 	# Keep short notices together in a compact top-centre stack instead.
 	# Compact top-centre alert stack; reduced in both width and height
@@ -2235,7 +2292,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
-		"coins": Rect2(currency_start, 17, currency_cell, 43),
+		"coins": Rect2(currency_start + 31.0, 17.0, maxf(22.0, currency_cell - 34.0), 43.0),
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
@@ -2279,11 +2336,16 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
-	for i in range(4):
-		var key: String = ["copper", "silver", "gold", "gems"][i]
-		var line: Label = wallet_currency_rows[key] as Label
-		_place_px(line, screen, Rect2(Vector2(currency_start + currency_cell * (float(i) + 1.0), 17.0) * unit,
-				Vector2(currency_cell, 43.0) * unit))
+	for i in range(5):
+		var key: String = ["coins", "copper", "silver", "gold", "gems"][i]
+		var x: float = currency_start + currency_cell * float(i)
+		var icon: TextureRect = wallet_currency_icons[key] as TextureRect
+		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 24.0) * unit,
+				Vector2(27.0, 27.0) * unit))
+		if i > 0:
+			var line: Label = wallet_currency_rows[key] as Label
+			_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
+					Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
