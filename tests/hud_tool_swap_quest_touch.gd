@@ -51,6 +51,24 @@ func _run() -> void:
 	for key in ["skill_1", "skill_2", "skill_3"]:
 		verify(not selector.get_global_rect().intersects((hud.quick_buttons[key] as Button).get_global_rect()),
 			"Tool selector never overlaps " + key)
+	# All three ability medallions must stay separately tappable after
+	# tightening the action arc, including above the bottom XP strip.
+	var skills: Array[Button] = [
+		hud.quick_buttons["skill_1"] as Button,
+		hud.quick_buttons["skill_2"] as Button,
+		hud.quick_buttons["skill_3"] as Button,
+	]
+	for i in range(skills.size()):
+		var skill_rect: Rect2 = skills[i].get_global_rect()
+		verify(not skill_rect.intersects(smart.get_global_rect()), "Skill %d is clear of Interact" % (i + 1))
+		verify(not skill_rect.intersects(hud.xp_bar.get_global_rect()), "Skill %d is clear of XP bar" % (i + 1))
+		for j in range(i):
+			verify(not skill_rect.intersects(skills[j].get_global_rect()), "Skills %d and %d have distinct touch targets" % [i + 1, j + 1])
+	var screen: Vector2 = hud.get_viewport().get_visible_rect().size
+	var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
+	verify(skills[0].get_global_rect().get_center().y >
+		smart.get_global_rect().get_center().y - 160.0 * scale,
+		"Heroic Strike sits in lower, compact arc above Interact")
 	verify(not hud.smart_tray_open and not hud.smart_tray.visible, "Old Training Blade popup is hidden at startup")
 	var touch := InputEventScreenTouch.new()
 	touch.index = 37
