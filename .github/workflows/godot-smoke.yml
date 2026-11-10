@@ -284,6 +284,13 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WORLD SKILL HUD:' hud-world-skill.log; then exit 1; fi
           grep -q "WORLD SKILL HUD RESULT: 0 failures" hud-world-skill.log
 
+      - name: Verify new ability and backpack/menu icons preserve existing HUD actions
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 75s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_menu_skill_art.gd 2>&1 | tee alpha-menu-skill-art.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MENU SKILL ART:' alpha-menu-skill-art.log; then exit 1; fi
+          grep -q "MENU SKILL ART RESULT: 0 failures" alpha-menu-skill-art.log
+
       - name: Validate wooden action medallions and context-sensitive cooldowns
         run: |
           set -o pipefail

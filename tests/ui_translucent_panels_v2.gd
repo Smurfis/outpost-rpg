@@ -52,7 +52,9 @@ func _run() -> void:
 	surface(hud.quick_tray, "Consumable quick tray")
 	surface(hud.smart_tray, "Tool-selection tray")
 	var menu_button: Button = hud.root.get_node_or_null("TopRightMenuButton") as Button
-	check(menu_button != null and menu_button.get_theme_stylebox("normal") is StyleBoxFlat, "Top-right MENU button now has flat chrome")
+	check(menu_button != null and menu_button.get_theme_stylebox("normal") is StyleBoxTexture
+		and (menu_button.get_node_or_null("ActionIcon") as TextureRect).texture.resource_path.ends_with("menu.svg"),
+		"Top-right MENU button uses the approved circular medallion while other panels stay flat")
 	hud._toggle_quest()
 	check(hud.quest_detail_back.visible, "Quest journal remains tappable and expandable")
 	hud._toggle_quest()
