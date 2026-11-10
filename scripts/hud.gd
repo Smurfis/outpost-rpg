@@ -2,6 +2,7 @@ extends CanvasLayer
 ## Outpost mobile HUD: compact live panels, gold-ringed touch actions and a
 ## functioning bottom hotbar. No flattened mock-up or imaginary game stats.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
+const ENEMY_TARGET = preload("res://scripts/ui/enemy_target_portrait.gd")
 const ACTION_FRAME_ROOT := "res://assets/ui/action_buttons/"
 const ACTION_RADIAL = preload("res://scripts/ui/action_cooldown_ring.gd")
 const ACTION_SKILL_LEVELS = preload("res://scripts/progression/character_levels.gd")
@@ -45,6 +46,7 @@ var hero_detail: Label
 var hero_status_frame: Panel
 var hero_portrait_frame: Panel
 var hero_portrait_art: TextureRect
+var enemy_target_hud: Control
 var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
@@ -287,6 +289,11 @@ func _ready() -> void:
 	root.add_child(hero_portrait)
 	_anchors(hero_portrait, 0.026, 0.031, 0.085, 0.126)
 	root.move_child(sigil, root.get_child_count() - 1)
+	# Independent enemy counterpart, aligned around screen centre. Neither it
+	# nor its children intercept Android touches or cover player controls.
+	enemy_target_hud = ENEMY_TARGET.new()
+	enemy_target_hud.name = "EnemyTargetHUD"
+	root.add_child(enemy_target_hud)
 	status = _label("Adventurer", 20, SKIN.GOLD, 0.094, 0.026, 0.269, 0.058)
 	status.name = "PlayerGoldName"
 	status.add_theme_color_override("font_outline_color", Color("#171114"))
@@ -2082,6 +2089,12 @@ func _layout_touch_hud() -> void:
 		return
 	var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
 	var edge: float = 18.0 * scale
+	# Top-centre enemy portrait: below the safe-area edge, above zone alerts,
+	# and well away from the player, quest and minimap chrome.
+	if enemy_target_hud != null:
+		_place_px(enemy_target_hud, screen, Rect2(
+			(screen.x - 324.0 * scale) * 0.5, 18.0 * scale,
+			324.0 * scale, 84.0 * scale))
 	# The live minimap stays a real square instead of becoming an oval on
 	# phones with wider aspect ratios. Footer and menu sit directly below it.
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * scale, screen.x * 0.23))
@@ -3535,6 +3548,10 @@ func set_trained_skill(skill_id: String, total_skill_xp: int) -> void:
 	# Existing weapon mastery already uses these thresholds; no fake stats.
 	if trained_skill_orb != null:
 		trained_skill_orb.call("set_skill", skill_id, maxi(0, total_skill_xp))
+
+func update_enemy_target(enemy: Node, enemy_name: String = "") -> void:
+	if enemy_target_hud != null:
+		enemy_target_hud.call("set_target", enemy, enemy_name)
 
 func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapon: String, objective: String, helper: String) -> void:
 	status.text = player_display_name
