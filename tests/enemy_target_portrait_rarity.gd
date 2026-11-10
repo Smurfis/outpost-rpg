@@ -41,7 +41,7 @@ func _run() -> void:
     var hp_label: Label = target_panel.get_node("EnemyHealthText") as Label
     var rarity: Label = target_panel.get_node("EnemyRarity") as Label
     var title: Label = target_panel.get_node("EnemyName") as Label
-    var beasts: Array[Node] = get_nodes_in_group("wild_boars")
+    var beasts: Array = get_nodes_in_group("wild_boars")
     verify(not beasts.is_empty(), "Real boars exist for HUD integration")
     if beasts.is_empty():
         game.queue_free()
