@@ -177,7 +177,7 @@ static func tree(species: int = OAK, variation: int = 0) -> MeshInstance3D:
 		st.generate_normals()
 		_meshes[key] = st.commit()
 	var node := MeshInstance3D.new()
-	node.name = "VoxelPineTree" if species == PINE else "VoxelTree"
+	node.name = "VoxelTreePine" if species == PINE else "VoxelTree"
 	node.mesh = _meshes[key] as Mesh
 	node.material_override = material()
 	return node
