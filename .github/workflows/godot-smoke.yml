@@ -295,7 +295,9 @@ jobs:
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_logo_smoke.gd 2>&1 | tee title-logo.log
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_screen_smoke.gd 2>&1 | tee title-screen.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' title-logo.log title-screen.log; then exit 1; fi
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/company_splash_aspect_smoke.gd 2>&1 | tee studio-aspect.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' title-logo.log title-screen.log studio-aspect.log; then exit 1; fi
+          grep -q "FIVE STAR ASPECT RESULT: 0 failures" studio-aspect.log
 
       - name: Verify title ambience, expanded tips and menu interactions
         run: |
