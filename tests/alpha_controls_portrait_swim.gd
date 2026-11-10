@@ -112,7 +112,7 @@ func _run() -> void:
 	var moving_touch := InputEventScreenTouch.new()
 	moving_touch.index = 91
 	moving_touch.pressed = true
-	moving_touch.position = Vector2(140, 400)
+	moving_touch.position = Vector2(210, 520)
 	hud._input(moving_touch)
 	verify(hud.finger == 91 and hud.joystick.visible, "Dynamic movement appears on first movement-area touch during gameplay")
 	verify(hud.joystick.position.distance_to(moving_touch.position - hud.joystick.size * 0.5) < 2.0,
