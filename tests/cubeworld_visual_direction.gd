@@ -20,7 +20,7 @@ func _run() -> void:
 	var atlas: StandardMaterial3D = pixels.get_material()
 	verify(atlas != null and atlas.vertex_color_use_as_albedo, "One shared atlas accepts per-vertex seasonal foliage")
 	verify(atlas != null and atlas.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST, "Atlas remains crisp nearest-filtered voxels")
-	verify(atlas.albedo_texture.get_size() == Vector2(64, 64), "No new large foliage textures created")
+	verify(atlas.albedo_texture.get_size() == Vector2(64, 64), "Existing terrain atlas dimensions remain unchanged")
 	var colours: Dictionary = {}
 	for x in range(-84, 84, 7):
 		for z in range(-70, 70, 9):
@@ -28,10 +28,16 @@ func _run() -> void:
 			colours[tint.to_html()] = true
 	verify(colours.size() >= 4, "Forest includes cherry, jade, sunlit and violet foliage regions")
 	verify(pixels.foliage_tint_at(22.0, -36.0) == pixels.foliage_tint_at(22.0, -36.0), "Tree colours stable across world streaming")
+	var foliage = load("res://scripts/voxel/foliage_renderer.gd")
+	var leaf_atlas: StandardMaterial3D = foliage.material()
+	verify(leaf_atlas != atlas and leaf_atlas.albedo_texture.get_size() == Vector2(80, 60),
+		"Trees use dedicated padded foliage atlas without changing terrain tiles")
 	var blossom: MeshInstance3D = props.tree(Color(1.0, 0.35, 0.78))
 	var pine: MeshInstance3D = props.pine_tree(Color(0.85, 1.0, 0.55))
-	verify(blossom != null and blossom.mesh != null and blossom.material_override == atlas, "Colourful blossom tree still uses one atlas mesh")
-	verify(pine != null and pine.mesh != null and pine.material_override == atlas, "Voxel pine also supports palette changes")
+	verify(blossom != null and blossom.mesh != null and blossom.mesh.get_surface_count() == 1 and blossom.material_override == leaf_atlas,
+		"Blossom tree uses one surface with the dedicated foliage atlas")
+	verify(pine != null and pine.mesh != null and pine.mesh.get_surface_count() == 1 and pine.material_override == leaf_atlas,
+		"Voxel pine uses the same tree atlas and one draw-call surface")
 	if blossom != null:
 		var colors: PackedColorArray = blossom.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 		verify(colors.size() > 0, "Canopy tints are encoded into mesh vertex colors")
