@@ -117,6 +117,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/greedy_meshing.gd 2>&1 | tee greedy.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL GREEDY:' greedy.log; then exit 1; fi
           grep -q "GREEDY RESULT: 0 failures" greedy.log
+      - name: Verify illustrated cliffs and actual harvestable voxel mushrooms
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/illustrated_terrain_mushrooms.gd 2>&1 | tee illustrated-mushrooms.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' illustrated-mushrooms.log; then exit 1; fi
+          grep -q "Illustrated terrain tests: 0 failure(s)" illustrated-mushrooms.log
       - name: Verify lazy chunk load, unload and deterministic reconstruction
         run: |
           set -o pipefail
