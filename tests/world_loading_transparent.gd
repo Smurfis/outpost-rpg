@@ -37,6 +37,6 @@ func _run() -> void:
 	var detail: Label = loader.get_node_or_null("LoadingArtboard/LoadingCenter/LoadingStack/ProgressDetail") as Label
 	_check(stage != null and detail != null, "Live loading stage and percentage labels remain")
 	var cancel: Button = loader.get_node_or_null("LoadingArtboard/LoadingCenter/LoadingStack/CancelLoading") as Button
-	_check(cancel != null and cancel.flat and cancel.pressed.is_connected(loader._cancel_to_title), "Accessible, unboxed return-to-title action remains wired")
+	_check(cancel != null and cancel.flat and cancel.pressed.is_connected(Callable(loader, "_cancel_to_title")), "Accessible, unboxed return-to-title action remains wired")
 	print("TRANSPARENT LOADING RESULT: %d failures" % failures)
 	quit(0 if failures == 0 else 1)
