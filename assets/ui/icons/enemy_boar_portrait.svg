@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64" shape-rendering="crispEdges">
+<!-- Original Outpost boar: squared voxel silhouette with high-contrast face for tiny circles. -->
+<path d="M0 0H64V64H0Z" fill="#272024"/>
+<path d="M5 5H59V59H5Z" fill="#423b40"/>
+<path d="M7 7H57V32H7Z" fill="#5d5251"/>
+<path d="M7 32H57V57H7Z" fill="#343832"/>
+<path d="M9 13H14V19H9Z M50 15H55V23H50Z M13 47H19V54H13Z M46 44H53V51H46Z" fill="#6e6159"/>
+<!-- Ears, angular brow and fur tufts. -->
+<path d="M5 16H14V12H23V21H17V27H10Z M41 19H48V12H57V16H60V27H52V24H45Z" fill="#4a3028"/>
+<path d="M8 16H13V22H18V24H11Z M48 16H55V24H50Z" fill="#ad775d"/>
+<path d="M14 20H20V16H43V20H49V25H53V43H48V49H16V44H11V28H14Z" fill="#684638"/>
+<path d="M19 21H42V24H47V39H43V46H19V41H16V28H19Z" fill="#9d6e4e"/>
+<path d="M22 24H42V37H39V42H23V38H20V28H22Z" fill="#bd8a60"/>
+<path d="M16 27H22V39H16Z M42 26H48V40H43Z" fill="#79513d"/>
+<path d="M22 20H29V24H22Z M33 20H42V24H33Z" fill="#57392e"/>
+<!-- Amber eyes and sharp brows. -->
+<path d="M20 29H28V31H20Z M36 29H44V31H36Z" fill="#3c2b28"/>
+<path d="M21 32H27V36H21Z M37 32H43V36H37Z" fill="#dfc777"/>
+<path d="M24 33H27V36H24Z M37 33H40V36H37Z" fill="#282525"/>
+<path d="M25 33H26V34H25Z M38 33H39V34H38Z" fill="#fff0b6"/>
+<!-- Wide snout, split nose and white tusks. -->
+<path d="M22 38H42V42H47V51H17V42H22Z" fill="#b37c68"/>
+<path d="M23 41H41V48H23Z" fill="#d69c7e"/>
+<path d="M26 43H31V46H26Z M34 43H39V46H34Z" fill="#563b3b"/>
+<path d="M27 46H38V48H27Z" fill="#aa705c"/>
+<path d="M15 40H20V48H23V51H17V47H15Z M44 43H49V40H51V47H49V51H43V48H44Z" fill="#f1ddac"/>
+<path d="M18 49H23V53H18Z M41 49H46V53H41Z" fill="#755342"/>
+<path d="M13 54H51V59H13Z" fill="#33322f"/>
+</svg>
