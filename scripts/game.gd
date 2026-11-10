@@ -197,6 +197,7 @@ func _process(delta: float) -> void:
 	elif closest_station() != "":
 		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
+	hud.set_enemy_target(enemy)
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
 
