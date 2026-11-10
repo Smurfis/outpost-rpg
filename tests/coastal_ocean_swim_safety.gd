@@ -51,15 +51,26 @@ func _run() -> void:
 	var ocean_material_ok: bool = true
 	var surfaces_only_over_water: bool = true
 	var ocean_at_sea_level: bool = true
+	var shore_colors_present: bool = true
+	var shallow_pixel_present: bool = false
 	for water in ocean:
 		ocean_material_ok = ocean_material_ok and water.material_override is ShaderMaterial
 		ocean_at_sea_level = ocean_at_sea_level and absf(water.global_position.y - biome.SEA_LEVEL) < 0.01
 		var arrays: Array = water.mesh.surface_get_arrays(0)
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var shoreline_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		shore_colors_present = shore_colors_present and shoreline_colors.size() == vertices.size()
+		for shore in shoreline_colors:
+			shallow_pixel_present = shallow_pixel_present or shore.r > 0.15
 		for i in range(0, vertices.size(), 3):
 			var center: Vector3 = (vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3.0
 			surfaces_only_over_water = surfaces_only_over_water and not biome.is_land_at(center.x, center.z)
 	check(ocean_material_ok and ocean_at_sea_level, "Streamed water retains the original animated opaque ocean shader at sea level")
+	check(shore_colors_present and shallow_pixel_present,
+		"Water mesh carries real shoreline proximity for turquoise pixels without extra geometry")
+	var shallow_shader: Shader = load("res://scripts/voxel/coastal_water.gdshader")
+	check(shallow_shader != null and shallow_shader.code.contains("ocean_shallow") and not shallow_shader.code.contains("ALPHA ="),
+		"Turquoise shallows remain in the opaque Android water pipeline")
 	check(surfaces_only_over_water, "Every rendered ocean triangle sits over real water cells, never dry or unloaded mainland")
 	check(biome._tile_height(95, 0) < biome.SEA_LEVEL - 0.1, "Ocean tile has a real sloping underwater stone floor")
 	check(biome.get_node_or_null("GroundCollision_84_0") != null, "Offshore stone floor has streamed trimesh collision")
