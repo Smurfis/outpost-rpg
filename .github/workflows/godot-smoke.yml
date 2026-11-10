@@ -111,6 +111,13 @@ jobs:
             echo "Voxel visual smoke errors detected"
             exit 1
           fi
+      - name: Verify checked-in seasonal foliage atlas and streamed renderer
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/foliage_renderer.gd 2>&1 | tee foliage.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FOLIAGE:' foliage.log; then exit 1; fi
+          grep -q "FOLIAGE RESULT: 0 failures" foliage.log
+
       - name: Verify atlas-safe greedy top and cliff face merges
         run: |
           set -o pipefail
