@@ -83,6 +83,8 @@ var knob: Panel
 var movement_stick_scale: float = 1.0
 var movement_stick_slider: HSlider
 var movement_stick_size_label: Label
+var settings_slider_finger: int = -1
+var settings_slider_mouse_down: bool = false
 const STICK_BASE_DIAMETER: float = 148.0
 const STICK_THUMB_DIAMETER: float = 55.0
 const STICK_INPUT_RADIUS: float = 55.0
@@ -1573,6 +1575,8 @@ func _close_control_settings() -> void:
 	control_settings_panel.visible = false
 	settings_touch_finger = -1
 	settings_touch_candidate = null
+	settings_slider_finger = -1
+	settings_slider_mouse_down = false
 	settings_touch_mouse_echo_until = Time.get_ticks_msec() + 370
 	_reset_touch()
 
@@ -1618,6 +1622,14 @@ func _settings_button_at(position: Vector2) -> BaseButton:
 	return null
 
 
+func _apply_settings_slider_touch(position: Vector2) -> void:
+	if movement_stick_slider == null:
+		return
+	var bounds: Rect2 = movement_stick_slider.get_global_rect()
+	var fraction: float = clampf((position.x - bounds.position.x) / maxf(1.0, bounds.size.x), 0.0, 1.0)
+	movement_stick_slider.value = roundf((80.0 + fraction * 70.0) / 5.0) * 5.0
+
+
 func _handle_settings_touch(event: InputEvent) -> void:
 	# Android sometimes routes GUI touch release to the scrolling parent
 	# instead of Button. Dispatch actual settings controls at HUD input level,
@@ -1628,6 +1640,17 @@ func _handle_settings_touch(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var touch: InputEventScreenTouch = event
+		if touch.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(touch.position):
+			settings_slider_finger = touch.index
+			_apply_settings_slider_touch(touch.position)
+			get_viewport().set_input_as_handled()
+			return
+		if touch.index == settings_slider_finger and not touch.pressed:
+			_apply_settings_slider_touch(touch.position)
+			settings_slider_finger = -1
+			settings_touch_mouse_echo_until = Time.get_ticks_msec() + 420
+			get_viewport().set_input_as_handled()
+			return
 		if touch.pressed and settings_touch_finger < 0:
 			settings_touch_candidate = _settings_button_at(touch.position)
 			if settings_touch_candidate != null:
@@ -1645,6 +1668,10 @@ func _handle_settings_touch(event: InputEvent) -> void:
 				_activate_settings_button(action)
 	elif event is InputEventScreenDrag:
 		var drag: InputEventScreenDrag = event
+		if drag.index == settings_slider_finger:
+			_apply_settings_slider_touch(drag.position)
+			get_viewport().set_input_as_handled()
+			return
 		if drag.index == settings_touch_finger and drag.position.distance_to(settings_touch_start) >= 32.0:
 			settings_touch_candidate = null
 			settings_touch_finger = -1
@@ -1653,6 +1680,16 @@ func _handle_settings_touch(event: InputEvent) -> void:
 		if click.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if Time.get_ticks_msec() < settings_touch_mouse_echo_until:
+			get_viewport().set_input_as_handled()
+			return
+		if click.pressed and movement_stick_slider != null and movement_stick_slider.get_global_rect().has_point(click.position):
+			settings_slider_mouse_down = true
+			_apply_settings_slider_touch(click.position)
+			get_viewport().set_input_as_handled()
+			return
+		if not click.pressed and settings_slider_mouse_down:
+			settings_slider_mouse_down = false
+			_apply_settings_slider_touch(click.position)
 			get_viewport().set_input_as_handled()
 			return
 		if click.pressed:
