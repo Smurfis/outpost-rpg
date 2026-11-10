@@ -3,8 +3,9 @@ extends RefCounted
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 
-static func tree(_tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
-	# Compatibility wrapper for callers using the historical terrain tile IDs.
+static func tree(tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInstance3D:
+	# Keep the old tint/tile API for mods and tests; select real leaf artwork
+	# rather than multiplying terrain pixels into pink or lavender.
 	var species: int = FOLIAGE.OAK
 	if foliage_tile == 1:
 		species = FOLIAGE.SUNLIT
@@ -12,6 +13,10 @@ static func tree(_tint: Color = Color.WHITE, foliage_tile: int = 9) -> MeshInsta
 		species = FOLIAGE.BLOSSOM
 	elif foliage_tile in [7, 13]:
 		species = FOLIAGE.TWILIGHT
+	elif tint.r > tint.g * 1.3 and tint.b > tint.g * 1.1:
+		species = FOLIAGE.BLOSSOM
+	elif tint.g > tint.r * 1.2 and tint.g > tint.b * 1.05:
+		species = FOLIAGE.SUNLIT
 	return FOLIAGE.tree(species)
 
 static func pine_tree(_tint: Color = Color.WHITE, _foliage_tile: int = 9) -> MeshInstance3D:
