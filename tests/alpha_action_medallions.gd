@@ -36,6 +36,7 @@ func _run() -> void:
 	check(str(game.smart_context().get("icon")) == "hand", "Idle uses only a glove, never the sword")
 	var wood_found: bool = false
 	var stone_found: bool = false
+	var gathering_test_position: Vector3 = Vector3.ZERO
 	for resource in get_nodes_in_group("resources"):
 		if not resource.active:
 			continue
@@ -45,6 +46,7 @@ func _run() -> void:
 		game.hero.global_position = resource.global_position + Vector3(0.0, 0.35, 0.0)
 		var active: Dictionary = game.smart_context()
 		if str(active.get("icon")) == desired:
+			gathering_test_position = game.hero.global_position
 			wood_found = wood_found or desired == "axe"
 			stone_found = stone_found or desired == "pickaxe"
 			hud._refresh_smart_button()
@@ -64,6 +66,8 @@ func _run() -> void:
 			break
 	check(combat_found, "Nearby enemy shows sword")
 	if wood_found or stone_found:
+		game.hero.global_position = gathering_test_position
+		check(str(game.smart_context().get("kind")) == "gather", "Cooldown test targets a nearby gatherable rather than the enemy")
 		game.gather_delay = 0.25
 		hud._refresh_smart_button()
 		var ring: Control = smart.get_node("CooldownRing") as Control
