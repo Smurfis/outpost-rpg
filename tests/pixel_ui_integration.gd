@@ -71,7 +71,11 @@ func _run() -> void:
 	verify(interact != null, "Single large smart-interaction touch button exists")
 	if interact != null:
 		var interact_skin: StyleBox = interact.get_theme_stylebox("normal")
-		verify(interact_skin is StyleBoxFlat and (interact_skin as StyleBoxFlat).corner_radius_top_left >= 60, "Smart action keeps circular gold-ring holder")
+		# The approved medallion is a transparent circular texture, not a flat stylebox.
+		var disabled_skin: StyleBox = interact.get_theme_stylebox("disabled")
+		verify(interact_skin is StyleBoxTexture and (interact_skin as StyleBoxTexture).texture != null
+			and disabled_skin is StyleBoxTexture and (disabled_skin as StyleBoxTexture).texture != null,
+			"Smart action keeps circular gold-ring holder")
 		var icon: TextureRect = interact.get_child(0) as TextureRect
 		verify(icon != null and icon.texture != null, "Smart-interact button displays graphic icon")
 		verify(interact.size.x >= 85 and interact.size.y >= 85, "Smart interaction is finger-sized")
