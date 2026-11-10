@@ -122,6 +122,7 @@ var wallet_bag: Button
 var wallet_coin: Label
 var wallet_popup_title: Label
 var wallet_currency_rows: Dictionary = {}
+var wallet_currency_icons: Dictionary = {}
 var wallet_resource_icon: TextureRect
 var wallet_resource_count: Label
 var wallet_resource_id: String = "wood"
@@ -410,6 +411,20 @@ func _ready() -> void:
 		line.add_theme_color_override("font_color", metal[denomination])
 		line.visible = false
 		wallet_currency_rows[denomination] = line
+	# Real compact transparent pixel-art currency symbols instead of just
+	# abbreviated uppercase words. They are separate artwork layers and
+	# never carry an opaque circular UI background.
+	for currency_id in ["coins", "copper", "silver", "gold", "gems"]:
+		var wallet_icon := TextureRect.new()
+		wallet_icon.name = "WalletCurrencyIcon_" + currency_id
+		wallet_icon.texture = load("res://assets/icons/" + currency_id + ".svg") as Texture2D
+		wallet_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		wallet_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		wallet_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		wallet_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		wallet_icon.visible = false
+		root.add_child(wallet_icon)
+		wallet_currency_icons[currency_id] = wallet_icon
 	wallet_resource_icon = TextureRect.new()
 	wallet_resource_icon.name = "LastTrackedResourceIcon"
 	wallet_resource_icon.texture = load("res://assets/icons/wood.svg") as Texture2D
@@ -1114,6 +1129,8 @@ func _apply_wallet_layout() -> void:
 	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
 		(wallet_currency_rows[key] as Label).visible = true
+	for key in wallet_currency_icons:
+		(wallet_currency_icons[key] as TextureRect).visible = true
 	_layout_player_chrome()
 
 func _short_currency(value: int) -> String:
@@ -1130,13 +1147,13 @@ func _refresh_wallet(inventory: Dictionary) -> void:
 	if wallet_coin == null:
 		return
 	var coins: int = maxi(0, int(inventory.get("coins", 0)))
-	wallet_coin.text = "COINS %s" % _short_currency(coins)
+	wallet_coin.text = _short_currency(coins)
 	wallet_coin.tooltip_text = "Coins: %d" % coins
 	for key in wallet_currency_rows:
 		var label: Label = wallet_currency_rows[key] as Label
 		var actual: bool = inventory.has(key)
 		var balance: int = maxi(0, int(inventory.get(key, 0)))
-		label.text = "%s %s" % [str(key).to_upper(), _short_currency(balance) if actual else "—"]
+		label.text = _short_currency(balance) if actual else "—"
 		label.tooltip_text = "%s: %d" % [str(key).capitalize(), balance] if actual else "%s not yet in wallet" % str(key).capitalize()
 	for key in inventory:
 		var id: String = str(key)
@@ -2235,7 +2252,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"wallet": Rect2(wallet_left, 75, 275, 248),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
 		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
-		"coins": Rect2(currency_start, 17, currency_cell, 43),
+		"coins": Rect2(currency_start + 31.0, 17.0, maxf(22.0, currency_cell - 34.0), 43.0),
 		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
 		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 164.0, 17, 72, 50),
@@ -2279,11 +2296,16 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
-	for i in range(4):
-		var key: String = ["copper", "silver", "gold", "gems"][i]
-		var line: Label = wallet_currency_rows[key] as Label
-		_place_px(line, screen, Rect2(Vector2(currency_start + currency_cell * (float(i) + 1.0), 17.0) * unit,
-				Vector2(currency_cell, 43.0) * unit))
+	for i in range(5):
+		var key: String = ["coins", "copper", "silver", "gold", "gems"][i]
+		var x: float = currency_start + currency_cell * float(i)
+		var icon: TextureRect = wallet_currency_icons[key] as TextureRect
+		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 24.0) * unit,
+				Vector2(27.0, 27.0) * unit))
+		if i > 0:
+			var line: Label = wallet_currency_rows[key] as Label
+			_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
+					Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
