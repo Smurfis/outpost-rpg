@@ -102,7 +102,7 @@ func _ready() -> void:
 	equipment_scroll.name = "CharacterEquipmentScroll"
 	equipment_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	equipment_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	equipment_scroll.custom_minimum_size = Vector2(0, 193)
+	equipment_scroll.custom_minimum_size = Vector2(0, 173)
 	equipment_section.add_child(equipment_scroll)
 	equipment_body = VBoxContainer.new()
 	equipment_body.name = "EquippedSlots"
@@ -398,29 +398,35 @@ func _render_equipment() -> void:
 	var title := _text("EQUIPPED GEAR  •  LV. %d  •  TAP OR DRAG" % game.character_level(), 13, SKIN.INK)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	equipment_body.add_child(title)
+	# Avatar on the left; a compact 3×3 slot grid on the right. Seven real
+	# equipment positions now fit without an invisible fourth row or dragging
+	# the Character panel below the phone's lower safe area.
 	var band := HBoxContainer.new()
+	band.name = "CharacterEquipmentBand"
 	band.alignment = BoxContainer.ALIGNMENT_CENTER
-	band.add_theme_constant_override("separation", 6)
+	band.add_theme_constant_override("separation", 8)
 	equipment_body.add_child(band)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 2)
-	band.add_child(left)
-	for slot in ["weapon", "offhand", "tool_wood", "tool_forage"]:
-		left.add_child(_gear_button(slot))
-	var center := VBoxContainer.new()
-	band.add_child(center)
-	_add_avatar(center)
-	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", 2)
-	band.add_child(right)
-	for slot in ["back", "bag", "tool_mining"]:
-		right.add_child(_gear_button(slot))
+	var avatar := VBoxContainer.new()
+	avatar.name = "CharacterPreview"
+	band.add_child(avatar)
+	_add_avatar(avatar)
+	var slots := GridContainer.new()
+	slots.name = "CharacterGearGrid"
+	slots.columns = 3
+	slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slots.add_theme_constant_override("h_separation", 4)
+	slots.add_theme_constant_override("v_separation", 2)
+	band.add_child(slots)
+	for slot in EQUIPMENT_SLOTS:
+		var gear: Button = _gear_button(slot)
+		gear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slots.add_child(gear)
 
 func _gear_button(slot: String) -> Button:
 	var id: String = str(game.equipment.get(slot, ""))
 	var button: Button = EQUIP_DRAG.new() as Button
 	button.name = "EquipmentSlot_" + slot
-	button.custom_minimum_size = Vector2(57, 41)
+	button.custom_minimum_size = Vector2(53, 44)
 	SKIN.apply_translucent_button(button, "wood_selected" if slot == selected_slot else "wood")
 	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to inspect or drag a compatible item here")
 	button.pressed.connect(_gear_clicked.bind(slot))
