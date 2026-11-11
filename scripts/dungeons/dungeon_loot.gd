@@ -67,4 +67,9 @@ static func breakable(entrance_id: String, rarity: int, floor_number: int, prop_
 			if not pool.is_empty():
 				var item: String = str(pool[rng.randi_range(0, pool.size() - 1)])
 				materials[item] = 1
-	return {"coins": coins, "xp": 1 + tier, "materials": materials, "books": []}
+	var currencies: Dictionary = {"copper": rng.randi_range(1, 4 + tier)}
+	if tier >= 2:
+		currencies["silver"] = rng.randi_range(1, tier)
+	if tier >= 3 and rng.randf() < (0.28 if tier == 3 else 0.56):
+		currencies["gold"] = 1
+	return {"coins": coins, "xp": 1 + tier, "materials": materials, "currencies": currencies, "books": []}
