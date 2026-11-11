@@ -66,6 +66,8 @@ func _run() -> void:
 	release.pressed = false
 	release.position = campfire_click
 	game.hud._input(release)
+	var raw_pick: Dictionary = preload("res://scripts/interaction/world_picker.gd").resolve(game, campfire_click)
+	print("PHONE ROUTE DEBUG: mobile=", not game.controls.desktop, " free_touch=", game.hud._can_start_camera_drag(campfire_click), " ui_block=", game.controls.point_over_ui(campfire_click), " target=", raw_pick.get("target", null), " navigate=", game.controls.navigating)
 	check(game.controls.navigating and game.controls.target == game.stations["campfire"], "Station tap starts shared, range-checked A-star walking instead of camera orbit")
 	check(game.hero.station_waypoints.size() > 0, "Shared route uses actual waypoints rather than teleporting")
 	for waypoint in game.hero.station_waypoints:
