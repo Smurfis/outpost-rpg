@@ -4,6 +4,7 @@ extends Control
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
+const DUNGEON_ROOM_STEP: float = 13.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
 const IDLE_REFRESH_INTERVAL: float = 2.0
 const MOVEMENT_REFRESH_DISTANCE: float = 1.4
@@ -242,7 +243,7 @@ func _draw_dungeon_rooms(dungeon: Node3D, center: Vector2, interior: float, radi
 	var hero: Node3D = dungeon.hero as Node3D
 	if hero != null and is_instance_valid(hero):
 		var delta: Vector3 = hero.global_position - dungeon.global_position
-		var hero_grid := Vector2(delta.x, delta.z) / float(dungeon.STEP)
+		var hero_grid := Vector2(delta.x, delta.z) / DUNGEON_ROOM_STEP
 		var map_pos: Vector2 = center + _world_to_map((hero_grid - middle) * scale_by)
 		draw_circle(map_pos, 6.8, Color("241d1a"))
 		draw_circle(map_pos, 4.7, Color("fff1a5"))
