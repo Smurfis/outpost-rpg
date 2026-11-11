@@ -46,17 +46,22 @@ func _apply_appearance() -> void:
 		icon = null
 		tooltip_text = CAPTIONS[kind]
 		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# Button stylebox drawing is not guaranteed to bind its PNG as TEXTURE
+		# for a canvas_item shader. On Android this became an opaque WHITE
+		# rectangle covering Play when the shader sampled a default white texel.
+		# Render the alpha-masked PNG through a real TextureRect instead. The
+		# Button stays the actual input/focus control; no invisible hitbox moves.
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			var art_style := StyleBoxTexture.new()
-			art_style.texture = baked_image
-			art_style.modulate_color = Color.WHITE
-			if state == "hover":
-				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("fff5db")
-			elif state == "pressed":
-				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("d4c3aa")
-			elif state == "disabled":
-				art_style.modulate_color = Color(0.72, 0.72, 0.72, 0.92)
-			add_theme_stylebox_override(state, art_style)
+			add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		var plaque := TextureRect.new()
+		plaque.name = "PlaqueArtwork"
+		plaque.texture = baked_image
+		plaque.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		plaque.stretch_mode = TextureRect.STRETCH_SCALE
+		plaque.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(plaque)
+		plaque.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		var art_focus := StyleBoxFlat.new()
 		art_focus.bg_color = Color.TRANSPARENT
 		art_focus.border_color = Color.TRANSPARENT
@@ -66,7 +71,9 @@ func _apply_appearance() -> void:
 		_selection_material.shader = GOLD_SHADER
 		_selection_material.set_shader_parameter("originally_gold", kind == "play")
 		_selection_material.set_shader_parameter("plaque_kind", ["play", "continue", "settings", "quit"].find(kind))
-		material = _selection_material
+		# Apply the selection shader to the TextureRect, NOT the Button:
+		# the TextureRect supplies the real PNG sampler and transparent alpha.
+		plaque.material = _selection_material
 		_update_active_art()
 		add_theme_stylebox_override("focus", art_focus)
 		return
