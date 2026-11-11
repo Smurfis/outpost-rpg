@@ -51,3 +51,20 @@ static func chest(entrance_id: String, rarity: int, floor_index: int, floor_coun
 		"seed": rng.seed,
 		"bonus": bonus
 	}
+
+## Small, deterministic drops from breakable scenery; no finished equipment.
+## Keyed per prop, not shared with the final-chest loot RNG.
+static func breakable(entrance_id: String, rarity: int, floor_number: int, prop_key: String) -> Dictionary:
+	var tier: int = clampi(rarity, 0, 4)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = LAYOUT.stable_seed("%s:breakable:%d:%s" % [entrance_id, floor_number, prop_key])
+	var coins: int = rng.randi_range(1 + tier + floor_number, 4 + tier * 3 + floor_number)
+	var materials: Dictionary = {}
+	if rng.randf() < 0.40:
+		var pools: Array = info().get("material_tiers", [])
+		if not pools.is_empty():
+			var pool: Array = pools[mini(tier, pools.size() - 1)]
+			if not pool.is_empty():
+				var item: String = str(pool[rng.randi_range(0, pool.size() - 1)])
+				materials[item] = 1
+	return {"coins": coins, "xp": 1 + tier, "materials": materials, "books": []}
