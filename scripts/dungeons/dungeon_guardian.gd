@@ -10,7 +10,12 @@ var cooldown: float = 0.0
 var visual: Node3D
 var quality: int = 0
 var damage_multiplier: float = 1.0
+var speed_multiplier: float = 1.0
+var damage_taken_multiplier: float = 1.0
+var affix_ids: Array[String] = []
+var affix_details: String = ""
 var display_name: String = "Crypt Guardian"
+var affix_label: Label3D
 @export var max_climb_height: float = 1.05
 @export var can_fly: bool = false
 @export var flight_height: float = 1.8
@@ -63,6 +68,36 @@ func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) ->
 	add_to_group("enemies")
 	add_to_group("dungeon_guardians")
 
+## Called after boss and floor scaling, so the same affixes modify the
+## actual final stats rather than being silently overwritten by progression.
+func apply_affixes(entries: Array[Dictionary]) -> void:
+	if entries.is_empty():
+		return
+	var names: Array[String] = []
+	var details: Array[String] = []
+	var accent: Color = Color("f3cc87")
+	for entry in entries:
+		affix_ids.append(str(entry.get("id", "")))
+		names.append(str(entry.get("name", "")))
+		details.append(str(entry.get("description", "")))
+		hp *= float(entry.get("hp", 1.0))
+		damage_multiplier *= float(entry.get("damage", 1.0))
+		speed_multiplier *= float(entry.get("speed", 1.0))
+		damage_taken_multiplier *= float(entry.get("defence", 1.0))
+		accent = entry.get("colour", accent)
+	display_name = "%s %s" % [" ".join(names), display_name]
+	affix_details = " • ".join(details)
+	affix_label = Label3D.new()
+	affix_label.name = "GuardianAffixLabel"
+	affix_label.text = "%s\n%s" % [display_name.to_upper(), affix_details]
+	affix_label.font_size = 30
+	affix_label.pixel_size = 0.005
+	affix_label.outline_size = 8
+	affix_label.modulate = accent
+	affix_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	affix_label.position = Vector3(0, 2.95, 0)
+	add_child(affix_label)
+
 func _material(tint: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = tint
@@ -98,8 +133,8 @@ func _physics_process(delta: float) -> void:
 	var direction := Vector3.ZERO
 	if distance > 1.5 and distance < 8.0:
 		direction = to_player.normalized()
-	velocity.x = direction.x * (2.0 + float(quality) * 0.24)
-	velocity.z = direction.z * (2.0 + float(quality) * 0.24)
+	velocity.x = direction.x * (2.0 + float(quality) * 0.24) * speed_multiplier
+	velocity.z = direction.z * (2.0 + float(quality) * 0.24) * speed_multiplier
 	var grounded: bool = is_on_floor()
 	if can_fly:
 		velocity.y = clampf((hero.global_position.y + flight_height - global_position.y) * 2.5, -4.0, 4.0)
@@ -108,7 +143,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if not can_fly and grounded and is_on_wall() and direction.length_squared() > 0.01:
 		var before: Vector3 = global_position
-		if VOXEL_STEP.try_step(self, direction * (2.0 + float(quality) * 0.24) * delta, max_climb_height) > 0.0:
+		if VOXEL_STEP.try_step(self, direction * (2.0 + float(quality) * 0.24) * speed_multiplier * delta, max_climb_height) > 0.0:
 			visual_step_offset += before - global_position
 			visual_step_offset = visual_step_offset.limit_length(1.4)
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
@@ -128,7 +163,7 @@ func ignite(seconds: float = 4.0) -> void:
 func receive_damage(amount: float) -> void:
 	if not alive:
 		return
-	hp -= amount
+	hp -= amount * damage_taken_multiplier
 	if hp <= 0.0:
 		alive = false
 		collision_layer = 0
