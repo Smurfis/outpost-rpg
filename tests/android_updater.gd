@@ -101,6 +101,7 @@ func _run() -> void:
 			check(button.pressed.is_connected(screen._check_updates_only), "Update button has a working callback")
 		var notice: Button = screen.get("_update_notice") as Button
 		check(notice != null and not notice.visible, "Update banner stays hidden until a newer build is found")
+		screen._select_update_channel("stable")
 		screen._on_update_found(newer, 15, "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-android-v15")
 		check(notice != null and notice.visible and notice.text.contains("BUILD 15"), "New release shows visible title-screen update notice")
 		var download: Button = screen.get("_download_button") as Button
