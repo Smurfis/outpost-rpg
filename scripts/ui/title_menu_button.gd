@@ -11,6 +11,7 @@ const GOLD_SHADER := preload("res://assets/ui/title/button_selection.gdshader")
 var _selection_material: ShaderMaterial
 
 var _pointer_hovered: bool = false
+var _last_disabled: bool = false
 var _spark_elapsed: float = 0.0
 @export var reduced_motion: bool = false
 
@@ -129,8 +130,13 @@ func _refresh_highlight() -> void:
 func _update_active_art() -> void:
 	if _selection_material != null:
 		_selection_material.set_shader_parameter("selected", is_title_highlighted() or is_pressed())
+		_selection_material.set_shader_parameter("down", is_pressed())
+		_selection_material.set_shader_parameter("disabled_button", disabled)
 
 func _process(delta: float) -> void:
+	if disabled != _last_disabled:
+		_last_disabled = disabled
+		_update_active_art()
 	if reduced_motion or not is_title_highlighted():
 		return
 	_spark_elapsed = fposmod(_spark_elapsed + delta, TAU)
