@@ -27,6 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch") # Use Android's radial placement, not desktop hotbar.
 	var packed: PackedScene = load("res://scenes/main.tscn")
 	verify(packed != null, "Scene imports")
 	if packed == null:
