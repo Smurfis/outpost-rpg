@@ -411,6 +411,10 @@ func _apply_reward(reward: Dictionary) -> void:
 		return
 	var pocket: Dictionary = game.inventory
 	pocket["coins"] = int(pocket.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	var currency_drops: Dictionary = reward.get("currencies", {})
+	for currency_id in ["copper", "silver", "gold", "gems"]:
+		if currency_drops.has(currency_id):
+			pocket[currency_id] = int(pocket.get(currency_id, 0)) + maxi(0, int(currency_drops[currency_id]))
 	game.experience += maxi(0, int(reward.get("xp", 0)))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
