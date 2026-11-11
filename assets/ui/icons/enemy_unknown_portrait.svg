@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64" shape-rendering="crispEdges">
+<!-- Neutral shadowed enemy silhouette; actual enemy rarity is supplied by code. -->
+<path d="M0 0H64V64H0Z" fill="#28232b"/>
+<path d="M5 5H59V59H5Z" fill="#384248"/>
+<path d="M7 7H57V29H7Z" fill="#52606a"/>
+<path d="M7 29H57V57H7Z" fill="#2a333b"/>
+<path d="M11 16H16V19H11Z M48 13H53V19H48Z" fill="#64717a"/>
+<!-- Helmet, shoulders, shadowed face and cloak. -->
+<path d="M10 58V46L19 42H27V37H37V42H45L54 47V58Z" fill="#1f2932"/>
+<path d="M12 56L18 46H25L31 53V59H13Z M33 54L40 45H46L51 56V59H33Z" fill="#44505c"/>
+<path d="M18 23H22V18H28V14H39V18H44V23H48V38H43V42H20V37H16V27H18Z" fill="#30343c"/>
+<path d="M19 25H45V34H42V39H23V34H19Z" fill="#161f29"/>
+<path d="M18 24H46V28H18Z M22 19H42V23H22Z" fill="#778087"/>
+<path d="M25 15H39V19H25Z M16 27H20V36H16Z M44 27H48V36H44Z" fill="#8e9695"/>
+<path d="M20 30H44V34H20Z" fill="#32424b"/>
+<path d="M23 30H30V33H23Z M34 30H41V33H34Z" fill="#f3b66f"/>
+<path d="M25 30H28V32H25Z M36 30H39V32H36Z" fill="#fff0c3"/>
+<path d="M27 38H37V40H27Z" fill="#57646a"/>
+<path d="M21 45H25V49H21Z M39 45H43V49H39Z" fill="#88908b"/>
+<path d="M29 45H35V59H29Z" fill="#796e58"/>
+<path d="M30 49H34V57H30Z" fill="#b7a070"/>
+</svg>
