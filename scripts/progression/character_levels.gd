@@ -5,7 +5,7 @@ const MASTERY_UNLOCK_RANKS: Array[int] = [1, 3, 5]
 # The three visible slots are always Heroic Strike, Armour Break, Whirlwind.
 # Existing saves store mastery XP only, so changing runtime skill IDs is safe.
 const WEAPON_SKILLS: Array[String] = ["power_strike", "armor_break", "whirlwind"]
-const WEAPON_SKILL_NAMES: Array[String] = ["HEROIC STRIKE", "ARMOUR BREAK", "WHIRLWIND"]
+const WEAPON_SKILL_NAMES: Array[String] = ["HEROIC STRIKE", "ARMOR BREAK", "WHIRLWIND"]
 const ARMOR_BREAK_SECONDS: float = 6.0
 const ARMOR_BREAK_BONUS: float = 0.25
 const WHIRLWIND_RADIUS: float = 3.2
