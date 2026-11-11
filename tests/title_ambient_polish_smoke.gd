@@ -73,7 +73,19 @@ func _run() -> void:
 						bright += 1
 					if p.a > 0.8 and q.r - p.r > 0.15:
 						changed += 1
-			print("QUIT PIXEL DIAGNOSTIC: in-glyph white=", whited, " dark=", dark, " bright=", bright, " changed=", changed)
+			var count_in: Array[int] = [0, 0, 0, 0, 0]
+			for y in range(18, mini(61, idle.get_height())):
+				for x in range(46, mini(235, idle.get_width())):
+					var p: Color = idle.get_pixel(x, y)
+					if p.a <= 0.8:
+						continue
+					var lum: float = p.r * 0.299 + p.g * 0.587 + p.b * 0.114
+					if lum < 0.2: count_in[0] += 1
+					if lum < 0.4: count_in[1] += 1
+					if lum < 0.6: count_in[2] += 1
+					if lum < 0.8: count_in[3] += 1
+					count_in[4] += 1
+			print("QUIT PIXEL DIAGNOSTIC: in-glyph white=", whited, " dark=", dark, " bright=", bright, " changed=", changed, " inside luminance thresholds=", count_in)
 			_check(whited > 50, "Quit power icon and lettering become white in selected PNG")
 		button.call("_on_pointer_exited")
 	var embers: Control = title.get_node_or_null("Artboard/CampfireEmbers") as Control
