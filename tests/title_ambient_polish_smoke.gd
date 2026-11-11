@@ -43,7 +43,9 @@ func _run() -> void:
 		var focus_style: StyleBox = button.get_theme_stylebox("focus")
 		_check(focus_style is StyleBoxEmpty, name + " has no opaque/rectangular focus image")
 		_check(button.material == null, name + " has no custom canvas shader that could draw a white quad")
-		var normal: StyleBoxTexture = button.get_theme_stylebox("normal") as StyleBoxTexture
+		# A focused title button uses the highlight as its normal style.
+		# Compare against the original cached RGBA texture, not that active style.
+		var normal: StyleBoxTexture = button.get("_base_style") as StyleBoxTexture
 		var hover: StyleBoxTexture = button.get_theme_stylebox("hover") as StyleBoxTexture
 		_check(normal != null and hover != null and normal.texture != hover.texture, name + " uses independent alpha-masked highlight art")
 		button.call("_on_pointer_entered")
