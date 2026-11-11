@@ -7,8 +7,10 @@ extends Button
 
 const ASSET_BASE := "res://assets/ui/title/"
 const CAPTIONS := {"play": "Play", "continue": "Continue", "settings": "Settings", "quit": "Quit"}
-const GOLD_SHADER := preload("res://assets/ui/title/button_selection.gdshader")
-var _selection_material: ShaderMaterial
+# Title controls must use pre-masked RGBA textures, not an item shader.
+# Button StyleBoxTexture draw calls can otherwise expose a WHITE untextured quad.
+var _base_style: StyleBoxTexture
+var _highlight_style: StyleBoxTexture
 
 var _pointer_hovered: bool = false
 var _last_disabled: bool = false
@@ -46,29 +48,23 @@ func _apply_appearance() -> void:
 		icon = null
 		tooltip_text = CAPTIONS[kind]
 		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		for state in ["normal", "hover", "pressed", "disabled"]:
-			var art_style := StyleBoxTexture.new()
-			art_style.texture = baked_image
-			art_style.modulate_color = Color.WHITE
-			if state == "hover":
-				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("fff5db")
-			elif state == "pressed":
-				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("d4c3aa")
-			elif state == "disabled":
-				art_style.modulate_color = Color(0.72, 0.72, 0.72, 0.92)
-			add_theme_stylebox_override(state, art_style)
-		var art_focus := StyleBoxFlat.new()
-		art_focus.bg_color = Color.TRANSPARENT
-		art_focus.border_color = Color.TRANSPARENT
-		art_focus.set_border_width_all(0)
-		# Gold is painted into the selected artwork, never a focus rectangle.
-		_selection_material = ShaderMaterial.new()
-		_selection_material.shader = GOLD_SHADER
-		_selection_material.set_shader_parameter("originally_gold", kind == "play")
-		_selection_material.set_shader_parameter("plaque_kind", ["play", "continue", "settings", "quit"].find(kind))
-		material = _selection_material
+		# Never draw a white fallback quad over PNG button art. Alpha is
+		# permanently baked into each state before it reaches the GPU.
+		material = null
+		var selected_image: Texture2D = _make_highlight_texture(baked_image, kind)
+		_base_style = StyleBoxTexture.new()
+		_base_style.texture = baked_image
+		_highlight_style = StyleBoxTexture.new()
+		_highlight_style.texture = selected_image
+		add_theme_stylebox_override("normal", _base_style)
+		add_theme_stylebox_override("hover", _highlight_style)
+		add_theme_stylebox_override("pressed", _highlight_style)
+		var disabled_style := StyleBoxTexture.new()
+		disabled_style.texture = baked_image
+		disabled_style.modulate_color = Color(0.72, 0.72, 0.72, 0.92)
+		add_theme_stylebox_override("disabled", disabled_style)
+		add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		_update_active_art()
-		add_theme_stylebox_override("focus", art_focus)
 		return
 	text = button_caption if not button_caption.is_empty() else CAPTIONS[kind]
 	var picture: Texture2D = _find_art("icon_", kind, "icons")
@@ -128,10 +124,10 @@ func _refresh_highlight() -> void:
 	queue_redraw()
 
 func _update_active_art() -> void:
-	if _selection_material != null:
-		_selection_material.set_shader_parameter("selected", is_title_highlighted() or is_pressed())
-		_selection_material.set_shader_parameter("down", is_pressed())
-		_selection_material.set_shader_parameter("disabled_button", disabled)
+	# Focus (keyboard/gamepad), hover and touch all select a pre-rendered
+	# transparent texture; absolutely no translucent white focus rectangle.
+	if _base_style != null and _highlight_style != null:
+		add_theme_stylebox_override("normal", _highlight_style if (is_title_highlighted() or is_pressed()) else _base_style)
 
 func _process(delta: float) -> void:
 	if disabled != _last_disabled:
@@ -186,6 +182,35 @@ static func _remove_screenshot_matte(source: Texture2D, kind: String) -> Texture
 					px.a *= smoothstep(0.0, 3.5, nearest)
 			bitmap.set_pixel(x, y, px)
 	return ImageTexture.create_from_image(bitmap)
+
+static func _make_highlight_texture(source: Texture2D, kind: String) -> Texture2D:
+	var image: Image = source.get_image()
+	if image == null:
+		return source
+	image.convert(Image.FORMAT_RGBA8)
+	for y in range(image.get_height()):
+		for x in range(image.get_width()):
+			var pixel: Color = image.get_pixel(x, y)
+			if pixel.a < 0.01:
+				continue
+			var luminance: float = pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114
+			if kind == "quit":
+				# The ink of the power symbol and label turns WHITE on hover and
+				# press, but never bleach the gold/wood outside the glyph region.
+				var u: float = float(x) / float(image.get_width())
+				var v: float = float(y) / float(image.get_height())
+				if u > 0.16 and u < 0.81 and v > 0.24 and v < 0.79 and luminance < 0.38:
+					pixel.r = 1.0
+					pixel.g = 1.0
+					pixel.b = 1.0
+			else:
+				# Warm selection accent, not a second rectangular light layer.
+				if luminance > 0.13 and luminance < 0.72:
+					pixel.r = minf(1.0, pixel.r * 1.18 + 0.045)
+					pixel.g = minf(1.0, pixel.g * 1.10 + 0.025)
+					pixel.b = minf(1.0, pixel.b * 0.94)
+			image.set_pixel(x, y, pixel)
+	return ImageTexture.create_from_image(image)
 
 func _set_plaque(state: String, picture: Texture2D, tint: Color) -> void:
 	var style := StyleBoxTexture.new()
