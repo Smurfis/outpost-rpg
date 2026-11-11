@@ -16,6 +16,7 @@ const WEIGHTS: Dictionary = {
 	"iron":1.15, "coal":0.95, "clay":0.72, "herbs":0.18,
 	"mushrooms":0.22, "reeds":0.22, "hide":0.70, "coins":0.0,
 	"iron_ingot":1.6, "linen":0.50, "bricks":1.4,
+	"shrimp":0.15, "cooked_shrimp":0.20, "shrimp_net":0.8,
 	"meal":0.65, "tonic":0.40, "stew":0.65,
 	"spear":2.5, "axe":2.2, "pickaxe":2.5, "shield":3.0,
 	"torch":1.0, "satchel":1.0, "iron_blade":3.0, "cloak":1.0,

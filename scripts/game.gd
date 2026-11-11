@@ -15,6 +15,14 @@ const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const LEVELS = preload("res://scripts/progression/character_levels.gd")
+const CONTROLS = preload("res://scripts/interaction/player_controls.gd")
+const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
+const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+var controls
+var prop_placement = PLACEMENT.new()
+var focus_target: Node3D
+var opened_world_objects: Dictionary = {}
+const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
@@ -73,6 +81,14 @@ func _ready() -> void:
 	# Preserve fullscreen content scale on phones with extra-wide displays.
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	_register_keys()
+	inventory.merge({"shrimp": 0, "cooked_shrimp": 0, "shrimp_net": 0})
+	equipment["tool_fishing"] = ""
+	gathering_skill_xp["fishing"] = 0
+	for point in station_positions.values():
+		prop_placement.reserve(point, 1.7)
+	prop_placement.reserve(Vector3(-6.1, 0, 2.8), 2.2)
+	for point in [Vector3(-18, 0, -18), Vector3(18, 0, -18), Vector3(-18, 0, 18), Vector3(18, 0, 18), Vector3(0, 0, -19)]:
+		prop_placement.reserve(point, 3.2)
 	_load_recipes()
 	_lighting()
 	_world()
@@ -120,36 +136,25 @@ func _ready() -> void:
 	elif requested_lan == "join":
 		coop.join_lan(lan_ip, lan_name)
 	_camera(1.0)
+	controls = CONTROLS.new()
+	add_child(controls)
+	controls.setup(self)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_G], "interact": [KEY_E], "attack": [KEY_F, KEY_SPACE], "jump": [KEY_J], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "jump": [KEY_SPACE], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
+		InputMap.action_erase_events(key_name)
 		for code in binds[action]:
 			var event := InputEventKey.new()
 			event.physical_keycode = int(code)
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("outpost_interact"):
-		smart_interact()
-	elif event.is_action_pressed("outpost_gather"):
-		gather()
-	elif event.is_action_pressed("outpost_attack"):
-		attack()
-	elif event.is_action_pressed("outpost_craft"):
-		craft()
-	elif event.is_action_pressed("outpost_bag"):
-		show_inventory()
-	elif event.is_action_pressed("outpost_heal"):
-		use_meal()
-	elif event.is_action_pressed("outpost_camera_left"):
-		rotate_camera(-1)
-	elif event.is_action_pressed("outpost_camera_right"):
-		rotate_camera(1)
+	pass # Shared controller routes InputMap actions after GUI consumption.
 
 func _process(delta: float) -> void:
 	_update_station_walk(delta)
@@ -181,7 +186,7 @@ func _process(delta: float) -> void:
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
-	var resource = _nearest_resource()
+	var resource = _nearest_resource() if controls == null or not controls.desktop else null
 	if resource != last_hit_node:
 		if is_instance_valid(last_hit_node):
 			last_hit_node.set_targeted(false)
@@ -328,7 +333,12 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var shelter: MeshInstance3D = VOXEL_PROPS.tent()
 		shelter.position = Vector3(-6.1, 0.0, 2.8)
-		add_child(shelter)
+		var shelter_object = WORLD_OBJECT.new()
+		add_child(shelter_object)
+		shelter_object.position = shelter.position
+		shelter.position = Vector3.ZERO
+		shelter_object.setup(self, "camp_shelter", "Camp shelter", "inspect", shelter)
+		shelter_object.message = "Outpost shelter. Nearby stations craft equipment and cook food."
 	else:
 		var tent := CylinderMesh.new()
 		tent.top_radius = 0.0
@@ -336,44 +346,30 @@ func _world() -> void:
 		tent.height = 2.9
 		part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
 		block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
-	# Decorative shrubs and wildflowers (deterministic for stable map)
+	# Every visible bush is now a harvestable, spaced against all other props.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 512309
-	for i in range(68):
-		var x := rng.randf_range(-21.0, 21.0)
-		var z := rng.randf_range(-21.0, 21.0)
-		if absf(x) < 5.3 and absf(z) < 5.3:
-			continue
-		if voxel_art_enabled:
-			if i % 2 == 0:
-				var shrub: MeshInstance3D = VOXEL_PROPS.bush(i % 13 == 0)
-				shrub.position = Vector3(x, 0, z)
-				shrub.scale = Vector3.ONE * rng.randf_range(0.18, 0.40)
-				add_child(shrub)
-		else:
-			var mesh := SphereMesh.new()
-			mesh.radial_segments = 7
-			mesh.rings = 3
-			mesh.radius = rng.randf_range(0.15, 0.38)
-			mesh.height = 0.40
-			var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
-			tuft.scale = Vector3(1.4, 0.53, 1.0)
-	# Details: timber palisade sections, supply crates, stumps and path stones
-	for i in range(12):
-		var px: float = -10.0 + float(i) * 1.75
-		if i < 5 or i > 8:
-			block(Vector3(0.25, 1.1, 0.25), Vector3(px, 0.55, 6.9), Color("735239"))
-			block(Vector3(1.65, 0.16, 0.18), Vector3(px, 0.82, 6.9), Color("b1844c"))
-	for x in [-4.2, -3.5, 2.4]:
-		block(Vector3(0.85, 0.78, 0.85), Vector3(x, 0.39, 4.3), Color("946d45"))
-		block(Vector3(0.90, 0.08, 0.9), Vector3(x, 0.82, 4.3), Color("be9867"))
-	for i in range(17):
-		var stones := CylinderMesh.new()
-		stones.top_radius = 0.18
-		stones.bottom_radius = 0.22
-		stones.height = 0.045
-		stones.radial_segments = 6
-		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
+	for i in range(20):
+		var site := Vector3(rng.randf_range(-21.0, 21.0), 0, rng.randf_range(-21.0, 21.0))
+		if absf(site.x) > 6.0 or absf(site.z) > 6.0:
+			spawn_resource(self, "herbs" if i % 4 == 0 else "fiber", site)
+	# Deliberate counted timber/stone bundles replace untracked overlapping props.
+	spawn_resource(self, "wood", Vector3(-10, 0, 7), 3, true)
+	spawn_resource(self, "stone", Vector3(3, 0, 11), 2, true)
+	# A real NPC demonstrates the same range-checked world interaction contract.
+	var guide = WORLD_OBJECT.new()
+	add_child(guide)
+	guide.position = Vector3(0, 0, 4.5)
+	var guide_art := Node3D.new()
+	for part_id in ["adventurer_torso", "adventurer_head"]:
+		var piece: MeshInstance3D = preload("res://scripts/voxel/voxel_character.gd").create_part(part_id)
+		if piece != null:
+			if part_id == "adventurer_head":
+				piece.position.y = 1.89
+			guide_art.add_child(piece)
+	guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
+	guide.message = "Gather fibre, craft a Shrimp net at the Workbench, then fish coastal pools. Cook shrimp at the Campfire."
+	prop_placement.reserve(guide.position, 0.6, guide)
 	# Make the Fields truly walkable. Keep the original small camp collision
 	# underneath its centre; outside it the chunk trimeshes own collision.
 	var half_extent: float = 384.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
@@ -403,35 +399,19 @@ func _world() -> void:
 	_wall(Vector3(0, boundary_y, half_extent), Vector3(span, boundary_height, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
-	if voxel_art_enabled:
-		var prop: MeshInstance3D
-		match id:
-			"oak_tree":
-				prop = FOLIAGE.tree(FOLIAGE.species_at(where.x, where.z, 64012),
-					posmod(roundi(where.x * 7.0 + where.z * 11.0), 3))
-			"rock_deposit":
-				prop = VOXEL_PROPS.rock()
-			"supply_crate":
-				prop = VOXEL_PROPS.crate()
-		if prop != null:
-			# Stable unique names avoid Godot's auto-generated sibling names.
-			prop.name = "%s_%d_%d" % [str(prop.name), roundi(where.x * 10.0), roundi(where.z * 10.0)]
-			prop.position = where
-			prop.scale = Vector3.ONE * size_factor
-			prop.rotation.y = angle
-			add_child(prop)
-			return
-	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
-	if mesh == null:
-		push_warning("Unable to import 3D model: " + id)
+	if id in ["oak_tree", "rock_deposit"]:
+		spawn_resource(self, "wood" if id == "oak_tree" else "stone", where, 1, true)
 		return
-	var instance := MeshInstance3D.new()
-	instance.mesh = mesh
-	instance.name = id
-	instance.position = where
-	instance.scale = Vector3.ONE * size_factor
-	instance.rotation.y = angle
-	add_child(instance)
+	if not prop_placement.available(where, 0.8):
+		return
+	var chest = WORLD_OBJECT.new()
+	add_child(chest)
+	chest.position = where
+	var art: MeshInstance3D = VOXEL_PROPS.crate()
+	art.scale = Vector3.ONE * size_factor
+	art.rotation.y = angle
+	chest.setup(self, "camp_crate_%s_%s" % [where.x, where.z], "Supply chest", "chest", art, {"wood": 2, "fiber": 2})
+	prop_placement.reserve(where, 0.8, chest)
 
 func _terrain_path(from: Vector3, to: Vector3, radius: float, shade: Color) -> void:
 	var creator := SurfaceTool.new()
@@ -563,25 +543,13 @@ func _update_station_walk(delta: float) -> void:
 
 func _resources() -> void:
 	for pos in [Vector3(-6, 0, -1), Vector3(-8, 0, -6), Vector3(6, 0, -7), Vector3(11, 0, 2), Vector3(-12, 0, 9), Vector3(7, 0, 12), Vector3(14, 0, -10)]:
-		var tree = NODE.new()
-		add_child(tree)
-		tree.position = pos
-		tree.setup("wood")
+		spawn_resource(self, "wood", pos, 1, true)
 	for pos in [Vector3(-6, 0, 7), Vector3(6, 0, 7), Vector3(11, 0, -7), Vector3(-13, 0, -9), Vector3(15, 0, 14)]:
-		var rock = NODE.new()
-		add_child(rock)
-		rock.position = pos
-		rock.setup("stone")
+		spawn_resource(self, "stone", pos, 1, true)
 	for pos in [Vector3(-4, 0, -9), Vector3(3, 0, -12), Vector3(12, 0, 9), Vector3(-15, 0, 4)]:
-		var bush = NODE.new()
-		add_child(bush)
-		bush.position = pos
-		bush.setup("fiber")
+		spawn_resource(self, "fiber", pos, 1, true)
 	for pos in [Vector3(-10, 0, 3), Vector3(8, 0, -3), Vector3(-17, 0, 16)]:
-		var berry = NODE.new()
-		add_child(berry)
-		berry.position = pos
-		berry.setup("berries")
+		spawn_resource(self, "berries", pos, 1, true)
 	# Uncommon resource clusters on the edges of the forest.
 	var points: Dictionary = {
 		"iron": [Vector3(-19, 0, -12), Vector3(18, 0, 15), Vector3(15, 0, -15), Vector3(-17, 0, 18)],
@@ -593,28 +561,8 @@ func _resources() -> void:
 	}
 	for item_id in points:
 		for pos in points[item_id]:
-			var node = NODE.new()
-			add_child(node)
-			node.position = pos
-			node.setup(str(item_id))
+			spawn_resource(self, str(item_id), pos, 1, true)
 
-	# The wider Fields has a few harvestable nodes beyond the original camp.
-	# Do not move the starting resources or alter recipe/save data.
-	if voxel_art_enabled and fields_biome_enabled:
-		var landscape = get_node_or_null("VoxelAtmosphere")
-		if landscape != null:
-			var field_sites: Dictionary = {
-				"wood": [Vector2(-34, -32), Vector2(32, -37), Vector2(-35, 29), Vector2(39, 24)],
-				"stone": [Vector2(35, 34), Vector2(-38, 34), Vector2(-34, -38)],
-				"berries": [Vector2(35, -31), Vector2(-37, 27)],
-				"fiber": [Vector2(32, 27), Vector2(-32, -31)]
-			}
-			for kind in field_sites:
-				for site in field_sites[kind]:
-					var field_node = NODE.new()
-					add_child(field_node)
-					field_node.position = Vector3(site.x, landscape.surface_y_at(site.x, site.y) + 0.055, site.y)
-					field_node.setup(str(kind))
 
 func _enemies() -> void:
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
@@ -658,13 +606,131 @@ func _nearest_enemy():
 func near_workshop() -> bool:
 	return near_station("workbench")
 
-func gather() -> void:
-	if gather_delay > 0.0:
+func valid_focus() -> bool:
+	if not is_instance_valid(focus_target) or not target_available(focus_target) or hero.global_position.distance_to(focus_target.global_position) > 32.0:
+		focus_target = null
+		return false
+	return true
+
+func focus_nearest_enemy() -> void:
+	var nearest: Node3D
+	var distance: float = 24.0
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not target_available(enemy):
+			continue
+		var delta: float = hero.global_position.distance_to(enemy.global_position)
+		if delta < distance:
+			distance = delta
+			nearest = enemy
+	focus_target = nearest
+	if nearest == null:
+		hud.toast("No enemy nearby to focus.")
+
+func perform_action(action: String) -> void:
+	match action:
+		"ability_1", "ability_2", "ability_3": use_weapon_skill(int(action.right(1)) - 1)
+		"potion": use_quick_consumable("potion")
+		"food": use_quick_consumable("consumable")
+		"tool_cycle": hud._cycle_quick_tool()
+		"bag": show_inventory()
+		"character": show_equipment()
+		"skills": hud._show_skill_details()
+		"focus": focus_nearest_enemy()
+		"interact": smart_interact()
+
+func target_available(target: Node3D) -> bool:
+	if not is_instance_valid(target) or not target.is_inside_tree() or not target.is_visible_in_tree():
+		return false
+	if target.is_in_group("resources"):
+		return target.active
+	if target.is_in_group("enemies"):
+		return target.alive
+	return target.has_meta("world_kind") or target.is_in_group("stations")
+
+func target_range(target: Node3D) -> float:
+	if target.is_in_group("enemies"):
+		return 3.4
+	if target.is_in_group("resources"):
+		return 3.3
+	if target.is_in_group("stations"):
+		return 3.0
+	return 2.8
+
+func target_in_range(target: Node3D) -> bool:
+	if not target_available(target) or hero == null:
+		return false
+	return hero.global_position.distance_to(target.global_position) < target_range(target)
+
+func target_on_cooldown(target: Node3D) -> bool:
+	return (target.is_in_group("enemies") and attack_delay > 0.0) or (target.is_in_group("resources") and gather_delay > 0.0)
+
+func interact_target(target: Node3D) -> void:
+	if not target_in_range(target) or (menu != null and menu.visible):
 		return
-	var resource = _nearest_resource()
-	if resource == null:
+	if target.is_in_group("enemies"):
+		focus_target = target
+		attack(target)
+	elif target.is_in_group("resources"):
+		gather(target)
+	elif target.is_in_group("stations"):
+		if near_station(target.station_id):
+			show_crafting()
+	elif target.has_method("interact"):
+		target.interact(hero)
+	elif target.has_meta("dungeon_bonus"):
+		var dungeon = get_node_or_null("Dungeons")
+		if dungeon != null:
+			dungeon._claim_bonus(int(target.get_meta("dungeon_bonus")))
+	elif target.has_meta("dungeon_exit"):
+		var dungeon = get_node_or_null("Dungeons")
+		if dungeon != null:
+			dungeon._on_chest_selected(target.get_meta("dungeon_exit"))
+	elif target.has_signal("selected"):
+		target.selected.emit(target)
+
+static func healing_for(item: String) -> float:
+	return 65.0 if item == "tonic" else 75.0 if item == "stew" else 30.0 if item == "cooked_shrimp" else 40.0
+
+func spawn_resource(parent: Node3D, kind: String, point: Vector3, count: int = 1, relocate: bool = false):
+	var radius: float = PLACEMENT.radius_for(kind, count)
+	var site: Vector3 = point
+	if not prop_placement.available(site, radius):
+		if not relocate:
+			return null
+		var found: bool = false
+		for i in range(1, 49):
+			var angle: float = float(i) * 2.39996
+			var offset := Vector3(cos(angle), 0, sin(angle)) * (2.0 + float(i / 8))
+			site = point + offset
+			if prop_placement.available(site, radius):
+				found = true
+				break
+		if not found:
+			return null
+	if terrain_surface != null:
+		site.y = -2.78 if kind == "shrimp" else terrain_surface._tile_height(floori(site.x), floori(site.z)) + 0.055
+	var resource = NODE.new()
+	parent.add_child(resource)
+	resource.global_position = site
+	resource.setup(kind, count)
+	prop_placement.reserve(site, radius, resource)
+	return resource
+
+func gather(selected: Node3D = null) -> void:
+	if gather_delay > 0.0 or (menu != null and menu.visible):
+		return
+	var resource = selected if selected != null else _nearest_resource()
+	if not target_available(resource) or not target_in_range(resource):
 		return
 	var expected_item: String = str(resource.kind)
+	var tool: String = "axe" if expected_item == "wood" else "pickaxe" if expected_item in ["stone", "iron", "coal"] else "shrimp_net" if expected_item == "shrimp" else "satchel"
+	if selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
+		equip_item(tool)
+	if expected_item == "shrimp" and (str(equipment.get("tool_fishing", "")) != "shrimp_net" or int(inventory.get("shrimp_net", 0)) < 1):
+		hud.toast("Craft a Shrimp net from 6 fibre at the Workbench first.")
+		return
+	if tool in ["axe", "pickaxe", "shrimp_net"] and is_equipped(tool):
+		hero.set_held_tool(tool)
 	var desired: int = 1
 	if expected_item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
 		desired = 2
@@ -676,7 +742,7 @@ func gather() -> void:
 	if CARRY.max_fit(inventory, expected_item, desired, equipped_bag_id(), equipped_bag_stars()) <= 0:
 		hud.toast("Bag full! Equip a larger bag or unload materials.")
 		return
-	gather_delay = 0.33
+	gather_delay = 1.0 if expected_item == "shrimp" else 0.33
 	var item: String = resource.harvest()
 	if item == "":
 		return
@@ -749,6 +815,8 @@ func _recipe_by_id(id: String) -> Dictionary:
 	return {}
 
 func equipment_slot(item_id: String) -> String:
+	if item_id == "shrimp_net":
+		return "tool_fishing"
 	if item_id in ["spear", "iron_blade"]:
 		return "weapon"
 	if item_id in ["shield", "torch"]:
@@ -770,10 +838,12 @@ func available_quick_tools() -> Array[String]:
 	for item in QUICK_TOOL_IDS:
 		if item != "training_blade" and int(inventory.get(item, 0)) > 0:
 			candidates.append(item)
+	if int(inventory.get("shrimp_net", 0)) > 0:
+		candidates.append("shrimp_net")
 	return candidates
 
 func select_quick_tool(item_id: String) -> bool:
-	if item_id not in QUICK_TOOL_IDS:
+	if item_id not in QUICK_TOOL_IDS and item_id != "shrimp_net":
 		return false
 	if item_id != "training_blade" and int(inventory.get(item_id, 0)) <= 0:
 		return false
@@ -792,6 +862,8 @@ func select_quick_tool(item_id: String) -> bool:
 	return true
 
 func smart_context() -> Dictionary:
+	if valid_focus():
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	# One smart action, showing its REAL current intent; never a redundant
 	# permanent hand beneath the sword/axe/pickaxe. The art is not a tooltip.
 	var workshop: String = closest_station()
@@ -814,6 +886,12 @@ func smart_context() -> Dictionary:
 
 func smart_interact() -> void:
 	if menu != null and menu.visible:
+		return
+	if valid_focus():
+		if target_in_range(focus_target):
+			attack(focus_target)
+		elif controls != null:
+			controls.approach(focus_target)
 		return
 	var action: String = str(smart_context().get("kind", "none"))
 	match action:
@@ -1112,7 +1190,7 @@ func gain_experience(amount: int) -> void:
 func gain_gathering_skill(resource_id: String, amount: int) -> void:
 	if amount <= 0:
 		return
-	var skill: String = "woodcutting" if resource_id == "wood" else "mining" if resource_id in ["stone", "iron", "coal", "clay"] else "foraging"
+	var skill: String = "fishing" if resource_id == "shrimp" else "woodcutting" if resource_id == "wood" else "mining" if resource_id in ["stone", "iron", "coal", "clay"] else "foraging"
 	gathering_skill_xp[skill] = maxi(0, int(gathering_skill_xp.get(skill, 0)) + amount)
 	last_trained_skill = skill
 	if hud != null:
@@ -1154,8 +1232,10 @@ func use_weapon_skill(slot: int) -> bool:
 	var skill: String = LEVELS.skill_for_slot(slot)
 	if float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
 		return false
-	var target = _nearest_enemy()
+	var target = focus_target if valid_focus() else _nearest_enemy()
 	if target == null:
+		return false
+	if not target_in_range(target):
 		return false
 	var mana_cost: float = 6.0 + 3.0 * float(slot)
 	if mana < mana_cost:
@@ -1182,8 +1262,7 @@ func available_quick_consumables(slot: String) -> Array[String]:
 	if slot == "potion":
 		pool.append("tonic")
 	elif slot == "consumable":
-		pool.append("meal")
-		pool.append("stew")
+		pool.append_array(FOOD_IDS)
 	var available: Array[String] = []
 	for item in pool:
 		if int(inventory.get(item, 0)) > 0:
@@ -1205,11 +1284,15 @@ func use_quick_consumable(slot: String) -> bool:
 	if float(quick_use_cooldowns.get(slot, 0.0)) > 0.0:
 		return false
 	var item: String = str(quick_slots.get(slot, ""))
+	if item == "" and slot == "potion" and int(inventory.get("tonic", 0)) > 0:
+		item = "tonic"
+		quick_slots[slot] = item
 	if item == "" or int(inventory.get(item, 0)) <= 0:
+		hud.toast("No healing potion available." if slot == "potion" else "No food equipped. Assign food from Inventory.")
 		return false
 	if hero == null or hero.health >= 99.9:
 		return false
-	var amount: float = 65.0 if item == "tonic" else 75.0 if item == "stew" else 40.0
+	var amount: float = healing_for(item)
 	consume(item, amount)
 	# Recovery starts only after an item actually heals, not on an empty tap.
 	quick_use_cooldowns[slot] = QUICK_USE_COOLDOWN
@@ -1230,18 +1313,20 @@ func consume(item_id: String, heal: float) -> void:
 func use_meal() -> void:
 	consume("meal", 40.0)
 
-func attack() -> void:
+func attack(selected: Node3D = null) -> void:
 	if attack_delay > 0.0 or menu != null and menu.visible:
 		return
+	var target = selected if selected != null else focus_target if valid_focus() else _nearest_enemy()
+	if not target_available(target) or not target_in_range(target):
+		return
 	if coop != null and coop.in_party_dungeon():
-		var guardian = _nearest_enemy()
+		var guardian = target
 		if guardian == null or not guardian.has_meta("encounter_slot"):
 			return
 		attack_delay = 0.55
 		hero.swing()
 		coop.request_strike(int(guardian.get_meta("encounter_slot")))
 		return
-	var target = _nearest_enemy()
 	if target == null:
 		return # No popup spam when outside combat range.
 	attack_delay = 0.55
@@ -1313,7 +1398,7 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
@@ -1328,6 +1413,8 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	if data.get("opened_world_objects", {}) is Dictionary:
+		opened_world_objects = data["opened_world_objects"].duplicate(true)
 	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)
 	night_quote_seen = bool(data.get("night_quote_seen", false))
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
@@ -1346,7 +1433,7 @@ func _load() -> void:
 	if data.get("quick_slots", {}) is Dictionary:
 		for slot in ["potion", "consumable"]:
 			var chosen: String = str(data["quick_slots"].get(slot, ""))
-			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else ["meal", "stew"]) else ""
+			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else FOOD_IDS) else ""
 	if data.get("bag_quality", {}) is Dictionary:
 		for bag_id in data.get("bag_quality", {}):
 			var key: String = str(bag_id)
@@ -1370,7 +1457,7 @@ func _load() -> void:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
 	active_quick_tool = str(data.get("active_quick_tool", "training_blade"))
-	if active_quick_tool not in QUICK_TOOL_IDS or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
+	if (active_quick_tool not in QUICK_TOOL_IDS and active_quick_tool != "shrimp_net") or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
 		active_quick_tool = "training_blade"
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))

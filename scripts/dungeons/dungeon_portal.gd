@@ -19,6 +19,9 @@ func configure(id: String, owner_chunk: String, tier: int) -> void:
 	quality = RARITY.bounded(tier)
 	dungeon_title = RARITY.dungeon_name(quality)
 	name = "DungeonEntrance_" + entrance_id.replace(":", "_")
+	set_meta("world_kind", "portal")
+	set_meta("display_name", dungeon_title)
+	set_meta("world_action", "Enter dungeon")
 	collision_layer = 8
 	collision_mask = 0
 	input_ray_pickable = true
@@ -118,6 +121,8 @@ func _process(delta: float) -> void:
 		aura.scale.y = 1.0 + sin(clock * 1.18) * 0.035
 
 func _on_input_event(_camera: Node, event: InputEvent, _position: Vector3, _normal: Vector3, _shape_index: int) -> void:
+	if get_parent().get("game") != null and get_parent().game.get("controls") != null:
+		return # Shared router distinguishes tap release from camera drag/hold.
 	var clicked: bool = event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed
 	var touched: bool = event is InputEventScreenTouch and event.pressed
 	if clicked or touched:

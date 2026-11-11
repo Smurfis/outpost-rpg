@@ -51,13 +51,16 @@ var interaction_target: Vector3 = Vector3.ZERO
 var interaction_moving: bool = false
 var interaction_locked: bool = false
 var station_waypoints: PackedVector3Array = PackedVector3Array()
+var path_navigation: bool = false
 
 func move_to_interaction(target: Vector3) -> void:
+	path_navigation = false
 	station_waypoints.clear()
 	interaction_target = target
 	interaction_moving = true
 
 func move_along_station_path(path: PackedVector3Array) -> void:
+	path_navigation = true
 	station_waypoints = path.duplicate()
 	if station_waypoints.is_empty():
 		stop_interaction_move()
@@ -67,6 +70,7 @@ func move_along_station_path(path: PackedVector3Array) -> void:
 
 func stop_interaction_move() -> void:
 	interaction_moving = false
+	path_navigation = false
 	station_waypoints.clear()
 
 func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
@@ -337,7 +341,7 @@ func _detect_surface_swimming() -> bool:
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
-	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or (hud != null and hud.control_settings_panel != null and hud.control_settings_panel.visible) or interaction_locked
+	var modal_open: bool = game.controls.modal_open() if game.controls != null else (game.menu != null and game.menu.visible) or interaction_locked
 	swimming = _detect_surface_swimming()
 	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
@@ -355,6 +359,8 @@ func _physics_process(delta: float) -> void:
 	if interaction_moving and not modal_open:
 		if control.length() > 0.15:
 			stop_interaction_move()
+			if game.controls != null:
+				game.controls.cancel()
 			if game.has_method("cancel_station_walk"):
 				game.cancel_station_walk()
 		else:
@@ -362,14 +368,14 @@ func _physics_process(delta: float) -> void:
 			# still use their original interaction_target / 2.4m arrival rule.
 			while station_waypoints.size() > 0:
 				var node: Vector3 = station_waypoints[0]
-				if Vector2(node.x - global_position.x, node.z - global_position.z).length() > 0.65:
+				if Vector2(node.x - global_position.x, node.z - global_position.z).length() > 0.25:
 					break
 				station_waypoints.remove_at(0)
 			if station_waypoints.size() > 0:
 				interaction_target = station_waypoints[0]
 			var towards: Vector3 = interaction_target - global_position
 			towards.y = 0.0
-			if station_waypoints.is_empty() and towards.length() <= (2.4 if game.station_walk_target.is_empty() else 0.65):
+			if station_waypoints.is_empty() and towards.length() <= (0.25 if path_navigation else 2.4):
 				stop_interaction_move()
 				direction = Vector3.ZERO
 			else:

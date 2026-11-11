@@ -307,6 +307,9 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 func _make_chest() -> void:
 	chest_area = Area3D.new()
 	chest_area.name = "FloorExit" if current_floor < floor_count else "FinalChest"
+	chest_area.set_meta("world_kind", "chest")
+	chest_area.set_meta("dungeon_exit", self)
+	chest_area.set_meta("world_action", "Open" if current_floor == floor_count else "Use stairs")
 	chest_area.position = exit_local
 	chest_area.collision_layer = 8
 	chest_area.collision_mask = 0
@@ -342,6 +345,9 @@ func _make_bonus(id: int, position_at: Vector3) -> void:
 	bonus_chests[id] = at
 	var bonus := Area3D.new()
 	bonus.name = "Bonus_%d" % id
+	bonus.set_meta("world_kind", "chest")
+	bonus.set_meta("dungeon_bonus", id)
+	bonus.set_meta("world_action", "Open bonus cache")
 	bonus.position = at
 	bonus.collision_layer = 8
 	bonus.collision_mask = 0
@@ -369,6 +375,8 @@ func _make_bonus(id: int, position_at: Vector3) -> void:
 	bonus.input_event.connect(_on_bonus_input.bind(id))
 
 func _on_exit_input(_camera: Node, event: InputEvent, _position: Vector3, _normal: Vector3, _shape_index: int) -> void:
+	if hero != null and hero.game.get("controls") != null:
+		return
 	var clicked: bool = event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed
 	var touched: bool = event is InputEventScreenTouch and event.pressed
 	if clicked or touched:
@@ -379,6 +387,8 @@ func _on_exit_input(_camera: Node, event: InputEvent, _position: Vector3, _norma
 		get_viewport().set_input_as_handled()
 
 func _on_bonus_input(_camera: Node, event: InputEvent, _position: Vector3, _normal: Vector3, _shape_index: int, bonus_id: int) -> void:
+	if hero != null and hero.game.get("controls") != null:
+		return
 	var clicked: bool = event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed
 	var touched: bool = event is InputEventScreenTouch and event.pressed
 	if clicked or touched:
