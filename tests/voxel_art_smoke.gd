@@ -44,15 +44,27 @@ func _run() -> void:
 		# low-cost distant water. Keep this test aligned to the approved art.
 		_check(biome.get_node_or_null("SteppedDistanceCliffs") == null, "No artificial wall of rock at the edge of streamed terrain")
 		_check(biome.get_node_or_null("DistantWaterHorizon") != null, "Distant horizon uses water rather than oversized rock border")
+	# Trees were converted to gatherable resource nodes using the dedicated
+	# foliage atlas. Crates are now nested under openable WorldObject chests,
+	# not bare top-level MeshInstance3D decorations.
+	var foliage = load("res://scripts/voxel/foliage_renderer.gd")
 	var tree_count: int = 0
+	for resource in get_nodes_in_group("resources"):
+		if str(resource.get("kind")) != "wood":
+			continue
+		var tree_art: MeshInstance3D = resource.get_node_or_null("HarvestableModel") as MeshInstance3D
+		if tree_art != null and tree_art.mesh != null and tree_art.material_override == foliage.material():
+			tree_count += 1
+	_check(tree_count >= 5, "At least five gatherable trees use the dedicated pixel foliage atlas")
 	var box_count: int = 0
 	for child in game.get_children():
-		if child is MeshInstance3D and str(child.name).begins_with("VoxelTree"):
-			tree_count += 1
-		if child is MeshInstance3D and str(child.name).begins_with("VoxelCrate"):
-			box_count += 1
-	_check(tree_count >= 5, "Five decorative trees use the voxel skin")
-	_check(box_count >= 4, "Four supply crates use the voxel skin")
+		if not child.has_meta("world_kind") or str(child.get_meta("world_kind")) != "chest":
+			continue
+		for artwork in child.get_children():
+			if artwork is MeshInstance3D and str(artwork.name).begins_with("VoxelCrate"):
+				box_count += 1
+				_check(artwork.material_override == atlas, "Openable supply chest uses shared pixel crate artwork")
+	_check(box_count >= 2, "Camp contains multiple functional, pixel-textured supply chests")
 	_check(game.get_node_or_null("Terrain") != null, "Original collision floor retained")
 	_check(game.get("hero") != null and game.get("menu") != null, "Gameplay/HUD still initialize")
 	var body: MeshInstance3D = game.hero.visual.get_node_or_null("adventurer_torso") as MeshInstance3D
@@ -62,7 +74,7 @@ func _run() -> void:
 		if child is MeshInstance3D and child.material_override == atlas:
 			pixel_station_blocks += 1
 	_check(pixel_station_blocks > 0, "Crafting stations use matching pixel textures")
-	_check(game.get("recipes").size() == 21 and not game._recipe_by_id("torch").is_empty() and not game._recipe_by_id("backpack_t2").is_empty(), "Original craft recipes and six bag recipes coexist")
+	_check(game.get("recipes").size() >= 23 and not game._recipe_by_id("torch").is_empty() and not game._recipe_by_id("backpack_t2").is_empty() and not game._recipe_by_id("fiery_weapon").is_empty() and not game._recipe_by_id("shrimp_net").is_empty() and not game._recipe_by_id("cooked_shrimp").is_empty(), "Original recipes, six bag recipes, enchanting and fishing additions coexist")
 	var kinds: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		kinds[node.kind] = true
