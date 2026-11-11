@@ -164,6 +164,12 @@ func approach(clicked: Node3D) -> bool:
 	cancel()
 	if not game.target_available(clicked):
 		return false
+	# Crafting stations already have a specialised proven A-star route that
+	# stops outside their solid collider and opens the correct recipe window.
+	# The generic world planner can reject dense camp geometry as unreachable.
+	# Use the same station journey for both touch taps and desktop clicks.
+	if clicked.is_in_group("stations"):
+		return game.visit_crafting_station(str(clicked.station_id))
 	target = clicked
 	if target.is_in_group("enemies"):
 		game.focus_target = target
