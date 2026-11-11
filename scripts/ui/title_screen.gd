@@ -88,7 +88,7 @@ var _channel_stable_button: Button
 var _channel_alpha_button: Button
 var _channel_note: Label
 var _changelog_button: Button
-var _changelog_panel: PanelContainer
+var _changelog_panel: Panel
 var _changelog_dim: ColorRect
 var _changelog_scroll: ScrollContainer
 var _changelog_entries: VBoxContainer
@@ -733,7 +733,9 @@ func _build_changelog_scroll() -> void:
 	_changelog_dim.visible = false
 	_canvas.add_child(_changelog_dim)
 
-	_changelog_panel = PanelContainer.new()
+	# PanelContainer's child minimum sizes can force the whole modal to
+	# grow past the bottom of a phone. Panel has a truly fixed viewport.
+	_changelog_panel = Panel.new()
 	_changelog_panel.name = "ChangelogPanel"
 	_changelog_panel.position = Vector2(64, 54)
 	_changelog_panel.size = Vector2(1152, 548)
@@ -751,6 +753,7 @@ func _build_changelog_scroll() -> void:
 	for side in ["left", "right", "top", "bottom"]:
 		margins.add_theme_constant_override("margin_" + side, 20)
 	_changelog_panel.add_child(margins)
+	margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 12)
 	margins.add_child(stack)
