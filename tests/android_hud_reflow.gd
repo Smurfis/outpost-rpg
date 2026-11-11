@@ -19,6 +19,7 @@ func _does_not_overlap(left: Control, right: Control, detail: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch") # Exercise the actual Android layout on desktop CI.
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	verify(scene != null, "Game scene imports")
 	if scene == null:
