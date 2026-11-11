@@ -12,10 +12,11 @@ const CHANNEL_KEY: String = "application/config/build_channel"
 const DOWNLOAD_PREFIX: String = "https://github.com/Smurfis/outpost-rpg/releases/download/"
 const PROJECT_VERSION_KEY: String = "application/config/android_build_code"
 const DEFAULT_VERSION_CODE: int = 11
-# Temporarily suspend Alpha APK distribution/installation after v1012 received
-# a Google Play Protect "Harmful app blocked" warning (issue #69).
-# Removing a risky permission is not proof the warning was a false positive.
-const ALPHA_DOWNLOADS_PAUSED: bool = true
+# A Play Protect warning was reported for Alpha v1012 (issue #69).
+# Keep native APK installation disabled, reject the flagged file everywhere,
+# but allow finding newer public, repository-owned releases so Settings can
+# copy their links. Android remains responsible for install consent.
+const ALPHA_DOWNLOADS_PAUSED: bool = false
 const APK_INSTALLS_PAUSED: bool = true
 
 var _request: HTTPRequest
@@ -60,7 +61,12 @@ static func valid_asset_url(url: String, channel: String) -> bool:
 	if parts.size() != 2 or not parts[0].begins_with(prefix):
 		return false
 	var digits: String = parts[0].trim_prefix(prefix)
-	return digits.is_valid_int() and int(digits) > 0 and parts[1] == filename_prefix + digits + ".apk"
+	if not digits.is_valid_int() or int(digits) <= 0:
+		return false
+	# This particular build was flagged by Play Protect; never offer its URL.
+	if channel == "alpha" and int(digits) == 1012:
+		return false
+	return parts[1] == filename_prefix + digits + ".apk"
 
 func has_active_download() -> bool:
 	return _download_id >= 0 and not _download_complete
@@ -328,7 +334,7 @@ static func find_newest_release(releases: Array, installed_code: int, tag_prefix
 			var asset: Dictionary = value
 			var url: String = str(asset.get("browser_download_url", ""))
 			var expected_name: String = ("Outpost-Alpha-v" if tag_prefix == ALPHA_TAG_PREFIX else "Outpost-Android-v") + number + ".apk"
-			if str(asset.get("name", "")) != expected_name or not url.begins_with(DOWNLOAD_PREFIX):
+			if str(asset.get("name", "")) != expected_name or not valid_asset_url(url, "alpha" if tag_prefix == ALPHA_TAG_PREFIX else "stable"):
 				continue
 			if not url.contains("/" + tag + "/"):
 				continue

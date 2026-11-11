@@ -5,6 +5,8 @@ shader_type canvas_item;
 // separate SVG glow in title_screen.gd follows the currently selected button.
 uniform bool selected = false;
 uniform bool originally_gold = false;
+uniform bool disabled_button = false;
+uniform bool down = false;
 uniform int plaque_kind = 0; // 0 Play, 1 Continue, 2 Settings, 3 Quit
 void fragment() {
     vec4 original = texture(TEXTURE, UV);
@@ -31,12 +33,24 @@ void fragment() {
     } else if (selected && plaque_kind == 3) {
         // Quit is different: no gold rays, no asterisks. The label and power
         // symbol illuminate white against the unchanged amber button plaque.
-        float centre = smoothstep(0.24, 0.27, UV.x) *
-                       (1.0 - smoothstep(0.80, 0.84, UV.x)) *
-                       smoothstep(0.20, 0.27, UV.y) *
-                       (1.0 - smoothstep(0.79, 0.86, UV.y));
-        float dark_ink = 1.0 - smoothstep(0.16, 0.35, luma);
-        rgb = mix(rgb, vec3(1.0, 1.0, 0.98), centre * dark_ink * 0.98);
+        // A white power symbol AND Quit lettering, even on pressed/touch.
+        // Extend the ink mask leftward to include the separately painted icon.
+        float centre = smoothstep(0.11, 0.18, UV.x) *
+                       (1.0 - smoothstep(0.82, 0.90, UV.x)) *
+                       smoothstep(0.22, 0.31, UV.y) *
+                       (1.0 - smoothstep(0.75, 0.86, UV.y));
+        float dark_ink = 1.0 - smoothstep(0.19, 0.42, luma);
+        rgb = clamp(rgb * 1.06 + vec3(0.018), vec3(0.0), vec3(1.0));
+        rgb = mix(rgb, vec3(1.0), centre * dark_ink);
     }
-    COLOR = vec4(clamp(rgb, vec3(0.0), vec3(1.0)), alpha) * COLOR;
+    // COLOR already contains the sampled texel in Godot's canvas fragment.
+    // Multiplying the newly whitened glyph by that original dark ink would
+    // turn the power symbol and Quit label black again. Output once instead.
+    if (disabled_button) {
+        rgb *= vec3(0.70);
+        alpha *= 0.88;
+    } else if (down && plaque_kind != 3) {
+        rgb *= vec3(0.93, 0.91, 0.88);
+    }
+    COLOR = vec4(clamp(rgb, vec3(0.0), vec3(1.0)), alpha);
 }

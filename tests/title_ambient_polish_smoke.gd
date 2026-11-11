@@ -45,6 +45,8 @@ func _run() -> void:
 		_check(button.material is ShaderMaterial, name + " swaps selected artwork through pixel shader")
 		button.call("_on_pointer_entered")
 		_check(bool(button.call("is_title_highlighted")) == not button.disabled, name + " highlights only while enabled")
+		if name == "QuitButton":
+			_check((button.material as ShaderMaterial).shader.code.contains("vec3(1.0)"), "Hover and press whiten Quit power icon and text")
 		button.call("_on_pointer_exited")
 	var embers: Control = title.get_node_or_null("Artboard/CampfireEmbers") as Control
 	_check(embers != null, "Two small campfire ember emitters are wired into title")
@@ -67,6 +69,10 @@ func _run() -> void:
 		intro.set("auto_advance", false)
 		root.add_child(intro)
 		await process_frame
+		_check(not bool(ProjectSettings.get_setting("application/boot_splash/show_image", true)), "Godot boot logo is suppressed before Five Star ident")
+		_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Five Star splash fills 20:9 Android instead of being pillarboxed")
+		var emblem: TextureRect = intro.get_node_or_null("StarMark") as TextureRect
+		_check(emblem != null and emblem.anchor_left <= 0.1 and emblem.anchor_right >= 0.9, "Five Star branding spans widescreen Android")
 		var twinkles: Control = intro.get_node_or_null("StarTwinkles") as Control
 		_check(twinkles != null, "Five Star pixel glints are added")
 		_check(twinkles != null and twinkles.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Intro stars cannot block tap-to-skip")
