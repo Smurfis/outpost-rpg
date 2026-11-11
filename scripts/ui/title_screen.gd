@@ -815,7 +815,7 @@ func _request_changelog_releases() -> void:
 	_changelog_status.text = "Loading release dates, times and developer credits from GitHub..."
 	var result: Error = _changelog_request.request(
 		CHANGELOG_RELEASES_API,
-		["Accept: application/vnd.github+json", "User-Agent: Outpost-Alpha"]
+		PackedStringArray(["Accept: application/vnd.github+json", "User-Agent: Outpost-Alpha"])
 	)
 	if result != OK:
 		_changelog_status.text = "Release feed unavailable. Showing offline Alpha test notes."
@@ -861,11 +861,13 @@ func _on_changelog_releases_loaded(result: int, response_code: int, _headers: Pa
 		var when: String = "Publication date/time unavailable"
 		if published.length() >= 16:
 			when = "%s  •  %s UTC" % [published.substr(0, 10), published.substr(11, 5)]
-		var author_data: Dictionary = release.get("author", {}) as Dictionary
+		var author_data: Dictionary = {}
+		if release.get("author", null) is Dictionary:
+			author_data = release["author"]
 		var publisher: String = str(author_data.get("login", "Unknown"))
 		var credit: String = "Posted by: " + publisher
 		if publisher.contains("[bot]"):
-			credit = "Developer: Smurf  •  Published automatically by " + publisher
+			credit = "Maintainer: Smurf  •  Posted automatically by " + publisher
 		var notes: String = str(release.get("body", "")).strip_edges()
 		if notes.is_empty():
 			notes = "No detailed notes were posted for this release."
