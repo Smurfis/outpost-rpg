@@ -184,11 +184,24 @@ func run() -> void:
 		verify(game.menu.selected_id == "shrimp_net", "Mouse selects Shrimp Net recipe")
 	verify(not game.controls.navigating, "Crafting UI clicks cannot move or attack")
 	game.menu.close_page()
+	var desktop_interact_width: float = game.hud.smart_button.size.x
 	game.controls.set_desktop(false)
 	game.hud.floating_joystick_enabled = false
 	game.hud._position_stick()
 	verify(game.hud.joystick.visible, "Touch mode restores virtual joystick")
-	verify(game.hud.quick_buttons.skill_3.get_global_rect().end.x < game.hud.smart_button.get_global_rect().position.x, "Touch combat uses same ordered row")
+	verify(not game.hud.desktop_mode, "Touch switches the HUD into mobile mode")
+	verify(game.hud.smart_button.size.x > desktop_interact_width * 1.8, "Mobile restores its large Interact button")
+	var top_skill: Rect2 = game.hud.quick_buttons.skill_1.get_global_rect()
+	var lower_skill: Rect2 = game.hud.quick_buttons.skill_3.get_global_rect()
+	verify(top_skill.get_center().y < lower_skill.get_center().y and top_skill.get_center().x > lower_skill.get_center().x, "Mobile skills return to a radial combat arc rather than the PC action row")
+	verify(not game.hud.focus_button.visible, "Desktop-only target button is hidden on touch")
+	verify(game.hud.quick_buttons.potion.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Mobile potion uses hold-and-slide touch handling")
+	var shortcut: Label = game.hud.quick_buttons.skill_1.get_node_or_null("KeyboardShortcut") as Label
+	verify(shortcut != null and not shortcut.visible, "Mobile hides keyboard shortcut hints")
+	game.controls.set_desktop(true)
+	verify(not game.hud.joystick.visible and game.hud.focus_button.visible, "Switching back to PC restores the desktop action UI")
+	game.controls.set_desktop(false)
+	verify(game.hud.smart_button.size.x > desktop_interact_width * 1.8, "Second mobile activation does not lose radial positions")
 	game.queue_free()
 	await process_frame
 	await process_frame
