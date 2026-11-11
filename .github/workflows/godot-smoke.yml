@@ -24,6 +24,13 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_overhaul.gd 2>&1 | tee dungeon-overhaul.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON OVERHAUL:' dungeon-overhaul.log; then exit 1; fi
           grep -q "DUNGEON OVERHAUL RESULT: 0 failures" dungeon-overhaul.log
+          for suite in dungeon_archetypes dungeon_seams visual_world_minimap; do
+            ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s "res://tests/${suite}.gd" 2>&1 | tee "${suite}-preflight.log"
+            if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ROOMS:|FAIL SEAMS:|VISUAL FAIL:' "${suite}-preflight.log"; then exit 1; fi
+          done
+          grep -q "ROOM ARCHETYPES RESULT: 0 failures" dungeon_archetypes-preflight.log
+          grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon_seams-preflight.log
+          grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual_world_minimap-preflight.log
       - name: Launch scene for 120 frames
         run: |
           set -o pipefail
