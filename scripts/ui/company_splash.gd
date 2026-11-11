@@ -9,8 +9,15 @@ const STUDIO_TWINKLES := preload("res://scripts/ui/studio_twinkles.gd")
 const UI_PREFS := "user://outpost_ui.cfg"
 var _transition_started: bool = false
 var _reduced_motion: bool = false
+var _previous_window_aspect: int = -1
 
 func _ready() -> void:
+	# The engine's default 16:9 keep-aspect setting pillarboxes the entire
+	# studio ident on 20:9 Android. Expand only during this intro scene.
+	var window: Window = get_window()
+	_previous_window_aspect = window.content_scale_aspect
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var prefs := ConfigFile.new()
 	if prefs.load(UI_PREFS) == OK:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
@@ -45,6 +52,10 @@ func _ready() -> void:
 	if auto_advance:
 		await get_tree().create_timer(maxf(0.5, hold_seconds)).timeout
 		_go_next()
+
+func _exit_tree() -> void:
+	if _previous_window_aspect >= 0:
+		get_window().content_scale_aspect = _previous_window_aspect
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
