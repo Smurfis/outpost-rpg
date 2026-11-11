@@ -24,6 +24,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/blockbench_import_pipeline.gd 2>&1 | tee blockbench-import.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BLOCKBENCH:' blockbench-import.log; then exit 1; fi
           grep -q "BLOCKBENCH IMPORT RESULT: 0 failures" blockbench-import.log
+      - name: Verify imported Quaternius animated animal and dungeon glTF scenes
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/quaternius_cube_world_import.gd 2>&1 | tee quaternius-cube-import.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CUBE WORLD:' quaternius-cube-import.log; then exit 1; fi
+          grep -q "CUBE WORLD KIT RESULT: 0 failures" quaternius-cube-import.log
       - name: Launch scene for 120 frames
         run: |
           set -o pipefail
