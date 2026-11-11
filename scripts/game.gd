@@ -620,6 +620,20 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Wild boar"
 	return enemy.name.replace("_", " ").capitalize()
 
+func _nearest_breakable():
+	if hero == null:
+		return null
+	var nearest: Node3D
+	var radius: float = 3.1
+	for prop in get_tree().get_nodes_in_group("dungeon_breakables"):
+		if not is_instance_valid(prop) or not prop.active:
+			continue
+		var distance: float = hero.global_position.distance_to(prop.global_position)
+		if distance < radius:
+			radius = distance
+			nearest = prop
+	return nearest
+
 func _nearest_enemy():
 	var best = null
 	var radius := 3.4
@@ -909,6 +923,8 @@ func smart_context() -> Dictionary:
 		return {"kind": "gather", "label": "GATHER", "icon": tool_icon}
 	if enemy != null:
 		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
+	if _nearest_breakable() != null:
+		return {"kind": "break", "label": "SMASH", "icon": "sword"}
 	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
 		return {"kind": "torch", "label": "TORCH", "icon": "hand"}
 	return {"kind": "none", "label": "INTERACT", "icon": "hand"}
@@ -928,6 +944,10 @@ func smart_interact() -> void:
 			attack()
 		"gather":
 			gather()
+		"break":
+			var prop = _nearest_breakable()
+			if prop != null:
+				prop.interact(hero)
 		"craft":
 			# Resolve station again at the instant of the tap. A stale CRAFT
 			# label must never open a different station or a generic recipe.
