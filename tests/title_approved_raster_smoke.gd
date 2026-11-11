@@ -111,6 +111,7 @@ func _run() -> void:
 		_check(artboard.scale.is_equal_approx(Vector2(1.5, 1.5)), "Foreground logo and button art stay pixel-proportional")
 		_check(panorama != null and wide.get_child_count() == 1, "One panorama only: never duplicate left/right flags, waterfall or decorative frame")
 		if panorama != null:
+			_check(panorama.material is ShaderMaterial and is_equal_approx(float((panorama.material as ShaderMaterial).get_shader_parameter("side_extension_px")), 160.0), "Widescreen stretches only the outer scenery, preserving the central campsite geometry")
 			_check(panorama.texture == backdrop.texture, "Widescreen uses the single approved landscape rather than repeating atlas regions")
 			_check(panorama.position.is_equal_approx(Vector2(-160, 0)), "Widescreen background begins at the left edge")
 			_check(panorama.size.is_equal_approx(Vector2(1600, 720)), "Widescreen background spans 20:9 in design units")
