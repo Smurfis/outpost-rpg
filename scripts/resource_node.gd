@@ -3,6 +3,9 @@ extends Node3D
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const PICKER = preload("res://scripts/interaction/world_picker.gd")
+var bundle_count: int = 1
+var max_hits: int = 3
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
@@ -12,8 +15,9 @@ var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
-func setup(resource_type: String) -> void:
+func setup(resource_type: String, count: int = 1) -> void:
 	kind = resource_type
+	bundle_count = clampi(count, 1, 3)
 	name = kind.capitalize() + "Node"
 	match kind:
 		"wood":
@@ -36,9 +40,22 @@ func setup(resource_type: String) -> void:
 			_mushrooms()
 		"reeds":
 			_reeds()
-	hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+		"shrimp":
+			_shrimp_pool()
+	if bundle_count > 1:
+		var originals: Array[Node] = get_children()
+		for i in range(1, bundle_count):
+			for original in originals:
+				if original is MeshInstance3D:
+					var bundled: Node3D = original.duplicate()
+					bundled.position += Vector3(-0.8 if i == 1 else 0.8, 0, 0.65)
+					bundled.scale *= 0.72
+					add_child(bundled)
+	max_hits = (3 if kind in ["wood", "stone", "iron", "coal", "clay", "shrimp"] else 2) * bundle_count
+	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
+	PICKER.attach(self, "resource")
 	_setup_target_marker()
 	add_to_group("resources")
 
@@ -97,7 +114,7 @@ func _setup_target_marker() -> void:
 func set_targeted(selected: bool) -> void:
 	if target_label != null:
 		target_label.visible = selected and active
-		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+		target_label.text = "%s%s · %d actions" % ["Shrimp pool" if kind == "shrimp" else kind.capitalize(), " ×%d" % bundle_count if bundle_count > 1 else "", hits_left]
 	if target_ring != null:
 		target_ring.visible = selected and active
 
@@ -208,7 +225,7 @@ func _process(delta: float) -> void:
 		cooldown -= delta
 		if cooldown <= 0.0:
 			active = true
-			hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+			hits_left = max_hits
 			visible = true
 			scale = initial_scale
 
@@ -231,3 +248,17 @@ func harvest() -> String:
 		visible = false
 		cooldown = recovery
 	return kind
+
+func _shrimp_pool() -> void:
+	# Open ripples and small voxel shrimp at the water surface, no water disk.
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.78
+	ring.outer_radius = 0.82
+	ring.rings = 4
+	ring.ring_segments = 20
+	_part(ring, Vector3(0, 0.02, 0), Vector3.ONE, Color("9bccbd"))
+	for i in range(5):
+		var angle: float = TAU * float(i) / 5.0
+		var at := Vector3(cos(angle) * 0.45, 0.04, sin(angle) * 0.45)
+		_block(Vector3(0.22, 0.06, 0.12), at, Color("d8947c"))
+		_block(Vector3(0.08, 0.06, 0.16), at + Vector3(0.11, 0, 0.06), Color("b77465"))

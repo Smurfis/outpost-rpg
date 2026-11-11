@@ -455,98 +455,62 @@ func _unregister_streamed_portal(cell: Vector2i) -> void:
 		dungeons.unregister_chunk("fields_%d_%d" % [cell.x, cell.y])
 
 func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
-	# Unlike earlier purely decorative distant trees, these are harvestable and
-	# enemies participate in the existing real item, quest and combat systems.
-	# Spawn keys are deterministic: revisiting a streamed chunk gives the same
-	# placements while retaining only local nodes in memory.
-	var owner: Node = get_parent()
-	if owner == null or not owner.has_method("_nearest_resource"):
+	var game: Node = get_parent()
+	if game == null or not game.has_method("spawn_resource"):
 		return null
 	var container := Node3D.new()
 	container.name = "ChunkInteractables_%d_%d" % [chunk_x, chunk_z]
 	add_child(container)
+	var kinds: Array[String] = ["wood", "wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds"]
+	# Global six-metre cells have enough separation even across chunk borders.
+	# Coordinate-derived seeds mean stream/load order never changes candidates.
+	for x in range(chunk_x + 3, chunk_x + CHUNK_SIZE, 6):
+		for z in range(chunk_z + 3, chunk_z + CHUNK_SIZE, 6):
+			if maxf(absf(x), absf(z)) < 27.0 or _coast_margin(x, z) < SAND_GRASS_BAND:
+				continue
+			var rng := RandomNumberGenerator.new()
+			rng.seed = absi(world_seed * 43 + x * 2257 + z * 4861)
+			var site := Vector3(x + rng.randf_range(-0.25, 0.25), 0, z + rng.randf_range(-0.25, 0.25))
+			var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+			var count: int = rng.randi_range(2, 3) if rng.randf() < 0.20 else 1
+			# Reserve the possible portal footprint regardless of load order.
+			var center := Vector2(chunk_x + CHUNK_SIZE * 0.5, chunk_z + CHUNK_SIZE * 0.5)
+			var has_gate: bool = posmod((chunk_x + 101) * 37 + (chunk_z + 101) * 43 + world_seed, 13) == 0
+			if has_gate and Vector2(site.x, site.z).distance_to(center) < 3.5 + game.PLACEMENT.radius_for(kind, count):
+				continue
+			game.spawn_resource(container, kind, site, count)
+	# One shallow, shore-reachable pool per coastal chunk. Shrimp are the
+	# first fish; deep ocean never spawns an unreachable fishing target.
+	var pool_placed: bool = false
+	if stream_enabled:
+		for x in range(chunk_x + 1, chunk_x + CHUNK_SIZE - 1):
+			for z in range(chunk_z + 1, chunk_z + CHUNK_SIZE - 1):
+				var margin: float = _coast_margin(x + 0.5, z + 0.5)
+				if margin < -1.2 or margin > -0.1 or pool_placed:
+					continue
+				var node = game.spawn_resource(container, "shrimp", Vector3(x + 0.5, SEA_LEVEL, z + 0.5))
+				pool_placed = node != null
 	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, posmod(int(world_seed) * 43 + (chunk_x + 707) * 2257 + (chunk_z + 707) * 4861, 2147483647))
-	var kinds: Array[String] = ["wood", "wood", "wood", "stone", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds"]
-	for i in range(2):
-		var x: float = float(chunk_x) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		var z: float = float(chunk_z) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		if maxf(absf(x), absf(z)) < 27.0 or _coast_margin(x, z) < SAND_GRASS_BAND:
-			continue # Preserve the original safe starter resource layout and sea.
-		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
-		var harvestable = HARVESTABLE.new()
-		container.add_child(harvestable)
-		harvestable.position = Vector3(x, surface_y_at(x, z) + 0.055, z)
-		harvestable.setup(kind)
-	# Guard against spawning a boar before the game has created its hero
-	# (the direct-scene smoke tests still create the camp synchronously).
-	var hero = owner.get("hero")
-	if hero != null and rng.randf() < 0.19:
-		var ex: float = float(chunk_x) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		var ez: float = float(chunk_z) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		if maxf(absf(ex), absf(ez)) > 32.0 and _coast_margin(ex, ez) >= SAND_GRASS_BAND:
-			var boar = WILD_BOAR.new()
-			container.add_child(boar)
-			boar.setup(owner, hero, Vector3(ex, surface_y_at(ex, ez) + 0.08, ez))
+	rng.seed = absi(world_seed + chunk_x * 731 + chunk_z * 193)
+	var hero = game.get("hero")
+	var center := Vector3(chunk_x + 6, 0, chunk_z + 6)
+	if hero != null and rng.randf() < 0.19 and maxf(absf(center.x), absf(center.z)) > 32 and _coast_margin(center.x, center.z) >= SAND_GRASS_BAND and game.prop_placement.available(center, 0.7):
+		var boar = WILD_BOAR.new()
+		container.add_child(boar)
+		center.y = _tile_height(floori(center.x), floori(center.z)) + 0.08
+		boar.setup(game, hero, center)
 	if container.get_child_count() == 0:
 		container.queue_free()
 		return null
 	return container
 
-func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# All grass, low shrubs and occasional trees generated deterministically
-	# per chunk, sharing the atlas, so unloading a cell also removes its props.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
-	var placed: int = 0
-	for i in range(18):
-		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
-		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
-		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
-			continue
-		placed += 1
-		var y: float = surface_y_at(x, z)
-		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
-			# Matching tree placement is emitted by _chunk_foliage with the
-			# dedicated padded tree atlas (never duplicate terrain-atlas crowns).
-			continue
-		elif i in [4, 11, 15]:
-			# Compact, deterministic voxel mushroom clusters share the exact
-			# silhouette of the gatherable mushrooms, without extra nodes.
-			VOXEL_PROPS.append_mushroom_cluster(st, Vector3(x, y, z), 0.52, true)
-		elif i % 3 == 0:
-			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), PIXELS.foliage_tile_at(x, z, world_seed), PIXELS.foliage_tile_at(x, z, world_seed), 3, PIXELS.foliage_tint_at(x, z, world_seed))
-		else:
-			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
-			if i % 5 == 0:
-				PIXELS.box(st, Vector3(x + 0.15, y + 0.20, z - 0.1), Vector3(0.14, 0.12, 0.14), 14, 14)
-	if placed == 0:
-		return null
-	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
+func _chunk_decoration(_chunk_x: int, _chunk_z: int) -> MeshInstance3D:
+	# Resource-shaped scenery now belongs to the harvestable population.
+	return null
 
-func _chunk_foliage(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# Same deterministic sample positions as _chunk_decoration. No new
-	# per-tree nodes: each loaded chunk gets at most ONE foliage draw call.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
-	var count: int = 0
-	for i in range(18):
-		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
-		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
-		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
-			continue
-		if i in [0, 7] and maxf(absf(x), absf(z)) > 28.0:
-			var y: float = surface_y_at(x, z)
-			var species: int = FOLIAGE.species_at(x, z, world_seed)
-			FOLIAGE.append_tree(st, Vector3(x, y, z), species, 0.58, i)
-			count += 1
-	if count == 0:
-		return null
-	return FOLIAGE.batched(st, "ChunkFoliage_%d_%d" % [chunk_x, chunk_z])
+func _chunk_foliage(_chunk_x: int, _chunk_z: int) -> MeshInstance3D:
+	# Avoid a second, unharvestable copy of visible trees.
+	return null
 
 func _shore_foam_vertex(st: SurfaceTool, point: Vector2, opacity: float) -> void:
 	# Vertex alpha feathers the strip into the ocean. Colours stay cool-white,
@@ -798,31 +762,7 @@ func _make_grass_detail() -> void:
 	add_child(PIXELS.as_instance(st, "VoxelWildflowers"))
 
 func _make_fields_scenery() -> void:
-	# Far-field vegetation is decorative and batched into ONE mesh draw call.
-	# Individual harvestables/collisions belong to the future chunk streamer.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var foliage_st := SurfaceTool.new()
-	foliage_st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var foliage_count: int = 0
-	var rng := RandomNumberGenerator.new()
-	rng.seed = world_seed + 1903
-	for i in range(85):
-		var x: float = rng.randf_range(-44.0, 44.0)
-		var z: float = rng.randf_range(-44.0, 44.0)
-		if maxf(absf(x), absf(z)) < 29.0:
-			continue
-		var y: float = surface_y_at(x, z)
-		if i % 4 == 0:
-			FOLIAGE.append_tree(foliage_st, Vector3(x, y, z),
-				FOLIAGE.species_at(x, z, world_seed), 0.62, i)
-			foliage_count += 1
-		elif i % 4 == 1:
-			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
-			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
-		else:
-			PIXELS.box(st, Vector3(x, y + 0.28, z), Vector3(0.88, 0.58, 0.82), 9, 10)
-			PIXELS.box(st, Vector3(x + 0.28, y + 0.43, z), Vector3(0.75, 0.69, 0.85), 1, 9)
-	add_child(PIXELS.as_instance(st, "FieldsBatchedScenery"))
-	if foliage_count > 0:
-		add_child(FOLIAGE.batched(foliage_st, "FieldsBatchedFoliage"))
+	for x in range(-48, 48, CHUNK_SIZE):
+		for z in range(-48, 48, CHUNK_SIZE):
+			_spawn_chunk_interactables(x, z)
+

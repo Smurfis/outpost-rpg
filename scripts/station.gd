@@ -14,6 +14,7 @@ func setup(id: String) -> void:
 	station_id = id
 	name = id.capitalize() + "Station"
 	_build()
+	preload("res://scripts/interaction/world_picker.gd").attach(self, "station")
 	add_to_group("stations")
 
 func _part(mesh: Mesh, at: Vector3, tint: Color) -> MeshInstance3D:

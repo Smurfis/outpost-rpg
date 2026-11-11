@@ -38,7 +38,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE", "enchanting":"ENCHANT"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR", "enchanting":"IMBUE"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2", "fiery_weapon"]
+var item_ids: Array = ["shrimp", "shrimp_net", "cooked_shrimp", "wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "cooked_shrimp", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2", "fiery_weapon"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -550,7 +550,7 @@ func _render_bag() -> void:
 			description = str(recipe.get("desc", description))
 			break
 	detail.add_child(_label(description, 17, SKIN.CREAM))
-	if focused in ["meal", "tonic", "stew"]:
+	if focused in ["meal", "tonic", "stew", "cooked_shrimp"]:
 		var slot: String = "potion" if focused == "tonic" else "consumable"
 		var assign := Button.new()
 		assign.text = "ASSIGN TO " + slot.to_upper() + " RADIAL"
@@ -590,7 +590,7 @@ func _set_bag_filter(category: String) -> void:
 func _bag_type(id: String) -> String:
 	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"] or CARRY.is_bag(id):
 		return "EQUIPMENT"
-	if id in ["meal", "tonic", "stew"]:
+	if id in ["meal", "tonic", "stew", "cooked_shrimp"]:
 		return "CONSUMABLE"
 	return "MATERIAL"
 

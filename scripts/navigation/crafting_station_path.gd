@@ -70,3 +70,93 @@ static func plan(start: Vector3, station_id: String, stations: Dictionary, surfa
 			var point: Vector2i = id_path[j]
 			output.append(Vector3(float(point.x), _ground(surface, float(point.x), float(point.y)) + 0.35, float(point.y)))
 	return output
+
+static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: float = 0.0) -> PackedVector3Array:
+	# Reuse the station grid/perimeter model, but validate each edge against
+	# actual loaded voxel/dungeon colliders (including cliffs and walls).
+	var result := PackedVector3Array()
+	var first := Vector2i(roundi(start.x), roundi(start.z))
+	var last := Vector2i(roundi(target.x), roundi(target.z))
+	var minimum := Vector2i(mini(first.x, last.x) - WORLD_PADDING, mini(first.y, last.y) - WORLD_PADDING)
+	var maximum := Vector2i(maxi(first.x, last.x) + WORLD_PADDING, maxi(first.y, last.y) + WORLD_PADDING)
+	if maximum.x - minimum.x > 70 or maximum.y - minimum.y > 70:
+		return result
+	var graph := AStar3D.new()
+	var cells: Dictionary = {}
+	var excluded: Array[RID] = [game.hero.get_rid()]
+	for enemy in game.get_tree().get_nodes_in_group("enemies"):
+		if enemy is CollisionObject3D:
+			excluded.append(enemy.get_rid())
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var top: float = maxf(start.y, target.y) + 5.0
+	for x in range(minimum.x, maximum.x + 1):
+		for z in range(minimum.y, maximum.y + 1):
+			var cell := Vector2i(x, z)
+			var query := PhysicsRayQueryParameters3D.create(Vector3(x, top, z), Vector3(x, minf(start.y, target.y) - 6.0, z), 1, excluded)
+			var hit: Dictionary = space.intersect_ray(query)
+			if hit.is_empty() or (hit.normal as Vector3).y < 0.7:
+				continue
+			var point: Vector3 = hit.position
+			# Click routes stay on dry loaded ground. Manual swimming is retained.
+			if absf(point.x) < 100.0 and absf(point.z) < 100.0 and point.y < -2.7:
+				continue
+			if cell != first and not game.prop_placement.available(point, 0.35):
+				continue
+			var id: int = graph.get_available_point_id()
+			graph.add_point(id, point + Vector3.UP * 0.08)
+			cells[cell] = id
+	if not cells.has(first):
+		return result
+	for cell in cells:
+		for offset in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, -1)]:
+			var next: Vector2i = cell + offset
+			if not cells.has(next):
+				continue
+			var a: Vector3 = graph.get_point_position(cells[cell])
+			var b: Vector3 = graph.get_point_position(cells[next])
+			if absf(a.y - b.y) > game.hero.max_auto_step_height:
+				continue
+			if offset.x != 0 and offset.y != 0:
+				var side_a: Vector2i = cell + Vector2i(offset.x, 0)
+				var side_b: Vector2i = cell + Vector2i(0, offset.y)
+				if not cells.has(side_a) or not cells.has(side_b):
+					continue
+				if absf(graph.get_point_position(cells[side_a]).y - a.y) > game.hero.max_auto_step_height or absf(graph.get_point_position(cells[side_b]).y - a.y) > game.hero.max_auto_step_height:
+					continue
+			# Capsule-width corridor checks keep routes away from dungeon walls.
+			var blocked: bool = false
+			var side: Vector3 = Vector3(b.z - a.z, 0, a.x - b.x).normalized() * 0.4
+			for shift in [Vector3.ZERO, side, -side]:
+				var height := Vector3.UP * (maxf(a.y, b.y) + 0.65)
+				var ray := PhysicsRayQueryParameters3D.create(Vector3(a.x, 0, a.z) + height + shift, Vector3(b.x, 0, b.z) + height + shift, 1, excluded)
+				if not space.intersect_ray(ray).is_empty():
+					blocked = true
+					break
+			if not blocked:
+				graph.connect_points(cells[cell], cells[next])
+	var candidates: Array[Vector2i] = []
+	if reach <= 0.0:
+		if cells.has(last):
+			candidates.append(last)
+	else:
+		for cell in cells:
+			var point: Vector3 = graph.get_point_position(cells[cell])
+			if point.distance_to(target) < reach - 0.25:
+				candidates.append(cell)
+	var best: float = INF
+	for cell in candidates:
+		var path: PackedVector3Array = graph.get_point_path(cells[first], cells[cell])
+		if path.is_empty():
+			continue
+		var length: float = 0.0
+		for i in range(1, path.size()):
+			length += path[i - 1].distance_to(path[i])
+		if length < best:
+			best = length
+			result = path
+	if result.size() > 1:
+		result.remove_at(0)
+	if reach <= 0.0 and not result.is_empty():
+		# Preserve the real raycast point instead of rounding the final click.
+		result.append(target + Vector3.UP * 0.08)
+	return result

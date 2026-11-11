@@ -236,6 +236,71 @@ var skill_slot_rows: Array[Label] = []
 func setup(ref: Node) -> void:
 	game = ref
 
+var desktop_mode: bool = false
+var focus_button: Button
+var focus_label: Label
+var world_touch_dragged: bool = false
+var world_touch_inspected: bool = false
+const INSPECTION = preload("res://scripts/interaction/inspection.gd")
+
+func set_desktop_mode(value: bool) -> void:
+	desktop_mode = value
+	_layout_touch_hud()
+	_position_stick()
+
+func _layout_shared_actions() -> void:
+	if smart_button == null or tool_swap_button == null:
+		return
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	var size_px: float = clampf(screen.y / 720.0, 0.65, 1.5) * (52.0 if desktop_mode else 66.0)
+	var gap: float = size_px * 0.14
+	var stride: float = size_px + gap
+	# The three abilities sit left of centre; context/tool/consumables follow.
+	var first_x: float = screen.x * 0.5 - stride * 3.5
+	if not desktop_mode:
+		first_x = maxf(first_x, screen.x * 0.25)
+	var bottom: float = screen.y - size_px - 25.0
+	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "interact", "tool_swap", "potion", "consumable"]
+	var shortcuts: Array[String] = ["1", "2", "3", "", "T", "Q", "E"]
+	for i in range(keys.size()):
+		var button: Button = smart_button if keys[i] == "interact" else tool_swap_button if keys[i] == "tool_swap" else quick_buttons[keys[i]]
+		_place_px(button, screen, Rect2(first_x + stride * i, bottom, size_px, size_px))
+		var key_label: Label = button.get_node_or_null("KeyboardShortcut")
+		if key_label == null:
+			key_label = Label.new()
+			key_label.name = "KeyboardShortcut"
+			key_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			key_label.add_theme_font_size_override("font_size", 13)
+			key_label.add_theme_color_override("font_color", SKIN.GOLD)
+			button.add_child(key_label)
+			key_label.position = Vector2(1, -15)
+		key_label.text = shortcuts[i]
+		key_label.visible = desktop_mode
+	for key in ["potion", "consumable"]:
+		quick_buttons[key].mouse_filter = Control.MOUSE_FILTER_STOP if desktop_mode else Control.MOUSE_FILTER_IGNORE
+	if focus_button == null:
+		focus_button = Button.new()
+		focus_button.name = "FocusNearestEnemy"
+		focus_button.focus_mode = Control.FOCUS_NONE
+		SKIN.apply_button(focus_button, "wood")
+		focus_button.pressed.connect(game.focus_nearest_enemy)
+		root.add_child(focus_button)
+		focus_label = Label.new()
+		focus_label.name = "FocusedEnemyInfo"
+		focus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		focus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		focus_label.add_theme_color_override("font_color", SKIN.GOLD)
+		root.add_child(focus_label)
+	focus_button.text = "TAB · Focus" if desktop_mode else "Target"
+	focus_button.tooltip_text = "Focus nearest enemy. Interact and abilities use this target."
+	_place_px(focus_button, screen, Rect2(first_x + stride * 3, bottom - 52, stride * 2 - gap, 36))
+	_place_px(focus_label, screen, Rect2(screen.x * 0.35, screen.y * 0.035, screen.x * 0.30, 32))
+	_place_px(torch_button, screen, Rect2(first_x - stride, bottom, size_px, size_px))
+	if tool_gesture_hint != null:
+		tool_gesture_hint.hide()
+	if camera_gesture_hint != null:
+		camera_gesture_hint.text = "RMB drag · Wheel zoom" if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
+
 func _ready() -> void:
 	root = Control.new()
 	root.name = "OutpostHUD"
@@ -771,6 +836,10 @@ func _ready() -> void:
 	quick_buttons["potion"] = _action("potion", "POTION", 0.835, 0.842, 0.894, 0.943, "round")
 	for key in ["consumable", "potion"]:
 		(quick_buttons[key] as Button).mouse_filter = Control.MOUSE_FILTER_IGNORE
+		quick_buttons[key].pressed.connect(func() -> void:
+			if desktop_mode:
+				game.use_quick_consumable(key)
+		)
 	smart_button = _action("interact", "INTERACT", 0.895, 0.740, 0.986, 0.941, "round")
 	smart_button.name = "Action_interact"
 	smart_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2225,6 +2294,7 @@ func _layout_touch_hud() -> void:
 	var toast_y: float = info_y - 43.0 * scale
 	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 33.0 * scale))
 	_place_px(toast_label, screen, Rect2(info_left + 7.0 * scale, toast_y + 1.0 * scale, info_width - 14.0 * scale, 30.0 * scale))
+	_layout_shared_actions()
 
 func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
 	# Always spans x=0..viewport width and y=viewport bottom, including 20:9.
@@ -2556,7 +2626,11 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	# The SECOND touch must be able to orbit during a held movement joystick.
 	# Reserve the actual button rectangles instead of a huge blocked right zone.
-	if pos.x < screen.x * 0.24 or pos.y < screen.y * 0.16 or pos.y > screen.y * 0.94:
+	if pos.y < screen.y * 0.16 or pos.y > screen.y * 0.94:
+		return false
+	if joystick != null and joystick.visible and joystick.get_global_rect().grow(16).has_point(pos):
+		return false
+	if focus_button != null and focus_button.get_global_rect().has_point(pos):
 		return false
 	if floating_joystick_enabled and finger < 0 and _floating_zone(pos):
 		return false
@@ -2655,6 +2729,8 @@ func _cancel_quick_hold() -> void:
 		quick_tray.visible = false
 
 func _handle_quick_input(event: InputEvent) -> bool:
+	if desktop_mode:
+		return false
 	if game == null or quick_buttons.is_empty():
 		return false
 	if (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible):
@@ -2707,10 +2783,10 @@ func _refresh_quick_radials() -> void:
 		var unlocked: bool = i < game.unlocked_skill_slots()
 		# The last slot remains Sundering Blow mechanically (damage only).
 		# Its Armour Break presentation does not invent a defence debuff.
-		button.tooltip_text = ["Heroic Strike (Power Strike)", "Cleave", "Armour Break (Sundering Blow — damage skill)"][i]
+		button.tooltip_text = INSPECTION.skill(game, i)
 		var skill: String = ["power_strike", "cleave", "sundering_blow"][i]
 		var time_left: float = float(game.skill_cooldowns.get(skill, 0.0))
-		button.disabled = not unlocked or time_left > 0.0
+		button.disabled = not unlocked or time_left > 0.0 or game.mana < 6.0 + 3.0 * i
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
 		if label != null:
 			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["HEROIC", "CLEAVE", "BREAK"][i] if unlocked else "LOCK"
@@ -2730,6 +2806,7 @@ func _refresh_quick_radials() -> void:
 			item = ""
 			quantity = 0
 		var time_left: float = float(game.quick_use_cooldowns.get(kind, 0.0))
+		button.tooltip_text = INSPECTION.item(game, item) + "\nRecovery: %.1fs" % time_left
 		var can_heal: bool = game.hero != null and game.hero.health < 99.9
 		button.disabled = item == "" or time_left > 0.0 or not can_heal
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
@@ -3111,6 +3188,10 @@ func _process(delta: float) -> void:
 	_advance_loot_feed(delta)
 	# MENU is now tap-to-open; holding is not required to interact.
 	_update_zone_state(delta)
+	if focus_label != null:
+		focus_label.visible = game.valid_focus()
+		if focus_label.visible:
+			focus_label.text = "%s · %.0f HP · FOCUSED" % [game.enemy_display_name(game.focus_target), float(game.focus_target.hp)]
 	if zone_banner_seconds > 0.0:
 		zone_banner_seconds = maxf(0.0, zone_banner_seconds - delta)
 		zone_banner.modulate.a = minf(1.0, zone_banner_seconds * 1.3)
@@ -3133,6 +3214,9 @@ func _process(delta: float) -> void:
 				game.smart_interact()
 	if camera_drag_finger >= 0 and not camera_hold_ready:
 		camera_hold_seconds += delta
+		if camera_hold_seconds >= 0.50 and not world_touch_dragged and not world_touch_inspected and game.controls != null:
+			world_touch_inspected = true
+			game.controls.inspect_at(camera_hold_origin)
 		if camera_hold_seconds >= 0.82:
 			camera_hold_ready = true
 	if (quick_hold_finger >= 0 or quick_hold_mouse) and not quick_tray_open:
@@ -3154,6 +3238,9 @@ func _process(delta: float) -> void:
 			toast_panel.visible = false
 
 func _position_stick() -> void:
+	if desktop_mode:
+		joystick.hide()
+		return
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	if floating_joystick_enabled:
 		joystick.visible = finger >= 0 or mouse_stick or (sticky_movement_enabled and move_vector.length_squared() > 0.001)
@@ -3339,6 +3426,8 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and desktop_mode and game.controls != null:
+		game.controls.set_desktop(false)
 	if skill_detail_panel != null and skill_detail_panel.visible:
 		_handle_skill_details_input(event)
 		return
@@ -3396,9 +3485,11 @@ func _input(event: InputEvent) -> void:
 		return
 	if _handle_quick_input(event):
 		return
+	if desktop_mode:
+		return # Shared controller receives only world events left after GUI.
 	# Detect a short tap on a projected Crafting Station; long drags still
 	# orbit the camera. Never steal the fixed/dynamic thumbstick or UI taps.
-	if event is InputEventScreenTouch and game != null:
+	if event is InputEventScreenTouch and game != null and game.controls == null:
 		if event.pressed and station_touch_finger < 0 and event.index != finger and _can_start_camera_drag(event.position):
 			var candidate: String = game.station_at_screen(event.position)
 			if not candidate.is_empty():
@@ -3420,7 +3511,7 @@ func _input(event: InputEvent) -> void:
 		if event.position.distance_to(station_touch_start) >= 17.0:
 			station_touch_finger = -1
 			station_touch_name = ""
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and game != null:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and game != null and game.controls == null:
 		if event.pressed and not mouse_stick and _can_start_camera_drag(event.position):
 			station_mouse_candidate = game.station_at_screen(event.position)
 			station_mouse_start = event.position
@@ -3437,11 +3528,18 @@ func _input(event: InputEvent) -> void:
 			camera_hold_seconds = 0.0
 			camera_hold_ready = false
 			camera_hold_origin = event.position
+			world_touch_dragged = false
+			world_touch_inspected = false
+			get_viewport().set_input_as_handled()
 			return
 		elif not event.pressed and event.index == camera_drag_finger:
+			var tapped: bool = not world_touch_dragged and not world_touch_inspected and event.position.distance_to(camera_hold_origin) < 16.0
 			camera_drag_finger = -1
 			camera_hold_seconds = 0.0
 			camera_hold_ready = false
+			if tapped and game.controls != null:
+				game.controls.primary_at(event.position, false)
+			get_viewport().set_input_as_handled()
 			return
 	elif event is InputEventScreenDrag and event.index == camera_drag_finger and game != null:
 		# A deliberate free-world swipe orbits immediately, while small finger
@@ -3450,8 +3548,13 @@ func _input(event: InputEvent) -> void:
 		# Holding still continues to enable precision dragging.
 		if not camera_hold_ready and event.position.distance_to(camera_hold_origin) >= 16.0:
 			camera_hold_ready = true
+		if event.position.distance_to(camera_hold_origin) >= 16.0:
+			world_touch_dragged = true
+			if game.controls != null:
+				game.controls.hide_inspection()
 		if camera_hold_ready:
 			game.drag_camera(event.screen_relative.x)
+		get_viewport().set_input_as_handled()
 		return
 	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):

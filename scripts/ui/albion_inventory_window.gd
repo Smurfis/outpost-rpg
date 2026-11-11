@@ -5,12 +5,12 @@ const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
-const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage"]
+const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage", "tool_fishing"]
 const SLOT_NAMES: Dictionary = {
 	"weapon":"MAIN HAND", "offhand":"OFF HAND", "back":"CLOAK", "bag":"BACKPACK",
-	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_forage":"FORAGING"
+	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_fishing":"FISHING", "tool_forage":"FORAGING"
 }
-const CONSUMABLES: Array[String] = ["meal", "tonic", "stew"]
+const CONSUMABLES: Array[String] = ["meal", "tonic", "stew", "cooked_shrimp"]
 var game
 var menu
 var window: PanelContainer
@@ -439,7 +439,7 @@ func _gear_button(slot: String) -> Button:
 	var placeholder_icons: Dictionary = {
 		"weapon": "training_blade", "offhand": "shield", "back": "cloak",
 		"bag": "backpack_t1", "tool_wood": "axe", "tool_mining": "pickaxe",
-		"tool_forage": "satchel"
+		"tool_forage": "satchel", "tool_fishing": "shrimp_net"
 	}
 	var art_id: String = id if id != "" else str(placeholder_icons.get(slot, "flag"))
 	var icon: TextureRect = _icon(art_id, 30)
@@ -460,7 +460,7 @@ func _gear_button(slot: String) -> Button:
 	var small: Label = _text({
 		"weapon":"SWORD", "offhand":"OFFHAND", "back":"CLOAK",
 		"bag":"BAG", "tool_wood":"AXE", "tool_mining":"PICKAXE",
-		"tool_forage":"FORAGING"
+		"tool_fishing":"FISHING", "tool_forage":"FORAGING"
 	}.get(slot, slot), 10, SKIN.CREAM)
 	small.name = "GearSlotName"
 	small.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -648,7 +648,7 @@ func _item_tip(id: String) -> String:
 		return "Empty equipment slot"
 	var label: String = id.replace("_", " ").capitalize()
 	var quantity: int = int(game.inventory.get(id, 0))
-	var heading: String = label + "  ×%d" % quantity
+	var heading: String = preload("res://scripts/interaction/inspection.gd").item(game, id)
 	if game.is_equipped(id):
 		heading += "  •  EQUIPPED"
 	var weight: float = CARRY.weight(id, game.equipped_bag_id(), game.equipped_bag_stars())
@@ -659,7 +659,7 @@ func _item_tip(id: String) -> String:
 			break
 	if CARRY.is_bag(id):
 		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
-	result += "\nTap to inspect" 
+	result += "\nSelect to inspect or assign" 
 	return result
 
 func _render_details() -> void:
@@ -718,7 +718,7 @@ func _equip_selected() -> void:
 		refresh()
 
 func _consume_selected() -> void:
-	var amount: float = 65.0 if selected_id == "tonic" else 75.0 if selected_id == "stew" else 40.0
+	var amount: float = game.healing_for(selected_id)
 	game.consume(selected_id, amount)
 	refresh()
 
