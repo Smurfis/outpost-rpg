@@ -70,6 +70,7 @@ func _run() -> void:
 		root.add_child(intro)
 		await process_frame
 		_check(not bool(ProjectSettings.get_setting("application/boot_splash/show_image", true)), "Godot boot logo is suppressed before Five Star ident")
+		_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Five Star splash fills 20:9 Android instead of being pillarboxed")
 		var emblem: TextureRect = intro.get_node_or_null("StarMark") as TextureRect
 		_check(emblem != null and emblem.anchor_left <= 0.1 and emblem.anchor_right >= 0.9, "Five Star branding spans widescreen Android")
 		var twinkles: Control = intro.get_node_or_null("StarTwinkles") as Control
