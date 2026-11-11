@@ -14,6 +14,7 @@ func check(ok: bool, label: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch")
 	var packed: PackedScene = load("res://scenes/main.tscn")
 	check(packed != null, "World scene is available")
 	if packed == null:
@@ -65,14 +66,15 @@ func _run() -> void:
 	release.pressed = false
 	release.position = campfire_click
 	game.hud._input(release)
-	check(game.station_walk_target == "campfire" and game.hero.interaction_moving, "Station tap starts deliberate A-star walking, not camera orbit")
-	check(game.hero.station_waypoints.size() > 0, "Optimal station route uses a waypoint path rather than teleporting")
+	check(game.station_walk_target == "campfire" and game.hero.interaction_moving,
+		"Shared mobile tap uses the specialised safe A-star crafting-station path")
+	check(game.hero.station_waypoints.size() > 0, "Station routing uses real waypoints rather than teleporting")
 	for waypoint in game.hero.station_waypoints:
 		var separation: float = Vector2(waypoint.x - game.station_positions["campfire"].x, waypoint.z - game.station_positions["campfire"].z).length()
-		check(separation >= 1.5, "A-star route never cuts straight through the station's solid centre")
+		check(separation >= 1.5, "A-star route never cuts through the station's solid centre")
 	game.hero.global_position = game.station_positions["campfire"] + Vector3(2.5, 0.35, 0)
 	game._update_station_walk(0.016)
-	check(game.menu.visible and game.menu.selected_station == "campfire", "Approach opens only the tapped station's recipes")
+	check(game.menu.visible and game.menu.selected_station == "campfire", "Arrival opens only the tapped station's recipes")
 	game.hero.take_hit(4.0)
 	check(not game.menu.visible and game.station_walk_target.is_empty(), "Enemy damage closes station modal and cancels navigation")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)

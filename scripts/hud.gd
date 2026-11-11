@@ -251,6 +251,24 @@ func set_desktop_mode(value: bool) -> void:
 func _layout_shared_actions() -> void:
 	if smart_button == null or tool_swap_button == null:
 		return
+	# Desktop overlays must never reposition Android's restored radial HUD.
+	# _layout_touch_hud() has already placed the dedicated joystick, large
+	# Interact target, tool-swap, abilities, food, potion and torch controls.
+	if not desktop_mode:
+		for key in ["skill_1", "skill_2", "skill_3", "interact", "tool_swap", "potion", "consumable"]:
+			var action: Button = smart_button if key == "interact" else tool_swap_button if key == "tool_swap" else quick_buttons[key]
+			var shortcut: Label = action.get_node_or_null("KeyboardShortcut") as Label
+			if shortcut != null:
+				shortcut.hide()
+		for kind in ["potion", "consumable"]:
+			quick_buttons[kind].mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if focus_button != null:
+			focus_button.hide()
+		if focus_label != null:
+			focus_label.hide()
+		if camera_gesture_hint != null:
+			camera_gesture_hint.text = "Tap to move · Drag to orbit · Hold to inspect"
+		return
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	var size_px: float = clampf(screen.y / 720.0, 0.65, 1.5) * (52.0 if desktop_mode else 66.0)
 	var gap: float = size_px * 0.14
@@ -292,6 +310,7 @@ func _layout_shared_actions() -> void:
 		focus_label.add_theme_color_override("font_color", SKIN.GOLD)
 		root.add_child(focus_label)
 	focus_button.text = "TAB · Focus" if desktop_mode else "Target"
+	focus_button.show()
 	focus_button.tooltip_text = "Focus nearest enemy. Interact and abilities use this target."
 	_place_px(focus_button, screen, Rect2(first_x + stride * 3, bottom - 52, stride * 2 - gap, 36))
 	_place_px(focus_label, screen, Rect2(screen.x * 0.35, screen.y * 0.035, screen.x * 0.30, 32))
@@ -2630,7 +2649,7 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 		return false
 	if joystick != null and joystick.visible and joystick.get_global_rect().grow(16).has_point(pos):
 		return false
-	if focus_button != null and focus_button.get_global_rect().has_point(pos):
+	if focus_button != null and focus_button.visible and focus_button.get_global_rect().has_point(pos):
 		return false
 	if floating_joystick_enabled and finger < 0 and _floating_zone(pos):
 		return false
@@ -3189,7 +3208,7 @@ func _process(delta: float) -> void:
 	# MENU is now tap-to-open; holding is not required to interact.
 	_update_zone_state(delta)
 	if focus_label != null:
-		focus_label.visible = game.valid_focus()
+		focus_label.visible = desktop_mode and game.valid_focus()
 		if focus_label.visible:
 			focus_label.text = "%s · %.0f HP · FOCUSED" % [game.enemy_display_name(game.focus_target), float(game.focus_target.hp)]
 	if zone_banner_seconds > 0.0:

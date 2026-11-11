@@ -356,17 +356,46 @@ func _world() -> void:
 	# Deliberate counted timber/stone bundles replace untracked overlapping props.
 	spawn_resource(self, "wood", Vector3(-10, 0, 7), 3, true)
 	spawn_resource(self, "stone", Vector3(3, 0, 11), 2, true)
-	# A real NPC demonstrates the same range-checked world interaction contract.
+	# The camp guide is a stationary NPC, NOT a second player. A unique
+	# outfit, hat, and permanent nameplate prevent confusing it with a ghost
+	# avatar when returning via Leave Game > Continue.
 	var guide = WORLD_OBJECT.new()
+	guide.name = "CampGuideNPC"
 	add_child(guide)
 	guide.position = Vector3(0, 0, 4.5)
 	var guide_art := Node3D.new()
+	guide_art.name = "GuideOutfit"
 	for part_id in ["adventurer_torso", "adventurer_head"]:
 		var piece: MeshInstance3D = preload("res://scripts/voxel/voxel_character.gd").create_part(part_id)
 		if piece != null:
 			if part_id == "adventurer_head":
 				piece.position.y = 1.89
+			var dye := StandardMaterial3D.new()
+			dye.albedo_color = Color("#e7be87") if part_id == "adventurer_head" else Color("#447c55")
+			dye.roughness = 1.0
+			piece.material_override = dye
 			guide_art.add_child(piece)
+	var guide_hat := MeshInstance3D.new()
+	guide_hat.name = "GuideWideBrimHat"
+	var hat_mesh := CylinderMesh.new()
+	hat_mesh.top_radius = 0.49
+	hat_mesh.bottom_radius = 0.49
+	hat_mesh.height = 0.16
+	guide_hat.mesh = hat_mesh
+	guide_hat.position = Vector3(0.0, 2.28, 0.0)
+	var hat_material := StandardMaterial3D.new()
+	hat_material.albedo_color = Color("#775a36")
+	hat_material.roughness = 1.0
+	guide_hat.material_override = hat_material
+	guide_art.add_child(guide_hat)
+	var guide_name := Label3D.new()
+	guide_name.name = "NPCNameplate"
+	guide_name.text = "OUTPOST GUIDE"
+	guide_name.position = Vector3(0.0, 2.65, 0.0)
+	guide_name.font_size = 36
+	guide_name.pixel_size = 0.006
+	guide_name.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	guide_art.add_child(guide_name)
 	guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
 	guide.message = "Gather fibre, craft a Shrimp net at the Workbench, then fish coastal pools. Cook shrimp at the Campfire."
 	prop_placement.reserve(guide.position, 0.6, guide)

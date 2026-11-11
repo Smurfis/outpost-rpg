@@ -188,7 +188,19 @@ func run() -> void:
 	game.hud.floating_joystick_enabled = false
 	game.hud._position_stick()
 	verify(game.hud.joystick.visible, "Touch mode restores virtual joystick")
-	verify(game.hud.quick_buttons.skill_3.get_global_rect().end.x < game.hud.smart_button.get_global_rect().position.x, "Touch combat uses same ordered row")
+	verify(not game.hud.desktop_mode, "Touch switches the HUD into mobile mode")
+	verify(game.hud.smart_button.size.x >= 110.0, "Mobile restores its large finger-sized Interact button")
+	var top_skill: Rect2 = game.hud.quick_buttons.skill_1.get_global_rect()
+	var lower_skill: Rect2 = game.hud.quick_buttons.skill_3.get_global_rect()
+	verify(top_skill.get_center().y < lower_skill.get_center().y and top_skill.get_center().x > lower_skill.get_center().x, "Mobile skills return to a radial combat arc rather than the PC action row")
+	verify(not game.hud.focus_button.visible, "Desktop-only target button is hidden on touch")
+	verify(game.hud.quick_buttons.potion.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Mobile potion uses hold-and-slide touch handling")
+	var shortcut: Label = game.hud.quick_buttons.skill_1.get_node_or_null("KeyboardShortcut") as Label
+	verify(shortcut != null and not shortcut.visible, "Mobile hides keyboard shortcut hints")
+	game.controls.set_desktop(true)
+	verify(not game.hud.joystick.visible and game.hud.focus_button.visible, "Switching back to PC restores the desktop action UI")
+	game.controls.set_desktop(false)
+	verify(game.hud.smart_button.size.x >= 110.0, "Second mobile activation retains its large Interact target")
 	game.queue_free()
 	await process_frame
 	await process_frame
