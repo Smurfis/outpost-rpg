@@ -27,11 +27,14 @@ func _run() -> void:
 	if play != null and settings != null:
 		var focus_style: StyleBoxFlat = play.get_theme_stylebox("focus") as StyleBoxFlat
 		_check(focus_style != null and focus_style.border_color.a < 0.01, "Grey/gold rectangle selection borders removed")
-		_check(play.material is ShaderMaterial, "Actual Play pixels use a selectable visual state")
-		_check(settings.material is ShaderMaterial, "Settings uses same gold image treatment as Play")
+		var play_art: TextureRect = play.get_node_or_null("PlaqueArtwork") as TextureRect
+		var settings_art: TextureRect = settings.get_node_or_null("PlaqueArtwork") as TextureRect
+		_check(play.material == null and play_art != null and play_art.material is ShaderMaterial, "Actual Play pixels use their own texture-bound shader")
+		_check(settings.material == null and settings_art != null and settings_art.material is ShaderMaterial, "Settings uses the same textured gold selection")
 		settings.call("_on_pointer_entered")
-		_check(bool((settings.material as ShaderMaterial).get_shader_parameter("selected")), "Gold follows selected Settings")
-		_check(not bool((play.material as ShaderMaterial).get_shader_parameter("selected")), "Play returns to unselected artwork when Settings is active")
+		if play_art != null and settings_art != null:
+			_check(bool((settings_art.material as ShaderMaterial).get_shader_parameter("selected")), "Gold follows selected Settings")
+			_check(not bool((play_art.material as ShaderMaterial).get_shader_parameter("selected")), "Play returns to unselected artwork when Settings is active")
 	var crest: Control = title.get_node_or_null("Artboard/OutpostLogo") as Control
 	_check(crest != null and crest.material is ShaderMaterial, "Approved crest sky blends without hard opaque rectangle")
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
