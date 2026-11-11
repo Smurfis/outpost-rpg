@@ -31,12 +31,15 @@ void fragment() {
     } else if (selected && plaque_kind == 3) {
         // Quit is different: no gold rays, no asterisks. The label and power
         // symbol illuminate white against the unchanged amber button plaque.
-        float centre = smoothstep(0.24, 0.27, UV.x) *
-                       (1.0 - smoothstep(0.80, 0.84, UV.x)) *
-                       smoothstep(0.20, 0.27, UV.y) *
-                       (1.0 - smoothstep(0.79, 0.86, UV.y));
-        float dark_ink = 1.0 - smoothstep(0.16, 0.35, luma);
-        rgb = mix(rgb, vec3(1.0, 1.0, 0.98), centre * dark_ink * 0.98);
+        // A white power symbol AND Quit lettering, even on pressed/touch.
+        // Extend the ink mask leftward to include the separately painted icon.
+        float centre = smoothstep(0.11, 0.18, UV.x) *
+                       (1.0 - smoothstep(0.82, 0.90, UV.x)) *
+                       smoothstep(0.22, 0.31, UV.y) *
+                       (1.0 - smoothstep(0.75, 0.86, UV.y));
+        float dark_ink = 1.0 - smoothstep(0.19, 0.42, luma);
+        rgb = clamp(rgb * 1.06 + vec3(0.018), vec3(0.0), vec3(1.0));
+        rgb = mix(rgb, vec3(1.0), centre * dark_ink);
     }
     COLOR = vec4(clamp(rgb, vec3(0.0), vec3(1.0)), alpha) * COLOR;
 }
