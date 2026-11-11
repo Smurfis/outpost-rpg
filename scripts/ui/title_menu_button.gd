@@ -50,9 +50,9 @@ func _apply_appearance() -> void:
 			art_style.texture = baked_image
 			art_style.modulate_color = Color.WHITE
 			if state == "hover":
-				art_style.modulate_color = Color("fff5db")
+				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("fff5db")
 			elif state == "pressed":
-				art_style.modulate_color = Color("d4c3aa")
+				art_style.modulate_color = Color.WHITE if kind == "quit" else Color("d4c3aa")
 			elif state == "disabled":
 				art_style.modulate_color = Color(0.72, 0.72, 0.72, 0.92)
 			add_theme_stylebox_override(state, art_style)
@@ -78,7 +78,7 @@ func _apply_appearance() -> void:
 	add_theme_font_size_override("font_size", 32)
 	add_theme_constant_override("h_separation", 22)
 	add_theme_color_override("font_color", Color("fff1cd") if kind != "quit" else Color("482b24"))
-	add_theme_color_override("font_hover_color", Color("ffffff") if kind != "quit" else Color("482b24"))
+	add_theme_color_override("font_hover_color", Color("ffffff"))
 	add_theme_color_override("font_pressed_color", Color("ffefb9"))
 	add_theme_color_override("font_disabled_color", Color("b3a79d"))
 	add_theme_color_override("font_outline_color", Color("3b2021"))
@@ -128,7 +128,7 @@ func _refresh_highlight() -> void:
 
 func _update_active_art() -> void:
 	if _selection_material != null:
-		_selection_material.set_shader_parameter("selected", is_title_highlighted())
+		_selection_material.set_shader_parameter("selected", is_title_highlighted() or is_pressed())
 
 func _process(delta: float) -> void:
 	if reduced_motion or not is_title_highlighted():
