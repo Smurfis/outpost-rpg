@@ -813,11 +813,11 @@ func _request_changelog_releases() -> void:
 		return
 	_changelog_fetch_started = true
 	_changelog_status.text = "Loading release dates, times and developer credits from GitHub..."
-	var result: Error = _changelog_request.request(
+	var request_error: int = _changelog_request.request(
 		CHANGELOG_RELEASES_API,
 		PackedStringArray(["Accept: application/vnd.github+json", "User-Agent: Outpost-Alpha"])
 	)
-	if result != OK:
+	if request_error != OK:
 		_changelog_status.text = "Release feed unavailable. Showing offline Alpha test notes."
 
 func _on_changelog_releases_loaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
