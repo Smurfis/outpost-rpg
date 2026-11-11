@@ -5,6 +5,8 @@ shader_type canvas_item;
 // separate SVG glow in title_screen.gd follows the currently selected button.
 uniform bool selected = false;
 uniform bool originally_gold = false;
+uniform bool disabled_button = false;
+uniform bool down = false;
 uniform int plaque_kind = 0; // 0 Play, 1 Continue, 2 Settings, 3 Quit
 void fragment() {
     vec4 original = texture(TEXTURE, UV);
@@ -41,5 +43,14 @@ void fragment() {
         rgb = clamp(rgb * 1.06 + vec3(0.018), vec3(0.0), vec3(1.0));
         rgb = mix(rgb, vec3(1.0), centre * dark_ink);
     }
-    COLOR = vec4(clamp(rgb, vec3(0.0), vec3(1.0)), alpha) * COLOR;
+    // COLOR already contains the sampled texel in Godot's canvas fragment.
+    // Multiplying the newly whitened glyph by that original dark ink would
+    // turn the power symbol and Quit label black again. Output once instead.
+    if (disabled_button) {
+        rgb *= vec3(0.70);
+        alpha *= 0.88;
+    } else if (down && plaque_kind != 3) {
+        rgb *= vec3(0.93, 0.91, 0.88);
+    }
+    COLOR = vec4(clamp(rgb, vec3(0.0), vec3(1.0)), alpha);
 }
