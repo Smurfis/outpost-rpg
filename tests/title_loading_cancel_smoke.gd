@@ -41,10 +41,10 @@ func _run() -> void:
 		splash.call("set_message", "Craft your own legend!")
 		_check(splash.text.contains("\n"), "Long slogan is laid out on two readable lines")
 	var crest: Control = title.get_node_or_null("Artboard/OutpostLogo") as Control
-	_check(crest != null and crest.material is ShaderMaterial, "Bright crest retains edge-alpha shader")
+	_check(crest != null and crest.material == null, "Transparent crest has no edge blending shader")
 	if crest != null:
-		var shader_source: String = (crest.material as ShaderMaterial).shader.code
-		_check(shader_source.contains("COLOR.a") and not shader_source.contains("texture(TEXTURE"), "Crest edge shader does not double-darken source colours")
+		var image: Image = (crest.get("_logo_texture") as Texture2D).get_image()
+		_check(image.get_pixel(0, 0).a < 0.05, "Crest corners are genuinely transparent")
 	title.call("_begin_continue")
 	await process_frame
 	await process_frame

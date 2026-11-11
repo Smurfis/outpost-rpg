@@ -9,7 +9,7 @@ const MAIN_GAME := "res://scenes/main.tscn"
 const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
-const APPROVED_RASTER := "res://assets/ui/title/title_background.png"
+const APPROVED_RASTER := "res://assets/ui/title/title_background_clean.png"
 const APPROVED_LOGO := "res://assets/ui/title/outpost_logo.png"
 const BAKED_VERSION_ART := "res://assets/ui/title/version_badge_original.png"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
@@ -196,7 +196,7 @@ func _make_screen() -> void:
 	_canvas.name = "Artboard"
 	_canvas.size = DESIGN
 	add_child(_canvas)
-	_add_image("Backdrop", "title_background.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
+	_add_image("Backdrop", "title_background_clean.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
 	_approved_backdrop = _canvas.get_node_or_null("Backdrop") as TextureRect
 	if _approved_art and _approved_backdrop != null:
 		_make_wide_background()
@@ -222,10 +222,6 @@ func _make_screen() -> void:
 	_canvas.add_child(logo)
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
-	if _approved_art:
-		var edge_material := ShaderMaterial.new()
-		edge_material.shader = CREST_BLEND
-		logo.material = edge_material
 	if _approved_art:
 		# Cheap 2D ember glints over the real campsite and crest campfires.
 		# Particles ignore mouse/touch and leave the button art untouched.

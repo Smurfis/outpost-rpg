@@ -46,13 +46,13 @@ func _run() -> void:
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
 	_check(backdrop != null and backdrop.texture != null, "Approved backdrop exists")
 	if backdrop != null and backdrop.texture != null:
-		_check(backdrop.texture.resource_path.ends_with("/title_background.png"), "Scene uses the approved painted backdrop")
+		_check(backdrop.texture.resource_path.ends_with("/title_background_clean.png"), "Scene uses the repaired painted backdrop")
 		_check(backdrop.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Backdrop uses nearest pixel sampling")
 	var logo: Control = title.get_node_or_null("Artboard/OutpostLogo") as Control
 	_check(logo != null, "Separate original crest Control survives")
 	if logo != null:
 		var source_texture: Texture2D = logo.get("_logo_texture") as Texture2D
-		_check(source_texture != null and source_texture.resource_path.ends_with("/outpost_logo.png"), "Crest uses approved image instead of vector approximation")
+		_check(source_texture != null and source_texture.resource_path.ends_with("/outpost_loading_logo.png"), "Crest uses the transparent logo shared with loading")
 		_check(logo.position == Vector2(416, 0) and logo.size == Vector2(438, 350), "Crest positioned at approved coordinates")
 	var layout: Dictionary = {
 		"Play": Rect2(427, 344, 422, 92),
