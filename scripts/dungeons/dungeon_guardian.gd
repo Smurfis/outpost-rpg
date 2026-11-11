@@ -73,8 +73,8 @@ func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) ->
 func apply_affixes(entries: Array[Dictionary]) -> void:
 	if entries.is_empty():
 		return
-	var names: Array[String] = []
-	var details: Array[String] = []
+	var names := PackedStringArray()
+	var details := PackedStringArray()
 	var accent: Color = Color("f3cc87")
 	for entry in entries:
 		affix_ids.append(str(entry.get("id", "")))
