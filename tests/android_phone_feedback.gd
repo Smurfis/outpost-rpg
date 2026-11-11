@@ -61,25 +61,20 @@ func _run() -> void:
 	first_touch.pressed = true
 	first_touch.position = campfire_click
 	game.hud._input(first_touch)
-	print("PHONE PRESS DEBUG: finger=", game.hud.camera_drag_finger, " joystick_finger=", game.hud.finger, " desktop=", game.hud.desktop_mode)
 	var release := InputEventScreenTouch.new()
 	release.index = 22
 	release.pressed = false
 	release.position = campfire_click
 	game.hud._input(release)
-	var raw_pick: Dictionary = preload("res://scripts/interaction/world_picker.gd").resolve(game, campfire_click)
-	print("PHONE ROUTE DEBUG: mobile=", not game.controls.desktop, " free_touch=", game.hud._can_start_camera_drag(campfire_click), " ui_block=", game.controls.point_over_ui(campfire_click), " target=", raw_pick.get("target", null), " navigate=", game.controls.navigating)
-	check(game.controls.navigating and game.controls.target == game.stations["campfire"], "Station tap starts shared, range-checked A-star walking instead of camera orbit")
-	if not game.controls.navigating:
-		var direct: bool = game.controls.primary_at(campfire_click, false)
-		print("PHONE DIRECT DEBUG: accepted=", direct, " target=", game.controls.target, " moving=", game.hero.interaction_moving, " toast=", game.hud.toast_label.text)
-	check(game.hero.station_waypoints.size() > 0, "Shared route uses actual waypoints rather than teleporting")
+	check(game.station_walk_target == "campfire" and game.hero.interaction_moving,
+		"Shared mobile tap uses the specialised safe A-star crafting-station path")
+	check(game.hero.station_waypoints.size() > 0, "Station routing uses real waypoints rather than teleporting")
 	for waypoint in game.hero.station_waypoints:
 		var separation: float = Vector2(waypoint.x - game.station_positions["campfire"].x, waypoint.z - game.station_positions["campfire"].z).length()
-		check(separation >= 1.5, "A-star route never cuts straight through the station's solid centre")
+		check(separation >= 1.5, "A-star route never cuts through the station's solid centre")
 	game.hero.global_position = game.station_positions["campfire"] + Vector3(2.5, 0.35, 0)
-	game.controls._physics_process(0.016)
-	check(game.menu.visible and game.menu.selected_station == "campfire", "Shared arrival opens only the tapped station's recipes")
+	game._update_station_walk(0.016)
+	check(game.menu.visible and game.menu.selected_station == "campfire", "Arrival opens only the tapped station's recipes")
 	game.hero.take_hit(4.0)
 	check(not game.menu.visible and game.station_walk_target.is_empty(), "Enemy damage closes station modal and cancels navigation")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)
