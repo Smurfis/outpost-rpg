@@ -52,7 +52,7 @@ func _run() -> void:
 	check((hud.quick_buttons.skill_3.get_node("ActionIcon") as TextureRect).texture.resource_path.ends_with("/whirlwind.svg"), "Whirlwind uses its own gold spinning-sword icon")
 	hud._show_skill_details()
 	check(hud.skill_detail_text.text.contains("WEAPON LV 5") or hud.skill_detail_text.text.contains("Weapon Lv 5"), "Skills screen shows actual weapon mastery level")
-	check(hud.skill_slot_rows[1].text.contains("ARMOUR BREAK") and hud.skill_slot_rows[2].text.contains("WHIRLWIND"), "Skills panel lists the exact second and third abilities")
+	check(hud.skill_slot_rows[1].text.contains("ARMOR BREAK") and hud.skill_slot_rows[2].text.contains("WHIRLWIND"), "Skills panel lists the exact second and third abilities")
 	hud._close_skill_details()
 
 	# Isolate combat from the starting boars. No focus is needed for Whirlwind.
