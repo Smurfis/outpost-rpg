@@ -108,7 +108,8 @@ func run() -> void:
 	game.controls.approach(enemy)
 	await physics_frame
 	await physics_frame
-	verify(enemy.hp < hp and not game.controls.navigating, "Click-target action uses existing basic attack")
+	verify(enemy.hp < hp and game.focus_target == enemy, "Click-target action uses existing basic attack")
+	game.controls.cancel()
 	game.weapon_mastery_xp[game.current_weapon_id()] = 240
 	game.attack_delay = 0
 	hp = enemy.hp
@@ -140,6 +141,7 @@ func run() -> void:
 	await physics_frame
 	await physics_frame
 	verify(game.inventory.wood == wood + 2 and tree.hits_left == 2, "Exact clicked tree gathers with owned tool")
+	game.controls.cancel()
 	verify(INSPECT.world(game, tree).contains("Chop"), "Shared hover/hold inspection describes gathering")
 	game._camera(1.0)
 	await physics_frame

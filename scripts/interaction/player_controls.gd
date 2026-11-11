@@ -27,7 +27,7 @@ var highlight: MeshInstance3D
 func setup(ref: Node) -> void:
 	game = ref
 	var preferred: String = str(get_tree().root.get_meta("outpost_input_mode", OS.get_environment("OUTPOST_INPUT_MODE")))
-	desktop = preferred != "touch" if preferred != "" else OS.get_name() != "Android" and not DisplayServer.is_touchscreen_available()
+	desktop = preferred != "touch" if preferred != "" else OS.get_name() != "Android"
 	_build_inspection()
 	game.hud.set_desktop_mode(desktop)
 
@@ -70,6 +70,8 @@ func _input(event: InputEvent) -> void:
 	if game == null:
 		return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		if event.device == -1:
+			return # Godot's mouse-to-touch emulation must not enable mobile HUD.
 		ignore_mouse_until = Time.get_ticks_msec() + 650
 		set_desktop(false)
 	elif event is InputEventMouse:
@@ -213,8 +215,13 @@ func _physics_process(delta: float) -> void:
 				if game.target_on_cooldown(target):
 					return
 				var arrived: Node3D = target
-				cancel()
+				var remaining: int = int(arrived.hits_left) if arrived.is_in_group("resources") else -1
 				game.interact_target(arrived)
+				if arrived.is_in_group("resources"):
+					if not arrived.active or int(arrived.hits_left) == remaining:
+						cancel()
+				elif not arrived.is_in_group("enemies") or not game.target_available(arrived):
+					cancel()
 				return
 			if target.global_position.distance_to(destination) > 1.0 and repath_left <= 0.0:
 				destination = target.global_position
