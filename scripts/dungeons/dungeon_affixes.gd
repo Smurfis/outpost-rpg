@@ -33,13 +33,13 @@ static func roll(entrance_id: String, floor_number: int, encounter_slot: int, ra
 	return rolled
 
 static func prefix(entries: Array[Dictionary]) -> String:
-	var parts: Array[String] = []
+	var parts := PackedStringArray()
 	for entry in entries:
 		parts.append(str(entry.get("name", "")))
 	return " ".join(parts)
 
 static func descriptions(entries: Array[Dictionary]) -> String:
-	var parts: Array[String] = []
+	var parts := PackedStringArray()
 	for entry in entries:
 		parts.append(str(entry.get("description", "")))
 	return " • ".join(parts)
