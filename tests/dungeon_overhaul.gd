@@ -75,7 +75,8 @@ func _run() -> void:
 	dungeon.floor_root.add_child(guardian)
 	guardian.setup(game.hero, dungeon, 0, Vector3.ZERO)
 	var base_hp: float = guardian.hp
-	guardian.apply_affixes([AFFIXES.BASIC[0], AFFIXES.BASIC[1]])
+	var basic_pair: Array[Dictionary] = [AFFIXES.BASIC[0], AFFIXES.BASIC[1]]
+	guardian.apply_affixes(basic_pair)
 	check(is_equal_approx(guardian.hp, base_hp * 2.0) and is_equal_approx(guardian.damage_multiplier, 2.0), "Both basic affix effects apply to live combat stats")
 	check(guardian.affix_label != null and guardian.display_name.contains("Brutal"), "Monster affixes are visible over enemies and in target name")
 	var mini = game.hud.root.get_node_or_null("LiveWorldMinimap")
