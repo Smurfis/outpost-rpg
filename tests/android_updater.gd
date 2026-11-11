@@ -28,10 +28,11 @@ func _run() -> void:
 	var updater_script = load("res://scripts/ui/android_updater.gd")
 	check(updater_script != null, "Updater script imports")
 	if updater_script != null:
-		check(updater_script.ALPHA_DOWNLOADS_PAUSED and updater_script.APK_INSTALLS_PAUSED, "v1012 response keeps Alpha downloads and APK installer paused")
+		check(not updater_script.ALPHA_DOWNLOADS_PAUSED and updater_script.APK_INSTALLS_PAUSED, "Newer Alpha releases are discoverable while in-app installation remains paused")
 		var blocked_url: String = "https://github.com/Smurfis/outpost-rpg/releases/download/outpost-alpha-v1012/Outpost-Alpha-v1012.apk"
 		var blocked_release: Dictionary = {"tag_name":"outpost-alpha-v1012", "draft":false, "assets":[{"name":"Outpost-Alpha-v1012.apk", "browser_download_url":blocked_url}]}
 		check(updater_script.find_newest_release([blocked_release], 0, "outpost-alpha-v").is_empty(), "Security-flagged v1012 never offered as a release")
+		check(not updater_script.valid_asset_url(blocked_url, "alpha"), "Flagged v1012 is rejected even if a caller provides its URL")
 	if updater_script == null:
 		quit(1)
 		return
@@ -68,15 +69,20 @@ func _run() -> void:
 		check(scroll_panel != null and not scroll_panel.visible, "Changelog scroll starts collapsed")
 		screen._toggle_changelog()
 		check(scroll_panel != null and scroll_panel.visible and scroll_panel.find_child("ChangelogBody", true, false) != null, "Changelog opens a scrollable reading panel")
-		check(scroll_panel.position.y < 180.0 and scroll_button.position.y < 200.0, "Changelog and scroll trigger moved higher in title art")
-		check((scroll_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a < 0.85, "Changelog uses newly approved translucent bronze frame")
+		check(scroll_panel.position.x < 90.0 and scroll_panel.position.y < 80.0 and scroll_panel.size.x > 1100.0 and scroll_panel.size.y > 600.0, "Changelog is a near-full-screen readable central modal")
+		var dim: ColorRect = screen.get("_changelog_dim") as ColorRect
+		check(dim != null and dim.visible and dim.size.x >= 1280, "Changelog dims the full backdrop behind the reading panel")
+		check(scroll_button.position.y < 200.0, "Changelog trigger remains at the top of the artwork")
+		check((scroll_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a > 0.95, "Changelog has high-contrast wood background for readable text")
 		check(panel.find_child("AndroidUpdateSectionFrame", true, false) != null, "Updater controls share a matching wood/parchment section")
+		var footer: Button = screen.get("_settings_home_button") as Button
+		check(footer != null and footer.text.contains("CANCEL") and footer.get_theme_stylebox("normal") is StyleBoxEmpty, "Settings uses the same frameless cancel action as world loading")
 		var red_close: Button = scroll_panel.find_child("ChangelogCloseButton", true, false) as Button
 		check(scroll_panel.clip_contents and scroll_panel.get_theme_stylebox("panel") is StyleBoxFlat, "Changelog contents are clipped inside one contained modal")
 		check(red_close != null and red_close.get_theme_stylebox("normal") is StyleBoxFlat and (red_close.get_theme_stylebox("normal") as StyleBoxFlat).corner_radius_top_left >= 50, "Changelog uses the same large red circular close control")
 		check(red_close != null and red_close.pressed.is_connected(screen._toggle_changelog), "Changelog close X is a functional action")
 		screen._toggle_changelog()
-		check(scroll_panel != null and not scroll_panel.visible, "Changelog can be dismissed")
+		check(scroll_panel != null and not scroll_panel.visible and not dim.visible, "Changelog and its dimmer can be dismissed")
 		var selected_glow: TextureRect = screen.get_node_or_null("Artboard/SelectedTitleButtonGlow") as TextureRect
 		var settings_action: Button = screen.get_node_or_null("Artboard/SettingsButton") as Button
 		check(selected_glow != null and selected_glow.texture != null, "All title buttons share one separate movable gold glow asset")
@@ -98,9 +104,12 @@ func _run() -> void:
 		screen._on_update_found(newer, 15, "https://github.com/Smurfis/outpost-rpg/releases/tag/outpost-android-v15")
 		check(notice != null and notice.visible and notice.text.contains("BUILD 15"), "New release shows visible title-screen update notice")
 		var download: Button = screen.get("_download_button") as Button
-		check(download != null and not download.disabled and download.text.contains("15"), "Dedicated download button enables for the discovered build")
-		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Download action starts the native in-game Android manager instead of a Chrome web view")
-		check(screen.get("_download_progress_bar") != null and screen.get("_cancel_download_button") != null, "Native download has in-game progress and cancellation controls")
+		check(download != null and not download.disabled and download.text.contains("COPY"), "Verified release action offers a clipboard link instead of an installer")
+		check(download != null and download.pressed.is_connected(screen._check_or_download_update), "Link button is wired to the verified clipboard-only action")
+		screen._check_or_download_update()
+		check(label != null and label.text.contains("Copied"), "Tapping the release action reports the clipboard copy")
+		check(not screen.get("_updater").has_active_download(), "Copying never starts a native APK download")
+		check(screen.get("_download_progress_bar") != null and screen.get("_cancel_download_button") != null, "Legacy download state can be cleaned without exposing an installer")
 		check(button.text == "CHECK FOR UPDATES", "Checking for newer updates remains available")
 		var stable: Button = screen.get("_channel_stable_button") as Button
 		var alpha: Button = screen.get("_channel_alpha_button") as Button
