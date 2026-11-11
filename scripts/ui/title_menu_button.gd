@@ -199,7 +199,7 @@ static func _make_highlight_texture(source: Texture2D, kind: String) -> Texture2
 				# press, but never bleach the gold/wood outside the glyph region.
 				var u: float = float(x) / float(image.get_width())
 				var v: float = float(y) / float(image.get_height())
-				if u > 0.16 and u < 0.81 and v > 0.24 and v < 0.79 and luminance < 0.38:
+				if u > 0.16 and u < 0.81 and v > 0.24 and v < 0.79 and luminance < 0.78:
 					pixel.r = 1.0
 					pixel.g = 1.0
 					pixel.b = 1.0
