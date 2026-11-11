@@ -38,6 +38,27 @@ jobs:
           timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_play_startup.gd 2>&1 | tee android-play.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ANDROID START:' android-play.log; then exit 1; fi
           grep -q "ANDROID STARTUP RESULT: 0 failures" android-play.log
+      - name: Check approved pixel-art title assets and exact interactive layout
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_approved_raster_smoke.gd 2>&1 | tee approved-title.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED TITLE:' approved-title.log; then exit 1; fi
+          grep -q "APPROVED TITLE RESULT: 0 failures" approved-title.log
+
+      - name: Verify torch slogan, gold menu focus, embers and Five Star ident
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_ambient_polish_smoke.gd 2>&1 | tee ambient-title.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE AMBIENT:' ambient-title.log; then exit 1; fi
+          grep -q "TITLE AMBIENT RESULT: 0 failures" ambient-title.log
+
+      - name: Verify selected button artwork, parchment adventure/settings and LAN join popup
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_adventure_join_ui.gd 2>&1 | tee adventure-title.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE ADVENTURE:' adventure-title.log; then exit 1; fi
+          grep -q "TITLE ADVENTURE RESULT: 0 failures" adventure-title.log
+
       - name: Verify phone report fixes for terrain, labels, combat and crafting
         run: |
           set -euo pipefail
@@ -351,26 +372,6 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE POLISH:' title-polish.log; then exit 1; fi
           grep -q "TITLE POLISH RESULT: 0 failures" title-polish.log
 
-      - name: Check approved pixel-art title assets and exact interactive layout
-        run: |
-          set -o pipefail
-          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_approved_raster_smoke.gd 2>&1 | tee approved-title.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED TITLE:' approved-title.log; then exit 1; fi
-          grep -q "APPROVED TITLE RESULT: 0 failures" approved-title.log
-
-      - name: Verify torch slogan, gold menu focus, embers and Five Star ident
-        run: |
-          set -o pipefail
-          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_ambient_polish_smoke.gd 2>&1 | tee ambient-title.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE AMBIENT:' ambient-title.log; then exit 1; fi
-          grep -q "TITLE AMBIENT RESULT: 0 failures" ambient-title.log
-
-      - name: Verify selected button artwork, parchment adventure/settings and LAN join popup
-        run: |
-          set -o pipefail
-          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_adventure_join_ui.gd 2>&1 | tee adventure-title.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE ADVENTURE:' adventure-title.log; then exit 1; fi
-          grep -q "TITLE ADVENTURE RESULT: 0 failures" adventure-title.log
 
       - name: Verify direct Continue, loading background, bright crest and cancel
         run: |
