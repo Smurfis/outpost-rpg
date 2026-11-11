@@ -23,7 +23,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	var hud = game.hud
-	var expected: Array[String] = ["heroic_strike", "cleave", "armor_break"]
+	var expected: Array[String] = ["heroic_strike", "armor_break", "whirlwind"]
 	for i in range(3):
 		var btn: Button = hud.quick_buttons["skill_%d" % (i + 1)] as Button
 		var art: TextureRect = btn.get_node_or_null("ActionIcon") as TextureRect
@@ -31,9 +31,9 @@ func _run() -> void:
 			"Ability %d has an independent %s icon" % [i + 1, expected[i]])
 		verify(btn.get_node_or_null("CooldownRing") != null, "Ability %d retains its radial timer" % (i + 1))
 	verify(game.LEVELS.skill_for_slot(0) == "power_strike"
-		and game.LEVELS.skill_for_slot(1) == "cleave"
-		and game.LEVELS.skill_for_slot(2) == "sundering_blow",
-		"New names do not change skill IDs, saves or combat mechanics")
+		and game.LEVELS.skill_for_slot(1) == "armor_break"
+		and game.LEVELS.skill_for_slot(2) == "whirlwind",
+		"Weapon ability bindings match Heroic Strike, Armor Break and Whirlwind")
 	var bag: Button = hud.wallet_bag
 	var menubtn: Button = hud.menu_button
 	for item in [bag, menubtn]:
