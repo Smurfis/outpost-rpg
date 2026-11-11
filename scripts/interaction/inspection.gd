@@ -11,11 +11,23 @@ static func item(game: Node, id: String) -> String:
 
 static func skill(game: Node, slot: int) -> String:
 	var id: String = LEVELS.skill_for_slot(slot)
-	var names: Array[String] = ["Heroic Strike", "Cleave", "Armour Break"]
-	return "%s\n%.0f%% weapon damage · %d MP\nCooldown %.0fs · %.1fs remaining%s" % [
-		names[slot], LEVELS.multiplier_for_skill(id) * 100.0, 6 + slot * 3,
-		LEVELS.cooldown_for_skill(id), float(game.skill_cooldowns.get(id, 0.0)),
-		"\nLocked: raise weapon mastery." if slot >= game.unlocked_skill_slots() else ""]
+	if id == "":
+		return "Unknown ability"
+	var description: String = ""
+	match id:
+		"power_strike":
+			description = "A powerful single-target sword strike."
+		"armor_break":
+			description = "Deals damage and weakens the target for 6s.\nYour physical attacks deal +25% damage."
+		"whirlwind":
+			description = "Spin twice with a golden sword trail.\nHit every nearby foe once in a %.1fm circle." % LEVELS.WHIRLWIND_RADIUS
+	var rank: int = game.mastery_rank(game.current_weapon_id())
+	var required: int = LEVELS.unlock_level_for_slot(slot)
+	var lock: String = "\nUNLOCK AT WEAPON LEVEL %d (CURRENT: %d)" % [required, rank] if slot >= game.unlocked_skill_slots() else ""
+	return "%s  •  WEAPON LV %d\n%s\n%.0f%% weapon damage · %d MP\nCooldown %.0fs · %.1fs remaining%s" % [
+		LEVELS.skill_name_for_slot(slot), required, description,
+		LEVELS.multiplier_for_skill(id) * 100.0, 6 + slot * 3,
+		LEVELS.cooldown_for_skill(id), float(game.skill_cooldowns.get(id, 0.0)), lock]
 
 static func world(game: Node, target: Node3D) -> String:
 	if not is_instance_valid(target):
