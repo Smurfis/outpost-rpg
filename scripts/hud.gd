@@ -2257,10 +2257,12 @@ func _layout_touch_hud() -> void:
 	# Lower smart Interact near full-width XP; keep distinct finger hitboxes.
 	_radial_px(smart_button, screen,
 			Vector2(screen.x - 90.0 * scale, screen.y - 120.0 * scale), 59.0 * 1.05 * scale)
+	# TOOLS takes Heroic's previous upper position. Heroic takes the old
+	# TOOLS level, directly above Interact; no touch-ring overlap.
 	_radial_px(tool_swap_button, screen,
-			Vector2(screen.x - 90.0 * scale, screen.y - 221.0 * scale), 24.0 * scale)
+			Vector2(screen.x - 126.0 * scale, screen.y - 287.0 * scale), 24.0 * scale)
 	var combat: Array[Vector3] = [
-		Vector3(126.0, 287.0, 37.0 * 1.03), # POWER above Interact
+		Vector3(90.0, 221.0, 37.0 * 1.03), # HEROIC below TOOLS, above Interact
 		Vector3(205.0, 204.0, 37.0 * 1.03), # CLEAVE left of Interact
 		Vector3(205.0, 121.0, 37.0 * 1.03), # SUNDER by Interact
 		Vector3(380.0, 83.0, 30.0 * 1.03),  # food/heal close to combat
@@ -2278,8 +2280,8 @@ func _layout_touch_hud() -> void:
 	# Follow the action target without obscuring the on-screen controls.
 	if tool_gesture_hint != null:
 		_place_px(tool_gesture_hint, screen, Rect2(
-				screen.x - 158.0 * scale, screen.y - 257.0 * scale,
-				133.0 * scale, 27.0 * scale))
+				screen.x - 258.0 * scale, screen.y - 315.0 * scale,
+				100.0 * scale, 25.0 * scale))
 	# Hold-and-slide trays are transient and remain below the map and
 	# clear of the viewport edge, with rows large enough to select.
 	var tool_width: float = 205.0 * scale
