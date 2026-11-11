@@ -17,15 +17,18 @@ func _ready() -> void:
 	var emblem: TextureRect = get_node_or_null("StarMark") as TextureRect
 	if emblem != null:
 		emblem.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# Widescreen Android: the studio ident owns the full screen, never a
+		# narrow fixed 16:9 logo slot. Preserve the artwork aspect ratio.
+		emblem.anchor_left = 0.08
+		emblem.anchor_top = 0.04
+		emblem.anchor_right = 0.92
+		emblem.anchor_bottom = 0.62
+		emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		# Keep the SVG art as the no-download fallback. Use final art if added.
 		if ResourceLoader.exists(STUDIO_LOGO):
 			emblem.texture = load(STUDIO_LOGO) as Texture2D
-			emblem.anchor_left = 0.24
-			emblem.anchor_top = 0.11
-			emblem.anchor_right = 0.76
-			emblem.anchor_bottom = 0.86
-			emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			emblem.anchor_bottom = 0.88
 			get_node("StudioName").visible = false
 			get_node("Subtitle").visible = false
 	var twinkles: Control = STUDIO_TWINKLES.new()
