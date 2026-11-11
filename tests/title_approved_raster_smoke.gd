@@ -68,11 +68,16 @@ func _run() -> void:
 		var rect: Rect2 = layout[button_name]
 		_check(button.position.is_equal_approx(rect.position) and button.size.is_equal_approx(rect.size), button_name + " aligns to exact cutout coordinates")
 		_check(button.text.is_empty() and button.icon == null, button_name + " does not double-render baked artwork caption or icon")
-		var style: StyleBoxTexture = button.get_theme_stylebox("normal") as StyleBoxTexture
-		_check(style != null and style.texture != null, button_name + " has independent approved PNG art")
-		if style != null and style.texture != null:
-			_check(style.texture is ImageTexture, button_name + " uses a genuine RGBA masked runtime texture")
-			var pixels: Image = style.texture.get_image()
+		# The original stylebox shader rendered a solid white rectangle on
+		# Android because the Button did not bind the PNG as shader TEXTURE.
+		_check(button.material == null and button.get_theme_stylebox("normal") is StyleBoxEmpty, button_name + " has no shaded white stylebox rectangle")
+		var plaque: TextureRect = button.get_node_or_null("PlaqueArtwork") as TextureRect
+		_check(plaque != null and plaque.texture != null, button_name + " has a separate approved PNG artwork layer")
+		if plaque != null and plaque.texture != null:
+			_check(plaque.texture is ImageTexture, button_name + " uses a genuine RGBA masked runtime texture")
+			_check(plaque.material is ShaderMaterial, button_name + " applies selection shader to real textured artwork")
+			_check(plaque.mouse_filter == Control.MOUSE_FILTER_IGNORE, button_name + " artwork cannot intercept input")
+			var pixels: Image = plaque.texture.get_image()
 			_check(pixels != null and pixels.get_pixel(0, 0).a < 0.01 and pixels.get_pixel(pixels.get_width() / 2, pixels.get_height() / 2).a > 0.95, button_name + " has clear corners but keeps opaque centre art")
 		_check(button.pressed.get_connections().size() > 0, button_name + " retains its interactive action")
 	var lights: TextureRect = title.get_node_or_null("Artboard/TitleLights") as TextureRect
