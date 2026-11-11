@@ -42,12 +42,37 @@ func _run() -> void:
 		_check(button.has_method("is_title_highlighted"), name + " implements gold selection")
 		var focus_style: StyleBoxFlat = button.get_theme_stylebox("focus") as StyleBoxFlat
 		_check(focus_style != null and focus_style.border_color.a < 0.01, name + " has no rectangular focus box")
-		_check(button.material is ShaderMaterial, name + " swaps selected artwork through pixel shader")
+		var plaque: TextureRect = button.get_node_or_null("PlaqueArtwork") as TextureRect
+		_check(button.material == null and plaque != null and plaque.material is ShaderMaterial, name + " shades the PNG, not the Button's untextured canvas")
 		button.call("_on_pointer_entered")
 		_check(bool(button.call("is_title_highlighted")) == not button.disabled, name + " highlights only while enabled")
-		if name == "QuitButton":
-			_check((button.material as ShaderMaterial).shader.code.contains("vec3(1.0)"), "Hover and press whiten Quit power icon and text")
+		if name == "QuitButton" and plaque != null and plaque.material is ShaderMaterial:
+			_check((plaque.material as ShaderMaterial).shader.code.contains("vec3(1.0)"), "Hover and press whiten Quit power icon and text")
 		button.call("_on_pointer_exited")
+	# Changelog stays inside the screen, with a permanently visible
+	# vertical scrollbar and actual published release metadata.
+	var log_panel: PanelContainer = title.get_node_or_null("Artboard/ChangelogPanel") as PanelContainer
+	var log_scroll: ScrollContainer = title.get_node_or_null("Artboard/ChangelogPanel/MarginContainer/VBoxContainer/ChangelogScrollList") as ScrollContainer
+	_check(log_panel != null and log_panel.position.y + log_panel.size.y < 630.0, "Changelog is shorter than the title viewport with bottom clearance")
+	_check(log_scroll != null and log_scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_SHOW_ALWAYS, "Changelog has persistent vertical scrollbar")
+	var release_fixture: Array = [{
+		"tag_name": "outpost-alpha-v9999",
+		"name": "Outpost Alpha test release",
+		"draft": false,
+		"published_at": "2026-11-11T13:37:00Z",
+		"author": {"login": "github-actions[bot]"},
+		"body": "Verified title and menu updates"
+	}]
+	title.call("_on_changelog_releases_loaded", HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(release_fixture).to_utf8_buffer())
+	var log_entries: VBoxContainer = title.get("_changelog_entries") as VBoxContainer
+	_check(log_entries != null and log_entries.get_child_count() == 2, "Latest Alpha releases replace offline notes")
+	if log_entries != null and log_entries.get_child_count() == 2:
+		var note_card: PanelContainer = log_entries.get_child(1) as PanelContainer
+		var note_stack: VBoxContainer = note_card.get_child(0).get_child(0) as VBoxContainer
+		var metadata: Label = note_stack.get_child(1) as Label
+		var attribution: Label = note_stack.get_child(2) as Label
+		_check(metadata.text.contains("2026-11-11") and metadata.text.contains("13:37 UTC"), "Release displays verified date and UTC time")
+		_check(attribution.text.contains("Smurf") and attribution.text.contains("github-actions[bot]"), "Changelog distinguishes developer from automated publisher")
 	var embers: Control = title.get_node_or_null("Artboard/CampfireEmbers") as Control
 	_check(embers != null, "Two small campfire ember emitters are wired into title")
 	if embers != null:
