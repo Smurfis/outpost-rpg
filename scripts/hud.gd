@@ -2649,7 +2649,7 @@ func _can_start_camera_drag(pos: Vector2) -> bool:
 		return false
 	if joystick != null and joystick.visible and joystick.get_global_rect().grow(16).has_point(pos):
 		return false
-	if focus_button != null and focus_button.get_global_rect().has_point(pos):
+	if focus_button != null and focus_button.visible and focus_button.get_global_rect().has_point(pos):
 		return false
 	if floating_joystick_enabled and finger < 0 and _floating_zone(pos):
 		return false
