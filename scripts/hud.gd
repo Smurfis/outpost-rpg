@@ -847,8 +847,8 @@ func _ready() -> void:
 	# The single context button replaces redundant ATTACK and GATHER tiles.
 	# Three real weapon-mastery skill holders arc around its upper-left side.
 	quick_buttons["skill_1"] = _action("skill_1", "HEROIC", 0.819, 0.600, 0.881, 0.712, "round")
-	quick_buttons["skill_2"] = _action("skill_2", "CLEAVE", 0.755, 0.667, 0.814, 0.779, "round")
-	quick_buttons["skill_3"] = _action("skill_3", "BREAK", 0.705, 0.760, 0.764, 0.870, "round")
+	quick_buttons["skill_2"] = _action("skill_2", "BREAK", 0.755, 0.667, 0.814, 0.779, "round")
+	quick_buttons["skill_3"] = _action("skill_3", "WHIRL", 0.705, 0.760, 0.764, 0.870, "round")
 	# Both utility radials start empty. Tap uses the equipped item; hold and
 	# slide upwards chooses among actually owned consumables.
 	quick_buttons["consumable"] = _action("consumable", "HEAL", 0.773, 0.852, 0.830, 0.947, "round")
@@ -1475,14 +1475,19 @@ func _show_skill_details() -> void:
 	var rank: int = game.mastery_rank(weapon)
 	var mastery_xp: int = int(game.weapon_mastery_xp.get(weapon, 0))
 	var available: int = game.unlocked_skill_slots()
-	skill_detail_text.text = "%s  •  Mastery rank %d  •  %d XP  •  %d/3 abilities" % [weapon.replace("_", " ").capitalize(), rank, mastery_xp, available]
 	skill_mastery_bar.value = 60 if rank >= 10 else mastery_xp % 60
-	var names: Array[String] = ["POWER STRIKE", "CLEAVE", "SUNDERING BLOW"]
-	var required: Array[int] = [1, 3, 5]
+	var next_level: int = ACTION_SKILL_LEVELS.next_skill_unlock_level(mastery_xp)
+	var next_name: String = ACTION_SKILL_LEVELS.skill_name_for_slot(available) if available < 3 else ""
+	skill_detail_text.text = "%s  •  Weapon Lv %d  •  %d mastery XP  •  %d/3 abilities\n%s" % [
+		weapon.replace("_", " ").capitalize(), rank, mastery_xp, available,
+		("NEXT: %s  •  WEAPON LV %d" % [next_name, next_level]) if next_level > 0 else "ALL WEAPON ABILITIES UNLOCKED"
+	]
 	for i in range(skill_slot_rows.size()):
 		var row: Label = skill_slot_rows[i]
 		var unlocked: bool = i < available
-		row.text = "◆  %s   •   %s" % [names[i], "UNLOCKED" if unlocked else "RANK %d REQUIRED" % required[i]]
+		var name: String = ACTION_SKILL_LEVELS.skill_name_for_slot(i)
+		var required: int = ACTION_SKILL_LEVELS.unlock_level_for_slot(i)
+		row.text = "◆  %s   •   %s" % [name, "UNLOCKED" if unlocked else "WEAPON LV %d TO UNLOCK" % required]
 		row.add_theme_color_override("font_color", SKIN.GOLD if unlocked else SKIN.CREAM)
 	skill_detail_panel.visible = true
 	skill_detail_panel.move_to_front()
@@ -2559,7 +2564,7 @@ func _action(key: String, label: String, left: float, top: float, right: float, 
 	_anchors(button, left, top, right, bottom)
 	var art_icon := TextureRect.new()
 	art_icon.name = "ActionIcon"
-	var matching_icon: String = "sword" if key == "tool_swap" else "hand" if key == "interact" else "red_potion" if key == "potion" else "backpack" if key == "bag" else "armour" if key == "gear" else "menu" if key == "menu" else "heroic_strike" if key == "skill_1" else "cleave" if key == "skill_2" else "armor_break" if key == "skill_3" else ""
+	var matching_icon: String = "sword" if key == "tool_swap" else "hand" if key == "interact" else "red_potion" if key == "potion" else "backpack" if key == "bag" else "armour" if key == "gear" else "menu" if key == "menu" else "heroic_strike" if key == "skill_1" else "armor_break" if key == "skill_2" else "whirlwind" if key == "skill_3" else ""
 	var icon_path: String = ACTION_FRAME_ROOT + matching_icon + ".svg" if matching_icon != "" else "res://assets/ui/icons/" + key + ".png"
 	if not ResourceLoader.exists(icon_path):
 		var ui_icon: String = "res://assets/ui/icons/" + key + ".svg"
@@ -2802,15 +2807,15 @@ func _refresh_quick_radials() -> void:
 		if button == null:
 			continue
 		var unlocked: bool = i < game.unlocked_skill_slots()
-		# The last slot remains Sundering Blow mechanically (damage only).
-		# Its Armour Break presentation does not invent a defence debuff.
+		# Fixed three-slot order; unlock requirements show weapon mastery
+		# LEVEL rather than a generic locked state.
 		button.tooltip_text = INSPECTION.skill(game, i)
-		var skill: String = ["power_strike", "cleave", "sundering_blow"][i]
+		var skill: String = ACTION_SKILL_LEVELS.skill_for_slot(i)
 		var time_left: float = float(game.skill_cooldowns.get(skill, 0.0))
 		button.disabled = not unlocked or time_left > 0.0 or game.mana < 6.0 + 3.0 * i
 		var label: Label = button.get_node_or_null("ActionLabel") as Label
 		if label != null:
-			label.text = "%ds" % int(ceilf(time_left)) if time_left > 0.0 else ["HEROIC", "CLEAVE", "BREAK"][i] if unlocked else "LOCK"
+			label.text = ("LV %d" % ACTION_SKILL_LEVELS.unlock_level_for_slot(i)) if not unlocked else ("%ds" % int(ceilf(time_left))) if time_left > 0.0 else ["HEROIC", "BREAK", "WHIRL"][i]
 		var ring: Control = button.get_node_or_null("CooldownRing") as Control
 		if ring != null:
 			ring.call("set_cooldown", time_left, ACTION_SKILL_LEVELS.cooldown_for_skill(skill))

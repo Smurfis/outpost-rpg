@@ -4,6 +4,7 @@ const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
+const WHIRLWIND_TRAIL = preload("res://scripts/vfx/whirlwind_sword_trail.gd")
 const WATER_SURFACE_Y: float = -2.82
 
 var game
@@ -30,6 +31,11 @@ var held_tool_id: String = ""
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
+var whirlwind_remaining: float = 0.0
+var whirlwind_elapsed: float = 0.0
+var whirlwind_start_heading: float = 0.0
+var whirlwind_grip_pose: Vector3 = Vector3.ZERO
+const WHIRLWIND_SPIN_DURATION: float = 0.90
 var walking_phase: float = 0.0
 var swimming: bool = false
 var swim_stroke_phase: float = 0.0
@@ -300,6 +306,21 @@ func swing() -> void:
 		right_arm.rotation.x = 1.75 * sin(combat_phase * PI)
 		right_arm.rotation.z = -0.31 * sin(combat_phase * PI)
 
+func play_whirlwind() -> void:
+	if visual == null or sword_mesh == null or weapon_grip == null:
+		return
+	whirlwind_elapsed = 0.0
+	whirlwind_remaining = WHIRLWIND_SPIN_DURATION
+	whirlwind_start_heading = visual.rotation.y
+	whirlwind_grip_pose = weapon_grip.rotation
+	combat_phase = 0.0
+	gather_phase = 0.0
+	# Raise the blade out from the hip before tracing the circle.
+	weapon_grip.rotation = Vector3(0.15, 0.0, 0.28)
+	var trail: MeshInstance3D = WHIRLWIND_TRAIL.new() as MeshInstance3D
+	add_child(trail)
+	trail.begin(sword_mesh, WHIRLWIND_SPIN_DURATION)
+
 func gather_swing(kind: String) -> void:
 	last_gather = kind
 	gather_phase = 1.0
@@ -469,6 +490,18 @@ func _physics_process(delta: float) -> void:
 			_emit_swim_splash(not swimming)
 	else:
 		swim_splash_elapsed = 0.0
+	if whirlwind_remaining > 0.0:
+		# Only the visible rig rotates. The real physics capsule remains
+		# stable, so this spin cannot alter steering or clip through terrain.
+		whirlwind_elapsed = minf(WHIRLWIND_SPIN_DURATION, whirlwind_elapsed + delta)
+		whirlwind_remaining = maxf(0.0, WHIRLWIND_SPIN_DURATION - whirlwind_elapsed)
+		var spin_t: float = whirlwind_elapsed / WHIRLWIND_SPIN_DURATION
+		visual.rotation.y = whirlwind_start_heading + TAU * 2.0 * spin_t
+		right_arm.rotation.x = -0.36
+		right_arm.rotation.z = -0.94
+		left_arm.rotation.z = 0.30
+		if whirlwind_remaining <= 0.0 and weapon_grip != null:
+			weapon_grip.rotation = whirlwind_grip_pose
 	# In LAN dungeons only the host owns health; local auto-healing must
 	# never revive knocked-out characters or desync peer health snapshots.
 	if elapsed - last_hit > 6.0 and not (game.coop != null and game.coop.in_party_dungeon()):

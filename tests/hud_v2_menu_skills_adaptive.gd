@@ -47,8 +47,8 @@ func _run() -> void:
 	verify(hud.skill_detail_panel.get_theme_stylebox("panel") is StyleBoxFlat, "Skills uses new shared modal frame")
 	verify(hud.skill_mastery_bar != null and hud.skill_mastery_bar.max_value == 60.0, "Real mastery rank is based on actual 60-XP progression")
 	verify(hud.skill_slot_rows.size() == 3, "Skill page has three framed ability slots")
-	verify(hud.skill_slot_rows[0].text.contains("POWER STRIKE") and hud.skill_slot_rows[0].text.contains("UNLOCKED"), "Existing first ability is live and unlocked")
-	verify(hud.skill_slot_rows[2].text.contains("RANK 5"), "Third ability correctly displays actual unlock rank")
+	verify(hud.skill_slot_rows[0].text.contains("HEROIC STRIKE") and hud.skill_slot_rows[0].text.contains("UNLOCKED"), "Existing first ability is live and unlocked")
+	verify(hud.skill_slot_rows[2].text.contains("WEAPON LV 5"), "Third ability correctly displays actual unlock rank")
 	verify(hud.trained_skill_orb.get_parent() == hud.skill_detail_panel and hud.trained_skill_orb.is_visible_in_tree(),
 		"Real trained sword XP icon is visible ONLY inside Skills modal")
 	verify(hud.skills_close_button != null and hud.skills_close_x != null and hud.skills_close_x.is_visible_in_tree(),

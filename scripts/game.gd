@@ -1249,22 +1249,47 @@ func gain_weapon_mastery(weapon_id: String, amount: int) -> void:
 	if LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0))) > previous and hud != null:
 		hud.toast("Weapon mastery! New ability slot available.")
 
+## Armour Break is a real timed vulnerability status, not just a renamed hit.
+## Keep it per-enemy in metadata so it works for boars and dungeon guardians,
+## disappears after six seconds and does not migrate or affect co-op authority.
+func _armor_break_damage_multiplier(target: Node3D) -> float:
+	if not is_instance_valid(target):
+		return 1.0
+	return 1.0 + LEVELS.ARMOR_BREAK_BONUS if float(target.get_meta("outpost_armor_break_until", -1.0)) > world_time else 1.0
+
+func _whirlwind_targets() -> Array[Node3D]:
+	var hits: Array[Node3D] = []
+	if hero == null:
+		return hits
+	for candidate in get_tree().get_nodes_in_group("enemies"):
+		var target: Node3D = candidate as Node3D
+		if not target_available(target):
+			continue
+		var difference: Vector3 = target.global_position - hero.global_position
+		if absf(difference.y) > 2.3:
+			continue
+		if Vector2(difference.x, difference.z).length() > LEVELS.WHIRLWIND_RADIUS:
+			continue
+		hits.append(target)
+		# One physical hit per enemy per cast; cap the fan-out for mobile.
+		if hits.size() >= 12:
+			break
+	return hits
+
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
 	# LAN dungeon combat remains host-authoritative; never apply local
-	# skill damage that could desynchronise an encounter.
+	# ability damage that could desynchronise an encounter.
 	if coop != null and coop.in_party_dungeon():
 		if hud != null:
 			hud.toast("Skills in co-op dungeons require host combat support.")
 		return false
 	var skill: String = LEVELS.skill_for_slot(slot)
-	if float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
+	if skill == "" or float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
 		return false
-	var target = focus_target if valid_focus() else _nearest_enemy()
-	if target == null:
-		return false
-	if not target_in_range(target):
+	var target: Node3D = focus_target if valid_focus() else _nearest_enemy()
+	if skill != "whirlwind" and (target == null or not target_in_range(target)):
 		return false
 	var mana_cost: float = 6.0 + 3.0 * float(slot)
 	if mana < mana_cost:
@@ -1276,13 +1301,36 @@ func use_weapon_skill(slot: int) -> bool:
 	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
 	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = 0.55
-	hero.swing()
-	target.receive_damage(dealt)
-	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
-		target.ignite(4.0)
-	gain_weapon_mastery(weapon, 18)
-	gain_experience(3)
+	attack_delay = 0.75 if skill == "whirlwind" else 0.55
+	if skill == "whirlwind":
+		# Whirlwind does not need a selected target: it damages ALL nearby
+		# valid enemies once, then the sword's visual rig executes two spins.
+		# Equip the actual sword if the player was previously gathering.
+		if active_quick_tool != weapon:
+			select_quick_tool(weapon)
+		hero.play_whirlwind()
+		var hit_count: int = 0
+		for enemy in _whirlwind_targets():
+			if not is_instance_valid(enemy):
+				continue
+			enemy.receive_damage(dealt * _armor_break_damage_multiplier(enemy))
+			if str(weapon_enchants.get(weapon, "")) == "fire" and enemy.has_method("ignite"):
+				enemy.ignite(4.0)
+			hit_count += 1
+		if hit_count > 0:
+			gain_weapon_mastery(weapon, 12 + 5 * mini(hit_count, 5))
+			gain_experience(3 + mini(hit_count, 4))
+	else:
+		hero.swing()
+		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		if skill == "armor_break" and target_available(target):
+			# A real follow-up damage increase for six seconds. Applying it
+			# AFTER this impact prevents double-dipping on the opening hit.
+			target.set_meta("outpost_armor_break_until", world_time + LEVELS.ARMOR_BREAK_SECONDS)
+		if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
+			target.ignite(4.0)
+		gain_weapon_mastery(weapon, 18)
+		gain_experience(3)
 	_save()
 	return true
 
@@ -1362,7 +1410,7 @@ func attack(selected: Node3D = null) -> void:
 	hero.swing()
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	target.receive_damage(damage)
+	target.receive_damage(damage * _armor_break_damage_multiplier(target))
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
 	gain_weapon_mastery(weapon, 12)
