@@ -84,6 +84,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_portal_ui.gd 2>&1 | tee portal-ui-preflight.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON PORTAL UI:' portal-ui-preflight.log; then exit 1; fi
           grep -q "DUNGEON PORTAL UI RESULT: 0 failures" portal-ui-preflight.log
+      - name: Verify Heroic, Armor Break vulnerability and Whirlwind sword-trail AoE
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/weapon_abilities_whirlwind.gd 2>&1 | tee weapon-abilities.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WEAPON ABILITIES:' weapon-abilities.log; then exit 1; fi
+          grep -q "WEAPON ABILITIES RESULT: 0 failures" weapon-abilities.log
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
