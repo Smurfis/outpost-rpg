@@ -185,6 +185,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_seams.gd 2>&1 | tee dungeon-seams.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SEAMS:' dungeon-seams.log; then exit 1; fi
           grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon-seams.log
+      - name: Validate centered portal entry and redesigned Yes/No dungeon dialog
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_portal_ui.gd 2>&1 | tee dungeon-portal-ui.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON PORTAL UI:' dungeon-portal-ui.log; then exit 1; fi
+          grep -q "DUNGEON PORTAL UI RESULT: 0 failures" dungeon-portal-ui.log
       - name: Verify voxel-world dungeon portals and movement-lock release
         run: |
           set -o pipefail
