@@ -51,8 +51,8 @@ func _run() -> void:
 		button.call("_on_pointer_exited")
 	# Changelog stays inside the screen, with a permanently visible
 	# vertical scrollbar and actual published release metadata.
-	var log_panel: PanelContainer = title.get_node_or_null("Artboard/ChangelogPanel") as PanelContainer
-	var log_scroll: ScrollContainer = title.get_node_or_null("Artboard/ChangelogPanel/MarginContainer/VBoxContainer/ChangelogScrollList") as ScrollContainer
+	var log_panel: Panel = title.get("_changelog_panel") as Panel
+	var log_scroll: ScrollContainer = title.get("_changelog_scroll") as ScrollContainer
 	_check(log_panel != null and log_panel.position.y + log_panel.size.y < 630.0, "Changelog is shorter than the title viewport with bottom clearance")
 	_check(log_scroll != null and log_scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_SHOW_ALWAYS, "Changelog has persistent vertical scrollbar")
 	var release_fixture: Array = [{
