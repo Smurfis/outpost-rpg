@@ -3,7 +3,7 @@ extends CanvasLayer
 ## Supports real cancellation before the generated world is revealed.
 const GAME_SCENE: String = "res://scenes/main.tscn"
 const TITLE_SCENE: String = "res://scenes/ui/title_screen.tscn"
-const SCENERY: String = "res://assets/ui/title/title_background.png"
+const SCENERY: String = "res://assets/ui/title/title_background_clean.png"
 const FALLBACK_SCENERY: String = "res://assets/ui/title/title_backdrop.svg"
 const CREST: String = "res://assets/ui/title/outpost_loading_logo.png"
 const READY_PAUSE_FRAMES: int = 2
