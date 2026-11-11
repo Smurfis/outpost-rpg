@@ -85,12 +85,10 @@ func _run() -> void:
 		check(scroll_panel != null and not scroll_panel.visible and not dim.visible, "Changelog and its dimmer can be dismissed")
 		var selected_glow: TextureRect = screen.get_node_or_null("Artboard/SelectedTitleButtonGlow") as TextureRect
 		var settings_action: Button = screen.get_node_or_null("Artboard/SettingsButton") as Button
-		check(selected_glow != null and selected_glow.texture != null, "All title buttons share one separate movable gold glow asset")
-		if selected_glow != null and settings_action != null:
-			screen._set_title_button_glow(settings_action)
-			check(selected_glow.visible and is_equal_approx(selected_glow.position.x, settings_action.position.x - 44.0), "Selected glow follows Settings instead of remaining behind Play")
-			screen._hide_title_glow_if_idle()
-			check(not selected_glow.visible, "Old selected glow hides when focus moves elsewhere")
+		check(selected_glow == null, "White rectangle bug: no oversized selection SVG can cover the title")
+		if settings_action != null:
+			check(settings_action.material == null, "Selection never uses an untextured white shader quad")
+			check(settings_action.get_theme_stylebox("hover") is StyleBoxTexture, "Hover uses alpha-masked pixel artwork")
 
 		check(screen.get("_updater") != null, "In-app updater service is connected")
 		var button: Button = screen.get("_update_button") as Button

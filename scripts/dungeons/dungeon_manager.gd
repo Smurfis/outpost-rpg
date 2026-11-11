@@ -36,9 +36,12 @@ var action_button: Button
 var leave_button: Button
 var progress_label: Label
 var dimmer: ColorRect
+var dialog_badge: Label
 var dialog_title: Label
+var dialog_stats: Label
 var dialog_message: Label
 var confirm_button: Button
+var decline_button: Button
 
 func _ready() -> void:
 	_load_clears()
@@ -169,7 +172,7 @@ func _update_overworld_action() -> void:
 			nearest_portal = portal
 	action_button.visible = nearest_portal != null
 	if nearest_portal != null:
-		action_button.text = "ENTER %s" % RARITY.quality_name(int(nearest_portal.get("quality"))).to_upper()
+		action_button.text = "✦ ENTER %s DUNGEON ✦" % RARITY.quality_name(int(nearest_portal.get("quality"))).to_upper()
 		action_button.add_theme_stylebox_override("normal", THEME.style(THEME.SURFACE, RARITY.color(int(nearest_portal.get("quality")))))
 
 func _update_dungeon_action() -> void:
@@ -254,16 +257,23 @@ func _prompt_to_enter(portal: Area3D) -> void:
 	chosen_portal = portal
 	var tier: int = int(portal.get("quality"))
 	var accent: Color = RARITY.color(tier)
-	dialog_title.text = "%s  •  %s" % [RARITY.quality_name(tier).to_upper(), str(portal.get("dungeon_title"))]
-	dialog_title.add_theme_color_override("font_color", accent)
+	dialog_badge.text = "✦  %s PORTAL  ✦" % RARITY.quality_name(tier).to_upper()
+	dialog_badge.add_theme_color_override("font_color", accent)
+	dialog_title.text = str(portal.get("dungeon_title")).to_upper()
+	dialog_title.add_theme_color_override("font_color", PIXEL_SKIN.CREAM)
 	var profile: Dictionary = LAYOUT.profile(str(portal.get("entrance_id")), tier)
 	var floors: int = int(profile.get("floors", 1))
 	var info: Dictionary = LAYOUT.settings()
 	var room_ranges: Array = info.get("room_ranges", [])
 	var room_range: Array = room_ranges[tier]
 	var multiplier: float = pow(float(profile.get("reward_multiplier", 1.3)), floors - 1)
-	dialog_message.text = "%d floor(s) • %d–%d rooms/floor\nFinal treasure multiplier: x%.2f\nDefeat guardians, advance through stairs, claim final reward.\nCompleted portals vanish; abandoned ones remain." % [floors, int(room_range[0]), int(room_range[1]), multiplier]
-	confirm_button.add_theme_stylebox_override("normal", THEME.style(THEME.SURFACE, accent))
+	dialog_stats.text = "%d FLOORS     •     %d–%d ROOMS / FLOOR\nTREASURE BONUS   ×%.2f" % [floors, int(room_range[0]), int(room_range[1]), multiplier]
+	dialog_message.text = "Defeat the guardians, climb the floors and claim the final treasure.\nLeaving early keeps this portal available."
+	# Match the rarity of the selected entrance in the bronze button outline.
+	for state in ["normal", "hover", "pressed"]:
+		var style: StyleBoxFlat = confirm_button.get_theme_stylebox(state) as StyleBoxFlat
+		if style != null:
+			style.border_color = accent
 	dimmer.visible = true
 	action_button.visible = false
 	hero.stop_interaction_move()
@@ -498,7 +508,11 @@ func _build_interface() -> void:
 	action_button = THEME.button("ENTER DUNGEON", "door_front", RARITY.color(RARITY.RARE))
 	PIXEL_SKIN.apply_button(action_button, "wood")
 	screen.add_child(action_button)
-	_layout(action_button, 0.655, 0.155, 0.960, 0.260)
+	# Was far right (65.5–96% of screen). Centre horizontally and keep
+	# the prompt above XP, below the top-centre quest/combat notices.
+	_layout(action_button, 0.375, 0.600, 0.625, 0.702)
+	action_button.add_theme_font_size_override("font_size", 20)
+	action_button.tooltip_text = "Inspect and enter this dungeon"
 	action_button.visible = false
 	action_button.pressed.connect(_on_action_pressed)
 	leave_button = THEME.button("LEAVE", "arrow_back", Color("b07b70"))
@@ -525,30 +539,70 @@ func _build_interface() -> void:
 	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dimmer.visible = false
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", PIXEL_SKIN.box("frame"))
+	panel.name = "DungeonConfirmPanel"
+	panel.add_theme_stylebox_override("panel", PIXEL_SKIN.modal_panel())
 	dimmer.add_child(panel)
-	_layout(panel, 0.235, 0.23, 0.765, 0.79)
+	_layout(panel, 0.24, 0.19, 0.76, 0.81)
+	var margins := MarginContainer.new()
+	margins.name = "DungeonConfirmMargins"
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 17)
+	panel.add_child(margins)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 12)
-	panel.add_child(stack)
-	dialog_title = THEME.label("DUNGEON", 27)
+	stack.name = "DungeonConfirmContent"
+	stack.add_theme_constant_override("separation", 11)
+	margins.add_child(stack)
+	dialog_badge = THEME.label("✦  DUNGEON PORTAL  ✦", 18, PIXEL_SKIN.GOLD)
+	dialog_badge.name = "DungeonRarity"
+	dialog_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(dialog_badge)
+	dialog_title = THEME.label("DUNGEON", 29, PIXEL_SKIN.CREAM)
+	dialog_title.name = "DungeonName"
 	dialog_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(dialog_title)
-	dialog_message = THEME.label("Enter dungeon?", 20)
+	var divider := ColorRect.new()
+	divider.name = "GoldDivider"
+	divider.color = Color(0.87, 0.67, 0.37, 0.62)
+	divider.custom_minimum_size.y = 2
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(divider)
+	var summary := PanelContainer.new()
+	summary.name = "DungeonSummary"
+	summary.add_theme_stylebox_override("panel", PIXEL_SKIN.modal_section())
+	stack.add_child(summary)
+	dialog_stats = THEME.label("1 FLOOR  •  REWARD BONUS ×1.00", 20, PIXEL_SKIN.CREAM)
+	dialog_stats.name = "DungeonStats"
+	dialog_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog_stats.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dialog_stats.custom_minimum_size.y = 74
+	summary.add_child(dialog_stats)
+	dialog_message = THEME.label("Defeat guardians to earn the final reward.", 17, PIXEL_SKIN.CREAM)
+	dialog_message.name = "DungeonInstructions"
 	dialog_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dialog_message.custom_minimum_size.y = 65
 	stack.add_child(dialog_message)
 	var actions := HBoxContainer.new()
+	actions.name = "DungeonDecisionButtons"
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 24)
+	actions.add_theme_constant_override("separation", 15)
 	stack.add_child(actions)
-	confirm_button = THEME.button("YES • ENTER", "check_circle", RARITY.color(RARITY.RARE))
-	PIXEL_SKIN.apply_button(confirm_button, "green")
+	confirm_button = THEME.button("YES  •  ENTER", "check_circle", RARITY.color(RARITY.RARE))
+	confirm_button.name = "DungeonConfirmEnter"
+	PIXEL_SKIN.apply_translucent_button(confirm_button, "green")
+	confirm_button.custom_minimum_size = Vector2(178, 59)
+	confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm_button.focus_mode = Control.FOCUS_ALL
 	actions.add_child(confirm_button)
 	confirm_button.pressed.connect(_enter_confirmed)
-	var decline := THEME.button("CANCEL", "cancel", Color("b9a29b"))
-	PIXEL_SKIN.apply_button(decline, "wood")
-	actions.add_child(decline)
-	decline.pressed.connect(_cancel_dialog)
+	decline_button = THEME.button("NO  •  STAY", "cancel", Color("b9a29b"))
+	decline_button.name = "DungeonConfirmStay"
+	PIXEL_SKIN.apply_translucent_button(decline_button, "red")
+	decline_button.custom_minimum_size = Vector2(178, 59)
+	decline_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	decline_button.focus_mode = Control.FOCUS_ALL
+	actions.add_child(decline_button)
+	decline_button.pressed.connect(_cancel_dialog)
 
 func _layout(control: Control, left: float, top: float, right: float, bottom: float) -> void:
 	control.anchor_left = left

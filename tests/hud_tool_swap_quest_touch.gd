@@ -27,6 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch") # Use Android's radial placement, not desktop hotbar.
 	var packed: PackedScene = load("res://scenes/main.tscn")
 	verify(packed != null, "Scene imports")
 	if packed == null:
@@ -48,6 +49,10 @@ func _run() -> void:
 	verify(smart != null and selector != null and smart != selector, "TOOLS and INTERACT are separate buttons")
 	verify(selector.get_node_or_null("ActionIcon") != null, "Tool selector has matching medallion icon")
 	verify(not selector.get_global_rect().intersects(smart.get_global_rect()), "Tool select touch target does not overlap Interact")
+	var heroic: Button = hud.quick_buttons["skill_1"] as Button
+	verify(selector.get_global_rect().get_center().y < heroic.get_global_rect().get_center().y, "TOOLS is raised above Heroic Strike")
+	verify(heroic.get_global_rect().get_center().y < smart.get_global_rect().get_center().y, "Heroic Strike occupies former TOOLS level above Interact")
+	verify(not heroic.get_global_rect().intersects(selector.get_global_rect()), "Raised TOOLS and Heroic retain separate touch targets")
 	for key in ["skill_1", "skill_2", "skill_3"]:
 		verify(not selector.get_global_rect().intersects((hud.quick_buttons[key] as Button).get_global_rect()),
 			"Tool selector never overlaps " + key)
