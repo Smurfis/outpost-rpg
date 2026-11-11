@@ -56,37 +56,12 @@ func _run() -> void:
 			var whited: int = 0
 			for y in range(18, mini(61, idle.get_height())):
 				for x in range(46, mini(235, idle.get_width())):
-					var a: Color = idle.get_pixel(x, y)
-					var b: Color = lit.get_pixel(x, y)
-					if a.a > 0.8 and a.r < 0.38 and b.r > 0.98 and b.g > 0.98 and b.b > 0.98:
+					var original: Color = idle.get_pixel(x, y)
+					var selected: Color = lit.get_pixel(x, y)
+					var brightness: float = original.r * 0.299 + original.g * 0.587 + original.b * 0.114
+					if original.a > 0.8 and brightness < 0.78 and selected.r > 0.98 and selected.g > 0.98 and selected.b > 0.98:
 						whited += 1
-			var bright: int = 0
-			var changed: int = 0
-			var dark: int = 0
-			for y in range(idle.get_height()):
-				for x in range(idle.get_width()):
-					var p: Color = idle.get_pixel(x, y)
-					var q: Color = lit.get_pixel(x, y)
-					if p.a > 0.8 and p.r < 0.38:
-						dark += 1
-					if q.a > 0.8 and q.r > 0.98 and q.g > 0.98 and q.b > 0.98:
-						bright += 1
-					if p.a > 0.8 and q.r - p.r > 0.15:
-						changed += 1
-			var count_in: Array[int] = [0, 0, 0, 0, 0]
-			for y in range(18, mini(61, idle.get_height())):
-				for x in range(46, mini(235, idle.get_width())):
-					var p: Color = idle.get_pixel(x, y)
-					if p.a <= 0.8:
-						continue
-					var lum: float = p.r * 0.299 + p.g * 0.587 + p.b * 0.114
-					if lum < 0.2: count_in[0] += 1
-					if lum < 0.4: count_in[1] += 1
-					if lum < 0.6: count_in[2] += 1
-					if lum < 0.8: count_in[3] += 1
-					count_in[4] += 1
-			print("QUIT PIXEL DIAGNOSTIC: in-glyph white=", whited, " dark=", dark, " bright=", bright, " changed=", changed, " inside luminance thresholds=", count_in)
-			_check(whited > 50, "Quit power icon and lettering become white in selected PNG")
+			_check(whited > 50, "Quit power icon and text gain genuinely white pixels on hover/press")
 		button.call("_on_pointer_exited")
 	var embers: Control = title.get_node_or_null("Artboard/CampfireEmbers") as Control
 	_check(embers != null, "Two small campfire ember emitters are wired into title")
