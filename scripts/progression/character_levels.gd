@@ -2,7 +2,14 @@ extends RefCounted
 ## Persistent RPG character level and independent weapon familiarity.
 ## Legacy saves already contain absolute experience; no migration/reset.
 const MASTERY_UNLOCK_RANKS: Array[int] = [1, 3, 5]
-const WEAPON_SKILLS: Array[String] = ["power_strike", "cleave", "sundering_blow"]
+# The three visible slots are always Heroic Strike, Armour Break, Whirlwind.
+# Existing saves store mastery XP only, so changing runtime skill IDs is safe.
+const WEAPON_SKILLS: Array[String] = ["power_strike", "armor_break", "whirlwind"]
+const WEAPON_SKILL_NAMES: Array[String] = ["HEROIC STRIKE", "ARMOUR BREAK", "WHIRLWIND"]
+const ARMOR_BREAK_SECONDS: float = 6.0
+const ARMOR_BREAK_BONUS: float = 0.25
+const WHIRLWIND_RADIUS: float = 3.2
+const WHIRLWIND_DURATION: float = 0.90
 
 static func total_xp_for(level: int) -> int:
 	var n: int = maxi(0, level - 1)
@@ -38,6 +45,20 @@ static func available_skill_slots(mastery_xp: int) -> int:
 			slots += 1
 	return slots
 
+static func unlock_level_for_slot(slot: int) -> int:
+	if slot < 0 or slot >= MASTERY_UNLOCK_RANKS.size():
+		return -1
+	return MASTERY_UNLOCK_RANKS[slot]
+
+static func skill_name_for_slot(slot: int) -> String:
+	if slot < 0 or slot >= WEAPON_SKILL_NAMES.size():
+		return ""
+	return WEAPON_SKILL_NAMES[slot]
+
+static func next_skill_unlock_level(mastery_xp: int) -> int:
+	var slots: int = available_skill_slots(mastery_xp)
+	return unlock_level_for_slot(slots) if slots < WEAPON_SKILLS.size() else -1
+
 static func skill_for_slot(slot: int) -> String:
 	if slot < 0 or slot >= WEAPON_SKILLS.size():
 		return ""
@@ -46,13 +67,13 @@ static func skill_for_slot(slot: int) -> String:
 static func cooldown_for_skill(skill_id: String) -> float:
 	match skill_id:
 		"power_strike": return 7.0
-		"cleave": return 10.0
-		"sundering_blow": return 11.0
+		"armor_break": return 10.0
+		"whirlwind": return 13.0
 	return 0.0
 
 static func multiplier_for_skill(skill_id: String) -> float:
 	match skill_id:
 		"power_strike": return 1.55
-		"cleave": return 1.10
-		"sundering_blow": return 1.35
+		"armor_break": return 1.15
+		"whirlwind": return 0.92
 	return 1.0
