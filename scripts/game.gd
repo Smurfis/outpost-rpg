@@ -432,16 +432,32 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 	if id in ["oak_tree", "rock_deposit"]:
 		spawn_resource(self, "wood" if id == "oak_tree" else "stone", where, 1, true)
 		return
-	if not prop_placement.available(where, 0.8):
-		return
+	# Nearby crafting benches reserve their work areas. Move supply crates
+	# to valid nearby ground rather than silently removing every blocked chest.
+	var site: Vector3 = where
+	if not prop_placement.available(site, 0.8):
+		var found: bool = false
+		for i in range(1, 49):
+			var angle: float = float(i) * 2.39996
+			var radius: float = 1.6 + float(i / 8)
+			var candidate: Vector3 = where + Vector3(cos(angle) * radius, 0, sin(angle) * radius)
+			if absf(candidate.x) <= 21.0 and absf(candidate.z) <= 21.0 and prop_placement.available(candidate, 0.8):
+				site = candidate
+				found = true
+				break
+		if not found:
+			push_warning("Unable to place camp supply chest near " + str(where))
+			return
+	if terrain_surface != null:
+		site.y = terrain_surface._tile_height(floori(site.x), floori(site.z)) + 0.055
 	var chest = WORLD_OBJECT.new()
 	add_child(chest)
-	chest.position = where
+	chest.position = site
 	var art: MeshInstance3D = VOXEL_PROPS.crate()
 	art.scale = Vector3.ONE * size_factor
 	art.rotation.y = angle
 	chest.setup(self, "camp_crate_%s_%s" % [where.x, where.z], "Supply chest", "chest", art, {"wood": 2, "fiber": 2})
-	prop_placement.reserve(where, 0.8, chest)
+	prop_placement.reserve(site, 0.8, chest)
 
 func _terrain_path(from: Vector3, to: Vector3, radius: float, shade: Color) -> void:
 	var creator := SurfaceTool.new()
