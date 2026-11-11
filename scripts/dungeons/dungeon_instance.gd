@@ -294,14 +294,18 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 		var guard := GUARDIAN.new()
 		floor_root.add_child(guard)
 		var boss: bool = current_floor == floor_count and i == guards_remaining - 1
-		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z))
+		var creature_kind: String = ""
+		if quality <= RARITY.RARE:
+			# Seeded art variants: same encounter always gets the same mob.
+			creature_kind = "skeleton" if (int(layout["seed"]) + i + current_floor) % 2 == 0 else "goblin"
+		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z), creature_kind)
 		guard.set_meta("encounter_slot", i) # Stable across every peer's seeded room copy.
 		guard.hp *= pow(1.20, current_floor - 1) * (2.1 if boss else 1.0)
 		guard.damage_multiplier = pow(1.12, current_floor - 1) * (1.40 if boss else 1.0)
 		if boss:
 			guard.name = "DungeonBoss"
 			guard.scale *= 1.35
-			guard.display_name = "Ancient Warden"
+			guard.display_name = "Skeleton Champion" if creature_kind == "skeleton" else "Goblin Chieftain" if creature_kind == "goblin" else "Ancient Warden"
 	boss_alive = current_floor == floor_count
 
 func _make_chest() -> void:

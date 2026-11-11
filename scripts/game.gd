@@ -3,6 +3,7 @@ extends Node3D
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
+const WILDLIFE = preload("res://scripts/creatures/overworld_wildlife.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
@@ -594,10 +595,20 @@ func _resources() -> void:
 
 
 func _enemies() -> void:
+	# Original voxel boar spawns are untouched. Quaternius pigs and wolves
+	# are separate animated creatures; a pig is not a boar replacement.
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
 		var boar = ENEMY.new()
 		add_child(boar)
 		boar.setup(self, hero, pos)
+	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
+		var pig = WILDLIFE.new()
+		add_child(pig)
+		pig.setup(self, hero, pos, "pig")
+	for pos in [Vector3(15, 0.2, 7), Vector3(-17, 0.2, -5)]:
+		var wolf = WILDLIFE.new()
+		add_child(wolf)
+		wolf.setup(self, hero, pos, "wolf")
 
 func _nearest_resource():
 	var best = null
@@ -618,6 +629,10 @@ func enemy_display_name(enemy: Node) -> String:
 		return str(enemy.get("display_name"))
 	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
 		return "Wild boar"
+	if enemy.is_in_group("wild_wolves"):
+		return "Wolf"
+	if enemy.is_in_group("wild_pigs"):
+		return "Pig"
 	return enemy.name.replace("_", " ").capitalize()
 
 func _nearest_enemy():
@@ -1417,13 +1432,18 @@ func attack(selected: Node3D = null) -> void:
 	# World-space damage numbers already come from each mob's hit feedback.
 	# No giant per-swing notification is needed, and no boar assumptions.
 
-func on_enemy_killed() -> void:
+func on_enemy_killed(kind: String = "boar") -> void:
 	kills += 1
-	grant_item("hide", 1, true)
-	grant_item("coins", 3, true)
-	gain_experience(12)
-	hud.record_combat_event("Boar defeated")
-	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
+	var is_wolf: bool = kind == "wolf"
+	var hide: int = 2 if is_wolf else 1
+	var coins: int = 5 if is_wolf else 2 if kind == "pig" else 3
+	var xp: int = 16 if is_wolf else 8 if kind == "pig" else 12
+	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Boar"
+	grant_item("hide", hide, true)
+	grant_item("coins", coins, true)
+	gain_experience(xp)
+	hud.record_combat_event(label + " defeated")
+	hud.toast(label + " defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()
 
