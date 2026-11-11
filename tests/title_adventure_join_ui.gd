@@ -36,7 +36,7 @@ func _run() -> void:
 			_check(bool((settings_art.material as ShaderMaterial).get_shader_parameter("selected")), "Gold follows selected Settings")
 			_check(not bool((play_art.material as ShaderMaterial).get_shader_parameter("selected")), "Play returns to unselected artwork when Settings is active")
 	var crest: Control = title.get_node_or_null("Artboard/OutpostLogo") as Control
-	_check(crest != null and crest.material is ShaderMaterial, "Approved crest sky blends without hard opaque rectangle")
+	_check(crest != null and crest.material == null and (crest.get("_logo_texture") is Texture2D), "Repaired title crest uses independent transparent PNG without legacy edge shader")
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
 	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Backdrop no longer uses mismatched dusk opacity")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
