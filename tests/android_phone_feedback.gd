@@ -61,6 +61,7 @@ func _run() -> void:
 	first_touch.pressed = true
 	first_touch.position = campfire_click
 	game.hud._input(first_touch)
+	print("PHONE PRESS DEBUG: finger=", game.hud.camera_drag_finger, " joystick_finger=", game.hud.finger, " desktop=", game.hud.desktop_mode)
 	var release := InputEventScreenTouch.new()
 	release.index = 22
 	release.pressed = false
@@ -69,6 +70,9 @@ func _run() -> void:
 	var raw_pick: Dictionary = preload("res://scripts/interaction/world_picker.gd").resolve(game, campfire_click)
 	print("PHONE ROUTE DEBUG: mobile=", not game.controls.desktop, " free_touch=", game.hud._can_start_camera_drag(campfire_click), " ui_block=", game.controls.point_over_ui(campfire_click), " target=", raw_pick.get("target", null), " navigate=", game.controls.navigating)
 	check(game.controls.navigating and game.controls.target == game.stations["campfire"], "Station tap starts shared, range-checked A-star walking instead of camera orbit")
+	if not game.controls.navigating:
+		var direct: bool = game.controls.primary_at(campfire_click, false)
+		print("PHONE DIRECT DEBUG: accepted=", direct, " target=", game.controls.target, " moving=", game.hero.interaction_moving, " toast=", game.hud.toast_label.text)
 	check(game.hero.station_waypoints.size() > 0, "Shared route uses actual waypoints rather than teleporting")
 	for waypoint in game.hero.station_waypoints:
 		var separation: float = Vector2(waypoint.x - game.station_positions["campfire"].x, waypoint.z - game.station_positions["campfire"].z).length()
