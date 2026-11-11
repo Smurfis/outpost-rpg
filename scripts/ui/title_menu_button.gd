@@ -184,9 +184,12 @@ static func _remove_screenshot_matte(source: Texture2D, kind: String) -> Texture
 	return ImageTexture.create_from_image(bitmap)
 
 static func _make_highlight_texture(source: Texture2D, kind: String) -> Texture2D:
-	var image: Image = source.get_image()
-	if image == null:
+	var original: Image = source.get_image()
+	if original == null:
 		return source
+	# Mutating get_image() directly can also recolour the idle ImageTexture
+	# on some render paths. Duplicate pixels so only the hover/press state changes.
+	var image: Image = original.duplicate() as Image
 	image.convert(Image.FORMAT_RGBA8)
 	for y in range(image.get_height()):
 		for x in range(image.get_width()):
