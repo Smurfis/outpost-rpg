@@ -72,6 +72,12 @@ func _run() -> void:
 	check(absf(game.mana - (game.MAX_MANA - 12.0)) < 0.01, "Whirlwind spends its actual 12 MP cost")
 	check(float(game.skill_cooldowns.get("whirlwind", 0.0)) == LEVELS.cooldown_for_skill("whirlwind"), "Whirlwind starts its real 13s cooldown")
 	check(game.hero.whirlwind_remaining > 0.0 and get_nodes_in_group("outpost_whirlwind_trails").size() > 0, "Whirlwind starts visible rig spin and actual sword trail")
+	var trail: MeshInstance3D = get_nodes_in_group("outpost_whirlwind_trails")[0] as MeshInstance3D
+	game.hero.visual.rotation.y = 0.35
+	trail._process(0.05)
+	game.hero.visual.rotation.y = 1.45
+	trail._process(0.05)
+	check(trail.mesh != null and trail.mesh.get_surface_count() > 0, "Sword trail generates visible geometry between actual rotating blade positions")
 	var old_damage: float = near_a.damage_taken
 	check(not game.use_weapon_skill(2) and is_equal_approx(near_a.damage_taken, old_damage), "Whirlwind cooldown prevents repeat hits")
 
