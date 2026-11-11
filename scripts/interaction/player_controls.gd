@@ -75,13 +75,18 @@ func _input(event: InputEvent) -> void:
 		ignore_mouse_until = Time.get_ticks_msec() + 650
 		set_desktop(false)
 	elif event is InputEventMouse:
+		# Android emits synthetic mouse input for some real screen taps. A
+		# delayed compatibility event must never flip the phone back to PC UI.
+		if OS.has_feature("mobile"):
+			return
 		if event.device == -1 or Time.get_ticks_msec() < ignore_mouse_until:
 			get_viewport().set_input_as_handled()
 			return
 		if event is InputEventMouseButton or (event is InputEventMouseMotion and event.relative.length_squared() > 0):
 			set_desktop(true)
 	elif event is InputEventKey and event.pressed and not event.echo:
-		set_desktop(true)
+		if not OS.has_feature("mobile"):
+			set_desktop(true)
 		if event.is_action_pressed("outpost_cancel"):
 			close_interface()
 			get_viewport().set_input_as_handled()
