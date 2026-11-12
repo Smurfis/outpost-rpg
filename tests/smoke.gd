@@ -155,7 +155,7 @@ func _test_game() -> void:
 	game.inventory["meal"] = 1
 	game.hero.health = 20.0
 	game.use_meal()
-	check(is_equal_approx(game.hero.health, 60.0), "Meal heals 40 HP")
+	check(is_equal_approx(game.hero.health, minf(100.0, 60.0 + game.crafting_bonus("ability_power"))), "Meal heals 40 HP plus equipped Ability Power")
 	check(int(game.inventory.get("meal", 0)) == 0, "Consumed food decrements")
 	game.hero.global_position = game.station_positions["forge"] + Vector3(0, 0.35, 0)
 	game.inventory["iron"] = 3
