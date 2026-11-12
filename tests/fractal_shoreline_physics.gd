@@ -62,6 +62,15 @@ func _run() -> void:
 				str(game.hero.velocity), str(game.hero.interaction_target),
 				str(game.controls.navigating),
 				str(Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down"))])
+			print("SHORE COLLISIONS: count=%d" % game.hero.get_slide_collision_count())
+			for ci in range(game.hero.get_slide_collision_count()):
+				var collision: KinematicCollision3D = game.hero.get_slide_collision(ci)
+				print("SHORE COLLISION %d: normal=%s at=%s body=%s" % [
+					ci, str(collision.get_normal()), str(collision.get_position()),
+					str(collision.get_collider())])
+			var probe: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+				at + Vector3(-0.9, 3, 0), at + Vector3(-0.9, -4, 0), 1)
+			print("SHORE NEXT FLOOR: %s" % str(game.get_world_3d().direct_space_state.intersect_ray(probe)))
 			break
 		last_x = at.x
 		if frame % 90 == 0:
