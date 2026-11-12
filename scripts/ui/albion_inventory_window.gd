@@ -3,6 +3,7 @@ extends Control
 ## reads the existing inventory/equipment/carry data and invokes game APIs.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 const CURRENCY = preload("res://scripts/inventory/currency.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
@@ -679,6 +680,15 @@ func _item_tip(id: String) -> String:
 			break
 	if CARRY.is_bag(id):
 		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
+	if game.best_craft_rolls.has(id):
+		var roll: Dictionary = game.best_craft_rolls[id]
+		result += "\n" + QUALITY.rarity_name(int(roll.get("rarity", 0))) + " quality"
+		for stat in QUALITY.STAT_KEYS:
+			var boosts: Dictionary = roll.get("bonuses", {})
+			if boosts.has(stat):
+				result += "\n" + QUALITY.stat_label(stat) + " " + QUALITY.format_stat(stat, float(boosts[stat]))
+		if str(roll.get("affix", "")) != "":
+			result += "\n" + str(roll["affix"]) + ": " + QUALITY.affix_description(str(roll["affix"]))
 	result += "\nTap to inspect or assign" 
 	return result
 
@@ -706,6 +716,16 @@ func _render_details() -> void:
 	attrs.add_child(_text("STARTER WEAPON  •  EQUIPPED" if selected_id == "training_blade" else _kind(selected_id).to_upper() + "  ×%d" % int(game.inventory.get(selected_id, 0)), 15, SKIN.GOLD))
 	var weight: float = CARRY.weight(selected_id, game.equipped_bag_id(), game.equipped_bag_stars())
 	item_info.add_child(_text("WEIGHT  %.2f each" % weight, 15, SKIN.CREAM))
+	if game.best_craft_rolls.has(selected_id):
+		var quality_roll: Dictionary = game.best_craft_rolls[selected_id]
+		var rank: int = int(quality_roll.get("rarity", 0))
+		item_info.add_child(_text(QUALITY.rarity_name(rank).to_upper() + "  •  CRAFTED QUALITY", 17, QUALITY.rarity_color(rank)))
+		var boosts: Dictionary = quality_roll.get("bonuses", {})
+		for stat in QUALITY.STAT_KEYS:
+			if boosts.has(stat):
+				item_info.add_child(_text(QUALITY.stat_label(stat) + "  " + QUALITY.format_stat(stat, float(boosts[stat])), 15, Color("#8de7b0")))
+		if str(quality_roll.get("affix", "")) != "":
+			item_info.add_child(_text("✦ " + str(quality_roll["affix"]) + "  •  " + QUALITY.affix_description(str(quality_roll["affix"])), 15, Color("#e1b6f5")))
 	if CARRY.is_bag(selected_id):
 		var stars: int = int(game.bag_quality.get(selected_id, 0))
 		item_info.add_child(_text("T%d  %s  •  +%.0f carry" % [CARRY.tier(selected_id), "★".repeat(stars), CARRY.capacity(selected_id, stars) - CARRY.BASE_CAPACITY], 15, SKIN.GOLD))
