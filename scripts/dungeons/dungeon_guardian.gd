@@ -19,6 +19,8 @@ var damage_multiplier: float = 1.0
 var speed_multiplier: float = 1.0
 var damage_taken_multiplier: float = 1.0
 var affix_ids: Array[String] = []
+# Keep authoritative affix names/colours for the player target nameplate.
+var affix_entries: Array[Dictionary] = []
 var affix_details: String = ""
 var display_name: String = "Crypt Guardian"
 var affix_label: Label3D
@@ -104,6 +106,7 @@ func apply_affixes(entries: Array[Dictionary]) -> void:
 	var details := PackedStringArray()
 	var accent: Color = Color("f3cc87")
 	for entry in entries:
+		affix_entries.append(entry.duplicate(true))
 		affix_ids.append(str(entry.get("id", "")))
 		names.append(str(entry.get("name", "")))
 		details.append(str(entry.get("description", "")))
