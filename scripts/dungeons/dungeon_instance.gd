@@ -340,6 +340,7 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z), creature_kind)
 		guard.set_meta("encounter_slot", i) # Stable across every peer's seeded room copy.
 		guard.hp *= pow(1.20, current_floor - 1) * (2.1 if boss else 1.0)
+		guard.max_hp = guard.hp
 		guard.damage_multiplier = pow(1.12, current_floor - 1) * (1.40 if boss else 1.0)
 		if boss:
 			guard.name = "DungeonBoss"
