@@ -126,8 +126,13 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if grounded and is_on_wall() and speed > 0.0:
 		VOXEL_STEP.try_step(self, direction * speed * delta, max_climb_height)
-	if direction.length_squared() > 0.02 and speed > 0.0:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
+	# A wolf stops advancing at bite range, but must still turn to face its prey.
+	# Pigs continue facing the direction they flee or wander.
+	var facing: Vector3 = direction
+	if species == "wolf" and distance <= 1.55 and distance > 0.02:
+		facing = to_hero.normalized()
+	if facing.length_squared() > 0.02:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(1.0, delta * 8.0))
 	avatar.play_motion(speed if direction.length_squared() > 0.02 else 0.0, species == "pig" and speed < 1.2 and wander_direction == Vector3.ZERO)
 
 func _respawn() -> void:
