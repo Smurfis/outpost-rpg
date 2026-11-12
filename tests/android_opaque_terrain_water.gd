@@ -72,17 +72,20 @@ func _run() -> void:
 			var transparent_edge: bool = false
 			var soft_foam: bool = false
 			var narrow_coast: bool = true
+			var restrained_surf: bool = true
 			var bluish_white: bool = true
 			for i in range(colors.size()):
 				transparent_edge = transparent_edge or colors[i].a <= 0.01
 				soft_foam = soft_foam or colors[i].a > 0.2 and colors[i].a < 0.7
 				bluish_white = bluish_white and colors[i].b >= colors[i].g and colors[i].g > colors[i].r
+				restrained_surf = restrained_surf and colors[i].a <= 0.29
 				var vertex: Vector3 = vertices[i]
 				if minf(absf(vertex.x - roundf(vertex.x)), absf(vertex.z - roundf(vertex.z))) > 0.34:
 					narrow_coast = false
 			check(transparent_edge and soft_foam, "Surf blends away instead of showing hard-edged boxes")
 			check(bluish_white, "Surf tint is cool white, not a murky green overlay")
 			check(narrow_coast, "Surf strips hug coastline edges rather than filling water cells")
+			check(restrained_surf, "Shore foam has restrained alpha instead of bright opaque border wedges")
 			check(surf.material_override is StandardMaterial3D
 				and (surf.material_override as StandardMaterial3D).vertex_color_use_as_albedo,
 				"Android foam material respects vertex-colour transparency")
