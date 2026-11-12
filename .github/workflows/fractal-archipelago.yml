@@ -58,6 +58,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_pc_chat_gm.gd 2>&1 | tee island-chat.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PC CHAT:' island-chat.log; then exit 1; fi
           grep -q 'PC CHAT RESULT: 0 failures' island-chat.log
+      - name: Physically swim to shore and climb the new island
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_shoreline_physics.gd 2>&1 | tee shore-walk.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SHORE WALK:' shore-walk.log; then exit 1; fi
+          grep -q 'SHORE WALK RESULT: 0 failures' shore-walk.log
       - name: Validate uncharted silhouettes, Diorama framing and island chunk meshing
         run: |
           set -o pipefail
