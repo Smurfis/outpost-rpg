@@ -19,7 +19,10 @@ func configure(terrain) -> void:
 	for island in terrain.islands:
 		var center: Vector2i = island["center"]
 		var radius: float = island["radius"]
-		var start := Vector2i(center.x + roundi(radius * 0.80), center.y)
+		# Put the entrance on the inland shoulder, NOT the beach. The old
+		# 0.80 radius point sometimes had terrain Y=-1 but the forced
+		# cave floor Y=+1, forming a 2-block wall in the access path.
+		var start := Vector2i(center.x + roundi(radius * 0.55), center.y)
 		var first_height: int = maxi(1, terrain.height_at(start.x, start.y))
 		var route: Array = []
 		var steps: int = mini(38, roundi(radius * 0.96))
