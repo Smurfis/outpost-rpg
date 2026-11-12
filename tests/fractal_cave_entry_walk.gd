@@ -56,8 +56,13 @@ func _run() -> void:
 			last_x = at.x
 			if no_progress > 95:
 				frozen = true
-				print("CAVE ENTRY STALL: island=%d frame=%d position=%s target=%s floor=%s" % [
-					index + 1, frame, str(at), str(goal), str(game.hero.is_on_floor())])
+				print("CAVE ENTRY STALL: island=%d frame=%d position=%s target=%s floor=%s wall=%s velocity=%s" % [
+					index + 1, frame, str(at), str(goal), str(game.hero.is_on_floor()), str(game.hero.is_on_wall()), str(game.hero.velocity)])
+				for ox in range(-4, 5):
+					var xx: int = floori(at.x) + ox
+					print("CAVE APPROACH: x=%d terrain=%d carve_floor=%d roof=%d" % [
+						xx, world.height_at(xx, floori(at.z)), world.caves.floor_at(xx, floori(at.z)),
+						world.caves.cover_height_at(xx, floori(at.z))])
 				break
 		check(not frozen, "Island %d cave has no impassable collision snag" % (index + 1))
 		check(entered, "Island %d avatar walks in from the hillside and reaches tunnel depth" % (index + 1))
