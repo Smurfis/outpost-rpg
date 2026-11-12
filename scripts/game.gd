@@ -22,8 +22,10 @@ const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
 const MAP_SERVICE = preload("res://scripts/map/map_service.gd")
 const WORLD_MAP = preload("res://scripts/ui/world_map.gd")
+const PC_CHAT = preload("res://scripts/ui/outpost_pc_chat.gd")
 var map_service: Node
 var world_map: CanvasLayer
+var chat: CanvasLayer
 var controls
 var prop_placement = PLACEMENT.new()
 var focus_target: Node3D
@@ -165,6 +167,9 @@ func _ready() -> void:
 	world_map = WORLD_MAP.new()
 	add_child(world_map)
 	world_map.setup(self, map_service)
+	chat = PC_CHAT.new()
+	chat.setup(self)
+	add_child(chat)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func toggle_world_map() -> void:

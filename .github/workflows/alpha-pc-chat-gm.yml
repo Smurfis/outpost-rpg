@@ -1,0 +1,44 @@
+name: Alpha PC Chat and GM command tests
+on:
+  push:
+    branches: [feature/alpha-pc-chat-gm-commands]
+  pull_request:
+    paths:
+      - 'scripts/debug/gm_commands.gd'
+      - 'scripts/ui/outpost_pc_chat.gd'
+      - 'scripts/game.gd'
+      - 'scripts/player.gd'
+      - 'scripts/interaction/player_controls.gd'
+      - 'tests/alpha_pc_chat_gm.gd'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot 4.7.2
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Import assets and parse GDScript
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit 2>&1 | tee import.log
+          # Baseline repo has a corrupt probe bbmodel texture: allow that one
+          # specific importer script error, but no unrelated parser errors.
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' import.log | grep -Ev 'resource_name'; then exit 1; fi
+      - name: Exercise chat UI, controls and open GM commands
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_pc_chat_gm.gd 2>&1 | tee gm-chat.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PC CHAT:' gm-chat.log; then exit 1; fi
+          grep -q 'PC CHAT RESULT: 0 failures' gm-chat.log
+      - name: Verify desktop shortcuts and mobile compatibility
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/pc_cross_platform_controls.gd 2>&1 | tee controls.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PC CONTROLS:' controls.log; then exit 1; fi
+          grep -q 'PC CONTROLS RESULT: 0 failures' controls.log
