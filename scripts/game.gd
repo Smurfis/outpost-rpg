@@ -739,9 +739,17 @@ func target_for_hud() -> Node3D:
 func target_frame_data(target: Node3D) -> Dictionary:
 	if not target_available(target) or not target.is_in_group("enemies"):
 		return {}
-	var hp: float = maxf(0.0, float(target.get("hp")))
+	# Test dummies and non-health actors may still carry the enemies group.
+	# Only actual numeric combat health may enter the HUD: float(null) errors
+	# at runtime on GDScript's Variant constructor path.
+	var raw_hp: Variant = target.get("hp")
+	if not (raw_hp is float or raw_hp is int):
+		return {}
+	var hp: float = maxf(0.0, float(raw_hp))
 	var raw_max: Variant = target.get("max_hp")
-	var maximum: float = maxf(1.0, float(raw_max) if raw_max != null else hp)
+	var maximum: float = maxf(1.0, hp)
+	if raw_max is float or raw_max is int:
+		maximum = maxf(1.0, float(raw_max))
 	var rank: String = ""
 	var accent: Color = Color("#907e71")
 	if target.is_in_group("dungeon_guardians"):
