@@ -53,7 +53,8 @@ func _run() -> void:
 		verify(badge_style != null and badge_style.get_corner_radius(CORNER_TOP_LEFT) >= 30, "Level badge uses true round border")
 	verify(hud.health_bar.get_global_rect().position.x - hud.hero_portrait_frame.get_global_rect().end.x <= 11.0, "HP remains close to portrait")
 
-	hud._layout_touch_hud()
+	# This suite exercises Android controls even when CI runs on desktop Linux.
+	hud.set_desktop_mode(false)
 	var smart: Button = hud.smart_button
 	var action: Button = hud.quick_buttons["skill_1"] as Button
 	var viewport: Vector2 = hud.get_viewport().get_visible_rect().size
