@@ -7,7 +7,7 @@ const CORRIDOR_WIDTH: int = 2
 const CORRIDOR_HEIGHT: int = 3
 const DESCENT_SPACING: int = 4
 var floors: Dictionary = {} # Vector2i -> absolute walkable y
-var routes: Array[Array] = []
+var routes: Array = []
 var entrances: Array[Vector3] = []
 var chests: Array[Vector3] = []
 
