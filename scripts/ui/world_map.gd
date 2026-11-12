@@ -353,6 +353,11 @@ func _select_result(index: int) -> void:
 func _minimap_hit(point: Vector2) -> bool:
 	if service.biome == null or not service.in_overworld() or not game.hud.minimap.visible:
 		return false
+	# The expand button has absolute input priority where its square slightly
+	# overlaps the round map: never move the player when expanding.
+	var expand: Button = game.hud.map_expand_button
+	if expand != null and expand.visible and expand.get_global_rect().has_point(point):
+		return false
 	var mini: Control = game.hud.minimap
 	var rect: Rect2 = mini.get_global_rect()
 	return point.distance_to(rect.get_center()) < minf(rect.size.x, rect.size.y) * 0.5 - 11.0

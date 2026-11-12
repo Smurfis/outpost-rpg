@@ -128,6 +128,7 @@ func run() -> void:
 	map._input(mini_tap)
 	check(not map.is_open() and map.mini_touch_index == -1, "Minimap release does not open the world map")
 	check(game.hud.map_expand_button.get_node_or_null("ExpandArrowsIcon") != null, "Dedicated gold two-arrow expand button is separate from circular minimap")
+	check(not map._minimap_hit(game.hud.map_expand_button.get_global_rect().get_center()), "Expand button cannot accidentally trigger map click-to-move")
 	game.hud.map_expand_button.pressed.emit()
 	check(map.is_open(), "Dedicated expand button opens full-screen island map")
 	map.close_map()
