@@ -427,7 +427,7 @@ func _remote_shore_float_target(direction: Vector3) -> float:
 	return maxf(default_depth, target_y + 0.16)
 
 
-func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, delta: float) -> void:
+func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, progressed: float) -> void:
 	# On generated voxel cliffs, Godot occasionally classifies the vertical
 	# boundary as an upward-facing *floor* normal (e.g. [-.25, .97, 0]).
 	# is_on_wall() stays false, disabling the normal auto-step solver.
@@ -444,10 +444,6 @@ func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, de
 		remote_ledge_stall_frames = 0
 		return
 	var intended: float = requested_motion.length()
-	var progressed: float = (global_position - (global_position - requested_motion)).length()
-	# A collision-aware progress measurement is passed through a temporary
-	# node metadata value by the caller below.
-	progressed = float(get_meta("_remote_progress", intended))
 	if intended < 0.015 or progressed > intended * 0.20:
 		remote_ledge_stall_frames = 0
 		return
@@ -560,9 +556,7 @@ func _physics_process(delta: float) -> void:
 	# voxels. Detect actual forward displacement to avoid false wall climbing.
 	if auto_step_enabled and not modal_open and not swimming:
 		var advance: float = maxf(0.0, (global_position - motion_from).dot(direction))
-		set_meta("_remote_progress", advance)
-		_rescue_remote_ledge_snag(direction, direction * speed * delta, delta)
-		remove_meta("_remote_progress")
+		_rescue_remote_ledge_snag(direction, direction * speed * delta, advance)
 	# Interpolate the avatar rig separately from the physics capsule. The
 	# capsule must not tunnel through a ledge and the camera stays independent.
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-11.0 * delta))
