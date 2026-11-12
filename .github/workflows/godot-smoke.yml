@@ -455,6 +455,13 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED TITLE:' approved-title.log; then exit 1; fi
           grep -q "APPROVED TITLE RESULT: 0 failures" approved-title.log
 
+      - name: Verify structured scrollable Alpha changelog and historic version entries
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_changelog_history.gd 2>&1 | tee title-changelog.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CHANGELOG:' title-changelog.log; then exit 1; fi
+          grep -q "CHANGELOG RESULT: 0 failures" title-changelog.log
+
       - name: Verify torch slogan, gold menu focus, embers and Five Star ident
         run: |
           set -o pipefail
