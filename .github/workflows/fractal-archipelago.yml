@@ -64,6 +64,18 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_shoreline_physics.gd 2>&1 | tee shore-walk.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SHORE WALK:' shore-walk.log; then exit 1; fi
           grep -q 'SHORE WALK RESULT: 0 failures' shore-walk.log
+      - name: Traverse the coastline of every remote island
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_all_island_shores.gd 2>&1 | tee all-islands.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ALL SHORE:' all-islands.log; then exit 1; fi
+          grep -q 'ALL SHORE RESULT: 0 failures' all-islands.log
+      - name: Ensure dungeon reward weight fix is retained
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_loot_slowdown.gd 2>&1 | tee dungeon-weight.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON SLOWDOWN:' dungeon-weight.log; then exit 1; fi
+          grep -q 'DUNGEON SLOWDOWN RESULT: 0 failures' dungeon-weight.log
       - name: Validate uncharted silhouettes, Diorama framing and island chunk meshing
         run: |
           set -o pipefail
