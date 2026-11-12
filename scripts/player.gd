@@ -388,7 +388,17 @@ func _detect_surface_swimming() -> bool:
 	# Never switch buoyancy off just because the player was pushed below the
 	# expected five-metre water band. That produced infinite falling if a
 	# streamed collision tile arrived late, or a knockback crossed the band.
-	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6
+	var land: bool = bool(terrain.is_land_at(global_position.x, global_position.z))
+	if land:
+		# The first island beach voxel is submerged at Y=-3. Keep buoyancy
+		# through that shallow landing tile until the swimmer has climbed up
+		# to the dry one-block shoreline. Otherwise buoyancy cuts out while
+		# the avatar is still below the first step and the character sinks.
+		var remote: Variant = terrain.get("archipelago")
+		if remote != null and remote.is_land_at(global_position.x, global_position.z):
+			var beach_y: float = remote.height_at(floori(global_position.x), floori(global_position.z))
+			return beach_y < WATER_SURFACE_Y and global_position.y < WATER_SURFACE_Y + 0.6
+	return not land and global_position.y < WATER_SURFACE_Y + 0.6
 
 
 func _physics_process(delta: float) -> void:

@@ -39,6 +39,7 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
 @export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
+@export var experimental_archipelago_enabled: bool = true # Feature branch: remote fractal islands and caves.
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
@@ -378,7 +379,7 @@ func _world() -> void:
 		terrain_surface = landscape
 		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
 		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
-		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry, experimental_archipelago_enabled)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))

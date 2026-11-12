@@ -1,0 +1,61 @@
+name: Fractal archipelago feature checks
+on:
+  push:
+    branches: [feature/outpost-fractal-perlin-cave-tunnels]
+  pull_request:
+    paths:
+      - 'scripts/world/fractal_archipelago_data.gd'
+      - 'scripts/world/stepped_cave_tunnels.gd'
+      - 'scripts/world/island_archipelago.gd'
+      - 'scripts/voxel/voxel_biome.gd'
+      - 'scripts/game.gd'
+      - 'scripts/map/**'
+      - 'scripts/ui/world_map.gd'
+      - 'tests/uncharted_island_map.gd'
+      - 'tests/fractal_archipelago_generation.gd'
+      - '.github/workflows/fractal-archipelago.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the same Godot editor as Alpha
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Parse and import project assets
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit 2>&1 | tee import.log
+          # The baseline repo's outpost_import_probe.bbmodel has a corrupt embedded PNG.
+          # Only ignore its known bbtexture.gd resource_name assignment while
+          # still rejecting new parser errors or unrelated script failures.
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' import.log | grep -Ev "resource_name"; then exit 1; fi
+      - name: Verify deterministic islands and one-block cave steps
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_archipelago_generation.gd 2>&1 | tee archipelago.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FRACTAL:' archipelago.log; then exit 1; fi
+          grep -q 'FRACTAL ARCHIPELAGO RESULT: 0 failures' archipelago.log
+      - name: Exercise desktop chat and GM island teleport
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_pc_chat_gm.gd 2>&1 | tee island-chat.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PC CHAT:' island-chat.log; then exit 1; fi
+          grep -q 'PC CHAT RESULT: 0 failures' island-chat.log
+      - name: Validate uncharted silhouettes, Diorama framing and island chunk meshing
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/uncharted_island_map.gd 2>&1 | tee island-map.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL UNCHARTED MAP:' island-map.log; then exit 1; fi
+          grep -q 'UNCHARTED MAP RESULT: 0 failures' island-map.log
+      - name: Check existing home island and ocean streaming
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/chunk_streaming.gd 2>&1 | tee chunks.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL STREAM:' chunks.log; then exit 1; fi
+          grep -q 'CHUNK STREAM RESULT: 0 failures' chunks.log

@@ -59,7 +59,8 @@ func run() -> void:
 	actor.dimension = "dungeon:other"
 	check(not service.markers().any(func(record): return record.get("id") == "fixture"), "Dungeon entities cannot leak onto overworld radar")
 	actor.queue_free()
-	check(map.focus == Vector3.ZERO and map.view_span > 200, "Default overview centres the island at island-wide scale")
+	check(map.focus.distance_to(map.target_focus) < 0.01 and map.view_span > 200,
+		"Default overview frames the full discovered and undiscovered archipelago")
 	check(map.map_viewport.find_world_3d() != game.get_world_3d(), "Map uses an isolated world with no gameplay simulation")
 	check(map.mini_viewport.find_world_3d() == map.map_viewport.find_world_3d(), "Minimap shares map geometry")
 	check(absf(float(map.map_viewport.size.x) / map.map_viewport.size.y - map.screen.size.x / map.screen.size.y) < 0.01, "Map viewport matches widescreen aspect without stretching")
@@ -73,7 +74,8 @@ func run() -> void:
 	map.zoom_by(0.0001)
 	check(map.target_span == map.MIN_VIEW_SIZE, "Zoom-in is clamped")
 	map.zoom_by(100000)
-	check(map.target_span <= service.biome.map_half * 8, "Zoom-out is clamped beyond island scale")
+	check(map.target_span <= maxf(512.0, service.biome.map_world_half * 8.0),
+		"Zoom-out remains clamped beyond the extended island world scale")
 	map.overview()
 	map._process(1.0)
 	var down := InputEventScreenTouch.new()
