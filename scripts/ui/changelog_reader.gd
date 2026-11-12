@@ -75,7 +75,9 @@ static func releases_from_json(json_text: String) -> Array[Dictionary]:
 		var stamp: String = "Publication date and time unavailable"
 		if published.length() >= 16:
 			stamp = "%s  •  %s UTC" % [published.substr(0, 10), published.substr(11, 5)]
-		var author_data: Dictionary = release.get("author", {}) if release.get("author", {}) is Dictionary else {}
+		var author_data: Dictionary = {}
+		if release.get("author", null) is Dictionary:
+			author_data = release["author"]
 		var author: String = str(author_data.get("login", "Unknown publisher"))
 		if author.contains("[bot]"):
 			author = "Smurf (maintainer)  •  Published by " + author
