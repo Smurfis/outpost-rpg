@@ -193,7 +193,12 @@ func _build_chunk(key: Vector2i) -> void:
 		body.collision_mask = 1
 		for mesh in meshed:
 			var collider := CollisionShape3D.new()
-			collider.shape = mesh.mesh.create_trimesh_shape()
+			var collision_mesh: ConcavePolygonShape3D = mesh.mesh.create_trimesh_shape()
+			# Match the established Outpost terrain collision contract.
+			# Without double-sided triangles the avatar can collide with
+			# cliff edges but miss the adjoining top face and fall/stall.
+			collision_mesh.backface_collision = true
+			collider.shape = collision_mesh
 			body.add_child(collider)
 		add_child(body)
 		members.append(body)
