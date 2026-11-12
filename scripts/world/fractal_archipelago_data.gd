@@ -111,12 +111,12 @@ func height_at(x: int, z: int) -> int:
 		var center: Vector2i = island["center"]
 		var mouth_x: int = center.x + roundi(float(island["radius"]) * 0.55)
 		var inward: float = float(mouth_x - x)
-		var side: float = absf(float(z - center.y))
-		if inward < 0.0 or inward > 15.0 or side >= 10.0:
+		var side: float = absf(float(z - (center.y + 8)))
+		if inward < 0.0 or inward > 15.0 or side >= 6.0:
 			continue
 		var inland_taper: float = clampf((15.0 - inward) / 5.0, 0.0, 1.0)
 		var rise_taper: float = clampf((inward + 2.0) / 4.0, 0.0, 1.0)
-		var shoulder: float = clampf((10.0 - side) / 5.0, 0.0, 1.0)
+		var shoulder: float = clampf((6.0 - side) / 3.0, 0.0, 1.0)
 		var rocky_brow: int = roundi((6.0 + 3.0 * rise_taper) * shoulder * inland_taper)
 		height += rocky_brow
 		break
