@@ -89,7 +89,7 @@ func is_solid(x: int, y: int, z: int) -> bool:
 	if y < BEDROCK or y >= height_at(x, z):
 		return false
 	var cave_floor: int = caves.floor_at(x, z)
-	return cave_floor == caves.INVALID_FLOOR or y < cave_floor or y >= cave_floor + caves.CORRIDOR_HEIGHT
+	return cave_floor == CAVES.INVALID_FLOOR or y < cave_floor or y >= cave_floor + CAVES.CORRIDOR_HEIGHT
 
 func top_tile(x: int, z: int) -> int:
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
