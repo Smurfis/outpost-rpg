@@ -81,9 +81,10 @@ func _draw_cone() -> void:
 		_quad(_radial(a, inner, 0.007), _radial(b, inner, 0.007),
 			_radial(b, reach, 0.007), _radial(a, reach, 0.007), edge)
 	for angle in [-half_angle, half_angle]:
-		var side: Vector3 = _radial(angle, reach, 0.009)
-		var inner_side: Vector3 = _radial(angle, maxf(0.0, reach - 0.12), 0.009)
-		_quad(Vector3.ZERO, side, inner_side, Vector3.ZERO, edge)
+		# Narrow radial border from the caster to the arc edge.
+		var toward_middle: float = 0.036 if angle < 0.0 else -0.036
+		_quad(Vector3.ZERO, _radial(angle, reach, 0.009),
+			_radial(angle + toward_middle, reach, 0.009), Vector3.ZERO, edge)
 
 func _radial(angle: float, radius: float, height: float) -> Vector3:
 	return Vector3(sin(angle) * radius, height, -cos(angle) * radius)
