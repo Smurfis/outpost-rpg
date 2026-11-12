@@ -72,7 +72,7 @@ func _run() -> void:
 	game.recent_target_seconds = 0.0
 	boar.alive = false
 	hud._update_enemy_target_frame()
-	verify(not frame.visible or frame.name_label.text != "Wild boar", "Dead enemies never leave a stale HUD target")
+	verify(not frame.visible or frame._target_id != boar.get_instance_id(), "Dead enemies never leave a stale HUD target")
 	var guardian = GUARDIAN.new()
 	guardian.set_physics_process(false)
 	game.add_child(guardian)
@@ -92,6 +92,7 @@ func _run() -> void:
 	verify(frame.visible and frame.rank_label.text == "BOSS" and absf(frame.bar.value - 25.0) < 0.1,
 		"Boss target draws an elite framed quarter-health bar")
 	guardian.queue_free()
+	await process_frame
 	boar.global_position = game.hero.global_position + Vector3(40.0, 0, 0)
 	hud._update_enemy_target_frame()
 	verify(not frame.visible, "Target frame disappears outside creature radar range")
