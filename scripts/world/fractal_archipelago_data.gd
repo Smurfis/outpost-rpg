@@ -81,7 +81,26 @@ func height_at(x: int, z: int) -> int:
 	var hills: float = _fractal.get_noise_2d(float(x), float(z)) * 3.0
 	var ridge_sample: float = (_ridges.get_noise_2d(float(x), float(z)) + 1.0) * 0.5
 	var ridge: float = ridge_sample * 12.0 * strength * smoothstep(7.0, 23.0, margin)
-	var height: int = maxi(-2, roundi(-2.0 + continent + hills + ridge))
+	# A swimmer's feet sit at sea level - 0.78. The previous minimum
+	# coastal top was -2, creating a 1.6m wall at the first dry cell while
+	# the player only auto-steps 1.05m. Start with a shallow submerged -3
+	# landing tile, then ascend in regular one-block terraces.
+	var raw_height: float = -2.0 + continent + hills + ridge
+	var coastal_steps: float = floorf(maxf(margin, 0.0) / 2.4)
+	var accessible_shore: float = -3.0 + coastal_steps
+	var blend: float = smoothstep(11.0, 25.0, margin)
+	var height: int = roundi(lerpf(accessible_shore, raw_height, blend))
+	# A broad eastward access route guarantees a traversable walk from
+	# the ocean to each island's small cave entrance and its inland slopes.
+	# Pure coastline terraces remain in this corridor; no random ridge
+	# can insert a two-block wall in the landing approach.
+	for island in islands:
+		var center: Vector2i = island["center"]
+		var dx: float = float(x) + 0.5 - float(center.x)
+		var dz: float = float(z) + 0.5 - float(center.y)
+		if dx >= -3.0 and absf(dz) <= 2.5 and dx <= float(island["radius"]) + 5.0:
+			height = roundi(accessible_shore)
+			break
 	_height_cache[key] = height
 	return height
 
