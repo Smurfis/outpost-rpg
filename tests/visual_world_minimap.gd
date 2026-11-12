@@ -54,6 +54,8 @@ func _run() -> void:
 		game.set("camera_angle", TAU + 0.3)
 		mini._process(0.02)
 		_check(int(mini.get("_refresh_count")) == cached_renders, "Even full camera orbit reuses cached map art")
+		mini._process(3.0)
+		_check(int(mini.get("_refresh_count")) == cached_renders, "Stationary idle does not resample unchanged terrain")
 		game.hero.global_position += Vector3(5.0, 0.0, 0.0)
 		mini._process(0.02)
 		_check(int(mini.get("_refresh_count")) > cached_renders, "Significant movement refreshes actual terrain data")

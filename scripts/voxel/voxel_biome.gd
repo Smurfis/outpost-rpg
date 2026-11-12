@@ -265,6 +265,20 @@ func coast_zone_at(x: float, z: float) -> String:
 		return "coastal_soil"
 	return "inland"
 
+func map_cell_at(x: int, z: int) -> Dictionary:
+	# Map consumers use the same cell heights and material choices as the
+	# terrain mesher. An empty result means no generated terrain exists here.
+	if x < -map_half or x >= map_half or z < -map_half or z >= map_half:
+		return {}
+	var zone: String = coast_zone_at(float(x) + 0.5, float(z) + 0.5)
+	var ground_height: float = _tile_height(x, z)
+	return {
+		"height": SEA_LEVEL if zone == "water" else ground_height,
+		"ground_height": ground_height,
+		"ground_tile": _ground_tile(x, z),
+		"zone": zone,
+	}
+
 func _tile_height(x: int, z: int) -> float:
 	var px: float = float(x) + 0.5
 	var pz: float = float(z) + 0.5
@@ -657,19 +671,12 @@ func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 			var b := Vector3(float(x), 0.0, float(z + 1))
 			var c := Vector3(float(x + 1), 0.0, float(z + 1))
 			var d := Vector3(float(x + 1), 0.0, float(z))
-			# On a curving coast, the tile centre may be offshore while a
-			# triangle crosses the dry half of that cell. Cull each half
-			# using its own centroid, preventing blue sea bleed over sand.
-			if not is_land_at((a.x + b.x + c.x) / 3.0, (a.z + b.z + c.z) / 3.0):
-				_append_pixel_water_vertex(st, a)
-				_append_pixel_water_vertex(st, b)
-				_append_pixel_water_vertex(st, c)
-				count += 1
-			if not is_land_at((a.x + c.x + d.x) / 3.0, (a.z + c.z + d.z) / 3.0):
-				_append_pixel_water_vertex(st, a)
-				_append_pixel_water_vertex(st, c)
-				_append_pixel_water_vertex(st, d)
-				count += 1
+			# Ground and water use the same whole-cell coast classification.
+			# Culling individual triangle centroids leaves half-cell holes in
+			# offshore tiles, especially around shore-adjacent fishing pools.
+			for vertex in [a, b, c, a, c, d]:
+				_append_pixel_water_vertex(st, vertex)
+			count += 2
 	if count == 0:
 		return null
 	var surface := MeshInstance3D.new()

@@ -279,7 +279,7 @@ func _layout_shared_actions() -> void:
 		first_x = maxf(first_x, screen.x * 0.25)
 	var bottom: float = screen.y - size_px - 25.0
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "interact", "tool_swap", "potion", "consumable"]
-	var shortcuts: Array[String] = ["1", "2", "3", "", "T", "Q", "E"]
+	var shortcuts: Array[String] = ["1", "2", "3", "SPACE", "T", "Q", "E"]
 	for i in range(keys.size()):
 		var button: Button = smart_button if keys[i] == "interact" else tool_swap_button if keys[i] == "tool_swap" else quick_buttons[keys[i]]
 		_place_px(button, screen, Rect2(first_x + stride * i, bottom, size_px, size_px))

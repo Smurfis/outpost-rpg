@@ -65,6 +65,7 @@ func _run() -> void:
 	var ocean_at_sea_level: bool = true
 	var shore_colors_present: bool = true
 	var shallow_pixel_present: bool = false
+	var triangles_per_cell: Dictionary = {}
 	for water in ocean:
 		ocean_material_ok = ocean_material_ok and water.material_override is ShaderMaterial
 		ocean_at_sea_level = ocean_at_sea_level and absf(water.global_position.y - biome.SEA_LEVEL) < 0.01
@@ -76,7 +77,9 @@ func _run() -> void:
 			shallow_pixel_present = shallow_pixel_present or shore.r > 0.15
 		for i in range(0, vertices.size(), 3):
 			var center: Vector3 = (vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3.0
-			surfaces_only_over_water = surfaces_only_over_water and not biome.is_land_at(center.x, center.z)
+			var cell := Vector2i(floori(center.x), floori(center.z))
+			surfaces_only_over_water = surfaces_only_over_water and not biome._land_cell(cell.x, cell.y)
+			triangles_per_cell[cell] = int(triangles_per_cell.get(cell, 0)) + 1
 	check(ocean_material_ok and ocean_at_sea_level, "Streamed water retains the original animated opaque ocean shader at sea level")
 	check(shore_colors_present and shallow_pixel_present,
 		"Water mesh carries real shoreline proximity for turquoise pixels without extra geometry")
@@ -84,6 +87,10 @@ func _run() -> void:
 	check(shallow_shader != null and shallow_shader.code.contains("ocean_shallow") and not shallow_shader.code.contains("ALPHA ="),
 		"Turquoise shallows remain in the opaque Android water pipeline")
 	check(surfaces_only_over_water, "Every rendered ocean triangle sits over real water cells, never dry or unloaded mainland")
+	var complete_cells: bool = not triangles_per_cell.is_empty()
+	for count in triangles_per_cell.values():
+		complete_cells = complete_cells and count == 2
+	check(complete_cells, "Every flooded cell has both water triangles, including coastal corners")
 	check(biome._tile_height(95, 0) < biome.SEA_LEVEL - 0.1, "Ocean tile has a real sloping underwater stone floor")
 	check(biome.get_node_or_null("GroundCollision_84_0") != null, "Offshore stone floor has streamed trimesh collision")
 	var from: Vector3 = Vector3(95.25, biome.SEA_LEVEL - 0.08, 0.5)

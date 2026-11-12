@@ -58,8 +58,8 @@ func run() -> void:
 	var a: Rect2 = game.hud.quick_buttons.skill_3.get_global_rect()
 	var b: Rect2 = game.hud.smart_button.get_global_rect()
 	verify(a.end.x < b.position.x and a.get_center().x < root.get_visible_rect().size.x * 0.5, "Ability row precedes centred Interact")
-	verify(InputMap.action_get_events("outpost_interact").is_empty(), "E never binds general interaction")
-	verify(InputMap.action_get_events("outpost_jump")[0].physical_keycode == KEY_SPACE, "Space jumps")
+	verify(InputMap.action_get_events("outpost_interact")[0].physical_keycode == KEY_SPACE, "Space binds Interact")
+	verify(not InputMap.has_action("outpost_jump"), "No manual jump action remains")
 	await key(KEY_I)
 	verify(game.menu.visible and game.menu.current_page == "bag", "I opens inventory through real input")
 	await key(KEY_ESCAPE)
@@ -147,6 +147,9 @@ func run() -> void:
 	await physics_frame
 	game.controls.inspect_at(game.camera.unproject_position(tree.global_position + Vector3.UP * 1.0))
 	verify(game.controls.tooltip.visible, "World hover shows inspection tooltip")
+	game.gather_delay = 0
+	await key(KEY_SPACE)
+	verify(game.inventory.wood == wood + 4, "Space performs the contextual gather action")
 	var yaw: float = game.camera_angle_target
 	var mouse := InputEventMouseButton.new()
 	mouse.position = Vector2(500, 300)

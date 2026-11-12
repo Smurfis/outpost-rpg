@@ -2,10 +2,10 @@ extends Control
 ## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
 ## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const MAP_CACHE = preload("res://scripts/map/overworld_map_cache.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
-const IDLE_REFRESH_INTERVAL: float = 2.0
 const MOVEMENT_REFRESH_DISTANCE: float = 1.4
 const RIM: Color = Color("cba668")
 const DARK_WOOD: Color = Color("382719")
@@ -19,6 +19,8 @@ var _sample_angle: float = 0.0 # Latest camera orbit; changes without texture up
 var _has_sample: bool = false
 var _refresh_count: int = 0
 var _relief_samples: int = 0 # Height-call counter for Android performance QA.
+var _map_cache: RefCounted
+var _map_cache_center := Vector2i(99999, 99999)
 
 func setup(game_ref: Node) -> void:
 	game = game_ref
@@ -47,6 +49,8 @@ func _process(delta: float) -> void:
 	_clock += delta
 	_sample_angle = float(game.get("camera_angle"))
 	var position_now: Vector3 = player.global_position
+	if bool(game.get("diorama_map_enabled")):
+		_update_experimental_cache(position_now)
 	var ground_shift := Vector2(position_now.x - _center.x, position_now.z - _center.z)
 	var distance_sq: float = ground_shift.length_squared()
 	# Cache the same world-aligned pixels while dragging the camera. Even a
@@ -54,12 +58,28 @@ func _process(delta: float) -> void:
 	# A small shift is smoothly offset at draw time to centre the player.
 	if not _has_sample or distance_sq >= 16.0 or (
 		_clock >= MIN_SAMPLE_INTERVAL and distance_sq >= MOVEMENT_REFRESH_DISTANCE * MOVEMENT_REFRESH_DISTANCE
-	) or _clock >= IDLE_REFRESH_INTERVAL:
+	):
 		_clock = 0.0
 		_center = position_now
 		_has_sample = true
 		_refresh_pixels()
 	queue_redraw()
+
+func _update_experimental_cache(player_position: Vector3) -> void:
+	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
+	if biome == null:
+		return
+	if _map_cache == null:
+		_map_cache = MAP_CACHE.new(biome)
+	var chunk := Vector2i(floori(player_position.x / MAP_CACHE.CHUNK_SIZE), floori(player_position.z / MAP_CACHE.CHUNK_SIZE))
+	if chunk != _map_cache_center:
+		_map_cache_center = chunk
+		# Centre first; the bounded queue never depends on camera yaw.
+		_map_cache.request_chunk(chunk)
+		for z in range(-1, 2):
+			for x in range(-1, 2):
+				_map_cache.request_chunk(chunk + Vector2i(x, z))
+	_map_cache.step(12)
 
 func _map_to_world(screen_local: Vector2) -> Vector2:
 	var c: float = cos(_sample_angle)

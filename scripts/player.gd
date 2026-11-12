@@ -50,6 +50,7 @@ const STEP_HOP_DURATION: float = 0.28
 var last_gather: String = ""
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
+@export_range(0.1, 2.0, 0.05) var max_resource_hop_height: float = 1.9
 const STEP_LANDING_TOLERANCE: float = 0.06
 const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front edge.
 # Dungeon portal interaction state: manually operated by default.
@@ -425,12 +426,10 @@ func _physics_process(delta: float) -> void:
 			velocity.y = 0.0
 		else:
 			velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 4.5)
-	elif grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
-		velocity.y = 5.1
 	else:
 		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
-	if auto_step_enabled and not modal_open and (grounded_before_motion or swimming) and is_on_wall() and direction.length_squared() > 0.02:
+	if auto_step_enabled and not modal_open and ((grounded_before_motion and velocity.y <= 0.0) or swimming) and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
 	# Interpolate the avatar rig separately from the physics capsule. The
 	# capsule must not tunnel through a ledge and the camera stays independent.
@@ -515,7 +514,16 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 		return false
 	if horizontal_motion.length_squared() < 0.0001 or not bool(game.get("voxel_art_enabled")):
 		return false
-	var up: Vector3 = Vector3.UP * (max_auto_step_height + STEP_LANDING_TOLERANCE)
+	# Only an ore/rock/clay obstacle grants the larger automatic hop.
+	# Terrain, walls and trees retain the existing one-voxel step limit.
+	var resource_obstacle: Object = null
+	for index in range(get_slide_collision_count()):
+		var obstacle: Object = get_slide_collision(index).get_collider()
+		if obstacle is Node and obstacle.is_in_group("auto_hop_resources"):
+			resource_obstacle = obstacle
+			break
+	var step_limit: float = maxf(max_auto_step_height, max_resource_hop_height) if resource_obstacle != null else max_auto_step_height
+	var up: Vector3 = Vector3.UP * (step_limit + STEP_LANDING_TOLERANCE)
 	var original: Transform3D = global_transform
 	if test_move(original, up):
 		return false # Low ceiling or other obstacle directly above the player.
@@ -527,7 +535,7 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	if test_move(raised, probe_motion):
 		return false # The elevated path is blocked by a full-height wall.
 	var candidate: Vector3 = original.origin + probe_motion
-	var start: Vector3 = candidate + Vector3.UP * (max_auto_step_height + 0.28)
+	var start: Vector3 = candidate + Vector3.UP * (step_limit + 0.28)
 	var end: Vector3 = candidate - Vector3.UP * 0.25
 	var query := PhysicsRayQueryParameters3D.create(start, end, collision_mask, [get_rid()])
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
@@ -537,8 +545,10 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	if normal.dot(Vector3.UP) < 0.75:
 		return false
 	var rise: float = float((hit["position"] as Vector3).y - original.origin.y)
-	if rise <= 0.045 or rise > max_auto_step_height:
+	if rise <= 0.045 or rise > step_limit:
 		return false
+	if rise > max_auto_step_height and hit.get("collider") != resource_obstacle:
+		return false # A nearby tall wall cannot borrow the ore's hop allowance.
 	# Revalidate horizontally at the final elevation before moving the body.
 	var landing: Transform3D = original.translated(Vector3.UP * (rise + STEP_LANDING_TOLERANCE))
 	if test_move(landing, probe_motion):

@@ -6,7 +6,7 @@ This pass fixes issues reported after APK v1040. It does not change the terrain 
 
 - World orbit was gated behind a 0.82 second hold, and deliberate swipes moving more than 26 screen pixels before that timeout were **cancelled**, producing the impression that camera rotation was broken. Free-world drags now activate orbit once the drag passes 16 screen pixels; the existing tiny-drift guard, optional hold, joystick and action-zone exclusions remain.
 - The original minimap recreated a 48×48 terrain texture whenever the smoothed camera heading changed by more than 0.035 rad. During a continuous orbit this could rerun expensive terrain/coastline noise calls near every frame, competing with input and world rendering on Android.
-- The map texture is now a 64×64 original-art, **north-aligned terrain cache**. Dragging the camera uses the inexpensive CanvasItem rotation transform. Terrain sampling only occurs when the player moves far enough (and after the minimum 0.24 second refresh interval), teleports or after 2 seconds idle.
+- The map texture is a 64×64 original-art, **north-aligned terrain cache**. Dragging the camera uses the inexpensive CanvasItem rotation transform. Terrain sampling occurs when the player moves far enough (and after the minimum 0.24 second refresh interval) or teleports. The current terrain is static; stationary idle does not trigger a periodic rebuild.
 - The player indicator remains centred, markers rotate with the camera, and map position is compensated between samples with a small display offset. Wood-and-brass framing, scale-aware compass ticks, clearer coast/path colours and more legible station dots are included.
 
 ## Acceptance

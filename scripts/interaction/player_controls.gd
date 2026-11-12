@@ -108,7 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
 			return
-		var actions: Array[String] = ["ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus"]
+		var actions: Array[String] = ["ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "interact"]
 		for action in actions:
 			if event.is_action_pressed("outpost_" + action):
 				game.perform_action(action)

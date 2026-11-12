@@ -26,6 +26,7 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
+@export var diorama_map_enabled: bool = false # Experimental terrain cache; existing minimap remains the fallback.
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
@@ -35,6 +36,7 @@ var camera: Camera3D
 var camera_angle: float = atan2(17.0, 20.0)
 var camera_angle_target: float = atan2(17.0, 20.0)
 var camera_occlusion_rise: float = 0.0
+var _camera_clearance_query: PhysicsShapeQueryParameters3D
 var camera_focus_smooth: Vector3 = Vector3.ZERO
 const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
@@ -142,7 +144,9 @@ func _ready() -> void:
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "jump": [KEY_SPACE], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [KEY_SPACE], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
+	if InputMap.has_action("outpost_jump"):
+		InputMap.erase_action("outpost_jump")
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -233,10 +237,11 @@ func _camera(delta: float) -> void:
 	var focus: Vector3 = camera_focus_smooth
 	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
 	var destination: Vector3 = focus + orbit
-	var query := PhysicsRayQueryParameters3D.create(destination, desired_focus, 1, [hero.get_rid()])
-	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(desired_focus) > 1.8
-	camera_occlusion_rise = lerpf(camera_occlusion_rise, 7.0 if occluded else 0.0, 1.0 - exp(-5.0 * t))
+	# A doorway/tree between the hero and camera is visual occlusion, not
+	# camera collision. Raising the framing for that ray hit displaced the
+	# hero on screen without clearing the obstruction. Only protect the
+	# actual camera position, keeping player and world collisions unchanged.
+	camera_occlusion_rise = lerpf(camera_occlusion_rise, _camera_clearance_rise(destination), 1.0 - exp(-5.0 * t))
 	# Old position interpolation lagged behind smoothed yaw, so look_at()
 	# changed pitch unpredictably when users swiped sideways very quickly.
 	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
@@ -244,6 +249,24 @@ func _camera(delta: float) -> void:
 	var raised_focus: Vector3 = focus + Vector3.UP * camera_occlusion_rise
 	camera.global_position = raised_focus + orbit
 	camera.look_at(raised_focus, Vector3.UP)
+
+func _camera_clearance_rise(destination: Vector3) -> float:
+	if _camera_clearance_query == null:
+		_camera_clearance_query = PhysicsShapeQueryParameters3D.new()
+		var probe := SphereShape3D.new()
+		probe.radius = 0.35
+		_camera_clearance_query.shape = probe
+		_camera_clearance_query.collision_mask = 1
+		_camera_clearance_query.collide_with_areas = false
+		_camera_clearance_query.exclude = [hero.get_rid()]
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	# Usually one query. Extra probes are bounded and only run when solid
+	# geometry overlaps the camera itself, never for a blocked sightline.
+	for rise in range(8):
+		_camera_clearance_query.transform = Transform3D(Basis.IDENTITY, destination + Vector3.UP * float(rise))
+		if space.intersect_shape(_camera_clearance_query, 1).is_empty():
+			return float(rise)
+	return 7.0
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()

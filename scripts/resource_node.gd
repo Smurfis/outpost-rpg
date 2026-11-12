@@ -4,6 +4,14 @@ const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const PICKER = preload("res://scripts/interaction/world_picker.gd")
+const SOLID = preload("res://scripts/interaction/resource_collision.gd")
+# Zero uses the model bounds (including bundles); positive values override
+# the local-space height or X/Z footprint for gameplay tuning.
+@export_range(0.0, 20.0, 0.05) var collision_height: float = 0.0
+@export_range(0.0, 20.0, 0.05) var collision_width: float = 0.0
+var resource_body: StaticBody3D
+var _harvest_tween: Tween
+var _mesh_scales: Dictionary = {}
 var bundle_count: int = 1
 var max_hits: int = 3
 var kind: String = "wood"
@@ -55,6 +63,13 @@ func setup(resource_type: String, count: int = 1) -> void:
 	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
+	if kind in ["wood", "stone", "iron", "coal", "clay"]:
+		resource_body = SOLID.new()
+		add_child(resource_body)
+		resource_body.configure(self, collision_height, collision_width)
+	for child in get_children():
+		if child is MeshInstance3D:
+			_mesh_scales[child] = child.scale
 	PICKER.attach(self, "resource")
 	_setup_target_marker()
 	add_to_group("resources")
@@ -225,6 +240,8 @@ func _process(delta: float) -> void:
 		cooldown -= delta
 		if cooldown <= 0.0:
 			active = true
+			if resource_body != null:
+				resource_body.set_deferred("collision_layer", 1)
 			hits_left = max_hits
 			visible = true
 			scale = initial_scale
@@ -240,11 +257,20 @@ func harvest() -> String:
 		PIXEL_FEEDBACK.emit_feedback(game_node, global_position + Vector3.UP * 0.55, 0, Color("d9ba87"), hits_left <= 0)
 	if target_label != null:
 		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
-	var bump := create_tween()
-	bump.tween_property(self, "scale", initial_scale * 1.07, 0.07)
-	bump.tween_property(self, "scale", initial_scale, 0.10)
+	# Animate art only: a player standing on a resource must not be pushed
+	# around by its harvest feedback or an overlapping scale tween.
+	if _harvest_tween != null:
+		_harvest_tween.kill()
+	_harvest_tween = create_tween().set_parallel(true)
+	for mesh in _mesh_scales:
+		_harvest_tween.tween_property(mesh, "scale", _mesh_scales[mesh] * 1.07, 0.07)
+	_harvest_tween.chain()
+	for mesh in _mesh_scales:
+		_harvest_tween.tween_property(mesh, "scale", _mesh_scales[mesh], 0.10)
 	if hits_left <= 0:
 		active = false
+		if resource_body != null:
+			resource_body.set_deferred("collision_layer", 0)
 		visible = false
 		cooldown = recovery
 	return kind
