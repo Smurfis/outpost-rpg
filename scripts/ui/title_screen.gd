@@ -220,6 +220,11 @@ func _make_screen() -> void:
 	# Clear the .tscn's old 650×358 minimum BEFORE assigning approved dimensions;
 	# otherwise Godot silently clamps the new size and wrecks pixel alignment.
 	logo.custom_minimum_size = Vector2.ZERO
+	if _approved_art:
+		# Feather residual screenshot sky around the crest without a hard rectangular border.
+		var crest_material := ShaderMaterial.new()
+		crest_material.shader = CREST_BLEND
+		logo.material = crest_material
 	_canvas.add_child(logo)
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
