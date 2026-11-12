@@ -65,8 +65,40 @@ func _run() -> void:
 				"Guaranteed tunnel air space at %s" % str(at))
 			check(world.is_solid(at.x, floor_y - 1, at.z),
 				"Solid walkable floor beneath tunnel at %s" % str(at))
-			if world.is_solid(at.x, floor_y + 3, at.z):
+			if world.is_solid(at.x, floor_y + 6, at.z):
 				covered_ceiling = true
+	# The first design was only two voxels wide and erased entire stone
+	# columns, leaving a roughly 6x14 rectangular tear near the entrance.
+	# Validate a walkable arched opening, real stone roof and an intact
+	# hillside from entrance through chamber on every procedural island.
+	for i in range(world.caves.routes.size()):
+		var route: Array = world.caves.routes[i]
+		var mouth: Vector3i = route[0]
+		var entry_air: int = 0
+		for side in range(-3, 4):
+			var z: int = mouth.z + side
+			if world.caves.is_air(mouth.x, mouth.y + 1, z):
+				entry_air += 1
+		check(entry_air >= 5, "Island %d has a broad walk-in cave mouth" % [i + 1])
+		check(not world.caves.is_air(mouth.x + 1, mouth.y + 1, mouth.z),
+			"Island %d entrance begins in the rock wall, not a surface trench" % [i + 1])
+		var roofed: int = 0
+		var flat_roofs: int = 0
+		for step in range(2, mini(route.size(), 15)):
+			var cell: Vector3i = route[step]
+			var floor_y: int = world.caves.floor_at(cell.x, cell.z)
+			if world.height_at(cell.x, cell.z) >= floor_y + 7:
+				roofed += 1
+			if world.is_solid(cell.x, world.height_at(cell.x, cell.z) - 1, cell.z):
+				flat_roofs += 1
+		check(roofed >= 9, "Island %d keeps actual mountain rock above its tunnel" % [i + 1])
+		check(flat_roofs >= 9, "Island %d has no long surface trench over its cave" % [i + 1])
+		var end: Vector3i = route[route.size() - 1]
+		var room_width: int = 0
+		for side in range(-4, 5):
+			if world.caves.is_air(end.x, end.y + 2, end.z + side):
+				room_width += 1
+		check(room_width >= 7, "Island %d ends in a roomy, connected treasure chamber" % [i + 1])
 	check(covered_ceiling, "At least one cave tunnel has an actual solid overhead roof")
 	check(world.map_cell_at(172, 62).get("zone") == "inland", "Diorama reads distant island heights")
 	print("FRACTAL ARCHIPELAGO RESULT: %d failures." % failures)

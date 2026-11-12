@@ -41,7 +41,7 @@ void fragment() {
 		bool above_walkway = island_world_position.y > island_cutaway_focus.y - 0.25;
 		bool in_sightline = in_front > 0.5 && horizontal_distance < island_cutaway_radius;
 		bool cave_ceiling = island_cave_mode
-			&& distance(island_world_position.xz, island_cutaway_focus.xz) < island_cutaway_radius * 1.65
+			&& distance(island_world_position.xz, island_cutaway_focus.xz) < island_cutaway_radius * 1.08
 			&& island_world_position.y > island_cutaway_focus.y + 0.8;
 		if (above_walkway && (in_sightline || cave_ceiling)) {
 			discard;

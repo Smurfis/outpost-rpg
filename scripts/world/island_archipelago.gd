@@ -52,6 +52,11 @@ func _is_below_terrain(position: Vector3) -> bool:
 	var zi: int = floori(position.z)
 	var floor_y: int = terrain.caves.floor_at(xi, zi)
 	if floor_y != CAVES.INVALID_FLOOR and position.y < float(terrain.height_at(xi, zi)) - 0.8:
+		# Keep the outside rock face intact near the mouth. The wider
+		# camera roof cutaway begins only a few blocks INSIDE the tunnel.
+		for entrance in terrain.caves.entrances:
+			if Vector2(position.x - entrance.x, position.z - entrance.z).length() <= 5.5:
+				return false
 		return true
 	var elevated: int = 0
 	for offset in [Vector2i(-3, 0), Vector2i(3, 0), Vector2i(0, -3), Vector2i(0, 3),
@@ -68,13 +73,19 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		return
 	_cave_mode = _is_below_terrain(position)
-	# Shader discards *visual pixels only* along the view-to-player corridor.
-	# Keep the full visual roofs and their original physical collision alive.
-	_cutaway_material.set_shader_parameter("island_cutaway_enabled", true)
+	# A visible Minecraft-style mouth must not be visually excavated by the
+	# camera's occlusion mask. Re-enable the cutaway once well inside.
+	var preserve_mouth: bool = false
+	for entrance in terrain.caves.entrances:
+		if Vector2(position.x - entrance.x, position.z - entrance.z).length() < 4.0:
+			preserve_mouth = true
+			break
+	# Shader discards visual pixels only. The mesh and collision remain.
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", not preserve_mouth)
 	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
 	_cutaway_material.set_shader_parameter("island_cutaway_focus", position + Vector3.UP * 0.95)
 	_cutaway_material.set_shader_parameter("island_cutaway_eye", view.global_position)
-	_cutaway_material.set_shader_parameter("island_cutaway_radius", 5.2 if _cave_mode else 3.6)
+	_cutaway_material.set_shader_parameter("island_cutaway_radius", 4.6 if _cave_mode else 3.6)
 	for roof in _roof_nodes:
 		if is_instance_valid(roof):
 			roof.visible = true

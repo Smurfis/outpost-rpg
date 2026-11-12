@@ -45,7 +45,7 @@ func _run() -> void:
 	for route in world.caves.routes:
 		for point in route:
 			var at: Vector3i = point
-			if world.height_at(at.x, at.z) >= at.y + 4:
+			if at.x <= (route[0] as Vector3i).x - 7 and world.height_at(at.x, at.z) >= at.y + 5:
 				tunnel = at
 				covered = true
 				break
@@ -68,7 +68,7 @@ func _run() -> void:
 	check(roof.visible, "Previously hidden cave roof is retained for per-pixel cutaway")
 	check(island._cave_mode and island._cutaway_material.get_shader_parameter("island_cave_mode") == true,
 		"Cave interior enables the wider opening")
-	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 5.2),
+	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 4.6),
 		"Cave opening uses the expected world-space radius")
 	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == true,
 		"Cutaway follows an actual camera")
@@ -76,6 +76,14 @@ func _run() -> void:
 		"Cutaway uses the current camera orbit")
 	check((island._cutaway_material.get_shader_parameter("island_cutaway_focus") as Vector3).distance_to(cave_player + Vector3.UP * 0.95) < 0.01,
 		"Cutaway focus follows the real avatar position")
+	# Preserve the physical-looking cave mouth rather than cutting a
+	# 6x14 block of visible hill out of the camera foreground.
+	var mouth: Vector3 = world.caves.entrances[0] + Vector3.UP * 0.35
+	host.hero.global_position = mouth
+	island._update_cutaway(host, mouth)
+	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == false,
+		"Natural cave mouth retains its visible hillside without a large camera cutout")
+	check(island._cave_mode == false, "Camera does not classify the surface entrance as a deep cavern")
 	var center: Vector2i = world.islands[0]["center"]
 	var shore_x: int = center.x + 32
 	var shore_z: int = center.y
