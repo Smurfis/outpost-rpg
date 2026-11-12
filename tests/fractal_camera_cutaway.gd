@@ -88,7 +88,7 @@ func _run() -> void:
 		"Shared Fields material remains unaffected by cave mode")
 	# A hillside lookout is not an underground cave: the view corridor
 	# shrinks but still reveals the player behind foreground rock.
-	var shore := world.caves.entrances[0]
+	var shore: Vector3 = world.caves.entrances[0]
 	var outside := Vector3(shore.x, float(world.height_at(floori(shore.x), floori(shore.z))) + 0.35, shore.z)
 	island._update_cutaway(game, outside)
 	check(bool(island._cutaway_material.get_shader_parameter("island_cutaway_enabled")),
