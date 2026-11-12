@@ -70,7 +70,7 @@ func _run() -> void:
 		embers.set("reduced_motion", true)
 		_check(bool(embers.get("reduced_motion")), "Reduced-motion option suppresses ember movement")
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
-	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
+	var wide: Control = title.get_node_or_null("WideBackdrop") as Control
 	title.call("_process", 0.4)
 	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Approved background no longer receives mismatched opacity tint")
 	_check(wide != null and wide.modulate == Color.WHITE, "Ultrawide landscape also preserves original tones")

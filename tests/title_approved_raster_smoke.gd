@@ -95,8 +95,8 @@ func _run() -> void:
 	# actual button hitboxes away from their approved pixel coordinates.
 	_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Title expands viewport instead of using 16:9 black sidebars")
 	var artboard: Control = title.get_node_or_null("Artboard") as Control
-	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
-	_check(wide != null, "Approved background has a continuous aspect-safe widescreen panorama")
+	var wide: Control = title.get_node_or_null("WideBackdrop") as Control
+	_check(wide != null and wide.get_parent() == title, "Approved panorama is a viewport-level sibling, not a clipped artboard child")
 	if wide != null and artboard != null and backdrop != null:
 		title.call("_layout_for_size", Vector2(2400.0, 1080.0)) # 20:9 Android
 		if version_plaque != null and version != null:
@@ -113,12 +113,20 @@ func _run() -> void:
 		if panorama != null:
 			_check(panorama.material is ShaderMaterial and is_equal_approx(float((panorama.material as ShaderMaterial).get_shader_parameter("side_extension_px")), 160.0), "Widescreen stretches only the outer scenery, preserving the central campsite geometry")
 			_check(panorama.texture == backdrop.texture, "Widescreen uses the single approved landscape rather than repeating atlas regions")
-			_check(panorama.position.is_equal_approx(Vector2(-160, 0)), "Widescreen background begins at the left edge")
-			_check(panorama.size.is_equal_approx(Vector2(1600, 720)), "Widescreen background spans 20:9 in design units")
-			_check(is_equal_approx(artboard.position.x + panorama.position.x * artboard.scale.x, 0.0), "The left frame touches the physical screen edge")
-			_check(is_equal_approx(artboard.position.x + (panorama.position.x + panorama.size.x) * artboard.scale.x, 2400.0), "The right frame touches the physical screen edge")
+			_check(panorama.position.is_equal_approx(Vector2.ZERO), "Widescreen panorama begins at viewport x=0, independent of the artboard inset")
+			_check(panorama.size.is_equal_approx(Vector2(2400, 1080)), "Widescreen panorama spans the complete 20:9 viewport")
+			_check(wide.position.is_equal_approx(Vector2.ZERO) and wide.size.is_equal_approx(Vector2(2400, 1080)), "Background canvas reaches both physical edges")
+			_check(wide.get_index() < artboard.get_index(), "Panorama is behind the artboard and its interactive buttons")
 		var play: Button = title.get_node_or_null("Artboard/PlayButton") as Button
 		_check(play != null and play.position == Vector2(427, 344) and play.size == Vector2(422, 92), "Widescreen preserves Play hitbox and art geometry")
+		# Regression: the reported 1919x1010 desktop screenshot showed exactly
+		# 62 pixels of navy curtain at the left, matching the centred artboard
+		# inset. The new panorama must cover that full 19:10-ish viewport.
+		title.call("_layout_for_size", Vector2(1919.0, 1010.0))
+		_check(artboard.position.x > 60.0 and artboard.position.x < 63.0, "Desktop artboard still uses proportional centre alignment")
+		_check(wide.position.is_equal_approx(Vector2.ZERO) and wide.size.is_equal_approx(Vector2(1919, 1010)), "Desktop background covers the formerly blank left strip")
+		if panorama != null:
+			_check(panorama.position.is_equal_approx(Vector2.ZERO) and panorama.size.is_equal_approx(Vector2(1919, 1010)), "Desktop panorama fills viewport outside centred artboard")
 		title.call("_layout_for_size", Vector2(1280.0, 720.0))
 		if version_plaque != null and version != null:
 			_check(version_plaque.position == Vector2(1088, 645) and version.position == Vector2(1095, 650), "16:9 version uses original badge coordinates")
