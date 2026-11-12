@@ -47,6 +47,6 @@ func _run() -> void:
 			if world.is_solid(at.x, floor_y + 3, at.z):
 				covered_ceiling = true
 	check(covered_ceiling, "At least one cave tunnel has an actual solid overhead roof")
-	check(world.map_cell_at(172, 26).get("zone") == "inland", "Diorama reads distant island heights")
+	check(world.map_cell_at(172, 62).get("zone") == "inland", "Diorama reads distant island heights")
 	print("FRACTAL ARCHIPELAGO RESULT: %d failures." % failures)
 	quit(0 if failures == 0 else 1)
