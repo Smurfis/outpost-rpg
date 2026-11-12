@@ -401,6 +401,31 @@ func _detect_surface_swimming() -> bool:
 	return not land and global_position.y < WATER_SURFACE_Y + 0.6
 
 
+func _remote_shore_float_target(direction: Vector3) -> float:
+	# Swim up *onto* the next shallow voxel before horizontal collision
+	# reaches its vertical face. Otherwise the swimmer stays at Y=-3.6,
+	# pinned against an otherwise traversable Y=-3 or Y=-2 beach.
+	var default_depth: float = WATER_SURFACE_Y - 0.78
+	if direction.length_squared() < 0.02:
+		return default_depth
+	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
+	if terrain == null:
+		return default_depth
+	var remote: Variant = terrain.get("archipelago")
+	if remote == null or remote.terrain == null:
+		return default_depth
+	var ahead: Vector3 = global_position + direction.normalized() * 1.25
+	if not remote.is_land_at(ahead.x, ahead.z):
+		return default_depth
+	var target_y: float = remote.height_at(floori(ahead.x), floori(ahead.z))
+	var rise: float = target_y - global_position.y
+	# Allow ONLY one normal voxel step. Never swim vertically up a cliff,
+	# wall or mountain; the coast's actual terraced terrain must be used.
+	if rise < -0.30 or rise > max_auto_step_height + 0.30:
+		return default_depth
+	return maxf(default_depth, target_y + 0.16)
+
+
 func _physics_process(delta: float) -> void:
 	update_combat(delta)
 	elapsed += delta
@@ -460,14 +485,14 @@ func _physics_process(delta: float) -> void:
 	if swimming:
 		# In water, stay inside the swimmable band even if the character
 		# entered fast, or an asynchronous coastal chunk had no collision yet.
-		var float_target: float = WATER_SURFACE_Y - 0.78
+		var float_target: float = _remote_shore_float_target(direction)
 		if global_position.y < WATER_SURFACE_Y - 6.0:
 			# Recovery stays at the SAME ocean coordinates rather than
 			# teleporting to camp or waiting for minutes of slow upward speed.
 			global_position.y = float_target
 			velocity.y = 0.0
 		else:
-			velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 4.5)
+			velocity.y = clampf((float_target - global_position.y) * 5.5, -2.4, 4.5)
 	else:
 		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
