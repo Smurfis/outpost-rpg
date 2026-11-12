@@ -50,7 +50,7 @@ func _run() -> void:
 		grounded = grounded or game.hero.is_on_floor()
 		if at.x < last_x - 0.005:
 			stationary_frames = 0
-		elif at.x < float(centre.x) + 25:
+		elif at.x < outer - 3.0:
 			stationary_frames += 1
 		if stationary_frames > 85:
 			ever_stuck = true
@@ -60,7 +60,13 @@ func _run() -> void:
 			break
 		last_x = at.x
 		if frame % 90 == 0:
-			print("SHORE TRACE: frame=%d pos=%s swim=%s floor=%s" % [frame, str(at), str(game.hero.swimming), str(game.hero.is_on_floor())])
+			var top_samples: Array = []
+			for offset in [-3, -2, -1, 0, 1, 2]:
+				var tx: int = floori(at.x) + offset
+				top_samples.append("%d:%d" % [tx, streamer.terrain.height_at(tx, floori(at.z))])
+			print("SHORE TRACE: frame=%d pos=%s swim=%s floor=%s wall=%s slopes=[%s]" % [
+				frame, str(at), str(game.hero.swimming), str(game.hero.is_on_floor()),
+				str(game.hero.is_on_wall()), ",".join(top_samples)])
 		if at.x <= goal.x + 2.7:
 			break
 	check(first_swim, "Character begins genuinely swimming")
