@@ -2205,23 +2205,23 @@ func _layout_touch_hud() -> void:
 	# Make room for the location banner ABOVE (not on top of) the live map.
 	var map_top: float = 54.0 * scale
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
-	# Upper-right of the map square, outside most of the circular movement
-	# surface; 44px is a reliably finger-sized Android target.
-	_place_px(map_expand_button, screen, Rect2(screen.x - edge - 44.0 * scale,
-			map_top + 4.0 * scale, 44.0 * scale, 44.0 * scale))
-	map_expand_button.visible = minimap.visible
-	# The zone pill now sits just two scaled pixels above the round map.
+	# Align the dedicated map-expand button NEXT TO the zone-name pill,
+	# not over the circular 3D movement map. Keep 7px between elements
+	# and a full finger-sized 44px button on mobile screens.
 	var zone_top: float = map_top - 30.0 * scale
-	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 30.0 * scale))
-	_place_px(zone_pill_text, screen, Rect2(screen.x - edge - map_side + 7.0 * scale, zone_top + 1.0 * scale,
-			map_side - 14.0 * scale, 28.0 * scale))
+	var map_left: float = screen.x - edge - map_side
+	_place_px(zone_pill, screen, Rect2(map_left, zone_top, map_side - 51.0 * scale, 30.0 * scale))
+	_place_px(zone_pill_text, screen, Rect2(map_left + 7.0 * scale, zone_top + 1.0 * scale,
+			map_side - 65.0 * scale, 28.0 * scale))
+	_place_px(map_expand_button, screen, Rect2(screen.x - edge - 44.0 * scale,
+			zone_top - 7.0 * scale, 44.0 * scale, 44.0 * scale))
+	map_expand_button.visible = minimap.visible
 	_place_px(zone_banner, screen, Rect2((screen.x - 440.0 * scale) * 0.5,
 			110.0 * scale, 440.0 * scale, 38.0 * scale))
 	var map_bottom: float = map_top + map_side
 	var toggle_side: float = 52.0 * scale
 	# MENU belongs up at the map's top-left shoulder, not detached
 	# beneath the clock. Leave the circular minimap unobstructed.
-	var map_left: float = screen.x - edge - map_side
 	# Equal-height carved mobile controls: WALLET / BAG / MENU.
 	# The menu never overlaps the circular map or consumes a combat slot.
 	_place_px(menu_button, screen, Rect2(map_left - 87.0 * scale,

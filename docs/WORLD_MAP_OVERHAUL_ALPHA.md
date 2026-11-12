@@ -4,8 +4,9 @@
 
 Tap/click the circular minimap to request an ordinary pathfound movement
 destination, projected from the orthographic mini-camera. The distinct
-44px wood/gold square at the upper-right displays **two diagonally outward
-gold arrows**, using the original `map_expand.svg` icon. This expands the
+44px carved-wood button alongside the zone name displays a folded parchment
+map with **two diagonally outward gold arrows**, using the bespoke
+`map_expand.svg` art. This expands the
 full-screen island map. The `M` key works on desktop. In combat the expand
 button is disabled while ordinary movement remains available; the map closes
 on combat entry. Dragging the minimap does not issue an accidental walk.

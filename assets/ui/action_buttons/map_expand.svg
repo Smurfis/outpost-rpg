@@ -1,13 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
-    <g stroke="#372617" stroke-width="6.8">
-      <path d="M21 21 L9 9 M9 20 V9 H20"/>
-      <path d="M27 27 L39 39 M39 28 V39 H28"/>
-    </g>
-    <g stroke="#f2d393" stroke-width="4.4">
-      <path d="M21 21 L9 9 M9 20 V9 H20"/>
-      <path d="M27 27 L39 39 M39 28 V39 H28"/>
-    </g>
-    <path d="M20.5 20.5 L10.5 10.5 M27.5 27.5 L37.5 37.5" stroke="#fff1be" stroke-width="1.2"/>
+  <!-- Outpost map-expansion glyph: parchment + pinch-out arrows; transparent. -->
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <path d="M8 26 19 23 29 27 40 23V39L29 43 19 39 8 43Z" fill="#F3DCA5" stroke="#322517" stroke-width="3.8"/>
+    <path d="M9.8 28.2 19 25.8 19 37.2 9.8 40.8Z" fill="#D4AE6B"/>
+    <path d="M21 26 28.8 29V40.8L21 37.8Z" fill="#F7E4B9"/>
+    <path d="M30.5 29.3 38 26.8V37.5L30.5 40.4Z" fill="#C79A59"/>
+    <path d="M19.6 25.6V38.2M29.6 29V41" fill="none" stroke="#664524" stroke-width="1.55"/>
+    <path d="M14 35 17 32 23 33 26 36 32 34" fill="none" stroke="#9B6B33" stroke-width="1.7" stroke-dasharray="2.3 2.3"/>
+    <circle cx="32.1" cy="34" r="2.1" fill="#C26B45" stroke="#67372B" stroke-width=".7"/>
+    <path d="M19 21 7 7M7 16V7H16M29 21 41 7M32 7H41V16" fill="none" stroke="#362618" stroke-width="6"/>
+    <path d="M19 21 7 7M7 16V7H16M29 21 41 7M32 7H41V16" fill="none" stroke="#F2CC7D" stroke-width="3.4"/>
+    <path d="M19 21 7 7M29 21 41 7" fill="none" stroke="#FFF1BC" stroke-width=".9"/>
   </g>
 </svg>
