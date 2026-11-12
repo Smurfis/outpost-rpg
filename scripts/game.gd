@@ -9,6 +9,7 @@ const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
 const STATION_PATH = preload("res://scripts/navigation/crafting_station_path.gd")
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
@@ -54,6 +55,9 @@ var camera_focus_smooth: Vector3 = Vector3.ZERO
 const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
 var bag_quality: Dictionary = {} # One maintained 0-3 star quality per owned bag type.
+var best_craft_rolls: Dictionary = {} # Highest scoring crafted roll retained per equipment ID.
+var last_craft_roll: Dictionary = {}
+var last_craft_improved: bool = false
 var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
@@ -1186,7 +1190,7 @@ func _craft_fits(recipe: Dictionary) -> bool:
 		return CARRY.used(staged, equipped_bag_id(), equipped_bag_stars()) <= bag_capacity() + 0.0001
 	var new_bag: bool = CARRY.is_bag(result_id)
 	var already_owned: bool = int(staged.get(result_id, 0)) > 0
-	if not new_bag or not already_owned:
+	if (not new_bag or not already_owned) and not (QUALITY.is_gear(result_id) and already_owned):
 		staged[result_id] = int(staged.get(result_id, 0)) + maxi(1, int(recipe.get("amount", 1)))
 	var preview_bag: String = result_id if new_bag else equipped_bag_id()
 	var preview_stars: int = (mini(3, int(bag_quality.get(result_id, 0)) + 1)) if new_bag else equipped_bag_stars()
@@ -1207,7 +1211,7 @@ func craft_block_reason(id: String) -> String:
 			return "This weapon already has Fiery Weapon."
 		if character_level() < 3:
 			return "Requires character level 3 and consumes one level."
-	if owns_unique(result):
+	if owns_unique(result) and not QUALITY.is_gear(result):
 		return "You already own this unique item."
 	if CARRY.is_bag(result) and int(inventory.get(result, 0)) > 0 and int(bag_quality.get(result, 0)) >= 3:
 		return "This bag already has maximum 3-star quality."
@@ -1280,9 +1284,7 @@ func begin_craft(id: String) -> bool:
 		"id": id,
 		"station": str(recipe.get("station", "workbench")),
 		"elapsed": 0.0,
-		"duration": maxf(0.5, float(recipe.get("seconds", 2.0))),
-		"strokes": 0,
-		"required": maxi(1, int(recipe.get("strokes", 3)))
+		"duration": maxf(1.4, float(recipe.get("seconds", 2.0)))
 	}
 	craft_work_cooldown = 0.0
 	if menu != null:
@@ -1295,19 +1297,8 @@ func craft_item(id: String) -> void:
 		hud.toast("Cannot begin this recipe at the current station.")
 
 func work_craft() -> bool:
-	if crafting.is_empty() or craft_work_cooldown > 0.0:
-		return false
-	var strokes: int = int(crafting.get("strokes", 0))
-	var required: int = int(crafting.get("required", 1))
-	if strokes >= required:
-		return false
-	crafting["strokes"] = strokes + 1
-	craft_work_cooldown = 0.18
-	var active_station: String = str(crafting.get("station", ""))
-	if stations.has(active_station):
-		stations[active_station].stroke()
-	_try_finish_craft()
-	return true
+	# Compatibility with legacy station actions; no repeated tapping required.
+	return false
 
 func _update_crafting(delta: float) -> void:
 	craft_work_cooldown = maxf(0.0, craft_work_cooldown - delta)
@@ -1323,8 +1314,6 @@ func _try_finish_craft() -> void:
 	if crafting.is_empty():
 		return
 	if float(crafting.get("elapsed", 0.0)) < float(crafting.get("duration", 1.0)):
-		return
-	if int(crafting.get("strokes", 0)) < int(crafting.get("required", 1)):
 		return
 	var recipe: Dictionary = _recipe_by_id(str(crafting.get("id", "")))
 	var station_id: String = str(crafting.get("station", ""))
@@ -1364,15 +1353,25 @@ func _try_finish_craft() -> void:
 		inventory[str(ingredient)] = int(inventory.get(str(ingredient), 0)) - int(ingredients[ingredient])
 	var result: String = str(recipe.get("result", ""))
 	var is_bag: bool = CARRY.is_bag(result)
-	if is_bag:
-		var existing: bool = int(inventory.get(result, 0)) > 0
-		if not existing:
+	var first_craft: bool = int(inventory.get(result, 0)) == 0
+	last_craft_roll.clear()
+	last_craft_improved = false
+	if QUALITY.is_gear(result):
+		# Reforging is an RNG attempt, not an extra inventory duplicate.
+		# A failed upgrade never replaces the player's strongest existing roll.
+		last_craft_roll = QUALITY.roll_item(result)
+		last_craft_improved = QUALITY.is_upgrade(last_craft_roll, best_craft_rolls.get(result, {}))
+		if last_craft_improved:
+			best_craft_rolls[result] = last_craft_roll.duplicate(true)
+		inventory[result] = maxi(1, int(inventory.get(result, 0)))
+	elif is_bag:
+		if first_craft:
 			inventory[result] = 1
 		bag_quality[result] = mini(3, int(bag_quality.get(result, 0)) + 1)
 	else:
 		inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
-	if hud != null and not result.is_empty():
-		hud.record_loot(result, 1 if is_bag else maxi(1, int(recipe.get("amount", 1))))
+	if hud != null and not result.is_empty() and (not QUALITY.is_gear(result) or first_craft):
+		hud.record_loot(result, 1 if is_bag or QUALITY.is_gear(result) else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
 	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
@@ -1381,7 +1380,15 @@ func _try_finish_craft() -> void:
 		equipment[slot] = result
 		_apply_equipment()
 	gain_experience(8)
-	hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
+	if hud != null:
+		if QUALITY.is_gear(result):
+			var rank_name: String = QUALITY.rarity_name(int(last_craft_roll.get("rarity", 0)))
+			var feedback: String = "%s %s • +8 XP" % [rank_name, str(recipe.get("name", result))]
+			if not last_craft_improved:
+				feedback += " • best roll retained"
+			hud.toast(feedback)
+		else:
+			hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
 	_save()
 	if menu != null:
 		menu.on_craft_completed(result)
@@ -1481,6 +1488,7 @@ func _apply_whirlwind_tick() -> void:
 		var hit_point: Vector3 = enemy.global_position
 		remember_attacked_enemy(enemy)
 		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(hit_point)
 		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
 			enemy.ignite(4.0)
@@ -1507,6 +1515,48 @@ func _advance_whirlwind_ticks(delta: float) -> void:
 	while whirlwind_ticks_done < WHIRLWIND_TICK_TIMES.size() and whirlwind_tick_clock >= WHIRLWIND_TICK_TIMES[whirlwind_ticks_done]:
 		_apply_whirlwind_tick()
 
+func crafting_bonus(stat: String) -> float:
+	var total: float = 0.0
+	var seen: Dictionary = {}
+	for slot in equipment:
+		var equipped: String = str(equipment[slot])
+		if equipped.is_empty() or seen.has(equipped):
+			continue
+		seen[equipped] = true
+		var roll: Dictionary = best_craft_rolls.get(equipped, {})
+		var boosts: Dictionary = roll.get("bonuses", {})
+		total += float(boosts.get(stat, 0))
+	return total
+
+func has_crafting_affix(affix: String) -> bool:
+	for equipped in equipment.values():
+		var roll: Dictionary = best_craft_rolls.get(str(equipped), {})
+		if str(roll.get("affix", "")) == affix:
+			return true
+	return false
+
+func crafted_damage(base: float) -> float:
+	var result: float = base + crafting_bonus("damage")
+	if has_crafting_affix("Brutal"):
+		result *= 1.08
+	if has_crafting_affix("Titanic"):
+		result *= 1.12
+	if randf() * 100.0 < minf(40.0, crafting_bonus("crit_chance")):
+		result *= 1.5
+	return result
+
+func crafted_attack_delay(base: float) -> float:
+	var speed: float = crafting_bonus("attack_speed")
+	if has_crafting_affix("Swift"):
+		speed += 6.0
+	if has_crafting_affix("Titanic"):
+		speed -= 8.0
+	return base / maxf(0.65, 1.0 + speed * 0.01)
+
+func apply_crafted_lifesteal() -> void:
+	if hero != null and has_crafting_affix("Vampiric"):
+		hero.health = minf(100.0, hero.health + 2.0)
+
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
@@ -1529,10 +1579,10 @@ func use_weapon_skill(slot: int) -> bool:
 		return false
 	var weapon: String = current_weapon_id()
 	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	var dealt: float = crafted_damage(base) * LEVELS.multiplier_for_skill(skill)
 	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else 0.55
+	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else crafted_attack_delay(0.55)
 	if skill == "whirlwind":
 		# A first hit on cast, then the second and third hits at 0.30s and
 		# 0.60s. Every tick checks live positions and creates sword-tip sparks.
@@ -1549,6 +1599,7 @@ func use_weapon_skill(slot: int) -> bool:
 		hero.swing()
 		remember_attacked_enemy(target)
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(target.global_position)
 		if skill == "armor_break" and target_available(target):
 			# A real follow-up damage increase for six seconds. Applying it
@@ -1609,7 +1660,7 @@ func consume(item_id: String, heal: float) -> void:
 	if int(inventory.get(item_id, 0)) <= 0 or hero.health >= 99.9:
 		return
 	inventory[item_id] = int(inventory[item_id]) - 1
-	hero.health = minf(100.0, hero.health + heal)
+	hero.health = minf(100.0, hero.health + heal + crafting_bonus("ability_power"))
 	hud.toast("Used %s: +%d health" % [item_id.capitalize(), int(heal)])
 	_save()
 	_refresh_menu()
@@ -1634,11 +1685,12 @@ func attack(selected: Node3D = null) -> void:
 		return
 	if target == null:
 		return # No popup spam when outside combat range.
-	attack_delay = 0.55
+	attack_delay = crafted_attack_delay(0.55)
 	hero.swing()
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
-	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	target.receive_damage(damage * _armor_break_damage_multiplier(target))
+	var base_damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
+	target.receive_damage(crafted_damage(base_damage) * _armor_break_damage_multiplier(target))
+	apply_crafted_lifesteal()
 	hero.show_weapon_hit_effect(target.global_position)
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
@@ -1709,7 +1761,7 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if map_service != null:
 		data["map_state"] = map_service.export_state()
@@ -1773,6 +1825,13 @@ func _load() -> void:
 		for key in stored:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
+	if data.get("best_craft_rolls", {}) is Dictionary:
+		for raw_id in data["best_craft_rolls"]:
+			var item_id: String = str(raw_id)
+			if QUALITY.is_gear(item_id) and int(inventory.get(item_id, 0)) > 0:
+				var clean_roll: Dictionary = QUALITY.sanitise_roll(data["best_craft_rolls"][raw_id])
+				if not clean_roll.is_empty():
+					best_craft_rolls[item_id] = clean_roll
 	active_quick_tool = str(data.get("active_quick_tool", "training_blade"))
 	if (active_quick_tool not in QUICK_TOOL_IDS and active_quick_tool != "shrimp_net") or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
 		active_quick_tool = "training_blade"
