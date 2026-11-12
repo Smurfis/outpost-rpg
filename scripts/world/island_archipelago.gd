@@ -73,9 +73,15 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		return
 	_cave_mode = _is_below_terrain(position)
-	# Shader discards *visual pixels only* along the view-to-player corridor.
-	# Keep the full visual roofs and their original physical collision alive.
-	_cutaway_material.set_shader_parameter("island_cutaway_enabled", true)
+	# A visible Minecraft-style mouth must not be visually excavated by the
+	# camera's occlusion mask. Re-enable the cutaway once well inside.
+	var preserve_mouth: bool = false
+	for entrance in terrain.caves.entrances:
+		if Vector2(position.x - entrance.x, position.z - entrance.z).length() < 4.0:
+			preserve_mouth = true
+			break
+	# Shader discards visual pixels only. The mesh and collision remain.
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", not preserve_mouth)
 	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
 	_cutaway_material.set_shader_parameter("island_cutaway_focus", position + Vector3.UP * 0.95)
 	_cutaway_material.set_shader_parameter("island_cutaway_eye", view.global_position)
