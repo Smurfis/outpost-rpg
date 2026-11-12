@@ -6,6 +6,7 @@ const MIN_VIEW_SIZE: float = 9.0 # Two 1.15x increments closer than the previous
 const PITCH: float = deg_to_rad(50.0)
 var game: Node
 var service: Node
+var has_remote_islands: bool = false
 var screen: Control
 var map_art: TextureRect
 var map_viewport: SubViewport
@@ -39,6 +40,7 @@ var mini_touch_origin := Vector2.ZERO
 func setup(owner_game: Node, source: Node) -> void:
 	game = owner_game
 	service = source
+	has_remote_islands = service.biome != null and service.biome.archipelago != null
 	layer = 40
 	map_viewport = SubViewport.new()
 	map_viewport.own_world_3d = true
@@ -122,7 +124,7 @@ func _build_ui() -> void:
 	title.add_theme_color_override("font_color", Color("ffe5a1"))
 	top.add_child(title)
 	_button(top, "Player", centre_player)
-	_button(top, "Islands" if service.biome.archipelago != null else "Island", overview)
+	_button(top, "Islands" if has_remote_islands else "Island", overview)
 	_button(top, "Close", close_map)
 	var left := VBoxContainer.new()
 	left.position = Vector2(12, 68)
@@ -174,7 +176,7 @@ func _build_ui() -> void:
 	footer.offset_right = -250
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	footer.add_theme_color_override("font_color", Color("e4ce9f"))
-	footer.text = "Drag to pan | Wheel / pinch to zoom | Dark land = uncharted" if service.biome.archipelago != null else "Drag to pan | Wheel / pinch to zoom"
+	footer.text = "Drag to pan | Wheel / pinch to zoom | Dark land = uncharted" if has_remote_islands else "Drag to pan | Wheel / pinch to zoom"
 	screen.hide()
 
 func _resize() -> void:
