@@ -7,7 +7,7 @@ const BEDROCK: int = -7
 const OCEAN_PLAY_HALF: int = 384
 # Exploration islands lie across real swimmable water, beyond home +/-96.
 var islands: Array[Dictionary] = [
-	{"center": Vector2i(172, 26), "radius": 36.0, "strength": 0.7},
+	{"center": Vector2i(172, 62), "radius": 36.0, "strength": 0.7},
 	{"center": Vector2i(-200, -58), "radius": 44.0, "strength": 1.15},
 	{"center": Vector2i(18, 232), "radius": 46.0, "strength": 1.4},
 ]
