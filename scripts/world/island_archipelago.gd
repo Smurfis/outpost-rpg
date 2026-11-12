@@ -2,6 +2,7 @@ extends Node3D
 ## Feature-branch-only remote island streamer. Never mutates the original
 ## Outpost chunks or its coastline. The far-ocean horizon supplies the water.
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
+const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const PROPS = preload("res://scripts/voxel/voxel_props.gd")
@@ -39,7 +40,7 @@ func _process(_delta: float) -> void:
 	var xi: int = floori(position.x)
 	var zi: int = floori(position.z)
 	var cave_floor: int = terrain.caves.floor_at(xi, zi)
-	var underground: bool = cave_floor != terrain.caves.INVALID_FLOOR and position.y < float(terrain.height_at(xi, zi)) - 0.8
+	var underground: bool = cave_floor != CAVES.INVALID_FLOOR and position.y < float(terrain.height_at(xi, zi)) - 0.8
 	for roof in _roof_nodes:
 		if is_instance_valid(roof):
 			roof.visible = not underground
@@ -121,10 +122,10 @@ func _build_chunk(key: Vector2i) -> void:
 	for x in range(key.x, key.x + CHUNK):
 		for z in range(key.y, key.y + CHUNK):
 			var top: int = terrain.height_at(x, z)
-			if top <= terrain.BEDROCK:
+			if top <= DATA.BEDROCK:
 				continue
 			var cave_here: bool = terrain.caves.has_cave(x, z)
-			for y in range(terrain.BEDROCK, top):
+			for y in range(DATA.BEDROCK, top):
 				if not terrain.is_solid(x, y, z):
 					continue
 				var xf: float = float(x)
@@ -132,7 +133,7 @@ func _build_chunk(key: Vector2i) -> void:
 				var zf: float = float(z)
 				var tile: int = terrain.top_tile(x, z) if y == top - 1 else 4
 				if not terrain.is_solid(x, y + 1, z):
-					var cutaway: bool = cave_here and terrain.caves.floor_at(x, z) < top - 1
+					var cutaway: bool = cave_here and y + 1 == top and terrain.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
 						Vector3(xf + 1, yf + 1, zf + 1), Vector3(xf + 1, yf + 1, zf), tile, "top")
