@@ -1,6 +1,7 @@
 extends CanvasLayer
 const RELIEF = preload("res://scripts/map/map_relief.gd")
 const MARKERS = preload("res://scripts/ui/map_marker_layer.gd")
+const UNCHARTED = preload("res://scripts/map/uncharted_island_silhouettes.gd")
 const MIN_VIEW_SIZE: float = 9.0 # Two 1.15x increments closer than the previous 12m limit.
 const PITCH: float = deg_to_rad(50.0)
 var game: Node
@@ -12,6 +13,7 @@ var map_camera: Camera3D
 var mini_viewport: SubViewport
 var mini_camera: Camera3D
 var relief: Node3D
+var uncharted: Node3D
 var marker_layer: Control
 var search_box: LineEdit
 var results: ItemList
@@ -53,6 +55,9 @@ func setup(owner_game: Node, source: Node) -> void:
 	relief = RELIEF.new()
 	world.add_child(relief)
 	relief.setup(service)
+	uncharted = UNCHARTED.new()
+	world.add_child(uncharted)
+	uncharted.setup(service.biome)
 	map_camera = Camera3D.new()
 	map_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	map_camera.keep_aspect = Camera3D.KEEP_HEIGHT
@@ -66,6 +71,7 @@ func setup(owner_game: Node, source: Node) -> void:
 	add_child(mini_viewport)
 	mini_camera = Camera3D.new()
 	mini_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	mini_camera.cull_mask = 1 # The main world map alone shows undiscovered silhouettes.
 	mini_camera.size = 72.0
 	mini_camera.far = 4000
 	mini_viewport.add_child(mini_camera)
@@ -116,7 +122,7 @@ func _build_ui() -> void:
 	title.add_theme_color_override("font_color", Color("ffe5a1"))
 	top.add_child(title)
 	_button(top, "Player", centre_player)
-	_button(top, "Island", overview)
+	_button(top, "Islands" if service.biome.archipelago != null else "Island", overview)
 	_button(top, "Close", close_map)
 	var left := VBoxContainer.new()
 	left.position = Vector2(12, 68)
@@ -168,7 +174,7 @@ func _build_ui() -> void:
 	footer.offset_right = -250
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	footer.add_theme_color_override("font_color", Color("e4ce9f"))
-	footer.text = "Drag to pan | Wheel / pinch to zoom"
+	footer.text = "Drag to pan | Wheel / pinch to zoom | Dark land = uncharted" if service.biome.archipelago != null else "Drag to pan | Wheel / pinch to zoom"
 	screen.hide()
 
 func _resize() -> void:
@@ -180,10 +186,25 @@ func _resize() -> void:
 	dirty = true
 
 func overview() -> void:
-	target_focus = Vector3.ZERO
 	map_yaw = PI * 0.25
-	var aspect: float = float(map_viewport.size.x) / map_viewport.size.y
-	target_span = float(service.biome.map_half) * 2.0 * sqrt(2.0) * maxf(sin(PITCH), 1.0 / aspect) * 1.15
+	var aspect: float = float(map_viewport.size.x) / float(map_viewport.size.y)
+	# Fit Outpost and all remote exploration islands. Previously this used
+	# home map_half=96 and silently cropped every new island from the map.
+	var left: float = -float(service.biome.map_half)
+	var right: float = float(service.biome.map_half)
+	var north: float = -float(service.biome.map_half)
+	var south: float = float(service.biome.map_half)
+	if service.biome.archipelago != null:
+		for island in service.biome.archipelago.terrain.islands:
+			var centre: Vector2i = island["center"]
+			var radius: float = float(island["radius"]) + 6.0
+			left = minf(left, float(centre.x) - radius)
+			right = maxf(right, float(centre.x) + radius)
+			north = minf(north, float(centre.y) - radius)
+			south = maxf(south, float(centre.y) + radius)
+	target_focus = Vector3((left + right) * 0.5, 0.0, (north + south) * 0.5)
+	var extent: float = maxf(right - left, south - north)
+	target_span = extent * sqrt(2.0) * maxf(sin(PITCH), 1.0 / aspect) * 1.20
 	dirty = true
 
 func centre_player() -> void:
@@ -290,7 +311,7 @@ func pan(relative: Vector2) -> void:
 
 func zoom_by(factor: float, cursor: Vector2 = Vector2.INF) -> void:
 	var old: float = target_span
-	target_span = clampf(target_span * factor, MIN_VIEW_SIZE, maxf(512.0, service.biome.map_half * 8.0))
+	target_span = clampf(target_span * factor, MIN_VIEW_SIZE, maxf(512.0, service.biome.map_world_half * 8.0))
 	if cursor != Vector2.INF:
 		var anchor := ground_at(cursor)
 		target_focus += (anchor - focus) * (1.0 - target_span / old)
