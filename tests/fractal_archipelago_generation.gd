@@ -30,6 +30,27 @@ func _run() -> void:
 			var z: int = center.y + dx
 			check(world.height_at(x, z) == again.height_at(x, z),
 				"Generation is repeatable for fixed seed at %d,%d" % [x, z])
+	# The old Y=-2 shore was >1.5 metres above a swimmer's feet. Require
+	# a shallow landing step and a walking-height route towards cave access.
+	for island in world.islands:
+		var centre: Vector2i = island["center"]
+		var radius: int = ceili(float(island["radius"]))
+		var z: int = centre.y
+		var was_land: bool = false
+		var last_y: int = -9999
+		var max_y: int = -9999
+		for x in range(centre.x + radius + 6, centre.x + roundi(radius * 0.50), -1):
+			if not world.is_land_at(float(x) + 0.5, float(z) + 0.5):
+				continue
+			var y: int = world.height_at(x, z)
+			if not was_land:
+				check(y <= -3, "Island shore starts within swimming auto-step reach")
+				was_land = true
+			else:
+				check(absi(y - last_y) <= 1, "One-block maximum along island landing route")
+			last_y = y
+			max_y = maxi(max_y, y)
+		check(was_land and max_y >= 1, "Landing route rises from ocean to explorable terrain")
 	check(world.caves.routes.size() == world.islands.size(), "One connected cave route per exploration island")
 	check(world.caves.chests.size() == world.islands.size(), "One persistent chest position per cave")
 	var covered_ceiling: bool = false
