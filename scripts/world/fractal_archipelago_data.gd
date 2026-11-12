@@ -43,6 +43,9 @@ func _init(world_seed: int = 64012) -> void:
 	_ridges.fractal_octaves = 4
 	caves = CAVES.new()
 	caves.configure(self)
+	# Cave roof support is assigned only after the routes are generated.
+	# Drop initial height samples so they cannot retain uncapped elevations.
+	_height_cache.clear()
 
 func margin_at(x: float, z: float) -> float:
 	var key := Vector2i(floori(x), floori(z))
@@ -101,6 +104,28 @@ func height_at(x: int, z: int) -> int:
 		if dx >= -3.0 and absf(dz) <= 2.5 and dx <= float(island["radius"]) + 5.0:
 			height = roundi(accessible_shore)
 			break
+	# Locally raised and softened rock crest forms a cliff FACE around
+	# each cave mouth, so tunnels enter through a hillside wall rather
+	# than cutting an exposed rectangular trench across its top.
+	for island in islands:
+		var center: Vector2i = island["center"]
+		var mouth_x: int = center.x + roundi(float(island["radius"]) * 0.55)
+		var inward: float = float(mouth_x - x)
+		var side: float = absf(float(z - center.y))
+		if inward < 0.0 or inward > 15.0 or side >= 10.0:
+			continue
+		var inland_taper: float = clampf((15.0 - inward) / 5.0, 0.0, 1.0)
+		var rise_taper: float = clampf((inward + 2.0) / 4.0, 0.0, 1.0)
+		var shoulder: float = clampf((10.0 - side) / 5.0, 0.0, 1.0)
+		var rocky_brow: int = roundi((6.0 + 3.0 * rise_taper) * shoulder * inland_taper)
+		height += rocky_brow
+		break
+	# Roof thickness is backed by actual rock, not just a texture cutaway.
+	# Only the irregular carved columns receive a minimum overburden.
+	if caves != null:
+		var roof: int = caves.cover_height_at(x, z)
+		if roof != CAVES.INVALID_FLOOR:
+			height = maxi(height, roof)
 	_height_cache[key] = height
 	return height
 
@@ -109,11 +134,12 @@ func is_solid(x: int, y: int, z: int) -> bool:
 		return false
 	var cave_floor: int = caves.floor_at(x, z)
 	if cave_floor != CAVES.INVALID_FLOOR:
-		# Support even a rare low spot along the tunnel: never allow
-		# Perlin valleys to remove the stairs beneath the player's feet.
+		# A solid walkable base stays underneath every descending step.
 		if y < cave_floor:
 			return true
-		if y < cave_floor + CAVES.CORRIDOR_HEIGHT:
+		# Only carve specifically selected XYZ voxels: no rectangular
+		# roof/ground removal when the terrain surface changes elevation.
+		if caves.is_air(x, y, z):
 			return false
 	return y < height_at(x, z)
 
