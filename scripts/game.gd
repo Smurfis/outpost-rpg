@@ -65,6 +65,14 @@ var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of chara
 var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
 var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
+# Three real damage checks across the 0.9s weapon animation. Per-tick
+# damage is 40% of the old single hit (120% total if all three land).
+const WHIRLWIND_TICK_TIMES: Array[float] = [0.0, 0.30, 0.60]
+var whirlwind_tick_clock: float = -1.0
+var whirlwind_ticks_done: int = 0
+var whirlwind_tick_damage: float = 0.0
+var whirlwind_tick_weapon: String = ""
+var whirlwind_unique_hits: Dictionary = {}
 const MAX_MANA: float = 35.0
 const MANA_REGEN_PER_SECOND: float = 2.5
 var mana: float = MAX_MANA
@@ -185,6 +193,7 @@ func _process(delta: float) -> void:
 	_update_crafting(delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
+	_advance_whirlwind_ticks(delta)
 	for id in skill_cooldowns:
 		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
 	for slot in quick_use_cooldowns:
@@ -1369,6 +1378,42 @@ func _whirlwind_targets() -> Array[Node3D]:
 			break
 	return hits
 
+## Hit anything currently inside the AoE on EACH swing, not a cached list
+## from the first frame. New entrants can be hit on subsequent passes.
+func _apply_whirlwind_tick() -> void:
+	if whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size() or hero == null:
+		return
+	for enemy in _whirlwind_targets():
+		if not is_instance_valid(enemy):
+			continue
+		var hit_point: Vector3 = enemy.global_position
+		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
+		hero.show_weapon_hit_effect(hit_point)
+		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
+			enemy.ignite(4.0)
+		whirlwind_unique_hits[enemy.get_instance_id()] = true
+	whirlwind_ticks_done += 1
+	if whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size():
+		if not whirlwind_unique_hits.is_empty():
+			var victims: int = whirlwind_unique_hits.size()
+			gain_weapon_mastery(whirlwind_tick_weapon, 12 + 5 * mini(victims, 5))
+			gain_experience(3 + mini(victims, 4))
+		whirlwind_tick_clock = -1.0
+		whirlwind_tick_weapon = ""
+		whirlwind_unique_hits.clear()
+
+func _advance_whirlwind_ticks(delta: float) -> void:
+	if whirlwind_tick_clock < 0.0 or whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size():
+		return
+	if hero == null or not is_instance_valid(hero) or hero.health <= 0.0:
+		whirlwind_tick_clock = -1.0
+		whirlwind_ticks_done = WHIRLWIND_TICK_TIMES.size()
+		whirlwind_unique_hits.clear()
+		return
+	whirlwind_tick_clock += maxf(0.0, delta)
+	while whirlwind_ticks_done < WHIRLWIND_TICK_TIMES.size() and whirlwind_tick_clock >= WHIRLWIND_TICK_TIMES[whirlwind_ticks_done]:
+		_apply_whirlwind_tick()
+
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
@@ -1394,28 +1439,23 @@ func use_weapon_skill(slot: int) -> bool:
 	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
 	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = 0.75 if skill == "whirlwind" else 0.55
+	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else 0.55
 	if skill == "whirlwind":
-		# Whirlwind does not need a selected target: it damages ALL nearby
-		# valid enemies once, then the sword's visual rig executes two spins.
-		# Equip the actual sword if the player was previously gathering.
+		# A first hit on cast, then the second and third hits at 0.30s and
+		# 0.60s. Every tick checks live positions and creates sword-tip sparks.
 		if active_quick_tool != weapon:
 			select_quick_tool(weapon)
 		hero.play_whirlwind()
-		var hit_count: int = 0
-		for enemy in _whirlwind_targets():
-			if not is_instance_valid(enemy):
-				continue
-			enemy.receive_damage(dealt * _armor_break_damage_multiplier(enemy))
-			if str(weapon_enchants.get(weapon, "")) == "fire" and enemy.has_method("ignite"):
-				enemy.ignite(4.0)
-			hit_count += 1
-		if hit_count > 0:
-			gain_weapon_mastery(weapon, 12 + 5 * mini(hit_count, 5))
-			gain_experience(3 + mini(hit_count, 4))
+		whirlwind_tick_clock = 0.0
+		whirlwind_ticks_done = 0
+		whirlwind_tick_weapon = weapon
+		whirlwind_tick_damage = dealt * 0.40
+		whirlwind_unique_hits.clear()
+		_apply_whirlwind_tick()
 	else:
 		hero.swing()
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		hero.show_weapon_hit_effect(target.global_position)
 		if skill == "armor_break" and target_available(target):
 			# A real follow-up damage increase for six seconds. Applying it
 			# AFTER this impact prevents double-dipping on the opening hit.
@@ -1504,6 +1544,7 @@ func attack(selected: Node3D = null) -> void:
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	target.receive_damage(damage * _armor_break_damage_multiplier(target))
+	hero.show_weapon_hit_effect(target.global_position)
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
 	gain_weapon_mastery(weapon, 12)

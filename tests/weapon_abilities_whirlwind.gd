@@ -60,6 +60,7 @@ func _run() -> void:
 	var center: Vector3 = game.hero.global_position
 	var near_a: Node3D = spawn_target(game, center + Vector3(1.2, 0, 0))
 	var near_b: Node3D = spawn_target(game, center + Vector3(-2.3, 0, 1.1))
+	var steady: Node3D = spawn_target(game, center + Vector3(0, 0, -2.1))
 	var far: Node3D = spawn_target(game, center + Vector3(5.1, 0, 0))
 	var above: Node3D = spawn_target(game, center + Vector3(0.6, 3.2, 0))
 	game.focus_target = null
@@ -67,7 +68,7 @@ func _run() -> void:
 	game.mana = game.MAX_MANA
 	var first_cast: bool = game.use_weapon_skill(2)
 	check(first_cast, "Whirlwind casts with no current target")
-	check(near_a.hit_count == 1 and near_b.hit_count == 1, "Whirlwind strikes two nearby enemies once each")
+	check(near_a.hit_count == 1 and near_b.hit_count == 1 and steady.hit_count == 1, "First Whirlwind tick applies on cast")
 	check(far.hit_count == 0 and above.hit_count == 0, "Whirlwind respects horizontal range and floor height")
 	check(absf(game.mana - (game.MAX_MANA - 12.0)) < 0.01, "Whirlwind spends its actual 12 MP cost")
 	check(float(game.skill_cooldowns.get("whirlwind", 0.0)) == LEVELS.cooldown_for_skill("whirlwind"), "Whirlwind starts its real 13s cooldown")
@@ -78,6 +79,19 @@ func _run() -> void:
 	game.hero.visual.rotation.y = 1.45
 	trail._process(0.05)
 	check(trail.mesh != null and trail.mesh.get_surface_count() > 0, "Sword trail generates visible geometry between actual rotating blade positions")
+	# The second and third passes check live positions, so dodging out of
+	# the circle avoids later damage and re-entering only catches that pass.
+	near_b.global_position = center + Vector3(8.0, 0, 0)
+	game._advance_whirlwind_ticks(0.31)
+	check(near_a.hit_count == 2 and near_b.hit_count == 1 and steady.hit_count == 2, "Second AoE tick hits only nearby enemies")
+	near_a.global_position = center + Vector3(7.0, 0, 0)
+	near_b.global_position = center + Vector3(-2.3, 0, 1.1)
+	game._advance_whirlwind_ticks(0.31)
+	check(near_a.hit_count == 2 and near_b.hit_count == 2 and steady.hit_count == 3, "Third AoE tick checks positions again")
+	check(is_equal_approx(steady.damage_taken, near_a.damage_taken * 1.5), "Three ticks deal proportional damage, not triple burst damage")
+	check(far.hit_count == 0 and above.hit_count == 0, "Enemies beyond the radius or on other floors never take AoE")
+	check(game.whirlwind_ticks_done == 3 and game.whirlwind_tick_clock < 0.0, "Whirlwind clears its timed attack state")
+	near_a.global_position = center + Vector3(1.2, 0, 0)
 	var old_damage: float = near_a.damage_taken
 	check(not game.use_weapon_skill(2) and is_equal_approx(near_a.damage_taken, old_damage), "Whirlwind cooldown prevents repeat hits")
 
