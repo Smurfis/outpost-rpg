@@ -3,6 +3,7 @@ const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 ## Lightweight dungeon guardian; compatible with Outpost's existing melee targeting.
 const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const CUBE_VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
+const ATTACK_TELEGRAPH = preload("res://scripts/vfx/attack_telegraph.gd")
 var hero: CharacterBody3D
 var dungeon: Node3D
 var hp: float = 24.0
@@ -26,11 +27,18 @@ var affix_label: Label3D
 var visual_step_offset: Vector3 = Vector3.ZERO
 var burn_left: float = 0.0
 var burn_tick: float = 0.0
+# Power attacks lock their angle at wind-up start so moving out of the red zone dodges.
+var heavy_charge_left: float = 0.0
+var heavy_attack_cooldown: float = 4.2
+var heavy_telegraph
+var heavy_shape: String = ""
 
 func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3, creature_kind: String = "") -> void:
 	hero = player
 	dungeon = instance
 	quality = RARITY.bounded(tier)
+	heavy_attack_cooldown = 4.2
+	heavy_charge_left = 0.0
 	position = at
 	hp = 24.0 + float(quality) * 15.0
 	name = "CryptGuardian"
@@ -154,7 +162,7 @@ func _physics_process(delta: float) -> void:
 	to_player.y = 0.0
 	var distance: float = to_player.length()
 	var direction := Vector3.ZERO
-	if distance > 1.5 and distance < 8.0:
+	if distance > 1.5 and distance < 8.0 and heavy_charge_left <= 0.0:
 		direction = to_player.normalized()
 	velocity.x = direction.x * (2.0 + float(quality) * 0.24) * speed_multiplier
 	velocity.z = direction.z * (2.0 + float(quality) * 0.24) * speed_multiplier
@@ -180,11 +188,62 @@ func _physics_process(delta: float) -> void:
 	if facing.length_squared() > 0.02:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(1.0, delta * 8.0))
 	cooldown = maxf(0.0, cooldown - delta)
-	if distance < 1.75 and cooldown <= 0.0:
+	heavy_attack_cooldown = maxf(0.0, heavy_attack_cooldown - delta)
+	if heavy_charge_left > 0.0:
+		heavy_charge_left = maxf(0.0, heavy_charge_left - delta)
+		if heavy_charge_left <= 0.0:
+			_finish_heavy_attack()
+		return
+	if cooldown <= 0.0 and distance < 4.2 and heavy_attack_cooldown <= 0.0:
+		_begin_heavy_attack(to_player)
+	elif distance < 1.75 and cooldown <= 0.0:
 		cooldown = 1.7
 		if avatar != null:
 			avatar.play_event("Attack")
-		hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier)
+		hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier, global_position)
+
+## Goblins sweep a broad cone; skeletons thrust in a line. Higher-tier
+## original guardians use a cone. The red ground mesh is the real hit area.
+func _begin_heavy_attack(to_player: Vector3) -> void:
+	if heavy_charge_left > 0.0 or get_parent() == null:
+		return
+	heavy_shape = "line" if appearance == "skeleton" else "cone"
+	var reach: float = 5.0 if heavy_shape == "line" else 4.0
+	heavy_charge_left = 1.1 if quality >= 2 else 0.95
+	heavy_attack_cooldown = 6.0 if quality >= 2 else 5.0
+	var facing: Vector3 = Vector3(to_player.x, 0.0, to_player.z).normalized()
+	if facing.length_squared() < 0.01:
+		facing = Vector3.FORWARD
+	# Snap the facing rig at commit time and keep the ground area stationary.
+	visual.rotation.y = atan2(-facing.x, -facing.z)
+	var origin: Vector3 = global_position
+	if get_world_3d() != null:
+		var ray := PhysicsRayQueryParameters3D.create(
+			global_position + Vector3.UP * 1.5, global_position - Vector3.UP * 3.0,
+			1, [get_rid()])
+		var floor_hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(ray)
+		if not floor_hit.is_empty():
+			origin.y = (floor_hit["position"] as Vector3).y
+	var marker = ATTACK_TELEGRAPH.new()
+	get_parent().add_child(marker)
+	marker.global_position = origin + Vector3.UP * 0.065
+	marker.configure(heavy_shape, facing, reach, heavy_charge_left)
+	heavy_telegraph = marker
+
+func _finish_heavy_attack() -> void:
+	cooldown = 1.7
+	if avatar != null:
+		avatar.play_event("Attack")
+	if hero != null and is_instance_valid(hero) and is_instance_valid(heavy_telegraph):
+		if heavy_telegraph.contains_position(hero.global_position):
+			hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier * 1.65, global_position)
+	_cancel_heavy_attack()
+
+func _cancel_heavy_attack() -> void:
+	heavy_charge_left = 0.0
+	if is_instance_valid(heavy_telegraph):
+		heavy_telegraph.queue_free()
+	heavy_telegraph = null
 
 func ignite(seconds: float = 4.0) -> void:
 	if alive:
@@ -196,6 +255,7 @@ func receive_damage(amount: float) -> void:
 		return
 	hp -= amount * damage_taken_multiplier
 	if hp <= 0.0:
+		_cancel_heavy_attack()
 		alive = false
 		collision_layer = 0
 		collision_mask = 0
