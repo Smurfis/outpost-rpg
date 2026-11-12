@@ -1,7 +1,7 @@
 name: Fractal archipelago feature checks
 on:
   push:
-    branches: [feature/outpost-fractal-perlin-cave-tunnels]
+    branches: [feature/outpost-fractal-perlin-cave-tunnels, feature/fractal-islands-quality-crafting]
   pull_request:
     paths:
       - 'scripts/world/fractal_archipelago_data.gd'
@@ -35,6 +35,17 @@ jobs:
           # Only ignore its known bbtexture.gd resource_name assignment while
           # still rejecting new parser errors or unrelated script failures.
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' import.log | grep -Ev "resource_name"; then exit 1; fi
+      - name: Validate crafting rarity and RNG
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/crafting_quality.gd 2>&1 | tee quality.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CRAFT:' quality.log; then exit 1; fi
+          grep -q 'CRAFT QUALITY RESULT: 0 failures' quality.log
+      - name: Verify automatic crafting through gameplay smoke test
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd 2>&1 | tee crafting-smoke.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' crafting-smoke.log; then exit 1; fi
       - name: Verify deterministic islands and one-block cave steps
         run: |
           set -o pipefail
