@@ -527,41 +527,47 @@ func _chunk_foliage(_chunk_x: int, _chunk_z: int) -> MeshInstance3D:
 	return null
 
 func _shore_foam_vertex(st: SurfaceTool, point: Vector2, opacity: float) -> void:
-	# Vertex alpha feathers the strip into the ocean. Colours stay cool-white,
-	# never the opaque pale-green squares from the earlier foam implementation.
-	st.set_color(Color(0.82, 0.95, 1.0, opacity))
+	# Cool-blue, low-alpha surf. Keeping the strip faint prevents a solid
+	# white border along every square of the voxel coastline.
+	st.set_color(Color(0.55, 0.79, 0.94, opacity))
 	st.add_vertex(Vector3(point.x, SEA_LEVEL + 0.035, point.y))
 
 
 func _append_shore_foam_edge(st: SurfaceTool, edge_start: Vector2, edge_end: Vector2,
-		water_direction: Vector2, x: int, z: int, side: int) -> void:
-	# Three short sections keep the surf slightly uneven while preserving one
-	# batched mesh per chunk. Both endpoints of adjoining sections agree, so
-	# there are no cracks or flickering seams as the player rotates the camera.
+		water_direction: Vector2, x: int, z: int, side: int,
+		taper_start: bool, taper_end: bool) -> void:
+	# Fade the strip at perpendicular shoreline joins. Otherwise two
+	# translucent foam faces overlap at an inside corner and make bright
+	# triangular wedges, even when the underlying water mesh is complete.
 	const SEGMENTS: int = 3
 	for segment in range(SEGMENTS):
 		var t0: float = float(segment) / float(SEGMENTS)
 		var t1: float = float(segment + 1) / float(SEGMENTS)
-		var shore_a: Vector2 = edge_start.lerp(edge_end, t0) + water_direction * 0.018
-		var shore_b: Vector2 = edge_start.lerp(edge_end, t1) + water_direction * 0.018
+		var shore_a: Vector2 = edge_start.lerp(edge_end, t0) + water_direction * 0.008
+		var shore_b: Vector2 = edge_start.lerp(edge_end, t1) + water_direction * 0.008
 		var seed_a: int = posmod(x * 17 + z * 29 + side * 13 + segment * 7, 6)
 		var seed_b: int = posmod(x * 17 + z * 29 + side * 13 + (segment + 1) * 7, 6)
-		var width_a: float = 0.13 + 0.027 * float(seed_a)
-		var width_b: float = 0.13 + 0.027 * float(seed_b)
+		var width_a: float = 0.10 + 0.017 * float(seed_a)
+		var width_b: float = 0.10 + 0.017 * float(seed_b)
+		var alpha_a: float = 0.16 + 0.023 * float(seed_a)
+		var alpha_b: float = 0.16 + 0.023 * float(seed_b)
+		if taper_start and segment == 0:
+			alpha_a = 0.0
+		if taper_end and segment == SEGMENTS - 1:
+			alpha_b = 0.0
 		var water_a: Vector2 = shore_a + water_direction * width_a
 		var water_b: Vector2 = shore_b + water_direction * width_b
-		_shore_foam_vertex(st, shore_a, 0.54)
-		_shore_foam_vertex(st, shore_b, 0.54)
+		_shore_foam_vertex(st, shore_a, alpha_a)
+		_shore_foam_vertex(st, shore_b, alpha_b)
 		_shore_foam_vertex(st, water_b, 0.0)
-		_shore_foam_vertex(st, shore_a, 0.54)
+		_shore_foam_vertex(st, shore_a, alpha_a)
 		_shore_foam_vertex(st, water_b, 0.0)
 		_shore_foam_vertex(st, water_a, 0.0)
 
 
 func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# The old single translucent quad covered much of each shoreline water
-	# cell, producing obvious green/blue rectangular boxes on Android.
-	# Only emit thin feathered foam following the actual land/water cell edges.
+	# Keep a subtle, feathered surf strip on genuine land/water edges only.
+	# Neighbour checks use the same discrete cells as terrain and ocean meshes.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var edge_count: int = 0
@@ -569,17 +575,25 @@ func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
 			if _land_cell(x, z):
 				continue
-			if _land_cell(x + 1, z):
-				_append_shore_foam_edge(st, Vector2(x + 1, z), Vector2(x + 1, z + 1), Vector2(-1, 0), x, z, 0)
+			var east_land: bool = _land_cell(x + 1, z)
+			var west_land: bool = _land_cell(x - 1, z)
+			var south_land: bool = _land_cell(x, z + 1)
+			var north_land: bool = _land_cell(x, z - 1)
+			if east_land:
+				_append_shore_foam_edge(st, Vector2(x + 1, z), Vector2(x + 1, z + 1),
+					Vector2(-1, 0), x, z, 0, north_land, south_land)
 				edge_count += 1
-			if _land_cell(x - 1, z):
-				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x, z + 1), Vector2(1, 0), x, z, 1)
+			if west_land:
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x, z + 1),
+					Vector2(1, 0), x, z, 1, north_land, south_land)
 				edge_count += 1
-			if _land_cell(x, z + 1):
-				_append_shore_foam_edge(st, Vector2(x, z + 1), Vector2(x + 1, z + 1), Vector2(0, -1), x, z, 2)
+			if south_land:
+				_append_shore_foam_edge(st, Vector2(x, z + 1), Vector2(x + 1, z + 1),
+					Vector2(0, -1), x, z, 2, west_land, east_land)
 				edge_count += 1
-			if _land_cell(x, z - 1):
-				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x + 1, z), Vector2(0, 1), x, z, 3)
+			if north_land:
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x + 1, z),
+					Vector2(0, 1), x, z, 3, west_land, east_land)
 				edge_count += 1
 	if edge_count == 0:
 		return null
@@ -596,6 +610,7 @@ func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	foam.material_override = material
 	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return foam
+
 
 func _ground_tile(x: int, z: int) -> int:
 	if stream_enabled:
@@ -646,20 +661,18 @@ func _water_material() -> ShaderMaterial:
 	return _shared_water_material
 
 
-func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3) -> void:
-	# Interpolate a cheap shoreline proximity value through actual ocean
-	# triangles. This doesn't change the coastal mask, collision or draw
-	# calls and avoids fitting a fake circular shoreline in the shader.
-	var offshore_distance: float = maxf(0.0, -_coast_margin(at.x, at.z))
-	var shallow_amount: float = 1.0 - smoothstep(0.0, 5.2, offshore_distance)
+func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3, shallow_amount: float) -> void:
+	# All six vertices of a flooded cell share one shore tint. Per-corner
+	# interpolation caused diagonal turquoise wedges along coastline tiles.
 	st.set_color(Color(shallow_amount, 0.0, 0.0, 1.0))
 	st.add_vertex(at)
 
 
 func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# Draw ONLY genuinely flooded cells in streamed terrain. A water tile
-	# always has a matching rendered/collidable stone seabed generated by
-	# _build_ground_chunk(), so there's no visual ocean over a bottomless void.
+	# Use the EXACT tile mask as the visible ground, seabed and collision.
+	# The previous continuous is_land_at() tests rejected individual water
+	# triangles within a flooded tile, exposing dark seabed in triangular
+	# notches along straight shores, inside corners and streamed chunk edges.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var count: int = 0
@@ -671,11 +684,11 @@ func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 			var b := Vector3(float(x), 0.0, float(z + 1))
 			var c := Vector3(float(x + 1), 0.0, float(z + 1))
 			var d := Vector3(float(x + 1), 0.0, float(z))
-			# Ground and water use the same whole-cell coast classification.
-			# Culling individual triangle centroids leaves half-cell holes in
-			# offshore tiles, especially around shore-adjacent fishing pools.
+			var offshore_distance: float = maxf(0.0,
+				-_coast_margin(float(x) + 0.5, float(z) + 0.5))
+			var shallow_amount: float = 1.0 - smoothstep(0.0, 5.2, offshore_distance)
 			for vertex in [a, b, c, a, c, d]:
-				_append_pixel_water_vertex(st, vertex)
+				_append_pixel_water_vertex(st, vertex, shallow_amount)
 			count += 2
 	if count == 0:
 		return null

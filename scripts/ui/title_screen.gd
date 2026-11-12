@@ -173,14 +173,16 @@ func _layout_for_size(available: Vector2) -> void:
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
 		return
-	# The original three-piece backdrop duplicated the left/right painted
-	# border, flag, tent and portal in the expanded 20:9 side strips. Use ONE
-	# continuous copy of the approved landscape, spanning the full viewport.
-	# Only the background scales horizontally: all clickable buttons, logo,
-	# version badge and overlay sprites retain their original proportions.
+	# Draw the wide panorama directly in viewport coordinates, BEHIND the
+	# centred 1280x720 artboard. A negative-x TextureRect inside that artboard
+	# left a curtain-coloured strip on its left edge at desktop 16:10/19:10
+	# sizes (for example, 1919x1010), while the right edge kept extending.
+	# The shader still remaps only the outer scenery to preserve the centre.
+	_wide_backdrop.position = Vector2.ZERO
+	_wide_backdrop.size = available
 	var panorama: TextureRect = _wide_backdrop.get_node("WidePanorama") as TextureRect
-	panorama.position = Vector2(-half_extra, 0.0)
-	panorama.size = Vector2(DESIGN.x + 2.0 * half_extra, DESIGN.y)
+	panorama.position = Vector2.ZERO
+	panorama.size = available
 	if panorama.material is ShaderMaterial:
 		(panorama.material as ShaderMaterial).set_shader_parameter("side_extension_px", half_extra)
 
@@ -338,15 +340,17 @@ func _make_screen() -> void:
 	_canvas.add_child(_update_notice)
 
 func _make_wide_background() -> void:
-	# One image, one frame, one left banner and one right banner.
-	# Never atlas/copy the border into extra side panels on ultrawide phones:
-	# it creates the highly visible duplicated 20:9 screenshot artifacts.
+	# One panorama covers the ENTIRE viewport independently of the fitted
+	# artboard. Drawing it inside the artboard could expose the navy curtain
+	# in the spare horizontal area and leave a one-sided decorative frame.
+	# Insert behind the artboard so buttons and the crest remain above it.
 	_wide_backdrop = Control.new()
 	_wide_backdrop.name = "WideBackdrop"
 	_wide_backdrop.size = DESIGN
 	_wide_backdrop.visible = false
 	_wide_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_canvas.add_child(_wide_backdrop)
+	add_child(_wide_backdrop)
+	move_child(_wide_backdrop, _canvas.get_index())
 	var panorama := TextureRect.new()
 	panorama.name = "WidePanorama"
 	panorama.texture = _approved_backdrop.texture
