@@ -459,13 +459,19 @@ func _ready() -> void:
 	root.add_child(status_effect_strip)
 	status_effect_strip.visible = false
 
-	# Passive one-line currency wallet. No dropdown, click target, shaded
-	# panel or resource tracker is displayed over normal gameplay. The bag
-	# and MENU remain independent touch inputs on the minimap shoulder.
+	# One compact, passive wallet frame; it never captures clicks or opens
+	# a flyout. Keep a pixel-sharp border and a subtle backing over bright terrain.
 	wallet_frame = _panel(0.302, 0.116, 0.505, 0.470)
 	wallet_frame.name = "ResourceQuickChips"
-	wallet_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
-	wallet_frame.visible = false
+	var wallet_style := StyleBoxFlat.new()
+	wallet_style.bg_color = Color(0.055, 0.048, 0.058, 0.70)
+	wallet_style.border_color = Color(0.83, 0.69, 0.43, 0.80)
+	wallet_style.set_border_width_all(1)
+	wallet_style.set_corner_radius_all(2)
+	wallet_style.set_content_margin_all(0)
+	wallet_style.anti_aliasing = false
+	wallet_frame.add_theme_stylebox_override("panel", wallet_style)
+	wallet_frame.visible = true
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "◈ WALLET ▾"
@@ -495,6 +501,9 @@ func _ready() -> void:
 	for denomination in ["copper", "silver", "gold", "gems"]:
 		var line := _label(denomination.capitalize() + "    —", 15, SKIN.CREAM, 0.31, 0.20, 0.48, 0.24)
 		line.name = "WalletCurrency_" + denomination
+		line.add_theme_font_size_override("font_size", 14)
+		line.add_theme_color_override("font_outline_color", Color("#18151b"))
+		line.add_theme_constant_override("outline_size", 2)
 		line.autowrap_mode = TextServer.AUTOWRAP_OFF
 		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -552,9 +561,15 @@ func _ready() -> void:
 		items[key] = count
 	# Overload notification appears only when load needs attention; the bag
 	# itself shows the full capacity meter and bonus information.
-	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.132, 0.310, 0.157)
+	bag_weight_label = _label("BAG  0 / 0", 13, Color("#f0e5ca"), 0.020, 0.132, 0.310, 0.157)
 	bag_weight_label.name = "CarryWeightLabel"
-	bag_weight_label.visible = false
+	bag_weight_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	bag_weight_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bag_weight_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bag_weight_label.add_theme_color_override("font_outline_color", Color("#15131a"))
+	bag_weight_label.add_theme_constant_override("outline_size", 2)
+	bag_weight_label.clip_text = true
+	bag_weight_label.visible = true
 
 	# The persistent quest ribbon is single-line and ellipsis-safe; on
 	# completion it collapses to a small journal button instead of endlessly
@@ -1235,7 +1250,7 @@ func _toggle_wallet() -> void:
 
 func _apply_wallet_layout() -> void:
 	wallet_open = false
-	wallet_frame.visible = false
+	wallet_frame.visible = true
 	wallet_popup_title.visible = false
 	wallet_collapse.visible = false
 	wallet_collapse.disabled = true
@@ -1243,9 +1258,9 @@ func _apply_wallet_layout() -> void:
 	wallet_resource_icon.visible = false
 	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
-		(wallet_currency_rows[key] as Label).visible = key in ["gold", "silver", "copper"]
+		(wallet_currency_rows[key] as Label).visible = key in ["gold", "silver", "copper", "gems"]
 	for key in wallet_currency_icons:
-		(wallet_currency_icons[key] as TextureRect).visible = key in ["gold", "silver", "copper"]
+		(wallet_currency_icons[key] as TextureRect).visible = key in ["gold", "silver", "copper", "gems"]
 	_layout_player_chrome()
 
 func _short_currency(value: int) -> String:
@@ -2393,21 +2408,19 @@ func _layout_player_chrome() -> void:
 	_layout_player_chrome_for_size(screen, scale)
 
 func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
-	# Preserve the portrait/HP and the top-right BAG/MENU controls. Keep
-	# all five currency captions on a single line strictly LEFT of BAG.
+	# Reserve space for four slim currency icon/number pairs between the hero
+	# frame and BAG, even at phone landscape resolutions. The frame's right edge
+	# is eight logical pixels left of BAG; all amounts stay on one line.
 	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
 		return
 	var unit: float = scale
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * unit, screen.x * 0.23))
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
-	var wallet_left: float = map_left_base - 300.0
-	# Right edge of the five-column strip ends eight virtual pixels before
-	# BAG (whose left edge is map_left_base - 164). Earlier code ended at
-	# map_left_base - 91, drawing GOLD/GEMS UNDER the Bag button.
 	var currency_right: float = map_left_base - 172.0
-	var wallet_width: float = minf(545.0, maxf(0.0, currency_right - 354.0))
+	var wallet_width: float = minf(404.0, maxf(0.0, currency_right - 354.0))
 	var currency_start: float = currency_right - wallet_width
-	var currency_cell: float = wallet_width / 3.0
+	var currency_cell: float = wallet_width / 4.0
+	var currency_icon_size: float = clampf(currency_cell * 0.29, 17.0, 25.0)
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
@@ -2422,14 +2435,15 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"mana_text": Rect2(109, 76, 226, 17),
 		"weapon": Rect2(117, 78, 220, 22),
 		"effects": Rect2(117, 99, 220, 22),
-		"wallet": Rect2(wallet_left, 75, 275, 248),
+		"wallet": Rect2(currency_start - 7.0, 12.0, wallet_width + 14.0, 56.0),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
-		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
-		"coins": Rect2(currency_start + 31.0, 17.0, maxf(22.0, currency_cell - 34.0), 43.0),
-		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
-		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
+		"popup_title": Rect2(currency_start, 83, 245, 28),
+		"coins": Rect2(currency_start, 17.0, 72.0, 43.0),
+		"resource_icon": Rect2(currency_start + 20, 278, 26, 26),
+		"resource_count": Rect2(currency_start + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 156.0, 11, 58, 58),
-		"weight": Rect2(375, 112, 295, 24),
+		# The carry meter belongs directly below BAG, not above the quest.
+		"weight": Rect2(map_left_base - 208.0, 75.0, 161.0, 24.0),
 		"quest_frame": Rect2(16, 143, 347, 52),
 		"quest_rule": Rect2(25, 192, 335, 1.4),
 		"quest_button": Rect2(23, 151, 109, 37),
@@ -2471,15 +2485,15 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
-	for i in range(3):
-		var key: String = ["gold", "silver", "copper"][i]
+	for i in range(4):
+		var key: String = ["gold", "silver", "copper", "gems"][i]
 		var x: float = currency_start + currency_cell * float(i)
 		var icon: TextureRect = wallet_currency_icons[key] as TextureRect
-		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 24.0) * unit,
-				Vector2(27.0, 27.0) * unit))
+		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 27.0) * unit,
+				Vector2(currency_icon_size, currency_icon_size) * unit))
 		var line: Label = wallet_currency_rows[key] as Label
-		_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
-				Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
+		_place_px(line, screen, Rect2(Vector2(x + currency_icon_size + 4.0, 17.0) * unit,
+				Vector2(maxf(10.0, currency_cell - currency_icon_size - 6.0), 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -3737,9 +3751,9 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 	if bag_weight_label != null and game != null:
 		var max_load: float = maxf(1.0, game.bag_capacity())
 		var current_load: float = game.bag_load()
-		bag_weight_label.text = "BAG NEAR LIMIT  %.0f / %.0f" % [current_load, max_load]
-		bag_weight_label.visible = current_load >= max_load * 0.85
-		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load >= max_load else Color("#e3b75d"))
+		bag_weight_label.text = "BAG  %.0f / %.0f" % [current_load, max_load]
+		bag_weight_label.visible = true
+		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load > max_load else Color("#e3b75d") if current_load >= max_load * 0.85 else Color("#f0e5ca"))
 	hero_detail.visible = false
 	if game != null and xp_level_label != null:
 		var level_data: Dictionary = game.level_state()
