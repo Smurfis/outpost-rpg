@@ -311,6 +311,11 @@ func open_storage(label: String, contents: Dictionary, tombstone_id: String = ""
 	open("storage")
 
 func close_page() -> void:
+	# A completed receipt is acknowledged when leaving the station. Opening
+	# it again must show recipes, never trap the player on Craft Another.
+	if current_page == "craft" and game.crafting.is_empty():
+		completed_id = ""
+		craft_step = "browse"
 	visible = false
 	shell.visible = false
 	if inventory_window != null:
