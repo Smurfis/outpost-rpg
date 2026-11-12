@@ -181,9 +181,13 @@ func _test_game() -> void:
 		game.hero.global_position = boar.global_position + Vector3(0.75, 0, 0)
 		game.menu.close_page()
 		game.attack_delay = 0.0
+		var before_hp: float = boar.hp
 		game.attack()
-		check(is_equal_approx(boar.hp, 8.0), "Iron blade upgrades combat to 24 damage")
-		boar.receive_damage(50.0)
+		# Crafted rarity adds genuine damage and may crit. An exact HP
+		# assertion is nondeterministically wrong after a quality upgrade.
+		check(boar.hp < before_hp - 23.9, "Iron blade deals at least 24 damage, plus any quality rolls")
+		if is_instance_valid(boar) and boar.hp > 0.0:
+			boar.receive_damage(50.0)
 		check(int(game.inventory.get("hide", 0)) > 0, "Boar awards hides")
 	game.queue_free()
 	print("RESULT: %d failed assertion(s)." % failures)
