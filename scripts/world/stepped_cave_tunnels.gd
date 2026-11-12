@@ -11,7 +11,7 @@ var routes: Array = []
 var entrances: Array[Vector3] = []
 var chests: Array[Vector3] = []
 
-func configure(terrain: RefCounted) -> void:
+func configure(terrain) -> void:
 	floors.clear()
 	routes.clear()
 	entrances.clear()
