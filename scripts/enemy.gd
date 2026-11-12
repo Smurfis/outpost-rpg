@@ -148,8 +148,12 @@ func _physics_process(delta: float) -> void:
 			visual_step_offset = visual_step_offset.limit_length(1.0)
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
 	visual.position = visual_step_offset
-	if pursuit.length() > 0.1:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-pursuit.x, -pursuit.z), minf(delta * 10.0, 1.0))
+	# Existing boars also keep facing the hero after stopping to attack.
+	var facing: Vector3 = pursuit
+	if dist <= 1.45 and dist > 0.02:
+		facing = direction.normalized()
+	if facing.length_squared() > 0.02:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(delta * 10.0, 1.0))
 	cooldown -= delta
 	if dist < 1.8 and cooldown <= 0.0:
 		cooldown = 1.7
