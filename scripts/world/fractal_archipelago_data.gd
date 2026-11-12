@@ -12,7 +12,7 @@ var islands: Array[Dictionary] = [
 	{"center": Vector2i(18, 232), "radius": 46.0, "strength": 1.4},
 ]
 var seed: int
-var caves: RefCounted
+var caves
 var _fuzz: FastNoiseLite
 var _fractal: FastNoiseLite
 var _ridges: FastNoiseLite
