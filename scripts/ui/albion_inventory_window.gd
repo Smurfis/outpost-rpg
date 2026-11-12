@@ -679,7 +679,7 @@ func _item_tip(id: String) -> String:
 			break
 	if CARRY.is_bag(id):
 		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
-	result += "\nSelect to inspect or assign" 
+	result += "\nTap to inspect or assign" 
 	return result
 
 func _render_details() -> void:
