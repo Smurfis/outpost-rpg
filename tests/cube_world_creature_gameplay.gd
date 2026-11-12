@@ -22,6 +22,8 @@ func _run() -> void:
 		root.add_child(avatar)
 		check(avatar.configure(kind, 0.7), "Native model instantiates: " + kind)
 		check(avatar.animator != null, "Native animation player: " + kind)
+		check(avatar.model != null and is_equal_approx(avatar.model.rotation.y, PI),
+			"Imported +Z artwork is turned to face Outpost -Z: " + kind)
 		var motions: Array = ["Idle", "Walk", "Run", "Death"]
 		if kind in ["skeleton", "goblin"]:
 			motions.append_array(["Attack", "HitRecieve"])
@@ -65,6 +67,7 @@ func _run() -> void:
 		wolf._physics_process(0.016)
 		check(game.hero.health < before and wolf.cooldown > 0.0, "Wolf attacks close targets with bite animation")
 		check(wolf.avatar.current_state.to_lower().contains("headbutt"), "Wolf attack visibly uses supplied clip")
+		check(wolf.visual.rotation.y < -0.01, "Wolf rotates toward nearby hero even after stopping to bite")
 		# Leave the wolf out of range for the rest of the procedural dungeon test.
 		game.hero.global_position = Vector3.ZERO
 	for tier in [0, 1, 2, 3, 4]:
@@ -80,6 +83,8 @@ func _run() -> void:
 			if tier <= 2:
 				check(guard.appearance in ["skeleton", "goblin"], "Tier %d uses Skeleton / Goblin: %s" % [tier, guard.appearance])
 				check(guard.avatar != null and guard.avatar.animator != null, "Animated guardian meshes on tier %d" % tier)
+				if guard.avatar != null:
+					check(is_equal_approx(guard.avatar.model.rotation.y, PI), "Dungeon imported guardian forward is corrected")
 			else:
 				check(guard.appearance == "", "Epic/Legendary original guardian not overridden")
 		dungeon.queue_free()

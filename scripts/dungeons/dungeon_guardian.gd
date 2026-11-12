@@ -173,8 +173,12 @@ func _physics_process(delta: float) -> void:
 	visual.position = visual_step_offset
 	if avatar != null:
 		avatar.play_motion(direction.length() * (2.0 + float(quality) * 0.24))
-	if direction.length() > 0.02:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
+	# Closing to attack range zeroes movement, but should not freeze facing.
+	var facing: Vector3 = direction
+	if distance <= 1.5 and distance > 0.02:
+		facing = to_player.normalized()
+	if facing.length_squared() > 0.02:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(1.0, delta * 8.0))
 	cooldown = maxf(0.0, cooldown - delta)
 	if distance < 1.75 and cooldown <= 0.0:
 		cooldown = 1.7

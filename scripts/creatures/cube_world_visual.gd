@@ -27,6 +27,9 @@ func configure(kind: String, size: float = 1.0) -> bool:
 		return false
 	add_child(model)
 	model.scale = Vector3.ONE * size
+	# Quaternius glTF creatures face local +Z, but Outpost's actors aim local -Z.
+	# Turn only the imported artwork so gameplay movement and hitboxes stay unchanged.
+	model.rotation.y = PI
 	var players: Array[Node] = model.find_children("*", "AnimationPlayer", true, false)
 	if players.is_empty():
 		push_warning("Cube World model without animations: " + kind)
