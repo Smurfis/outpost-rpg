@@ -8,7 +8,7 @@ uniform vec4 ocean_deep : source_color = vec4(0.025, 0.145, 0.360, 1.0);
 uniform vec4 ocean_swell : source_color = vec4(0.040, 0.360, 0.630, 1.0);
 uniform vec4 ocean_glint : source_color = vec4(0.370, 0.790, 0.950, 1.0);
 uniform vec4 ocean_foam : source_color = vec4(0.750, 0.940, 0.980, 1.0);
-// Shallow water follows world coastline vertex colour, not a screen-space mask.
+// Shallow water uses flat per-cell shoreline colour, not a screen-space mask.
 uniform vec4 ocean_shallow : source_color = vec4(0.080, 0.670, 0.790, 1.0);
 uniform float wave_speed : hint_range(0.0, 3.0) = 0.72;
 uniform float pixel_density : hint_range(1.0, 16.0, 1.0) = 3.0;
@@ -36,7 +36,7 @@ void fragment() {
 	ripples += 0.25 * sin((p.x + p.y) * 2.05 + t * 0.32);
 	float water_band = step(-0.20, ripples);
 	vec3 pigment = mix(ocean_deep.rgb, ocean_swell.rgb, water_band * 0.82);
-	// Shallow colour is interpolated from the real streamed land/water mask.
+	// Shallow tint is constant across both triangles of each streamed water cell.
 	// Bright water has depth and remains opaque (Android Compatibility-safe).
 	float shallow = clamp(COLOR.r, 0.0, 1.0);
 	pigment = mix(pigment, ocean_shallow.rgb, shallow * (0.43 + water_band * 0.24));
