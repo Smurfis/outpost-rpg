@@ -120,6 +120,23 @@ func height_at(x: int, z: int) -> int:
 		var rocky_brow: int = roundi((6.0 + 3.0 * rise_taper) * shoulder * inland_taper)
 		height += rocky_brow
 		break
+	# Blend a real walk-in approach up to the high cliff mouths. Each
+	# exterior tile climbs at most one voxel towards the cave floor.
+	# Without this, taller islands make 2-3-block steps directly outside
+	# the mouth even if the tunnel itself is five blocks high.
+	# Narrow three-voxel centre path and natural stone shoulders avoid
+	# digging a giant rectangular section out of the surrounding hillside.
+	if caves != null:
+		for route in caves.routes:
+			var mouth: Vector3i = route[0]
+			var offset: int = x - mouth.x
+			if offset < 1 or offset > 15 or absi(z - mouth.z) > 1:
+				continue
+			var stair_y: int = mouth.y - offset
+			if stair_y < -2:
+				break
+			height = stair_y
+			break
 	# Roof thickness is backed by actual rock, not just a texture cutaway.
 	# Only the irregular carved columns receive a minimum overburden.
 	if caves != null:
