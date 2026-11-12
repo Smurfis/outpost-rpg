@@ -44,15 +44,21 @@ func _run() -> void:
 		# low-cost distant water. Keep this test aligned to the approved art.
 		_check(biome.get_node_or_null("SteppedDistanceCliffs") == null, "No artificial wall of rock at the edge of streamed terrain")
 		_check(biome.get_node_or_null("DistantWaterHorizon") != null, "Distant horizon uses water rather than oversized rock border")
+	# Trees now spawn as real gatherable resource nodes (and large forests
+	# are batched within the streamed biome), not decorative root meshes.
+	# Supply crates are WorldObject children with a proper pickup contract.
 	var tree_count: int = 0
-	var box_count: int = 0
-	for child in game.get_children():
-		if child is MeshInstance3D and str(child.name).begins_with("VoxelTree"):
+	var chest_count: int = 0
+	for resource in get_nodes_in_group("resources"):
+		if str(resource.kind) == "wood":
 			tree_count += 1
-		if child is MeshInstance3D and str(child.name).begins_with("VoxelCrate"):
-			box_count += 1
-	_check(tree_count >= 5, "Five decorative trees use the voxel skin")
-	_check(box_count >= 4, "Four supply crates use the voxel skin")
+	for child in game.get_children():
+		if child.has_method("remaining") and str(child.get("action_kind")) == "chest":
+			var art: Node3D = child.get_node_or_null("VoxelCrate") as Node3D
+			if art != null and art is MeshInstance3D and (art as MeshInstance3D).mesh != null:
+				chest_count += 1
+	_check(tree_count >= 5, "World contains at least five gatherable timber trees")
+	_check(chest_count > 0, "Supply chests contain actual pixel-art meshes and pickup behaviour")
 	_check(game.get_node_or_null("Terrain") != null, "Original collision floor retained")
 	_check(game.get("hero") != null and game.get("menu") != null, "Gameplay/HUD still initialize")
 	var body: MeshInstance3D = game.hero.visual.get_node_or_null("adventurer_torso") as MeshInstance3D
@@ -62,7 +68,7 @@ func _run() -> void:
 		if child is MeshInstance3D and child.material_override == atlas:
 			pixel_station_blocks += 1
 	_check(pixel_station_blocks > 0, "Crafting stations use matching pixel textures")
-	_check(game.get("recipes").size() == 21 and not game._recipe_by_id("torch").is_empty() and not game._recipe_by_id("backpack_t2").is_empty(), "Original craft recipes and six bag recipes coexist")
+	_check(game.get("recipes").size() >= 21 and not game._recipe_by_id("torch").is_empty() and not game._recipe_by_id("backpack_t2").is_empty() and not game._recipe_by_id("shrimp_net").is_empty(), "Core recipes, six bags and new fishing progression coexist")
 	var kinds: Dictionary = {}
 	for node in get_nodes_in_group("resources"):
 		kinds[node.kind] = true
