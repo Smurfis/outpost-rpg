@@ -127,6 +127,13 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_menu_skills_adaptive.gd 2>&1 | tee skills-adaptive.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD POLISH:' skills-adaptive.log; then exit 1; fi
           grep -q "HUD POLISH RESULT: 0 failures" skills-adaptive.log
+      - name: Verify dodgeable cone/line heavy attacks
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_combat_telegraphs.gd 2>&1 | tee alpha-telegraphs.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ALPHA TELEGRAPHS:' alpha-telegraphs.log; then exit 1; fi
+          grep -q "ALPHA TELEGRAPHS RESULT: 0 failures" alpha-telegraphs.log
+
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
