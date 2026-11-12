@@ -101,11 +101,10 @@ func _test_game() -> void:
 	check(int(game.inventory.get("spear", 0)) == 0, "Crafting does not instantly deliver item")
 	check(int(game.inventory.get("wood", 0)) == 7, "Materials remain reserved until completion")
 	game._update_crafting(10.0)
-	check(int(game.inventory.get("spear", 0)) == 0, "Timer alone cannot finish without work actions")
-	for i in range(3):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(game.crafting.is_empty(), "Manual workshop actions finish craft")
+	check(game.crafting.is_empty(), "Automatic crafting completes without repeated actions")
+	check(not game.last_craft_roll.is_empty(), "Equipment receives a rarity roll")
+	check(game.best_craft_rolls.has("spear"), "Best crafted spear stats are retained")
+	check(game.menu.progress_bar == null, "No obsolete action button remains after craft")
 	check(int(game.inventory.get("spear", 0)) == 1, "Completed spear enters inventory")
 	check(int(game.inventory.get("wood", 0)) == 4 and int(game.inventory.get("stone", 0)) == 3, "Ingredients deducted once on completion")
 	check(game.spear_crafted, "Spear crafted flag retained")
@@ -114,7 +113,13 @@ func _test_game() -> void:
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Unequipping restores training blade")
 	check(game.equip_item("spear"), "Owned weapon can be equipped again")
 	check(game.is_equipped("spear"), "Weapon slot now reflects equipped spear")
-	check(not game.can_craft("spear"), "Unique gear cannot be duplicated")
+	check(game.can_craft("spear"), "Owned equipment can be reforged for new RNG stats")
+	var original_spear: Dictionary = game.best_craft_rolls["spear"].duplicate(true)
+	check(game.begin_craft("spear"), "Second quality roll can start")
+	game._update_crafting(10.0)
+	check(int(game.inventory.get("spear", 0)) == 1, "Reforging does not create an extra unique item")
+	check(float(game.best_craft_rolls["spear"]["score"]) >= float(original_spear["score"]), "Reforging never destroys a better roll")
+	check(int(game.inventory.get("wood", 0)) == 1, "Reforging pays the full material cost")
 	game.menu.close_page()
 	game.inventory["stone"] = 6
 	check(game.begin_craft("pickaxe"), "Can start another recipe after axe is already owned")
@@ -129,7 +134,7 @@ func _test_game() -> void:
 	check(game.hero.tool_mesh == null and game.hero.sword_mesh.visible, "Putting pickaxe away restores sword")
 	game.inventory["pickaxe"] = 0
 	check(not game.select_quick_tool("pickaxe"), "Unowned pickaxe cannot be selected")
-	check(int(game.inventory.get("wood", 0)) == 4, "Cancellation never consumes ingredients")
+	check(int(game.inventory.get("wood", 0)) == 1, "Cancellation never consumes ingredients")
 	game.show_inventory()
 	check(game.menu.visible and game.menu.current_page == "bag", "Inventory tab opens")
 	game.show_equipment()
@@ -157,19 +162,14 @@ func _test_game() -> void:
 	check(game.can_craft("iron_ingot"), "Iron ingot can be smelted at forge")
 	check(game.begin_craft("iron_ingot"), "Forge crafting starts")
 	game._update_crafting(10.0)
-	for i in range(4):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(int(game.inventory.get("iron_ingot", 0)) == 1, "Forge produces refined ingot")
+	check(int(game.inventory.get("iron_ingot", 0)) == 1, "Automatic forge produces refined ingot")
 	check(int(game.inventory.get("iron", 0)) == 0, "Iron ore consumed by recipe")
 	game.inventory["iron_ingot"] = 2
 	game.inventory["wood"] = 2
 	check(game.begin_craft("iron_blade"), "Iron blade can be forged from ingots")
 	game._update_crafting(10.0)
-	for i in range(5):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(int(game.inventory.get("iron_blade", 0)) == 1, "Forged blade awarded")
+	check(int(game.inventory.get("iron_blade", 0)) == 1, "Automatically forged blade awarded")
+	check(game.best_craft_rolls.has("iron_blade"), "Forged blade has saved bonuses and rarity")
 	check(game.is_equipped("iron_blade"), "Forged blade automatically equips as the current weapon")
 	game.equip_item("spear")
 	check(game.is_equipped("spear"), "Can switch between owned weapons")
