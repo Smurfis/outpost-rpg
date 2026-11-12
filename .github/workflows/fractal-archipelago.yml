@@ -9,6 +9,12 @@ on:
       - 'scripts/world/island_archipelago.gd'
       - 'scripts/voxel/voxel_biome.gd'
       - 'scripts/game.gd'
+      - 'scripts/player.gd'
+      - 'scripts/menu.gd'
+      - 'scripts/ui/albion_inventory_window.gd'
+      - 'scripts/ui/equipment_drag_button.gd'
+      - 'scripts/interaction/world_object.gd'
+      - 'tests/fractal_inventory_tombstones.gd'
       - 'scripts/map/**'
       - 'scripts/ui/world_map.gd'
       - 'tests/uncharted_island_map.gd'
@@ -46,6 +52,12 @@ jobs:
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd 2>&1 | tee crafting-smoke.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' crafting-smoke.log; then exit 1; fi
+      - name: Verify crafting escape, confirmed disposal and persistent tombstone recovery
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 90s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_inventory_tombstones.gd 2>&1 | tee grave-inventory.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL GRAVES:' grave-inventory.log; then exit 1; fi
+          grep -q 'GRAVE INVENTORY RESULT: 0 failures' grave-inventory.log
       - name: Verify deterministic islands and one-block cave steps
         run: |
           set -o pipefail
