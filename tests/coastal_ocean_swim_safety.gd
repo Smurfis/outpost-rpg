@@ -65,6 +65,9 @@ func _run() -> void:
 	var ocean_at_sea_level: bool = true
 	var shore_colors_present: bool = true
 	var shallow_pixel_present: bool = false
+	var complete_water_tiles: bool = true
+	var flat_cell_shallows: bool = true
+	var shoreline_tiles_checked: int = 0
 	for water in ocean:
 		ocean_material_ok = ocean_material_ok and water.material_override is ShaderMaterial
 		ocean_at_sea_level = ocean_at_sea_level and absf(water.global_position.y - biome.SEA_LEVEL) < 0.01
@@ -72,18 +75,48 @@ func _run() -> void:
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var shoreline_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
 		shore_colors_present = shore_colors_present and shoreline_colors.size() == vertices.size()
+		if shoreline_colors.size() != vertices.size():
+			continue
 		for shore in shoreline_colors:
 			shallow_pixel_present = shallow_pixel_present or shore.r > 0.15
+		var cell_triangle_counts: Dictionary = {}
+		var cell_shallows: Dictionary = {}
 		for i in range(0, vertices.size(), 3):
 			var center: Vector3 = (vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3.0
-			surfaces_only_over_water = surfaces_only_over_water and not biome.is_land_at(center.x, center.z)
+			var tile := Vector2i(floori(center.x), floori(center.z))
+			surfaces_only_over_water = surfaces_only_over_water and not biome._land_cell(tile.x, tile.y)
+			cell_triangle_counts[tile] = int(cell_triangle_counts.get(tile, 0)) + 1
+			var tint: float = shoreline_colors[i].r
+			for corner in range(3):
+				flat_cell_shallows = flat_cell_shallows and absf(shoreline_colors[i + corner].r - tint) < 0.0001
+			if cell_shallows.has(tile):
+				flat_cell_shallows = flat_cell_shallows and absf(float(cell_shallows[tile]) - tint) < 0.0001
+			else:
+				cell_shallows[tile] = tint
+		# The ocean tile mask is cell-based, just like ground and collision.
+		# Every submerged cell needs BOTH triangles, even at coast bends.
+		var coords: PackedStringArray = str(water.name).trim_prefix("OceanSurface_").split("_")
+		var chunk_x: int = int(coords[0])
+		var chunk_z: int = int(coords[1])
+		for x in range(chunk_x, mini(chunk_x + biome.CHUNK_SIZE, biome.map_half)):
+			for z in range(chunk_z, mini(chunk_z + biome.CHUNK_SIZE, biome.map_half)):
+				var tile := Vector2i(x, z)
+				var expected_triangles: int = 0 if biome._land_cell(x, z) else 2
+				complete_water_tiles = complete_water_tiles and int(cell_triangle_counts.get(tile, 0)) == expected_triangles
+				if expected_triangles == 2 and (
+					biome._land_cell(x - 1, z) or biome._land_cell(x + 1, z)
+					or biome._land_cell(x, z - 1) or biome._land_cell(x, z + 1)):
+					shoreline_tiles_checked += 1
 	check(ocean_material_ok and ocean_at_sea_level, "Streamed water retains the original animated opaque ocean shader at sea level")
 	check(shore_colors_present and shallow_pixel_present,
 		"Water mesh carries real shoreline proximity for turquoise pixels without extra geometry")
 	var shallow_shader: Shader = load("res://scripts/voxel/coastal_water.gdshader")
 	check(shallow_shader != null and shallow_shader.code.contains("ocean_shallow") and not shallow_shader.code.contains("ALPHA ="),
 		"Turquoise shallows remain in the opaque Android water pipeline")
-	check(surfaces_only_over_water, "Every rendered ocean triangle sits over real water cells, never dry or unloaded mainland")
+	check(surfaces_only_over_water, "Every rendered ocean triangle belongs to a flooded terrain/collision cell")
+	check(complete_water_tiles and shoreline_tiles_checked > 0,
+		"All flooded shoreline and corner tiles have two complete water triangles, with no exposed seabed wedges")
+	check(flat_cell_shallows, "Shallow colour stays flat inside each water tile, without diagonal triangle tint seams")
 	check(biome._tile_height(95, 0) < biome.SEA_LEVEL - 0.1, "Ocean tile has a real sloping underwater stone floor")
 	check(biome.get_node_or_null("GroundCollision_84_0") != null, "Offshore stone floor has streamed trimesh collision")
 	var from: Vector3 = Vector3(95.25, biome.SEA_LEVEL - 0.08, 0.5)
