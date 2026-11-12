@@ -18,6 +18,8 @@ func _clear_of(panel: Control, target: Control, label: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	# Validate Android touchscreen button arrangement, not the PC hotbar.
+	root.set_meta("outpost_input_mode", "touch")
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	verify(scene != null, "Outpost world loads")
 	if scene == null:
