@@ -7,6 +7,7 @@ const FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var game: Node
 var hero: CharacterBody3D
 var species: String = "pig"
+var max_hp: float = 22.0
 var hp: float = 22.0
 var alive: bool = true
 var cooldown: float = 0.0
@@ -33,6 +34,7 @@ func setup(game_ref: Node, player_ref: CharacterBody3D, at: Vector3, kind: Strin
 	position = at
 	rng.seed = int(absf(at.x) * 271.0 + absf(at.z) * 137.0 + (993 if species == "wolf" else 311))
 	hp = 38.0 if species == "wolf" else 20.0
+	max_hp = hp
 	collision_layer = 2
 	collision_mask = 1
 	var shape := CollisionShape3D.new()
@@ -137,7 +139,7 @@ func _physics_process(delta: float) -> void:
 
 func _respawn() -> void:
 	alive = true
-	hp = 38.0 if species == "wolf" else 20.0
+	hp = max_hp
 	burn_left = 0.0
 	burn_tick = 0.0
 	panic = 0.0
