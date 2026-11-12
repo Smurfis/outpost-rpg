@@ -3,7 +3,8 @@ extends Control
 ## meter stay in screen space; no mob-following labels or damage text spam.
 ## Built from stock Godot controls for GL Compatibility on Android.
 var backing: Panel
-var name_label: Label
+var name_label: RichTextLabel
+var _name_markup: String = ""
 var rank_label: Label
 var accent_rule: ColorRect
 var bar: ProgressBar
@@ -30,16 +31,19 @@ func _ready() -> void:
 	shell.shadow_size = 5
 	shell.set_content_margin_all(0)
 	backing.add_theme_stylebox_override("panel", shell)
-	name_label = Label.new()
+	# Rich text colours each affix separately, with the base creature
+	# name inheriting its dungeon rarity even when multiple affixes roll.
+	name_label = RichTextLabel.new()
 	name_label.name = "TargetCreatureName"
+	name_label.bbcode_enabled = true
+	name_label.scroll_active = false
+	name_label.selection_enabled = false
+	name_label.fit_content = false
+	name_label.clip_contents = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.clip_text = true
 	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.add_theme_font_size_override("font_size", 19)
-	name_label.add_theme_color_override("font_color", Color("#f8ecdb"))
+	name_label.add_theme_font_size_override("normal_font_size", 19)
+	name_label.add_theme_color_override("default_color", Color("#f8ecdb"))
 	name_label.add_theme_color_override("font_outline_color", Color("#170f10"))
 	name_label.add_theme_constant_override("outline_size", 2)
 	add_child(name_label)
@@ -101,14 +105,40 @@ func _create_meter(id: String, fill_color: Color, background: bool) -> ProgressB
 	add_child(meter)
 	return meter
 
-func show_target(target_id: int, caption: String, hp: float, max_hp: float, rank: String, accent: Color) -> void:
+## Render only real affix prefixes from authoritative combat data; never
+## colour the entire label using just the last rolled affix.
+func _set_coloured_name(caption: String, rarity_color: Color, affixes: Array) -> void:
+	var remainder: String = caption
+	var segments: PackedStringArray = []
+	for descriptor in affixes:
+		if not (descriptor is Dictionary):
+			continue
+		var affix_name: String = str(descriptor.get("text", "")).strip_edges()
+		var affix_color: Variant = descriptor.get("color", rarity_color)
+		if affix_name.is_empty() or not (affix_color is Color):
+			continue
+		# Only peel genuine prefixes; retain custom or renamed mob text.
+		if remainder.begins_with(affix_name + " "):
+			var shade: Color = affix_color
+			segments.append("[color=#%s]%s[/color]" % [
+				shade.to_html(false), affix_name.replace("[", "[lb]")])
+			remainder = remainder.substr(affix_name.length() + 1)
+	segments.append("[color=#%s]%s[/color]" % [
+		rarity_color.to_html(false), remainder.replace("[", "[lb]")])
+	var markup: String = "[center]%s[/center]" % " ".join(segments)
+	if markup != _name_markup:
+		_name_markup = markup
+		name_label.text = markup
+
+func show_target(target_id: int, caption: String, hp: float, max_hp: float, rank: String, accent: Color,
+		rarity_name_color: Color = Color("#f8ecdb"), affixes: Array = []) -> void:
 	if max_hp <= 0.0 or target_id <= 0:
 		clear_target()
 		return
 	var fresh: bool = _target_id != target_id
 	_target_id = target_id
 	_wanted_percent = clampf(100.0 * hp / max_hp, 0.0, 100.0)
-	name_label.text = caption
+	_set_coloured_name(caption, rarity_name_color, affixes)
 	rank_label.text = rank
 	rank_label.visible = not rank.is_empty()
 	name_label.anchor_right = 0.78 if rank_label.visible else 0.94

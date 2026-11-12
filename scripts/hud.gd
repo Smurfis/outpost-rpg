@@ -3258,7 +3258,7 @@ func _update_enemy_target_frame() -> void:
 		else:
 			enemy_target_frame.show_target(int(data["id"]), str(data["name"]),
 			float(data["hp"]), float(data["max_hp"]), str(data["rank"]),
-			data["accent"] as Color)
+			data["accent"] as Color, data["name_color"] as Color, data["affixes"] as Array)
 	# Notifications can coexist with the fixed bar, without floating over it.
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	if screen.x > 0.0 and screen.y > 0.0 and toast_panel != null and toast_label != null:
