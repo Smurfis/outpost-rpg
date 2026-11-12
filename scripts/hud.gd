@@ -13,6 +13,7 @@ const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
 const SKILL_XP_ORB = preload("res://scripts/ui/skill_xp_orb.gd")
+const TARGET_FRAME = preload("res://scripts/ui/enemy_target_frame.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
 var root: Control
@@ -78,6 +79,7 @@ var quest_expanded: bool = false
 var hint: Label
 var toast_label: Label
 var health_bar: ProgressBar
+var enemy_target_frame: Control
 var xp_bar: ProgressBar
 var xp_bar_divisions: Control
 var trained_skill_orb: Control
@@ -305,17 +307,11 @@ func _layout_shared_actions() -> void:
 		SKIN.apply_button(focus_button, "wood")
 		focus_button.pressed.connect(game.focus_nearest_enemy)
 		root.add_child(focus_button)
-		focus_label = Label.new()
-		focus_label.name = "FocusedEnemyInfo"
-		focus_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		focus_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		focus_label.add_theme_color_override("font_color", SKIN.GOLD)
-		root.add_child(focus_label)
+		# The fixed enemy health frame replaces the old floating HP/FOCUSED text.
 	focus_button.text = "TAB · Focus" if desktop_mode else "Target"
 	focus_button.show()
 	focus_button.tooltip_text = "Focus nearest enemy. Interact and abilities use this target."
 	_place_px(focus_button, screen, Rect2(first_x + stride * 3, bottom - 52, stride * 2 - gap, 36))
-	_place_px(focus_label, screen, Rect2(screen.x * 0.35, screen.y * 0.035, screen.x * 0.30, 32))
 	_place_px(torch_button, screen, Rect2(first_x - stride, bottom, size_px, size_px))
 	if tool_gesture_hint != null:
 		tool_gesture_hint.hide()
@@ -329,6 +325,9 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# A single fixed nameplate, shown only for a valid target/nearby creature.
+	enemy_target_frame = TARGET_FRAME.new()
+	root.add_child(enemy_target_frame)
 
 	# Small live status strip. No generic, permanently fixed cartoon portrait:
 	# the gold sigil is an independent icon; equipment retains the real 3D avatar.
@@ -2349,6 +2348,12 @@ func _layout_touch_hud() -> void:
 	var toast_y: float = info_y - 43.0 * scale
 	_place_px(toast_panel, screen, Rect2(info_left, toast_y, info_width, 33.0 * scale))
 	_place_px(toast_label, screen, Rect2(info_left + 7.0 * scale, toast_y + 1.0 * scale, info_width - 14.0 * scale, 30.0 * scale))
+	# Fixed top-centre target plate remains below the currency strip and
+	# above quest prompts, independent of minimap/joystick aspect ratio.
+	if enemy_target_frame != null:
+		var target_width: float = minf(396.0 * scale, screen.x * 0.40)
+		_place_px(enemy_target_frame, screen, Rect2(
+			(screen.x - target_width) * 0.5, 68.0 * scale, target_width, 58.0 * scale))
 	_layout_shared_actions()
 
 func _layout_xp_for_size(screen: Vector2, scale: float) -> void:
@@ -3238,19 +3243,49 @@ func _show_zone_name(value: String) -> void:
 		zone_banner.modulate.a = 1.0
 		zone_banner_seconds = 2.7
 
+## One creature-only status plate shared by touch and desktop. Hide stale
+## targets immediately on death, removal or large distance changes.
+func _update_enemy_target_frame() -> void:
+	if enemy_target_frame == null or game == null:
+		return
+	var creature: Node3D = game.target_for_hud()
+	if creature == null:
+		enemy_target_frame.clear_target()
+	else:
+		var data: Dictionary = game.target_frame_data(creature)
+		if data.is_empty():
+			enemy_target_frame.clear_target()
+		else:
+			enemy_target_frame.show_target(int(data["id"]), str(data["name"]),
+			float(data["hp"]), float(data["max_hp"]), str(data["rank"]),
+			data["accent"] as Color)
+	# Notifications can coexist with the fixed bar, without floating over it.
+	var screen: Vector2 = get_viewport().get_visible_rect().size
+	if screen.x > 0.0 and screen.y > 0.0 and toast_panel != null and toast_label != null:
+		var scale: float = clampf(minf(screen.x / 1280.0, screen.y / 720.0), 0.8, 1.2)
+		var width: float = minf(298.0 * scale, screen.x * 0.30)
+		var left: float = (screen.x - width) * 0.5
+		var context_y: float = maxf(129.0 * scale, screen.y * 0.175)
+		var y: float = (205.0 if enemy_target_frame.visible else context_y / scale - 43.0) * scale
+		_place_px(toast_panel, screen, Rect2(left, y, width, 33.0 * scale))
+		_place_px(toast_label, screen, Rect2(left + 7.0 * scale, y + 1.0 * scale,
+			width - 14.0 * scale, 30.0 * scale))
+
 func _process(delta: float) -> void:
 	_advance_loot_feed(delta)
+	_update_enemy_target_frame()
 	# MENU is now tap-to-open; holding is not required to interact.
 	_update_zone_state(delta)
-	if focus_label != null:
-		focus_label.visible = desktop_mode and game.valid_focus()
-		if focus_label.visible:
-			focus_label.text = "%s · %.0f HP · FOCUSED" % [game.enemy_display_name(game.focus_target), float(game.focus_target.hp)]
 	if zone_banner_seconds > 0.0:
 		zone_banner_seconds = maxf(0.0, zone_banner_seconds - delta)
 		zone_banner.modulate.a = minf(1.0, zone_banner_seconds * 1.3)
 		if zone_banner_seconds <= 0.0:
 			zone_banner.visible = false
+	if zone_banner != null and enemy_target_frame != null and enemy_target_frame.visible:
+		# Keep the monster health frame legible during zone transitions.
+		zone_banner.visible = false
+	elif zone_banner != null and zone_banner_seconds > 0.0:
+		zone_banner.visible = true
 	if gesture_hint_timeout > 0.0:
 		gesture_hint_timeout = maxf(0.0, gesture_hint_timeout - delta)
 		if gesture_hint_timeout <= 0.0:
