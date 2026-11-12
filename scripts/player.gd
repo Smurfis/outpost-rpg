@@ -722,7 +722,7 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated)
 	if defeated:
 		knockback_velocity = Vector3.ZERO
+		game.on_player_defeated(global_position)
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
-		game.hud.toast("Defeated! Respawned at outpost; items kept.")
 

@@ -5,11 +5,22 @@ var item_id: String = ""
 var target_slot: String = ""
 var game_ref
 var on_item_dropped: Callable
+var on_drop_outside: Callable
+var allow_inventory_discard: bool = false
+var drag_started_here: bool = false
+
+func _notification(what: int) -> void:
+	# Drag-end notifications can reach multiple Controls. Only the tile
+	# which initiated the drag may request disposal.
+	if what == NOTIFICATION_DRAG_END and drag_started_here:
+		drag_started_here = false
+		if allow_inventory_discard and is_visible_in_tree() and not get_viewport().gui_is_drag_successful() and on_drop_outside.is_valid():
+			on_drop_outside.call(item_id)
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	if item_id.is_empty() or game_ref == null or int(game_ref.inventory.get(item_id, 0)) < 1:
 		return null
-	if str(game_ref.equipment_slot(item_id)) == "":
+	if str(game_ref.equipment_slot(item_id)) == "" and not allow_inventory_discard:
 		return null
 	var preview := PanelContainer.new()
 	var text := Label.new()
@@ -17,6 +28,7 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 	text.add_theme_font_size_override("font_size", 15)
 	preview.add_child(text)
 	set_drag_preview(preview)
+	drag_started_here = true
 	return {"source": "outpost_character_inventory", "item_id": item_id}
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:

@@ -59,6 +59,9 @@ var best_craft_rolls: Dictionary = {} # Highest scoring crafted roll retained pe
 var last_craft_roll: Dictionary = {}
 var last_craft_improved: bool = false
 var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
+var death_tombstones: Dictionary = {} # Persisted grave-id -> position, contents, and crafted metadata.
+var next_tombstone_id: int = 1
+var tombstone_nodes: Dictionary = {}
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "copper": 0, "silver": 0, "gold": 0, "gems": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
@@ -1179,6 +1182,31 @@ func claim_overflow() -> int:
 		hud.toast("Recovered %d stored loot items." % moved if moved > 0 else "Make more room in your bag first.")
 	return moved
 
+func can_discard_item(item_id: String) -> bool:
+	# The starter weapon and wallet are not bag stacks. Equipped items must
+	# be unequipped before a player can destroy them deliberately.
+	return item_id != "" and item_id not in ["training_blade", "coins", "copper", "silver", "gold", "gems"] and int(inventory.get(item_id, 0)) > 0 and not is_equipped(item_id)
+
+func discard_item(item_id: String, amount: int) -> bool:
+	if amount <= 0 or not can_discard_item(item_id):
+		return false
+	var count: int = mini(amount, int(inventory.get(item_id, 0)))
+	inventory[item_id] = int(inventory.get(item_id, 0)) - count
+	if int(inventory[item_id]) <= 0:
+		best_craft_rolls.erase(item_id)
+		weapon_enchants.erase(item_id)
+		bag_quality.erase(item_id)
+		for slot in quick_slots:
+			if str(quick_slots[slot]) == item_id:
+				quick_slots[slot] = ""
+		if active_quick_tool == item_id:
+			active_quick_tool = "training_blade"
+	_save()
+	_refresh_menu()
+	if hud != null:
+		hud.toast("Destroyed %d × %s." % [count, item_id.replace("_", " ").capitalize()])
+	return true
+
 func _craft_fits(recipe: Dictionary) -> bool:
 	var staged: Dictionary = inventory.duplicate()
 	var ingredients: Dictionary = recipe.get("ingredients", {})
@@ -1752,6 +1780,138 @@ func _on_first_night() -> void:
 		hud.toast("I don't care how dark the world gets. You are its light.")
 	_save()
 
+func _tombstone_position(at: Vector3) -> Vector3:
+	# Snap to ground where available so the grave does not float, while
+	# retaining the death location in tunnels and on unusual terrain.
+	var ray := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 3.0, at + Vector3.DOWN * 8.0, 1 | 2 | 8)
+	if hero != null:
+		ray.exclude = [hero.get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(ray)
+	if not hit.is_empty():
+		return Vector3(at.x, float(hit.position.y) + 0.05, at.z)
+	return at
+
+func _spawn_tombstone_node(tombstone_id: String) -> void:
+	if tombstone_nodes.has(tombstone_id) or not death_tombstones.has(tombstone_id):
+		return
+	var record: Dictionary = death_tombstones[tombstone_id]
+	var coords: Array = record.get("position", [])
+	if coords.size() != 3:
+		return
+	var art := Node3D.new()
+	var base := MeshInstance3D.new()
+	base.name = "TombstoneBase"
+	var plinth := BoxMesh.new()
+	plinth.size = Vector3(1.0, 0.22, 0.76)
+	base.mesh = plinth
+	base.position.y = 0.11
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("#555864")
+	base.material_override = stone
+	art.add_child(base)
+	var head := MeshInstance3D.new()
+	head.name = "TombstoneHead"
+	var slab := BoxMesh.new()
+	slab.size = Vector3(0.7, 0.95, 0.22)
+	head.mesh = slab
+	head.position = Vector3(0, 0.65, -0.09)
+	head.material_override = stone
+	art.add_child(head)
+	var grave = WORLD_OBJECT.new()
+	grave.name = "DeathTombstone_" + tombstone_id
+	add_child(grave)
+	grave.global_position = Vector3(float(coords[0]), float(coords[1]), float(coords[2]))
+	grave.setup(self, tombstone_id, "Your Tombstone", "tombstone", art, record.get("contents", {}))
+	tombstone_nodes[tombstone_id] = grave
+
+func on_player_defeated(at: Vector3) -> void:
+	# Transfer once, before teleporting. No starter weapon is an inventory
+	# item. Currency and all carried equipment/resources are included.
+	var carried: Dictionary = {}
+	for raw_id in inventory:
+		var item_id: String = str(raw_id)
+		var amount: int = int(inventory.get(item_id, 0))
+		if amount > 0:
+			carried[item_id] = amount
+			inventory[item_id] = 0
+	for slot in equipment:
+		equipment[slot] = "training_blade" if slot == "weapon" else ""
+	active_quick_tool = "training_blade"
+	for slot in quick_slots:
+		quick_slots[slot] = ""
+	if not carried.is_empty():
+		var site: Vector3 = _tombstone_position(at)
+		var tombstone_id: String = "grave_%d" % next_tombstone_id
+		next_tombstone_id += 1
+		death_tombstones[tombstone_id] = {
+			"position": [site.x, site.y, site.z],
+			"contents": carried,
+			"bag_quality": bag_quality.duplicate(true),
+			"best_craft_rolls": best_craft_rolls.duplicate(true),
+			"weapon_enchants": weapon_enchants.duplicate(true)
+		}
+		bag_quality.clear()
+		best_craft_rolls.clear()
+		weapon_enchants.clear()
+		_spawn_tombstone_node(tombstone_id)
+	_apply_equipment()
+	_save()
+	if hud != null:
+		hud.toast("Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost.")
+
+func tombstone_contents(tombstone_id: String) -> Dictionary:
+	if not death_tombstones.has(tombstone_id):
+		return {}
+	return (death_tombstones[tombstone_id].get("contents", {}) as Dictionary).duplicate(true)
+
+func open_tombstone(tombstone_id: String) -> void:
+	if menu == null or not death_tombstones.has(tombstone_id):
+		return
+	menu.open_storage("YOUR TOMBSTONE  •  RECOVER", tombstone_contents(tombstone_id), tombstone_id)
+
+func take_tombstone_item(tombstone_id: String, item_id: String) -> int:
+	if not death_tombstones.has(tombstone_id):
+		return 0
+	var record: Dictionary = death_tombstones[tombstone_id]
+	var contents: Dictionary = record.get("contents", {})
+	var available: int = maxi(0, int(contents.get(item_id, 0)))
+	if available <= 0:
+		return 0
+	var already_owned: bool = int(inventory.get(item_id, 0)) > 0
+	var taken: int = grant_item(item_id, available)
+	if taken <= 0:
+		return 0
+	var left: int = available - taken
+	if left > 0:
+		contents[item_id] = left
+	else:
+		contents.erase(item_id)
+		if not already_owned:
+			for field in ["bag_quality", "best_craft_rolls", "weapon_enchants"]:
+				var archived: Dictionary = record.get(field, {})
+				if archived.has(item_id):
+					match field:
+						"bag_quality":
+							bag_quality[item_id] = archived[item_id]
+						"best_craft_rolls":
+							best_craft_rolls[item_id] = archived[item_id]
+						"weapon_enchants":
+							weapon_enchants[item_id] = archived[item_id]
+	if contents.is_empty():
+		death_tombstones.erase(tombstone_id)
+		if tombstone_nodes.has(tombstone_id):
+			var grave: Node = tombstone_nodes[tombstone_id]
+			tombstone_nodes.erase(tombstone_id)
+			if is_instance_valid(grave):
+				grave.queue_free()
+	else:
+		record["contents"] = contents
+		death_tombstones[tombstone_id] = record
+	_save()
+	if hud != null:
+		hud.toast("Recovered %d × %s." % [taken, item_id.replace("_", " ").capitalize()])
+	return taken
+
 func save_and_return_to_title() -> void:
 	# Single exit path for solo and LAN. Dismantle active sessions before saving
 	# so the next title visit starts offline and no ghost avatars remain.
@@ -1761,7 +1921,7 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if map_service != null:
 		data["map_state"] = map_service.export_state()
@@ -1838,8 +1998,8 @@ func _load() -> void:
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
-	if spear_crafted:
-		inventory["spear"] = maxi(1, int(inventory.get("spear", 0)))
+	# A past quest completion must not silently recreate a spear discarded
+	# by the player or left behind in a tombstone on loading a save.
 	if version >= 5 and data.get("equipment", {}) is Dictionary:
 		var saved_gear: Dictionary = data.get("equipment", {})
 		for slot in equipment:
@@ -1852,6 +2012,33 @@ func _load() -> void:
 			if int(inventory.get(item, 0)) > 0:
 				equipment[equipment_slot(item)] = item
 	_apply_equipment()
+	next_tombstone_id = maxi(1, int(data.get("next_tombstone_id", 1)))
+	if data.get("death_tombstones", {}) is Dictionary:
+		for raw_id in data["death_tombstones"]:
+			var id: String = str(raw_id)
+			var record: Variant = data["death_tombstones"][raw_id]
+			if id.length() > 64 or not record is Dictionary:
+				continue
+			var contents: Variant = record.get("contents", {})
+			var pos: Variant = record.get("position", [])
+			if not contents is Dictionary or not pos is Array or pos.size() != 3:
+				continue
+			var clean_contents: Dictionary = {}
+			for key in contents:
+				var key_id: String = str(key)
+				if not key_id.is_empty() and key_id.length() <= 64 and int(contents[key]) > 0:
+					clean_contents[key_id] = maxi(0, int(contents[key]))
+			if clean_contents.is_empty():
+				continue
+			var clean_record: Dictionary = {
+				"position": pos.duplicate(),
+				"contents": clean_contents,
+				"bag_quality": record.get("bag_quality", {}),
+				"best_craft_rolls": record.get("best_craft_rolls", {}),
+				"weapon_enchants": record.get("weapon_enchants", {})
+			}
+			death_tombstones[id] = clean_record
+			_spawn_tombstone_node(id)
 
 
 func _notification(what: int) -> void:

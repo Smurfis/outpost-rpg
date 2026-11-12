@@ -304,13 +304,18 @@ func open(page: String) -> void:
 		craft_step = "browse"
 	refresh()
 
-func open_storage(label: String, contents: Dictionary) -> void:
-	# Display-only adapter for future real chest/bag storage providers.
-	# Transfers require persistent authoritative storage; not mocked here.
-	inventory_window.set_storage_view(label, contents)
+func open_storage(label: String, contents: Dictionary, tombstone_id: String = "") -> void:
+	# Normal chests remain read-only previews; a persisted tombstone has
+	# an authoritative, capacity-checked recovery action.
+	inventory_window.set_storage_view(label, contents, tombstone_id)
 	open("storage")
 
 func close_page() -> void:
+	# A completed receipt is acknowledged when leaving the station. Opening
+	# it again must show recipes, never trap the player on Craft Another.
+	if current_page == "craft" and game.crafting.is_empty():
+		completed_id = ""
+		craft_step = "browse"
 	visible = false
 	shell.visible = false
 	if inventory_window != null:
@@ -1134,6 +1139,14 @@ func _render_result() -> void:
 	SKIN.apply_button(again, "green")
 	again.pressed.connect(_clear_result)
 	result.add_child(again)
+	var return_button := Button.new()
+	return_button.name = "CraftResultReturnToWorld"
+	return_button.text = "RETURN TO WORLD"
+	return_button.tooltip_text = "Close the crafting station and continue exploring"
+	return_button.custom_minimum_size = Vector2(0, 52)
+	SKIN.apply_button(return_button, "wood")
+	return_button.pressed.connect(close_page)
+	result.add_child(return_button)
 
 func _clear_result() -> void:
 	completed_id = ""

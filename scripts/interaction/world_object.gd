@@ -16,20 +16,24 @@ func setup(ref: Node, id: String, label: String, kind: String, art: Node3D, loot
 	contents = loot.duplicate()
 	add_child(art)
 	set_meta("display_name", title)
-	set_meta("world_action", "Open" if kind == "chest" else "Collect" if kind == "loot" else "Talk" if kind == "npc" else "Inspect")
+	set_meta("world_action", "Recover" if kind == "tombstone" else "Open" if kind == "chest" else "Collect" if kind == "loot" else "Talk" if kind == "npc" else "Inspect")
 	PICKER.attach(self, kind)
 
 func inspection_text() -> String:
-	return "%s\n%s%s" % [title, get_meta("world_action"), " · Empty" if action_kind in ["chest", "loot"] and remaining().is_empty() else ""]
+	return "%s\n%s%s" % [title, get_meta("world_action"), " · Empty" if action_kind in ["chest", "loot", "tombstone"] and remaining().is_empty() else ""]
 
 func remaining() -> Dictionary:
+	if action_kind == "tombstone":
+		return game.tombstone_contents(object_id)
 	return game.opened_world_objects.get(object_id, contents).duplicate()
 
 func interact(_hero: Node3D) -> void:
 	# Controller and mobile context both enter here only after range validation.
 	if not game.target_in_range(self):
 		return
-	if action_kind in ["chest", "loot"]:
+	if action_kind == "tombstone":
+		game.open_tombstone(object_id)
+	elif action_kind in ["chest", "loot"]:
 		var pending: Dictionary = remaining()
 		var received: int = 0
 		for id in pending.keys():
