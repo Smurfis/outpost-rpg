@@ -2,6 +2,7 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 const INVENTORY_WINDOW = preload("res://scripts/ui/albion_inventory_window.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
@@ -822,7 +823,7 @@ func _render_craft() -> void:
 		material_label.anchor_bottom = 0.85
 		choose.add_child(material_label)
 		var badge := Label.new()
-		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "OWNED" if owned_unique else "READY" if affordable else "MISSING"
+		badge.text = "★%d → ★%d" % [int(game.bag_quality.get(result_id, 0)), mini(3, int(game.bag_quality.get(result_id, 0)) + 1)] if CARRY.is_bag(result_id) and int(game.inventory.get(result_id, 0)) > 0 else "REFORGE" if owned_unique and QUALITY.is_gear(result_id) else "OWNED" if owned_unique else "READY" if affordable else "MISSING"
 		badge.add_theme_font_size_override("font_size", 13)
 		badge.add_theme_color_override("font_color", Color("#355b31") if affordable and not owned_unique else Color("#873b2c"))
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -899,13 +900,15 @@ func _render_recipe() -> void:
 		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
 	next.name = "StationCraftAction"
-	next.text = "IMPROVE QUALITY" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "CRAFT  ◆  %s" % str(recipe.get("name", "ITEM")).to_upper()
+	next.text = "IMPROVE QUALITY" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "REFORGE  ◆  ROLL QUALITY" if QUALITY.is_gear(product_id) and game.owns_unique(product_id) else "CRAFT  ◆  %s" % str(recipe.get("name", "ITEM")).to_upper()
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
 	next.disabled = not game.can_craft(selected_id)
 	next.pressed.connect(_craft_selected)
 	details.add_child(next)
-	if game.owns_unique(product_id):
+	if game.owns_unique(product_id) and QUALITY.is_gear(product_id):
+		details.add_child(_label("Reforge for a new rarity, stats and affix. Best result kept.", 15, Color("ffe2a6")))
+	elif game.owns_unique(product_id):
 		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
 	elif CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3:
 		details.add_child(_label("Maximum 3 stars. Select a different bag or tier.", 15, SKIN.GOLD))
@@ -945,7 +948,7 @@ func _render_prepare() -> void:
 		var slot := Button.new()
 		slot.custom_minimum_size = Vector2(0, 56)
 		SKIN.apply_translucent_button(slot, "wood_selected" if loaded_now else "parchment_light")
-		slot.disabled = not available or game.owns_unique(product_id)
+		slot.disabled = not available or (game.owns_unique(product_id) and not QUALITY.is_gear(product_id))
 		slot.text = ("✓ LOADED   " if loaded_now else "LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
 		slot.pressed.connect(_toggle_ingredient.bind(id))
 		var row := HBoxContainer.new()
@@ -1004,42 +1007,35 @@ func _render_work() -> void:
 	var recipe: Dictionary = game._recipe_by_id(id)
 	var item: String = str(recipe.get("result", "craft"))
 	var stage := _column_panel(details, Color("29413f"))
-	stage.add_child(_label("PRODUCTION IN PROGRESS", 23, Color("f1d5a2")))
-	action_art = _icon(item, 118)
-	stage.add_child(action_art)
-	stage.add_child(_label(str(recipe.get("name", id)), 21))
+	stage.add_child(_label("FORGING ITEM", 23, SKIN.GOLD))
+	var portrait := PanelContainer.new()
+	portrait.name = "CraftItemFrame"
+	portrait.custom_minimum_size = Vector2(0, 150)
+	portrait.add_theme_stylebox_override("panel", SKIN.flat("inset"))
+	stage.add_child(portrait)
+	var centered := CenterContainer.new()
+	portrait.add_child(centered)
+	action_art = _icon(item, 120)
+	centered.add_child(action_art)
+	stage.add_child(_label(str(recipe.get("name", id)), 21, SKIN.CREAM))
 	progress_bar = ProgressBar.new()
+	progress_bar.name = "AutomaticCraftProgress"
 	progress_bar.max_value = 100.0
-	progress_bar.custom_minimum_size = Vector2(0, 26)
+	progress_bar.custom_minimum_size = Vector2(0, 22)
 	progress_bar.show_percentage = false
-	var craft_background: StyleBoxFlat = SKIN.flat("inset")
-	craft_background.set_corner_radius_all(3)
-	var craft_fill: StyleBoxFlat = SKIN.flat("green")
-	craft_fill.set_border_width_all(0)
-	craft_fill.set_corner_radius_all(3)
-	progress_bar.add_theme_stylebox_override("background", craft_background)
-	progress_bar.add_theme_stylebox_override("fill", craft_fill)
+	progress_bar.add_theme_stylebox_override("background", SKIN.flat("inset"))
+	progress_bar.add_theme_stylebox_override("fill", SKIN.flat("green"))
 	stage.add_child(progress_bar)
-	work_counter = _label("", 18)
+	work_counter = _label("", 16, SKIN.CREAM)
 	stage.add_child(work_counter)
-	work_label = _label("", 17, Color("b9dfce"))
+	stage.add_child(_label("RARITY REVEAL: COMMON  •  UNCOMMON  •  RARE  •  EPIC  •  LEGENDARY", 13, SKIN.GOLD))
+	work_label = _label("Crafting automatically — no repeated tapping.", 16, Color("b9dfce"))
 	stage.add_child(work_label)
-	action_button = Button.new()
-	action_button.text = str(action_names.get(str(active.get("station", "")), "WORK")) + " • TAP"
-	action_button.custom_minimum_size = Vector2(0, 62)
-	SKIN.apply_button(action_button, "green")
-	action_button.pressed.connect(_do_work)
-	stage.add_child(action_button)
-	stage.add_child(_label("Watch the station as you work. Closing this panel does not cancel the job.", 15, Color("b4bfb8")))
 	_update_visual()
 
 func _do_work() -> void:
-	if game.work_craft() and action_art != null:
-		var tw := create_tween()
-		tw.tween_property(action_art, "rotation_degrees", -13.0, 0.08)
-		tw.tween_property(action_art, "rotation_degrees", 11.0, 0.10)
-		tw.tween_property(action_art, "rotation_degrees", 0.0, 0.10)
-	_update_visual()
+	# Retained for older code paths; the process timer handles crafting.
+	pass
 
 func _process(_delta: float) -> void:
 	if visible and current_page == "equipment" and is_instance_valid(preview_rig):
@@ -1053,13 +1049,9 @@ func _update_visual() -> void:
 		return
 	var running: Dictionary = game.crafting
 	var elapsed: float = float(running.get("elapsed", 0.0))
-	var duration: float = float(running.get("duration", 1.0))
-	var strokes: int = int(running.get("strokes", 0))
-	var total: int = int(running.get("required", 1))
+	var duration: float = maxf(0.1, float(running.get("duration", 1.0)))
 	progress_bar.value = clampf(elapsed / duration, 0.0, 1.0) * 100.0
-	work_counter.text = "Working: %d / %d actions" % [strokes, total]
-	work_label.text = "HOLDING HEAT / WORKING MATERIAL..." if elapsed < duration else "Ready! Finish remaining work actions." if strokes < total else "FINISHING ITEM..."
-	action_button.disabled = strokes >= total or game.craft_work_cooldown > 0.0
+	work_counter.text = "CREATING  •  %d%%" % roundi(progress_bar.value)
 
 func on_craft_completed(result_id: String) -> void:
 	completed_id = result_id
@@ -1072,9 +1064,70 @@ func on_craft_completed(result_id: String) -> void:
 
 func _render_result() -> void:
 	var result := _column_panel(details, Color("305141"))
-	result.add_child(_label("CRAFT COMPLETE", 27, Color("e4dfaa")))
-	result.add_child(_icon(completed_id, 126))
-	result.add_child(_label(completed_id.replace("_", " ").capitalize() + (" • now %s!" % "★".repeat(int(game.bag_quality.get(completed_id, 0))) if CARRY.is_bag(completed_id) else " added to your inventory!"), 21, Color("c3e9b7")))
+	result.add_child(_label("CRAFT COMPLETE", 25, SKIN.GOLD))
+	var portrait := PanelContainer.new()
+	portrait.name = "CraftResultItemFrame"
+	portrait.custom_minimum_size = Vector2(0, 142)
+	portrait.add_theme_stylebox_override("panel", SKIN.flat("inset"))
+	result.add_child(portrait)
+	var centered := CenterContainer.new()
+	portrait.add_child(centered)
+	centered.add_child(_icon(completed_id, 112))
+	var roll: Dictionary = game.last_craft_roll
+	if not roll.is_empty() and QUALITY.is_gear(completed_id):
+		var rarity: int = clampi(int(roll.get("rarity", 0)), 0, 4)
+		result.add_child(_label(QUALITY.rarity_name(rarity).to_upper() + "  •  " + completed_id.replace("_", " ").capitalize(), 21, QUALITY.rarity_color(rarity)))
+		result.add_child(_label("CRAFT QUALITY", 16, SKIN.CREAM))
+		var tier_bars := HBoxContainer.new()
+		tier_bars.name = "CraftRarityProgression"
+		tier_bars.add_theme_constant_override("separation", 4)
+		result.add_child(tier_bars)
+		var bars: Array[ProgressBar] = []
+		for tier in range(5):
+			var meter := ProgressBar.new()
+			meter.name = "RarityTier_%d" % tier
+			meter.max_value = 100
+			meter.value = 0
+			meter.show_percentage = false
+			meter.custom_minimum_size = Vector2(20, 17)
+			meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			meter.add_theme_stylebox_override("background", SKIN.flat("inset"))
+			var fill := StyleBoxFlat.new()
+			fill.bg_color = QUALITY.rarity_color(tier)
+			fill.set_corner_radius_all(2)
+			meter.add_theme_stylebox_override("fill", fill)
+			tier_bars.add_child(meter)
+			bars.append(meter)
+		var tier_names := HBoxContainer.new()
+		result.add_child(tier_names)
+		for tier in range(5):
+			var tier_name := _label(QUALITY.rarity_name(tier).substr(0, 3).to_upper(), 11, QUALITY.rarity_color(tier))
+			tier_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			tier_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			tier_names.add_child(tier_name)
+		var reveal := create_tween()
+		for tier in range(rarity + 1):
+			reveal.tween_property(bars[tier], "value", 100.0, 0.27)
+		result.add_child(_label("STAT ENHANCEMENTS", 17, SKIN.GOLD))
+		var boosts: Dictionary = roll.get("bonuses", {})
+		if boosts.is_empty():
+			result.add_child(_label("Base stats • no bonus this time", 16, SKIN.CREAM))
+		else:
+			for stat in QUALITY.STAT_KEYS:
+				if boosts.has(stat):
+					var stat_row := HBoxContainer.new()
+					result.add_child(stat_row)
+					var key_label := _label(QUALITY.stat_label(stat), 17, SKIN.CREAM)
+					key_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					stat_row.add_child(key_label)
+					stat_row.add_child(_label(QUALITY.format_stat(stat, float(boosts[stat])), 17, Color("#8de7b0")))
+		if str(roll.get("affix", "")) != "":
+			result.add_child(_label("✦  " + str(roll["affix"]) + "  •  " + QUALITY.affix_description(str(roll["affix"])), 16, Color("#e1b6f5")))
+		else:
+			result.add_child(_label("SPECIAL AFFIX  •  NOT ROLLED", 14, SKIN.CREAM))
+		result.add_child(_label("UPGRADE SAVED • BEST ROLL EQUIPPED" if game.last_craft_improved else "NO UPGRADE • PREVIOUS BEST RETAINED", 16, Color("#aee9b4") if game.last_craft_improved else SKIN.GOLD))
+	else:
+		result.add_child(_label(completed_id.replace("_", " ").capitalize() + (" • now %s!" % "★".repeat(int(game.bag_quality.get(completed_id, 0))) if CARRY.is_bag(completed_id) else " added to inventory"), 20, SKIN.CREAM))
 	var again := Button.new()
 	again.text = "CRAFT ANOTHER"
 	again.custom_minimum_size = Vector2(0, 52)
