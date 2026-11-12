@@ -2,12 +2,16 @@ extends CharacterBody3D
 const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 ## Lightweight dungeon guardian; compatible with Outpost's existing melee targeting.
 const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
+const CUBE_VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 var hero: CharacterBody3D
 var dungeon: Node3D
 var hp: float = 24.0
 var alive: bool = true
 var cooldown: float = 0.0
 var visual: Node3D
+var avatar
+var appearance: String = ""
+var death_left: float = 0.0
 var quality: int = 0
 var damage_multiplier: float = 1.0
 var display_name: String = "Crypt Guardian"
@@ -18,7 +22,7 @@ var visual_step_offset: Vector3 = Vector3.ZERO
 var burn_left: float = 0.0
 var burn_tick: float = 0.0
 
-func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) -> void:
+func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3, creature_kind: String = "") -> void:
 	hero = player
 	dungeon = instance
 	quality = RARITY.bounded(tier)
@@ -36,6 +40,19 @@ func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3) ->
 	add_child(collider)
 	visual = Node3D.new()
 	add_child(visual)
+	# Only Common, Uncommon and Rare use the imported Skeleton / Goblin art.
+	# Keep the original higher-tier guardian until those variants are designed.
+	if quality <= RARITY.RARE and creature_kind in ["skeleton", "goblin"]:
+		var imported = CUBE_VISUAL.new()
+		visual.add_child(imported)
+		if imported.configure(creature_kind, 0.57):
+			avatar = imported
+			appearance = creature_kind
+			display_name = "Crypt Skeleton" if creature_kind == "skeleton" else "Crypt Goblin"
+			add_to_group("enemies")
+			add_to_group("dungeon_guardians")
+			return
+		imported.queue_free()
 	var stone: Color = Color("525d65")
 	_piece(Vector3(0, 0.85, 0), Vector3(0.83, 1.28, 0.73), stone)
 	var armour := MeshInstance3D.new()
@@ -82,7 +99,13 @@ func _piece(at: Vector3, size: Vector3, tint: Color) -> void:
 	visual.add_child(instance)
 
 func _physics_process(delta: float) -> void:
-	if not alive or hero == null or not is_instance_valid(hero):
+	if not alive:
+		if death_left > 0.0:
+			death_left -= delta
+			if death_left <= 0.0:
+				queue_free()
+		return
+	if hero == null or not is_instance_valid(hero):
 		return
 	if burn_left > 0.0:
 		burn_left = maxf(0.0, burn_left - delta)
@@ -113,11 +136,15 @@ func _physics_process(delta: float) -> void:
 			visual_step_offset = visual_step_offset.limit_length(1.4)
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
 	visual.position = visual_step_offset
+	if avatar != null:
+		avatar.play_motion(direction.length() * (2.0 + float(quality) * 0.24))
 	if direction.length() > 0.02:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(1.0, delta * 8.0))
 	cooldown = maxf(0.0, cooldown - delta)
 	if distance < 1.75 and cooldown <= 0.0:
 		cooldown = 1.7
+		if avatar != null:
+			avatar.play_event("Attack")
 		hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier)
 
 func ignite(seconds: float = 4.0) -> void:
@@ -134,6 +161,12 @@ func receive_damage(amount: float) -> void:
 		collision_layer = 0
 		collision_mask = 0
 		remove_from_group("enemies")
+		if avatar != null:
+			avatar.play_event("Death")
+			death_left = 1.05
 		if dungeon != null and is_instance_valid(dungeon):
 			dungeon.guardian_defeated()
-		queue_free()
+		if death_left <= 0.0:
+			queue_free()
+	elif avatar != null:
+		avatar.play_event("HitRecieve")
