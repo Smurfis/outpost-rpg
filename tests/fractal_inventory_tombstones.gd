@@ -26,6 +26,13 @@ func _run() -> void:
 	await process_frame
 	game.set_process(false)
 	game.hero.set_physics_process(false)
+	game.show_crafting()
+	game.menu.on_craft_completed("spear")
+	var return_button: Button = game.menu.details.find_child("CraftResultReturnToWorld", true, false) as Button
+	check(return_button != null, "Completed craft offers a prominent Return to World button")
+	if return_button != null:
+		return_button.pressed.emit()
+	check(not game.menu.visible, "Return to World closes crafting instead of trapping player")
 	game.inventory["wood"] = 10
 	game.inventory["stone"] = 4
 	game.show_inventory()
@@ -55,6 +62,7 @@ func _run() -> void:
 	check(game.menu.current_page == "storage" and game.menu.inventory_window.storage_tombstone_id == grave_id, "Grave opens in live storage inventory")
 	check(game.take_tombstone_item(grave_id, "wood") == 8, "Resources are recoverable")
 	check(game.take_tombstone_item(grave_id, "spear") == 1, "Weapon is recoverable")
+	check(game.take_tombstone_item(grave_id, "stone") == 4, "All remaining materials can be recovered")
 	check(not game.death_tombstones.has(grave_id), "Empty tombstone is removed")
 	game.menu.close_page()
 	game.inventory["stone"] = 5
