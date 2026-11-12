@@ -56,7 +56,7 @@ func _run() -> void:
 	check(chat.frame_style.border_width_left == 1 and chat.frame_style.corner_radius_top_left == 0, "Chat border is pixel-crisp")
 	chat.open_chat()
 	check(chat.chat_open and chat.input.visible and chat.frame_style.bg_color.a > 0.7, "Chat expands for entry")
-	check(chat.transcript.text.contains("GM") and chat.transcript.text.contains("Ready"), "Coloured chat preserves history")
+	check(chat.transcript.get_parsed_text().contains("GM") and chat.transcript.get_parsed_text().contains("Ready"), "Coloured chat preserves history")
 	chat.close_chat()
 	check(not chat.input.visible and chat.frame.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Closed chat releases gameplay input")
 	game.queue_free()
