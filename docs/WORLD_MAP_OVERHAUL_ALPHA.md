@@ -1,4 +1,18 @@
-# World map overhaul — work in progress
+# World map overhaul — Alpha v1061 recovery
+
+## Recovery continuation
+Recovered from `rescue/diorama-map-wip` at `5cae365`.
+A separate review branch fixes POI revision propagation, rejects impossible
+saved discovery cells that would stall the relief queue, and adds tests for
+minimap tap-to-open and malformed saves. Generated `.import` files, logs,
+and screenshot artifacts are omitted from the review diff; they remain
+available in the immutable WIP recovery commit.
+
+**Validation gate:** Run targeted Godot 4.7.2 CI plus Android landscape and
+desktop GPU visual checks before Alpha merge. Tests logged earlier by Codex
+predate the final shader, minimap and save changes; do not cite those as proof
+the recovered final tree is tested. Stable/main must not be touched.
+
 
 Branch: `feature/diorama-map-foundation`.
 

@@ -39,6 +39,11 @@ func run() -> void:
 	cache.request_chunk(Vector2i(-1, 0))
 	cache.step(2000)
 	check(cache.sample_count == initial_count, "A completed chunk is never re-sampled by repeat requests")
+	var service: Node = game.map_service
+	var old_revision: int = service.revision
+	service.observe_player()
+	service.remember("station:foundation-qa", "QA Station", "stations", game.hero.global_position)
+	check(service.revision > old_revision, "Map discovery and POI updates trigger geometry scheduling")
 	game.queue_free()
 	await process_frame
 	quit(0 if failures == 0 else 1)

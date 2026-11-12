@@ -41,6 +41,9 @@ func run() -> void:
 	var hero_before: Vector3 = game.hero.global_position
 	var chunks_before: int = service.biome.loaded_chunk_count()
 	check(map.open_map(), "Map opens outside combat")
+	var revision_before_marker: int = service.revision
+	service.remember("station:map-qa", "Map QA", "stations", hero_before)
+	check(service.revision == revision_before_marker + 1, "Newly discovered POIs invalidate relief without moving the player")
 	var actor = load("res://tests/support/map_actor.gd").new()
 	game.add_child(actor)
 	actor.position = game.hero.position + Vector3(3,0,0)
@@ -113,6 +116,14 @@ func run() -> void:
 	check(map.is_open(), "M opens the map")
 	await key(KEY_ESCAPE)
 	check(not map.is_open(), "Escape closes the map")
+	map.input_guard_until = 0
+	var mini_tap := InputEventScreenTouch.new()
+	mini_tap.device = 0
+	mini_tap.pressed = true
+	mini_tap.position = game.hud.minimap.get_global_rect().get_center()
+	map._input(mini_tap)
+	check(map.is_open(), "Tapping the live minimap opens the full island map")
+	map.close_map()
 	map.relief.schedule(game.hero.global_position)
 	for i in range(300): map.relief.tick()
 	var samples: int = service.cache.sample_count
@@ -130,6 +141,10 @@ func run() -> void:
 	changed_seed.world_id = "fields:other"
 	service.import_state(changed_seed)
 	check(service.discovered.is_empty(), "Exploration cannot cross world seeds")
+	var invalid_cells: Dictionary = saved.map_state.duplicate(true)
+	invalid_cells["cells"] = [[999999, 999999], [-999999, -999999], [0, 0]]
+	service.import_state(invalid_cells)
+	check(service.discovered.size() == 1 and service.discovered.has(Vector2i.ZERO), "Off-island save data cannot stall incremental map geometry")
 	service.import_state(saved.map_state)
 	check(service.discovered.size() == count, "Discovery survives JSON serialization")
 	game.queue_free()

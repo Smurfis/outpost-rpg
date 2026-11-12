@@ -95,6 +95,9 @@ func remember(id: String, label: String, category: String, point: Vector3, extra
 	record.merge(extra)
 	known[id] = record
 	_touch_chunk(point)
+	# POIs change map-only geometry and must invalidate the relief schedule
+	# even when the player has not moved or revealed a new terrain cell.
+	revision += 1
 	dirty = true
 	changed.emit()
 
@@ -205,8 +208,13 @@ func import_state(data: Variant) -> void:
 		return
 	if data.get("cells") is Array:
 		for entry in data.cells.slice(0, 65536):
-			if entry is Array and entry.size() == 2:
-				discovered[Vector2i(int(entry[0]), int(entry[1]))] = true
+			if entry is Array and entry.size() == 2 and (entry[0] is int or entry[0] is float) and (entry[1] is int or entry[1] is float):
+				var cell := Vector2i(int(entry[0]), int(entry[1]))
+				var at := Vector3((float(cell.x) + 0.5) * CELL, 0.0, (float(cell.y) + 0.5) * CELL)
+				# Never let malformed/off-island save cells enter relief.schedule:
+				# a chunk outside the finite biome cannot ever finish sampling.
+				if inside(at):
+					discovered[cell] = true
 	for list_id in ["known", "scenery"]:
 		if not data.get(list_id) is Array:
 			continue
