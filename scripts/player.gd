@@ -339,6 +339,18 @@ func play_whirlwind() -> void:
 	add_child(trail)
 	trail.begin(sword_mesh, WHIRLWIND_SPIN_DURATION)
 
+## Weapon-hit sparks start at the actual animated blade/tool tip, not at
+## the player's feet. Reuse the existing tiny voxel burst for Android.
+func show_weapon_hit_effect(_target_position: Vector3) -> void:
+	if game == null or sword_mesh == null:
+		return
+	var held: MeshInstance3D = sword_mesh
+	if not sword_mesh.visible and is_instance_valid(tool_mesh):
+		held = tool_mesh
+	var tip_y: float = 1.70 if game.current_weapon_id() == "spear" and held == sword_mesh else 1.42
+	var tip: Vector3 = held.to_global(Vector3(0.0, tip_y, 0.0))
+	PIXEL_FEEDBACK.emit_feedback(game, tip, 0.0, Color("f04450"))
+
 func gather_swing(kind: String) -> void:
 	last_gather = kind
 	gather_phase = 1.0
