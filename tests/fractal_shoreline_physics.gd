@@ -57,6 +57,11 @@ func _run() -> void:
 			print("SHORE DEBUG: stalled pos=%s swim=%s grounded=%s wall=%s next_tile=%d" % [
 				str(at), str(game.hero.swimming), str(game.hero.is_on_floor()),
 				str(game.hero.is_on_wall()), streamer.terrain.height_at(floori(at.x - 1), floori(at.z))])
+			print("SHORE STATE: moving=%s modal=%s vel=%s target=%s nav=%s manual=%s" % [
+				str(game.hero.interaction_moving), str(game.controls.modal_open()),
+				str(game.hero.velocity), str(game.hero.interaction_target),
+				str(game.controls.navigating),
+				str(Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down"))])
 			break
 		last_x = at.x
 		if frame % 90 == 0:
