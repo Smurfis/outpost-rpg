@@ -122,9 +122,11 @@ func _build_chunk(key: Vector2i) -> void:
 	for x in range(key.x, key.x + CHUNK):
 		for z in range(key.y, key.y + CHUNK):
 			var top: int = terrain.height_at(x, z)
+			var cave_here: bool = terrain.caves.has_cave(x, z)
+			if cave_here:
+				top = maxi(top, terrain.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
 			if top <= DATA.BEDROCK:
 				continue
-			var cave_here: bool = terrain.caves.has_cave(x, z)
 			for y in range(DATA.BEDROCK, top):
 				if not terrain.is_solid(x, y, z):
 					continue
