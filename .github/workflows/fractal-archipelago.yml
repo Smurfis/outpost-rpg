@@ -52,6 +52,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_archipelago_generation.gd 2>&1 | tee archipelago.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FRACTAL:' archipelago.log; then exit 1; fi
           grep -q 'FRACTAL ARCHIPELAGO RESULT: 0 failures' archipelago.log
+      - name: Check camera-facing cave and cliff cutaway without changing collision
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 30s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_camera_cutaway.gd 2>&1 | tee cave-camera.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CAVE CAMERA:' cave-camera.log; then exit 1; fi
+          grep -q 'CAVE CAMERA RESULT: 0 failures' cave-camera.log
       - name: Exercise desktop chat and GM island teleport
         run: |
           set -o pipefail

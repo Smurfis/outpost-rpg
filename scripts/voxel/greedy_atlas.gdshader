@@ -7,11 +7,46 @@ render_mode cull_disabled, diffuse_burley, specular_disabled, depth_draw_opaque;
 uniform sampler2D atlas_texture : source_color, filter_nearest, repeat_disable;
 uniform sampler2D coast_texture : source_color, filter_nearest, repeat_disable;
 
+// Off by default: starter Fields, ordinary dungeons, maps and all existing
+// users of the shared atlas render exactly as before. The remote islands
+// duplicate the material and supply their own player/camera uniforms.
+uniform bool island_cutaway_enabled = false;
+uniform bool island_cave_mode = false;
+uniform vec3 island_cutaway_focus = vec3(0.0);
+uniform vec3 island_cutaway_eye = vec3(0.0);
+uniform float island_cutaway_radius = 3.6;
+varying vec3 island_world_position;
+
+void vertex() {
+	island_world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 float pixel_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
 void fragment() {
+	// Cut away only pixels between the camera and hero, *above* the walking
+	// surface. Camera orbiting a cliff no longer hides the character, while
+	// floor collision and the rest of the mountain remain completely intact.
+	// The extra cave opening reveals the chamber ceiling without hiding
+	// entire 12x12 roof meshes/chunks (which previously exposed blue holes).
+	if (island_cutaway_enabled) {
+		vec3 eye_ray = island_cutaway_eye - island_cutaway_focus;
+		float span_squared = max(dot(eye_ray, eye_ray), 0.0001);
+		float along = dot(island_world_position - island_cutaway_focus, eye_ray) / span_squared;
+		vec3 nearest = island_cutaway_focus + clamp(along, 0.0, 1.0) * eye_ray;
+		float in_front = step(0.025, along) * (1.0 - step(1.12, along));
+		float horizontal_distance = distance(island_world_position.xz, nearest.xz);
+		bool above_walkway = island_world_position.y > island_cutaway_focus.y - 0.25;
+		bool in_sightline = in_front > 0.5 && horizontal_distance < island_cutaway_radius;
+		bool cave_ceiling = island_cave_mode
+			&& distance(island_world_position.xz, island_cutaway_focus.xz) < island_cutaway_radius * 1.65
+			&& island_world_position.y > island_cutaway_focus.y + 0.8;
+		if (above_walkway && (in_sightline || cave_ceiling)) {
+			discard;
+		}
+	}
 	float id = floor(UV2.x + 0.5);
 	vec2 block = vec2(mod(id, 4.0), floor(id / 4.0));
 	vec2 local_uv = fract(UV);
