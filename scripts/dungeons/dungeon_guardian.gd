@@ -185,7 +185,7 @@ func _physics_process(delta: float) -> void:
 	var facing: Vector3 = direction
 	if distance <= 1.5 and distance > 0.02:
 		facing = to_player.normalized()
-	if facing.length_squared() > 0.02:
+	if facing.length_squared() > 0.02 and heavy_charge_left <= 0.0:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(1.0, delta * 8.0))
 	cooldown = maxf(0.0, cooldown - delta)
 	heavy_attack_cooldown = maxf(0.0, heavy_attack_cooldown - delta)
