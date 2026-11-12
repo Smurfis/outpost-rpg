@@ -26,3 +26,6 @@ textures/default_filters/use_nearest_mipmap_filter=false
 
 [physics]
 3d/default_gravity=18.0
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/bbmodel-importer/plugin.cfg")

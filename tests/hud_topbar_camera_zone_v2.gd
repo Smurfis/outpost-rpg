@@ -72,9 +72,9 @@ func _run() -> void:
 	verify(hud.top_menu_open, "Synthetic Android mouse echo press+release cannot close the freshly opened modal")
 	hud._set_top_menu(false)
 	verify(not wallet_button.visible and not hud.wallet_frame.visible, "Wallet is no longer a clickable dropdown or opaque popup")
-	verify(hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Horizontal currency strip is always present")
+	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Gold/silver/copper strip replaces separate legacy coins")
 	hud._toggle_wallet()
-	verify(not hud.wallet_open and hud.wallet_coin.visible, "Compatibility wallet toggle cannot hide currency totals")
+	verify(not hud.wallet_open and hud.wallet_currency_rows.copper.visible, "Compatibility wallet toggle cannot hide currency totals")
 
 	_tap(hud, bag_button, 19)
 	verify(game.menu.visible and game.menu.current_page == "bag", "One BAG tap opens real inventory")
@@ -95,10 +95,11 @@ func _run() -> void:
 		verify(absf(game.camera.global_transform.basis.y.dot(game.camera.global_transform.basis.x)) < 0.001, "Camera basis remains orthogonal, no roll creep")
 
 	var minimap: Control = holder.get_node_or_null("LiveWorldMinimap") as Control
-	verify(minimap != null and minimap.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR, "Minimap is filtered smoothly")
+	verify(minimap != null and minimap.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "Relief minimap preserves pixel edges")
 	verify(MAP.terrain_colour("inland") == Color("719a51"), "Inland grass is one deterministic colour")
 	verify(MAP.terrain_colour("water") != MAP.terrain_colour("dry_sand"), "Distinct biomes remain distinguishable")
 	if minimap != null:
+		game.diorama_map_enabled = false # Validate the existing flat fallback separately.
 		minimap._process(0.5)
 		var map_image: Image = minimap.get("_image") as Image
 		verify(map_image != null and map_image.get_pixel(31, 31) == map_image.get_pixel(32, 31), "Adjacent grass cells do not alternate shades")

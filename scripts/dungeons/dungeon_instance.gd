@@ -3,6 +3,7 @@ extends Node3D
 signal chest_selected(instance: Node3D)
 signal stairs_selected(instance: Node3D)
 signal bonus_selected(instance: Node3D, bonus_id: int)
+signal prop_broken(instance: Node3D, prop_id: String, reward: Dictionary)
 signal completed(instance: Node3D, reward: Dictionary)
 signal floor_changed(instance: Node3D, current_floor: int, total_floors: int)
 
@@ -11,6 +12,8 @@ const GUARDIAN = preload("res://scripts/dungeons/dungeon_guardian.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
 const LOOT = preload("res://scripts/dungeons/dungeon_loot.gd")
 const ROOM_DECOR = preload("res://scripts/dungeons/dungeon_room_decor.gd")
+const BREAKABLE = preload("res://scripts/dungeons/dungeon_breakable.gd")
+const AFFIXES = preload("res://scripts/dungeons/dungeon_affixes.gd")
 const ASSET_ROOT = "res://assets/third_party/kaykit_dungeon/"
 # Bring paired doorframes closer together while keeping the seeded room graph
 # and chest/guardian locations deterministic per entrance.
@@ -42,17 +45,20 @@ var exit_local: Vector3 = Vector3.ZERO
 var spawn_local: Vector3 = Vector3.ZERO
 var bonus_chests: Dictionary = {}
 var claimed_bonuses: Dictionary = {}
+var claimed_props: Dictionary = {}
 var mesh_cache: Dictionary = {}
 var material_cache: Dictionary = {}
 var boss_alive: bool = false
 
-func setup(id: String, tier: int, player: CharacterBody3D, first_floor: int = 1) -> void:
+func setup(id: String, tier: int, player: CharacterBody3D, first_floor: int = 1, already_broken: Array = []) -> void:
 	entrance_id = id
 	quality = RARITY.bounded(tier)
 	hero = player
 	floor_count = int(LAYOUT.profile(id, quality).get("floors", 1))
 	current_floor = clampi(first_floor, 1, floor_count)
 	name = "DungeonInstance_" + id.replace(":", "_")
+	for prop_key in already_broken:
+		claimed_props[str(prop_key)] = true
 	_build_floor()
 
 func hero_spawn_point() -> Vector3:
@@ -194,8 +200,14 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 			else:
 				_solid(Vector3(0.65, 3.2, 4.0) if delta.x != 0 else Vector3(4.0, 3.2, 0.65), location + Vector3(0, 1.6, 0))
 	if int(room["id"]) != 0:
-		if rng.randf() < 0.42:
-			_model("barrel_small", center + Vector3(-4.5, 0.05, 4.4), Color("986e47"))
+		# Every interactive prop has a persistent per-floor ID. Pure rubble
+		# and wall fragments remain batched decoration, not fake loot.
+		if rng.randf() < 0.67:
+			_spawn_breakable("barrel", center + Vector3(-4.35, 0.05, 4.25), int(room["id"]), 0)
+		if rng.randf() < 0.43:
+			_spawn_breakable("sealed_crate", center + Vector3(4.25, 0.05, -4.20), int(room["id"]), 1)
+		if rng.randf() < 0.34:
+			_spawn_breakable("urn", center + Vector3(4.3, 0.05, 4.25), int(room["id"]), 2)
 		if rng.randf() < 0.24:
 			_model("rubble_half", center + Vector3(4.5, 0.03, -4.4), Color("767f8b"), rng.randf() * TAU)
 		if rng.randf() < 0.32:
@@ -205,7 +217,7 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 		torch.scale = Vector3(0.92, 0.92, 0.92)
 	# Add one batched nearest-filtered mesh for each room's unique archetype.
 	# No new colliders inside traversable doors or guardian/chest locations.
-	ROOM_DECOR.decorate(floor_root, room, center, quality)
+	ROOM_DECOR.decorate(floor_root, room, center, quality, rooms)
 
 func _build_connector(a: Vector2i, b: Vector2i) -> void:
 	var a_center: Vector3 = Vector3(float(a.x) * STEP, 0.0, float(a.y) * STEP)
@@ -282,6 +294,33 @@ func _model(id: String, pos: Vector3, tint: Color, yaw: float = 0.0) -> MeshInst
 	floor_root.add_child(node)
 	return node
 
+func _spawn_breakable(kind: String, at: Vector3, room_id: int, slot: int) -> void:
+	var prop_id: String = "%d:%d:%d" % [current_floor, room_id, slot]
+	if claimed_props.has(prop_id):
+		return
+	var prop := BREAKABLE.new()
+	prop.position = at
+	floor_root.add_child(prop)
+	prop.setup(kind, LOOT.breakable(entrance_id, quality, current_floor, prop_id))
+	prop.set_meta("dungeon_prop_id", prop_id)
+	prop.shattered.connect(_on_prop_shattered.bind(prop_id))
+
+func _on_prop_shattered(reward: Dictionary, prop_id: String) -> void:
+	if claimed_props.has(prop_id):
+		return
+	claimed_props[prop_id] = true
+	prop_broken.emit(self, prop_id, reward)
+
+## KayKit stairs rise from local +Z toward -Z: their low step must face
+## an actual doorway. Choose the first connected room deterministically.
+func _stairs_yaw(rooms: Array) -> float:
+	var exit_room: Dictionary = rooms[int(layout["exit"])]
+	var links: Array = exit_room.get("links", [])
+	if links.is_empty():
+		return 0.0
+	var delta: Vector2i = rooms[int(links[0])]["grid"] - exit_room["grid"]
+	return atan2(float(delta.x), float(delta.y))
+
 func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 	guards_remaining = RARITY.guard_count(quality) + current_floor - 1
 	for i in range(guards_remaining):
@@ -294,14 +333,19 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 		var guard := GUARDIAN.new()
 		floor_root.add_child(guard)
 		var boss: bool = current_floor == floor_count and i == guards_remaining - 1
-		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z))
+		var creature_kind: String = ""
+		if quality <= RARITY.RARE:
+			# Deterministic skeleton/goblin variants
+			creature_kind = "skeleton" if (int(layout["seed"]) + i + current_floor) % 2 == 0 else "goblin"
+		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z), creature_kind)
 		guard.set_meta("encounter_slot", i) # Stable across every peer's seeded room copy.
 		guard.hp *= pow(1.20, current_floor - 1) * (2.1 if boss else 1.0)
 		guard.damage_multiplier = pow(1.12, current_floor - 1) * (1.40 if boss else 1.0)
 		if boss:
 			guard.name = "DungeonBoss"
 			guard.scale *= 1.35
-			guard.display_name = "Ancient Warden"
+			guard.display_name = "Skeleton Champion" if creature_kind == "skeleton" else "Goblin Chieftain" if creature_kind == "goblin" else "Ancient Warden"
+		guard.apply_affixes(AFFIXES.roll(entrance_id, current_floor, i, quality, boss))
 	boss_alive = current_floor == floor_count
 
 func _make_chest() -> void:
@@ -323,6 +367,9 @@ func _make_chest() -> void:
 	chest_area.add_child(collider)
 	var art := MeshInstance3D.new()
 	art.mesh = load(ASSET_ROOT + ("chest_gold.obj" if current_floor == floor_count else "stairs_wide.obj")) as Mesh
+	if current_floor < floor_count:
+		art.rotation.y = _stairs_yaw(layout["rooms"])
+		art.set_meta("doorway_aligned", true)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = RARITY.color(quality).lerp(Color("c6ac79"), 0.6)
 	mat.roughness = 0.72

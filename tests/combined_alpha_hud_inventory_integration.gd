@@ -15,6 +15,9 @@ func check(ok: bool, detail: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	# Android layout QA must opt into touch mode even on headless Linux.
+	# Desktop deliberately puts Torch to the left of the PC action row.
+	root.set_meta("outpost_input_mode", "touch")
 	var world: PackedScene = load("res://scenes/main.tscn")
 	check(world != null, "World imports with pixel water and PyroLux hooks")
 	if world == null:

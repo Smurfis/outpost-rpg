@@ -31,7 +31,7 @@ func _run() -> void:
 	check(cycle != null and cycle.is_night() == false, "New adventurer starts in daylight")
 	check(cycle.clock_text().length() == 5, "Game uses a 24-hour clock")
 	check(game.hud.clock_label != null, "HUD includes day/night clock")
-	check(game.recipes.size() == 21 and not game._recipe_by_id("torch").is_empty(), "Torch and six bag recipes coexist with existing crafts")
+	check(game.recipes.size() >= 21 and not game._recipe_by_id("torch").is_empty() and not game._recipe_by_id("shrimp_net").is_empty() and not game._recipe_by_id("cooked_shrimp").is_empty(), "Torch, six bags, and fishing recipes coexist with existing crafts")
 	check(game.equipment_slot("torch") == "offhand", "Torch occupies offhand equipment slot")
 	check(not game.hero.torch_light.visible, "Unequipped torch does not emit light")
 	var daylight: float = cycle.environment.ambient_light_energy
@@ -76,7 +76,7 @@ func _run() -> void:
 	check(reload.night_quote_seen, "First-night message flag survives save/reload")
 	check(int(reload.inventory.get("torch", 0)) == 1, "Crafted torch persists in existing save format")
 	check(reload.is_equipped("torch") and reload.hero.torch_light.visible, "Torch equipment and light restore after restart")
-	check(reload.recipes.size() == 21 and not reload._recipe_by_id("backpack_t1").is_empty(), "Crafting additions persist after save reload")
+	check(reload.recipes.size() >= 21 and not reload._recipe_by_id("backpack_t1").is_empty() and not reload._recipe_by_id("shrimp_net").is_empty() and not reload._recipe_by_id("cooked_shrimp").is_empty(), "Crafting additions including fishing persist after save reload")
 	reload.queue_free()
 	await process_frame
 	if FileAccess.file_exists(SAVE_TEST):

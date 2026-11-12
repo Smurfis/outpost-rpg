@@ -3,6 +3,7 @@ extends Node3D
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
+const WILDLIFE = preload("res://scripts/creatures/overworld_wildlife.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
@@ -18,6 +19,10 @@ const LEVELS = preload("res://scripts/progression/character_levels.gd")
 const CONTROLS = preload("res://scripts/interaction/player_controls.gd")
 const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+const MAP_SERVICE = preload("res://scripts/map/map_service.gd")
+const WORLD_MAP = preload("res://scripts/ui/world_map.gd")
+var map_service: Node
+var world_map: CanvasLayer
 var controls
 var prop_placement = PLACEMENT.new()
 var focus_target: Node3D
@@ -26,6 +31,7 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
+@export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
@@ -35,6 +41,7 @@ var camera: Camera3D
 var camera_angle: float = atan2(17.0, 20.0)
 var camera_angle_target: float = atan2(17.0, 20.0)
 var camera_occlusion_rise: float = 0.0
+var _camera_clearance_query: PhysicsShapeQueryParameters3D
 var camera_focus_smooth: Vector3 = Vector3.ZERO
 const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
@@ -108,6 +115,9 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
+	map_service = MAP_SERVICE.new()
+	add_child(map_service)
+	map_service.setup(self)
 	# Title Play starts a fresh run; Continue reads the previous save.
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
@@ -139,10 +149,24 @@ func _ready() -> void:
 	controls = CONTROLS.new()
 	add_child(controls)
 	controls.setup(self)
+	world_map = WORLD_MAP.new()
+	add_child(world_map)
+	world_map.setup(self, map_service)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
+func toggle_world_map() -> void:
+	if world_map == null:
+		return
+	if world_map.is_open():
+		world_map.close_map()
+	elif controls == null or not controls.modal_open():
+		world_map.open_map()
+
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "jump": [KEY_SPACE], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [KEY_SPACE], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
+	if InputMap.has_action("outpost_jump"):
+		InputMap.erase_action("outpost_jump")
+	binds["map"] = [KEY_M]
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -233,10 +257,11 @@ func _camera(delta: float) -> void:
 	var focus: Vector3 = camera_focus_smooth
 	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
 	var destination: Vector3 = focus + orbit
-	var query := PhysicsRayQueryParameters3D.create(destination, desired_focus, 1, [hero.get_rid()])
-	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(desired_focus) > 1.8
-	camera_occlusion_rise = lerpf(camera_occlusion_rise, 7.0 if occluded else 0.0, 1.0 - exp(-5.0 * t))
+	# A doorway/tree between the hero and camera is visual occlusion, not
+	# camera collision. Raising the framing for that ray hit displaced the
+	# hero on screen without clearing the obstruction. Only protect the
+	# actual camera position, keeping player and world collisions unchanged.
+	camera_occlusion_rise = lerpf(camera_occlusion_rise, _camera_clearance_rise(destination), 1.0 - exp(-5.0 * t))
 	# Old position interpolation lagged behind smoothed yaw, so look_at()
 	# changed pitch unpredictably when users swiped sideways very quickly.
 	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
@@ -244,6 +269,24 @@ func _camera(delta: float) -> void:
 	var raised_focus: Vector3 = focus + Vector3.UP * camera_occlusion_rise
 	camera.global_position = raised_focus + orbit
 	camera.look_at(raised_focus, Vector3.UP)
+
+func _camera_clearance_rise(destination: Vector3) -> float:
+	if _camera_clearance_query == null:
+		_camera_clearance_query = PhysicsShapeQueryParameters3D.new()
+		var probe := SphereShape3D.new()
+		probe.radius = 0.35
+		_camera_clearance_query.shape = probe
+		_camera_clearance_query.collision_mask = 1
+		_camera_clearance_query.collide_with_areas = false
+		_camera_clearance_query.exclude = [hero.get_rid()]
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	# Usually one query. Extra probes are bounded and only run when solid
+	# geometry overlaps the camera itself, never for a blocked sightline.
+	for rise in range(8):
+		_camera_clearance_query.transform = Transform3D(Basis.IDENTITY, destination + Vector3.UP * float(rise))
+		if space.intersect_shape(_camera_clearance_query, 1).is_empty():
+			return float(rise)
+	return 7.0
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -431,16 +474,32 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 	if id in ["oak_tree", "rock_deposit"]:
 		spawn_resource(self, "wood" if id == "oak_tree" else "stone", where, 1, true)
 		return
-	if not prop_placement.available(where, 0.8):
-		return
+	# Nearby crafting benches reserve their work areas. Move supply crates
+	# to valid nearby ground rather than silently removing every blocked chest.
+	var site: Vector3 = where
+	if not prop_placement.available(site, 0.8):
+		var found: bool = false
+		for i in range(1, 49):
+			var search_angle: float = float(i) * 2.39996
+			var radius: float = 1.6 + float(i / 8)
+			var candidate: Vector3 = where + Vector3(cos(search_angle) * radius, 0, sin(search_angle) * radius)
+			if absf(candidate.x) <= 21.0 and absf(candidate.z) <= 21.0 and prop_placement.available(candidate, 0.8):
+				site = candidate
+				found = true
+				break
+		if not found:
+			push_warning("Unable to place camp supply chest near " + str(where))
+			return
+	if terrain_surface != null:
+		site.y = terrain_surface._tile_height(floori(site.x), floori(site.z)) + 0.055
 	var chest = WORLD_OBJECT.new()
 	add_child(chest)
-	chest.position = where
+	chest.position = site
 	var art: MeshInstance3D = VOXEL_PROPS.crate()
 	art.scale = Vector3.ONE * size_factor
 	art.rotation.y = angle
 	chest.setup(self, "camp_crate_%s_%s" % [where.x, where.z], "Supply chest", "chest", art, {"wood": 2, "fiber": 2})
-	prop_placement.reserve(where, 0.8, chest)
+	prop_placement.reserve(site, 0.8, chest)
 
 func _terrain_path(from: Vector3, to: Vector3, radius: float, shade: Color) -> void:
 	var creator := SurfaceTool.new()
@@ -594,10 +653,20 @@ func _resources() -> void:
 
 
 func _enemies() -> void:
+	# Original voxel boar spawns are untouched. Quaternius pigs and wolves
+	# are separate animated creatures; a pig is not a boar replacement.
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
 		var boar = ENEMY.new()
 		add_child(boar)
 		boar.setup(self, hero, pos)
+	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
+		var pig = WILDLIFE.new()
+		add_child(pig)
+		pig.setup(self, hero, pos, "pig")
+	for pos in [Vector3(15, 0.2, 7), Vector3(-17, 0.2, -5)]:
+		var wolf = WILDLIFE.new()
+		add_child(wolf)
+		wolf.setup(self, hero, pos, "wolf")
 
 func _nearest_resource():
 	var best = null
@@ -618,7 +687,25 @@ func enemy_display_name(enemy: Node) -> String:
 		return str(enemy.get("display_name"))
 	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
 		return "Wild boar"
+	if enemy.is_in_group("wild_wolves"):
+		return "Wolf"
+	if enemy.is_in_group("wild_pigs"):
+		return "Pig"
 	return enemy.name.replace("_", " ").capitalize()
+
+func _nearest_breakable():
+	if hero == null:
+		return null
+	var nearest: Node3D
+	var radius: float = 3.1
+	for prop in get_tree().get_nodes_in_group("dungeon_breakables"):
+		if not is_instance_valid(prop) or not prop.active:
+			continue
+		var distance: float = hero.global_position.distance_to(prop.global_position)
+		if distance < radius:
+			radius = distance
+			nearest = prop
+	return nearest
 
 func _nearest_enemy():
 	var best = null
@@ -909,6 +996,8 @@ func smart_context() -> Dictionary:
 		return {"kind": "gather", "label": "GATHER", "icon": tool_icon}
 	if enemy != null:
 		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
+	if _nearest_breakable() != null:
+		return {"kind": "break", "label": "SMASH", "icon": "sword"}
 	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
 		return {"kind": "torch", "label": "TORCH", "icon": "hand"}
 	return {"kind": "none", "label": "INTERACT", "icon": "hand"}
@@ -928,6 +1017,10 @@ func smart_interact() -> void:
 			attack()
 		"gather":
 			gather()
+		"break":
+			var prop = _nearest_breakable()
+			if prop != null:
+				prop.interact(hero)
 		"craft":
 			# Resolve station again at the instant of the tap. A stale CRAFT
 			# label must never open a different station or a generic recipe.
@@ -957,7 +1050,7 @@ func grant_item(item_id: String, amount: int, store_excess: bool = false) -> int
 	if fitting > 0:
 		inventory[item_id] = int(inventory.get(item_id, 0)) + fitting
 		if hud != null:
-			hud.record_loot(item_id, fitting)
+			hud.record_loot("copper" if item_id == "coins" else item_id, fitting)
 	var excess: int = amount - fitting
 	if excess > 0 and store_excess:
 		overflow_loot[item_id] = int(overflow_loot.get(item_id, 0)) + excess
@@ -1417,13 +1510,18 @@ func attack(selected: Node3D = null) -> void:
 	# World-space damage numbers already come from each mob's hit feedback.
 	# No giant per-swing notification is needed, and no boar assumptions.
 
-func on_enemy_killed() -> void:
+func on_enemy_killed(kind: String = "boar") -> void:
 	kills += 1
-	grant_item("hide", 1, true)
-	grant_item("coins", 3, true)
-	gain_experience(12)
-	hud.record_combat_event("Boar defeated")
-	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
+	var is_wolf: bool = kind == "wolf"
+	var hide: int = 2 if is_wolf else 1
+	var coins: int = 5 if is_wolf else 2 if kind == "pig" else 3
+	var xp: int = 16 if is_wolf else 8 if kind == "pig" else 12
+	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Boar"
+	grant_item("hide", hide, true)
+	grant_item("coins", coins, true)
+	gain_experience(xp)
+	hud.record_combat_event(label + " defeated")
+	hud.toast(label + " defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()
 
@@ -1448,7 +1546,7 @@ func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
 	_save()
 	_refresh_menu()
 	if hud != null:
-		hud.toast("Party dungeon cleared! +%d coins • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+		hud.toast("Party dungeon cleared! +%d copper • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
 	return true
 
 func toggle_torch() -> void:
@@ -1477,9 +1575,13 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if map_service != null:
+		data["map_state"] = map_service.export_state()
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
+		if map_service != null:
+			map_service.dirty = false
 
 func _load() -> void:
 	if not FileAccess.file_exists(save_path):
@@ -1490,6 +1592,8 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	if map_service != null:
+		map_service.import_state(data.get("map_state", {}))
 	if data.get("opened_world_objects", {}) is Dictionary:
 		opened_world_objects = data["opened_world_objects"].duplicate(true)
 	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)

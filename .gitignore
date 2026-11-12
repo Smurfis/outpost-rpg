@@ -14,3 +14,10 @@ export_presets.cfg
 # PyroLux Lite license permits game use but not redistribution of addon sources.
 /addons/pyrolux_fx/
 /pyrolux_lite_demo/
+
+# Generated editor imports, test outputs and local map QA captures.
+*.import
+*.log
+/artifacts/map/
+/.map-test-save.json
+/.map-visual-save.json

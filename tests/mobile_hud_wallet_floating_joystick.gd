@@ -15,6 +15,7 @@ func verify(ok: bool, name: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch")
 	var game_scene: PackedScene = load("res://scenes/main.tscn")
 	verify(game_scene != null, "Game scene imported")
 	if game_scene == null:
@@ -37,9 +38,9 @@ func _run() -> void:
 	hud.render_status(83.0, {"wood": 9, "stone": 5, "coins": 147}, 40, 0, "training_blade", "Find iron", "")
 	verify(hud.wallet_resource_id == "wood" and hud.wallet_resource_count.text.contains("9"), "Recent gather changes the tracked material")
 	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Wallet is a permanent transparent strip, not a flyout")
-	verify(hud.wallet_coin.visible and hud.wallet_coin.text.contains("147"), "Coins appear immediately in horizontal wallet")
+	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["copper"] as Label).text == "147", "Legacy coins appear as copper in the wallet")
 	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency")
-	for key in ["coins", "copper", "silver", "gold", "gems"]:
+	for key in ["gold", "silver", "copper"]:
 		verify(game.inventory.has(key) and int(game.inventory[key]) >= 0,
 			"Real persistable player currency account exists: " + key)
 		var icon: TextureRect = hud.wallet_currency_icons.get(key) as TextureRect
@@ -47,15 +48,14 @@ func _run() -> void:
 			"Original transparent pixel currency icon loads and shows horizontally: " + key)
 		if icon != null:
 			verify(icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Currency art never blocks touch: " + key)
-	verify(hud.wallet_currency_rows.has("silver") and (hud.wallet_currency_rows["silver"] as Label).visible and (hud.wallet_currency_rows["silver"] as Label).text.contains("—"), "Unavailable silver shows a dash, not fictitious zero")
+	verify((hud.wallet_currency_rows["silver"] as Label).visible, "Silver is visible")
 	var bounds: Array[Rect2] = []
-	bounds.append(hud.wallet_coin.get_global_rect())
-	for key in ["copper", "silver", "gold", "gems"]:
+	for key in ["gold", "silver", "copper"]:
 		var cell: Label = hud.wallet_currency_rows[key] as Label
 		verify(cell.visible, "Currency appears without a dropdown: " + key)
 		bounds.append(cell.get_global_rect())
-	for i in range(5):
-		var currency: String = ["coins", "copper", "silver", "gold", "gems"][i]
+	for i in range(3):
+		var currency: String = ["gold", "silver", "copper"][i]
 		var symbol: TextureRect = hud.wallet_currency_icons[currency] as TextureRect
 		verify(symbol.get_global_rect().end.x <= bounds[i].position.x + 1.0,
 			"Wallet pixel-art symbol stays to the left of its amount: " + currency)
@@ -64,11 +64,11 @@ func _run() -> void:
 			"Currency counters are laid out horizontally without overlapping")
 	# Regression from real Android: the fifth currency used to sit underneath
 	# BAG because the wallet row extended into its button rectangle.
-	verify(bounds[4].end.x <= bag.get_global_rect().position.x - 3.0,
+	verify(bounds[2].end.x <= bag.get_global_rect().position.x - 3.0,
 		"Last currency ends before the BAG button; no top-row overlap")
 	verify(bounds[0].position.x >= hud.hero_status_frame.get_global_rect().end.x + 3.0,
 		"Wallet starts after the portrait and HP/MP instead of covering them")
-	for key in ["copper", "silver", "gold", "gems"]:
+	for key in ["gold", "silver", "copper"]:
 		var label: Label = hud.wallet_currency_rows[key] as Label
 		verify(label.autowrap_mode == TextServer.AUTOWRAP_OFF and label.clip_text,
 			"Wallet amount never wraps into a second line: " + key)
@@ -79,26 +79,23 @@ func _run() -> void:
 	for virtual_size in [Vector2(1280, 720), Vector2(1600, 720)]:
 		hud._layout_player_chrome_for_size(virtual_size, 1.0)
 		var bag_left: float = bag.anchor_left * virtual_size.x
-		var last_currency: Label = hud.wallet_currency_rows["gems"] as Label
+		var last_currency: Label = hud.wallet_currency_rows["copper"] as Label
 		var gems_end: float = last_currency.anchor_right * virtual_size.x
-		var coins_left: float = hud.wallet_coin.anchor_left * virtual_size.x
+		var coins_left: float = (hud.wallet_currency_icons["gold"] as TextureRect).anchor_left * virtual_size.x
 		var portrait_end: float = hud.hero_status_frame.anchor_right * virtual_size.x
 		verify(gems_end <= bag_left - 4.0 and coins_left >= portrait_end + 3.0,
 			"Wallet never overlaps Bag or portrait at %d×%d" % [int(virtual_size.x), int(virtual_size.y)])
 	hud._layout_player_chrome()
 	hud._refresh_wallet({"coins": 1234567, "copper": 23456, "silver": 0, "gold": 2, "gems": 9})
-	verify(hud.wallet_coin.text.contains("1.2M") and hud.wallet_coin.tooltip_text.contains("1234567"),
-		"Large coin balances shorten in the strip but preserve exact total")
-	verify((hud.wallet_currency_rows["copper"] as Label).text.contains("23.5K")
-		and (hud.wallet_currency_rows["copper"] as Label).tooltip_text.contains("23456"),
-		"Large copper balances stay one-line with exact-count tooltip")
+	verify((hud.wallet_currency_rows["copper"] as Label).text.contains("1.3M") and (hud.wallet_currency_rows["copper"] as Label).tooltip_text.contains("1258023"),
+		"Combined legacy and copper balances shorten while preserving the exact total")
 	hud._refresh_wallet({"wood": 9, "stone": 5, "coins": 147})
 	var old_bag_x: float = bag.anchor_left
 	hud._toggle_wallet()
-	verify(hud.wallet_coin.visible and not hud.wallet_frame.visible, "Deprecated wallet toggle never opens an opaque panel")
+	verify((hud.wallet_currency_rows["silver"] as Label).visible and not hud.wallet_frame.visible, "Deprecated wallet toggle never opens an opaque panel")
 	verify(absf(bag.anchor_left - old_bag_x) < 0.001, "Passive wallet never shifts the Bag button")
 	hud._set_top_menu(true)
-	verify(hud.wallet_coin.visible, "Menu does not hide the horizontal currency display")
+	verify((hud.wallet_currency_rows["silver"] as Label).visible, "Menu does not hide the horizontal currency display")
 	hud._set_top_menu(false)
 	var top_menu: Button = hud_root.get_node_or_null("TopRightMenuButton") as Button
 	verify(top_menu != null, "One top-right menu replaces button row")

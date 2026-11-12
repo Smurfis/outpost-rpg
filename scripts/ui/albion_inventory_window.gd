@@ -3,6 +3,7 @@ extends Control
 ## reads the existing inventory/equipment/carry data and invokes game APIs.
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const CURRENCY = preload("res://scripts/inventory/currency.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
 const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage", "tool_fishing"]
@@ -42,6 +43,7 @@ var selected_id: String = ""
 var selected_slot: String = ""
 var equipment_expanded: bool = true
 var preview_rig: Node3D
+var currency_labels: Dictionary = {}
 
 func setup(game_ref: Node, menu_ref: Node) -> void:
 	game = game_ref
@@ -206,6 +208,18 @@ func _ready() -> void:
 	)
 	overflow_button.visible = false
 	layout.add_child(overflow_button)
+	var money_row := HBoxContainer.new()
+	money_row.name = "BagCurrencyFooter"
+	money_row.alignment = BoxContainer.ALIGNMENT_END
+	money_row.add_theme_constant_override("separation", 8)
+	layout.add_child(money_row)
+	for denomination in ["gold", "silver", "copper"]:
+		money_row.add_child(_icon(denomination, 23))
+		var amount := _text("0", 16, SKIN.CREAM)
+		amount.name = "BagCurrency_" + denomination
+		amount.autowrap_mode = TextServer.AUTOWRAP_OFF
+		money_row.add_child(amount)
+		currency_labels[denomination] = amount
 	# Controls already communicate tap-to-inspect; the redundant footer was
 	# pushing the panel beyond the safe area on short landscape screens.
 
@@ -354,6 +368,8 @@ func _ordered_items() -> Array[String]:
 	var ids: Array[String] = []
 	for raw_id in game.inventory:
 		var id: String = str(raw_id)
+		if id in ["coins", "copper", "silver", "gold"]:
+			continue
 		if int(game.inventory.get(id, 0)) > 0 and _matches_filter(id):
 			ids.append(id)
 	ids.sort_custom(_item_before)
@@ -373,6 +389,10 @@ func _item_before(a: String, b: String) -> bool:
 func refresh() -> void:
 	if not visible or window == null:
 		return
+	for denomination in currency_labels:
+		var value: int = CURRENCY.balance(game.inventory, denomination)
+		currency_labels[denomination].text = str(value)
+		currency_labels[denomination].tooltip_text = "%s: %d" % [denomination.capitalize(), value]
 	header_label.text = "◈  " + ("STORAGE" if storage_mode else "RESOURCES" if filter_kind in ["resource", "material"] else "CHARACTER")
 	equipment_toggle.visible = not storage_mode and filter_kind not in ["resource", "material"]
 	equipment_section.visible = equipment_toggle.visible and equipment_expanded
@@ -659,7 +679,7 @@ func _item_tip(id: String) -> String:
 			break
 	if CARRY.is_bag(id):
 		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
-	result += "\nSelect to inspect or assign" 
+	result += "\nTap to inspect or assign" 
 	return result
 
 func _render_details() -> void:

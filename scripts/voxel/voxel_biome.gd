@@ -265,6 +265,20 @@ func coast_zone_at(x: float, z: float) -> String:
 		return "coastal_soil"
 	return "inland"
 
+func map_cell_at(x: int, z: int) -> Dictionary:
+	# Map consumers use the same cell heights and material choices as the
+	# terrain mesher. An empty result means no generated terrain exists here.
+	if x < -map_half or x >= map_half or z < -map_half or z >= map_half:
+		return {}
+	var zone: String = coast_zone_at(float(x) + 0.5, float(z) + 0.5)
+	var ground_height: float = _tile_height(x, z)
+	return {
+		"height": SEA_LEVEL if zone == "water" else ground_height,
+		"ground_height": ground_height,
+		"ground_tile": _ground_tile(x, z),
+		"zone": zone,
+	}
+
 func _tile_height(x: int, z: int) -> float:
 	var px: float = float(x) + 0.5
 	var pz: float = float(z) + 0.5

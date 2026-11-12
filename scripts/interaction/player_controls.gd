@@ -42,6 +42,8 @@ func set_desktop(value: bool) -> void:
 	hide_inspection()
 
 func modal_open() -> bool:
+	if game.world_map != null and game.world_map.is_open():
+		return true
 	var hud = game.hud
 	var dungeon = game.get_node_or_null("Dungeons")
 	return (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or hud.top_menu_open or hud.control_settings_panel.visible or hud.skill_detail_panel.visible or hud.leave_menu_panel.visible or (dungeon != null and dungeon.dimmer != null and dungeon.dimmer.visible) or game.hero.interaction_locked
@@ -91,6 +93,17 @@ func _input(event: InputEvent) -> void:
 			close_interface()
 			get_viewport().set_input_as_handled()
 			return
+	# Desktop RMB orbits even above a decorative HUD panel. Some panels
+	# consume GUI mouse presses before _unhandled_input, which previously
+	# prevented the drag from starting in otherwise empty world-space.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and desktop and not OS.has_feature("mobile") and not modal_open():
+		if event.pressed:
+			rotating = true
+			hold_ground = false
+		else:
+			rotating = false
+		get_viewport().set_input_as_handled()
+		return
 	# Releases must always clear gestures, including over UI or outside a modal.
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -108,7 +121,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
 			return
-		var actions: Array[String] = ["ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus"]
+		if event.is_action_pressed("outpost_map"):
+			game.toggle_world_map()
+			get_viewport().set_input_as_handled()
+			return
+		var actions: Array[String] = ["ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "interact"]
 		for action in actions:
 			if event.is_action_pressed("outpost_" + action):
 				game.perform_action(action)
@@ -265,6 +282,9 @@ func _fail_route() -> void:
 	game.hud.toast("Movement stopped: destination is unreachable.")
 
 func close_interface() -> void:
+	if game.world_map != null and game.world_map.is_open():
+		game.world_map.close_map()
+		return
 	cancel()
 	game.focus_target = null
 	hide_inspection()
