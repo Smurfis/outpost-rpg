@@ -39,8 +39,8 @@ func _run() -> void:
 	verify(hud.wallet_resource_id == "wood" and hud.wallet_resource_count.text.contains("9"), "Recent gather changes the tracked material")
 	verify(not hud.wallet_open and hud.wallet_frame.visible, "Wallet is a passive framed strip, not a flyout")
 	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["copper"] as Label).text == "147", "Legacy coins appear as copper in the wallet")
-	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency"
-	verify(hud.wallet_frame.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Decorative wallet is touch-through"))
+	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency")
+	verify(hud.wallet_frame.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Decorative wallet is touch-through")
 	for key in ["gold", "silver", "copper", "gems"]:
 		verify(game.inventory.has(key) and int(game.inventory[key]) >= 0,
 			"Real persistable player currency account exists: " + key)
