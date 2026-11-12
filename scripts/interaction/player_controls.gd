@@ -46,7 +46,7 @@ func modal_open() -> bool:
 		return true
 	var hud = game.hud
 	var dungeon = game.get_node_or_null("Dungeons")
-	return (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or hud.top_menu_open or hud.control_settings_panel.visible or hud.skill_detail_panel.visible or hud.leave_menu_panel.visible or (dungeon != null and dungeon.dimmer != null and dungeon.dimmer.visible) or game.hero.interaction_locked
+	return (game.chat != null and game.chat.chat_open) or (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or hud.top_menu_open or hud.control_settings_panel.visible or hud.skill_detail_panel.visible or hud.leave_menu_panel.visible or (dungeon != null and dungeon.dimmer != null and dungeon.dimmer.visible) or game.hero.interaction_locked
 
 func point_over_ui(point: Vector2) -> bool:
 	return modal_open() or _ui_at(get_tree().root, point)
@@ -70,6 +70,13 @@ func _ui_at(node: Node, point: Vector2) -> bool:
 
 func _input(event: InputEvent) -> void:
 	if game == null:
+		return
+	# Chat owns keyboard focus. Escape must close it rather than opening
+	# other modals; gameplay shortcuts must never fire while typing.
+	if game.chat != null and game.chat.chat_open and event is InputEventKey:
+		if event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			game.chat.close_chat()
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
 		if event.device == -1:
