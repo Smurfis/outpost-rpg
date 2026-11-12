@@ -36,7 +36,7 @@ const TILE_COAST_SOIL: int = 19
 
 var map_half: int = MAP_HALF
 var map_world_half: int = MAP_HALF # Map can see remote islands while home terrain stays +/-96.
-var archipelago: Node3D
+var archipelago
 var fields_enabled: bool = false
 var world_seed: int = 64012
 var _noise: FastNoiseLite
