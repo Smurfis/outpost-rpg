@@ -86,10 +86,17 @@ func height_at(x: int, z: int) -> int:
 	return height
 
 func is_solid(x: int, y: int, z: int) -> bool:
-	if y < BEDROCK or y >= height_at(x, z):
+	if y < BEDROCK:
 		return false
 	var cave_floor: int = caves.floor_at(x, z)
-	return cave_floor == CAVES.INVALID_FLOOR or y < cave_floor or y >= cave_floor + CAVES.CORRIDOR_HEIGHT
+	if cave_floor != CAVES.INVALID_FLOOR:
+		# Support even a rare low spot along the tunnel: never allow
+		# Perlin valleys to remove the stairs beneath the player's feet.
+		if y < cave_floor:
+			return true
+		if y < cave_floor + CAVES.CORRIDOR_HEIGHT:
+			return false
+	return y < height_at(x, z)
 
 func top_tile(x: int, z: int) -> int:
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
