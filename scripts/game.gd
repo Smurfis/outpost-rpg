@@ -1488,6 +1488,7 @@ func _apply_whirlwind_tick() -> void:
 		var hit_point: Vector3 = enemy.global_position
 		remember_attacked_enemy(enemy)
 		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(hit_point)
 		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
 			enemy.ignite(4.0)
@@ -1514,6 +1515,48 @@ func _advance_whirlwind_ticks(delta: float) -> void:
 	while whirlwind_ticks_done < WHIRLWIND_TICK_TIMES.size() and whirlwind_tick_clock >= WHIRLWIND_TICK_TIMES[whirlwind_ticks_done]:
 		_apply_whirlwind_tick()
 
+func crafting_bonus(stat: String) -> float:
+	var total: float = 0.0
+	var seen: Dictionary = {}
+	for slot in equipment:
+		var equipped: String = str(equipment[slot])
+		if equipped.is_empty() or seen.has(equipped):
+			continue
+		seen[equipped] = true
+		var roll: Dictionary = best_craft_rolls.get(equipped, {})
+		if roll.get("bonuses", {}) is Dictionary:
+			total += float(roll["bonuses"].get(stat, 0))
+	return total
+
+func has_crafting_affix(affix: String) -> bool:
+	for equipped in equipment.values():
+		var roll: Dictionary = best_craft_rolls.get(str(equipped), {})
+		if str(roll.get("affix", "")) == affix:
+			return true
+	return false
+
+func crafted_damage(base: float) -> float:
+	var result: float = base + crafting_bonus("damage")
+	if has_crafting_affix("Brutal"):
+		result *= 1.08
+	if has_crafting_affix("Titanic"):
+		result *= 1.12
+	if randf() * 100.0 < minf(40.0, crafting_bonus("crit_chance")):
+		result *= 1.5
+	return result
+
+func crafted_attack_delay(base: float) -> float:
+	var speed: float = crafting_bonus("attack_speed")
+	if has_crafting_affix("Swift"):
+		speed += 6.0
+	if has_crafting_affix("Titanic"):
+		speed -= 8.0
+	return base / maxf(0.65, 1.0 + speed * 0.01)
+
+func apply_crafted_lifesteal() -> void:
+	if hero != null and has_crafting_affix("Vampiric"):
+		hero.health = minf(100.0, hero.health + 2.0)
+
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
@@ -1536,10 +1579,10 @@ func use_weapon_skill(slot: int) -> bool:
 		return false
 	var weapon: String = current_weapon_id()
 	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	var dealt: float = crafted_damage(base) * LEVELS.multiplier_for_skill(skill)
 	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else 0.55
+	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else crafted_attack_delay(0.55)
 	if skill == "whirlwind":
 		# A first hit on cast, then the second and third hits at 0.30s and
 		# 0.60s. Every tick checks live positions and creates sword-tip sparks.
@@ -1556,6 +1599,7 @@ func use_weapon_skill(slot: int) -> bool:
 		hero.swing()
 		remember_attacked_enemy(target)
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(target.global_position)
 		if skill == "armor_break" and target_available(target):
 			# A real follow-up damage increase for six seconds. Applying it
@@ -1616,7 +1660,7 @@ func consume(item_id: String, heal: float) -> void:
 	if int(inventory.get(item_id, 0)) <= 0 or hero.health >= 99.9:
 		return
 	inventory[item_id] = int(inventory[item_id]) - 1
-	hero.health = minf(100.0, hero.health + heal)
+	hero.health = minf(100.0, hero.health + heal + crafting_bonus("ability_power"))
 	hud.toast("Used %s: +%d health" % [item_id.capitalize(), int(heal)])
 	_save()
 	_refresh_menu()
@@ -1641,11 +1685,12 @@ func attack(selected: Node3D = null) -> void:
 		return
 	if target == null:
 		return # No popup spam when outside combat range.
-	attack_delay = 0.55
+	attack_delay = crafted_attack_delay(0.55)
 	hero.swing()
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
-	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	target.receive_damage(damage * _armor_break_damage_multiplier(target))
+	var base_damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
+	target.receive_damage(crafted_damage(base_damage) * _armor_break_damage_multiplier(target))
+	apply_crafted_lifesteal()
 	hero.show_weapon_hit_effect(target.global_position)
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
