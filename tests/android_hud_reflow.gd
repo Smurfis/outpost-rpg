@@ -192,7 +192,7 @@ func _run() -> void:
 	if status != null and wallet != null:
 		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 391.2) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
 		var previous_end: float = wallet.anchor_left * 2400.0
-		for key in ["copper", "silver", "gold", "gems"]:
+		for key in ["gold", "silver", "copper", "gems"]:
 			var currency: Label = hud.wallet_currency_rows[key] as Label
 			verify(absf(currency.anchor_top - hud.wallet_coin.anchor_top) < 0.001,
 				"At 20:9 " + key + " remains in one horizontal currency row")
