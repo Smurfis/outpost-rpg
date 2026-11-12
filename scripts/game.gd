@@ -716,7 +716,7 @@ func remember_attacked_enemy(target: Node3D) -> void:
 func target_for_hud() -> Node3D:
 	if hero == null:
 		return null
-	if recent_target_seconds > 0.0 and target_available(recent_attack_target):
+	if recent_target_seconds > 0.0 and is_instance_valid(recent_attack_target) and target_available(recent_attack_target):
 		if hero.global_position.distance_to(recent_attack_target.global_position) <= 24.0:
 			return recent_attack_target
 	if valid_focus() and hero.global_position.distance_to(focus_target.global_position) <= 24.0:
