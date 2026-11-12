@@ -52,13 +52,26 @@ func _run() -> void:
 		var field: Node3D = game.get_node_or_null("VoxelAtmosphere") as Node3D
 		_check(field != null, "Voxel Fields still builds")
 		if field != null:
-			var foliage_chunks: int = 0
+			# _chunk_foliage() deliberately returns null: the actual
+			# harvestable wood resource carries the tree atlas. A duplicate
+			# streamed crown used to draw a second, unharvestable tree.
+			var duplicate_crowns: int = 0
 			for child in field.get_children():
 				if str(child.name).begins_with("ChunkFoliage_"):
-					foliage_chunks += 1
-					_check(child is MeshInstance3D and child.material_override == mat,
-						"Streamed foliage batch uses dedicated atlas")
-			_check(foliage_chunks > 0, "Loaded Fields includes batched textured tree crowns")
+					duplicate_crowns += 1
+			_check(duplicate_crowns == 0, "Streaming avoids duplicate unharvestable tree crowns")
+			var textured_tree_found: bool = false
+			for resource in get_nodes_in_group("resources"):
+				if str(resource.get("kind")) != "wood":
+					continue
+				for child in resource.get_children():
+					if child is MeshInstance3D and child.name == "HarvestableModel":
+						if child.material_override == mat:
+							textured_tree_found = true
+							break
+				if textured_tree_found:
+					break
+			_check(textured_tree_found, "Loaded Fields has actual harvestable trees using the foliage atlas")
 		game.queue_free()
 		await process_frame
 	print("FOLIAGE RESULT: %d failures" % failures)
