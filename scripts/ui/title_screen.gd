@@ -18,6 +18,8 @@ const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
 const SKIN := preload("res://scripts/ui/outpost_skin.gd")
+const CHANGELOG_READER := preload("res://scripts/ui/changelog_reader.gd")
+const CHANGELOG_RELEASES_API := "https://api.github.com/repos/Smurfis/outpost-rpg/releases?per_page=12"
 const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
 	"Tip: Gather wood and stone before visiting the workbench.",
@@ -86,8 +88,13 @@ var _channel_stable_button: Button
 var _channel_alpha_button: Button
 var _channel_note: Label
 var _changelog_button: Button
-var _changelog_panel: PanelContainer
+var _changelog_panel: Panel
 var _changelog_dim: ColorRect
+var _changelog_scroll: ScrollContainer
+var _changelog_entries: VBoxContainer
+var _changelog_status: Label
+var _changelog_request: HTTPRequest
+var _changelog_fetch_started: bool = false
 var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
@@ -164,8 +171,8 @@ func _layout_for_size(available: Vector2) -> void:
 		_changelog_button.position.x = 1164.0 + half_extra
 	if _changelog_panel != null:
 		# Nearly full viewport in either 16:9 or 20:9 Android landscape.
-		_changelog_panel.position = Vector2(54.0 - half_extra, 47.0)
-		_changelog_panel.size = Vector2(DESIGN.x + 2.0 * half_extra - 108.0, 626.0)
+		_changelog_panel.position = Vector2(128.0 - half_extra, 72.0)
+		_changelog_panel.size = Vector2(DESIGN.x + 2.0 * half_extra - 256.0, 556.0)
 	if _changelog_dim != null:
 		_changelog_dim.position = Vector2(-half_extra, 0.0)
 		_changelog_dim.size = Vector2(DESIGN.x + 2.0 * half_extra, DESIGN.y)
@@ -687,13 +694,13 @@ func _build_settings() -> void:
 	_settings_panel.visible = false
 
 func _build_changelog_scroll() -> void:
-	# The parchment scroll stays in the same place; the reader itself becomes
-	# a large, truly centred modal with a dimmer, not a skinny right sidebar.
+	# Keep the illustrated scroll shortcut, but make the reader a bounded
+	# changelog instead of a near-fullscreen unformatted test-notes block.
 	_changelog_button = Button.new()
 	_changelog_button.name = "ChangelogScrollButton"
 	_changelog_button.position = Vector2(1164, 180)
 	_changelog_button.size = Vector2(62, 70)
-	_changelog_button.tooltip_text = "Read the latest Outpost changes"
+	_changelog_button.tooltip_text = "Read the Outpost version history"
 	_changelog_button.icon = load("res://assets/ui/title/changelog_scroll.svg") as Texture2D
 	_changelog_button.expand_icon = true
 	_changelog_button.focus_mode = Control.FOCUS_ALL
@@ -701,6 +708,7 @@ func _build_changelog_scroll() -> void:
 		_changelog_button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 	_changelog_button.pressed.connect(_toggle_changelog)
 	_canvas.add_child(_changelog_button)
+
 	_changelog_dim = ColorRect.new()
 	_changelog_dim.name = "ChangelogDim"
 	_changelog_dim.position = Vector2.ZERO
@@ -709,58 +717,196 @@ func _build_changelog_scroll() -> void:
 	_changelog_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_changelog_dim.visible = false
 	_canvas.add_child(_changelog_dim)
-	_changelog_panel = PanelContainer.new()
+
+	# A Panel, not PanelContainer: content minimum height must never stretch
+	# the dialog beyond its 556px viewport. Only the notes scroll.
+	_changelog_panel = Panel.new()
 	_changelog_panel.name = "ChangelogPanel"
-	_changelog_panel.position = Vector2(54, 47)
-	_changelog_panel.size = Vector2(1172, 626)
+	_changelog_panel.position = Vector2(128, 72)
+	_changelog_panel.size = Vector2(1024, 556)
 	_changelog_panel.custom_minimum_size = Vector2.ZERO
-	var reading_panel := SKIN.modal_panel()
-	reading_panel.bg_color = Color(0.15, 0.09, 0.09, 0.97)
-	reading_panel.border_color = Color("d9a85e")
-	reading_panel.set_border_width_all(3)
-	_changelog_panel.add_theme_stylebox_override("panel", reading_panel)
+	_changelog_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var surface := SKIN.modal_panel()
+	surface.bg_color = Color(0.14, 0.09, 0.09, 0.97)
+	surface.border_color = Color("d9a85e")
+	surface.set_border_width_all(2)
+	_changelog_panel.add_theme_stylebox_override("panel", surface)
 	_changelog_panel.clip_contents = true
-	_changelog_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(_changelog_panel)
+
 	var margins := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margins.add_theme_constant_override("margin_" + side, 25)
+	margins.name = "ChangelogMargins"
 	_changelog_panel.add_child(margins)
+	margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 20)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 18)
+	stack.name = "ChangelogLayout"
+	stack.add_theme_constant_override("separation", 9)
 	margins.add_child(stack)
+
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 14)
+	header.add_theme_constant_override("separation", 12)
 	stack.add_child(header)
-	var heading := _menu_label("OUTPOST  ◆  WHAT'S NEW", 30)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var heading := _menu_label("OUTPOST  ◆  CHANGELOG", 26)
+	heading.name = "ChangelogHeading"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(heading)
 	var close := Button.new()
 	close.name = "ChangelogCloseButton"
-	SKIN.apply_close_button(close, 54)
+	SKIN.apply_close_button(close, 48)
 	close.tooltip_text = "Close changelog"
 	close.pressed.connect(_toggle_changelog)
 	header.add_child(close)
-	var scroll := ScrollContainer.new()
-	scroll.name = "ChangelogScrollList"
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroll.clip_contents = true
-	scroll.follow_focus = true
-	stack.add_child(scroll)
-	var details := _menu_label("ALPHA TEST NOTES\\n\\nCRAFTING  •  Interact beside a campfire, forge, loom, woodwork bench or enchanting table. Only that station's items appear, with its icon. Tap a recipe and craft directly when materials are ready.\\n\\nITEMS  •  Tap weapon, armour and inventory icons to inspect details. Hover with a mouse for a quick tooltip.\\n\\nCONTROLS  •  Try fixed or dynamic thumbstick, sticky movement STOP, and second-finger camera rotation.\\n\\nWORLD  •  Cube World-inspired voxel scenery, circular minimap and Albion-style equipment.\\n\\nTESTING  •  Please report stuck menus, overlapping text, incorrect hitboxes or missing crafting options.\\n\\nANDROID BUILDS  •  Check GitHub releases and copy a verified Alpha APK link into your browser. Android controls installation. Never disable Play Protect.", 22)
-	details.name = "ChangelogBody"
-	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	details.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	details.add_theme_constant_override("line_spacing", 6)
-	details.text = details.text.replace("\\n", "\n")
-	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(details)
+
+	_changelog_status = _menu_label("RELEASE HISTORY  •  OFFLINE", 15)
+	_changelog_status.name = "ChangelogStatus"
+	_changelog_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_changelog_status.add_theme_color_override("font_color", Color("dcb981"))
+	stack.add_child(_changelog_status)
+
+	var rule := ColorRect.new()
+	rule.name = "ChangelogDivider"
+	rule.color = Color("b18b54")
+	rule.custom_minimum_size = Vector2(0, 1)
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(rule)
+
+	_changelog_scroll = ScrollContainer.new()
+	_changelog_scroll.name = "ChangelogScrollList"
+	_changelog_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_changelog_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_changelog_scroll.custom_minimum_size = Vector2(0, 60)
+	_changelog_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_changelog_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	_changelog_scroll.clip_contents = true
+	_changelog_scroll.follow_focus = true
+	_changelog_scroll.get_v_scroll_bar().custom_minimum_size.x = 16
+	_changelog_scroll.get_v_scroll_bar().modulate = Color("e9be79")
+	stack.add_child(_changelog_scroll)
+	_changelog_entries = VBoxContainer.new()
+	_changelog_entries.name = "ChangelogEntries"
+	_changelog_entries.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_changelog_entries.add_theme_constant_override("separation", 12)
+	_changelog_scroll.add_child(_changelog_entries)
+
+	var footer := _menu_label("SCROLL OR SWIPE FOR EARLIER UPDATES", 13)
+	footer.name = "ChangelogFooter"
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	footer.add_theme_color_override("font_color", Color("baa27f"))
+	stack.add_child(footer)
+
+	_changelog_show_entries(CHANGELOG_READER.offline_entries(), false)
 	_changelog_panel.visible = false
+
+	_changelog_request = HTTPRequest.new()
+	_changelog_request.name = "ChangelogReleasesRequest"
+	_changelog_request.timeout = 10.0
+	_changelog_request.request_completed.connect(_on_changelog_releases_loaded)
+	_canvas.add_child(_changelog_request)
+
+func _changelog_show_entries(entries: Array[Dictionary], include_archive: bool) -> void:
+	for previous in _changelog_entries.get_children():
+		_changelog_entries.remove_child(previous)
+		previous.queue_free()
+	for entry in entries:
+		_changelog_add_entry(entry)
+	if include_archive:
+		var archive_label := _menu_label("◆  EARLIER DEVELOPMENT  •  docs/CHANGELOG.md", 16)
+		archive_label.name = "ChangelogArchiveHeading"
+		archive_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		archive_label.add_theme_color_override("font_color", Color("e9be79"))
+		_changelog_entries.add_child(archive_label)
+		for entry in CHANGELOG_READER.offline_entries():
+			_changelog_add_entry(entry)
+	_changelog_scroll.scroll_vertical = 0
+
+func _changelog_add_entry(entry: Dictionary) -> void:
+	var card := PanelContainer.new()
+	card.name = "ChangelogVersionCard"
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", SKIN.translucent_surface(false))
+	_changelog_entries.add_child(card)
+	var inset := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		inset.add_theme_constant_override("margin_" + side, 13)
+	card.add_child(inset)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	inset.add_child(content)
+
+	var version := _menu_label("◆  " + str(entry.get("version", "UPDATE")), 21)
+	version.name = "ChangelogVersion"
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	version.add_theme_color_override("font_color", Color("ffe1a4"))
+	content.add_child(version)
+	var title := _menu_label(str(entry.get("title", "")), 17)
+	title.name = "ChangelogEntryTitle"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title.add_theme_color_override("font_color", Color("f7e8c9"))
+	content.add_child(title)
+	var meta := _menu_label("DATE / TIME  •  " + str(entry.get("date", "Not recorded")) + "     AUTHOR  •  " + str(entry.get("author", "Unknown")), 14)
+	meta.name = "ChangelogMetadata"
+	meta.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	meta.add_theme_color_override("font_color", Color("d4b78b"))
+	content.add_child(meta)
+
+	for line in entry.get("lines", []):
+		if not (line is Dictionary):
+			continue
+		var text_value: String = str(line.get("text", "")).strip_edges()
+		if text_value.is_empty():
+			continue
+		var kind: String = str(line.get("kind", "body"))
+		if kind == "heading":
+			var section := _menu_label("◆  " + text_value, 16)
+			section.name = "ChangelogSectionHeading"
+			section.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			section.add_theme_color_override("font_color", Color("e9be79"))
+			content.add_child(section)
+		elif kind == "bullet":
+			var bullet := HBoxContainer.new()
+			bullet.name = "ChangelogBullet"
+			bullet.add_theme_constant_override("separation", 8)
+			content.add_child(bullet)
+			var dot := _menu_label("•", 17)
+			dot.add_theme_color_override("font_color", Color("d9a85e"))
+			dot.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+			bullet.add_child(dot)
+			var text_label := _menu_label(text_value, 16)
+			text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			bullet.add_child(text_label)
+		else:
+			var description := _menu_label(text_value, 16)
+			description.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			content.add_child(description)
+
+func _request_changelog_releases() -> void:
+	if _changelog_fetch_started or _changelog_request == null:
+		return
+	_changelog_fetch_started = true
+	_changelog_status.text = "CHECKING PUBLISHED ALPHA RELEASES  •  OFFLINE HISTORY AVAILABLE"
+	var err: int = _changelog_request.request(
+		CHANGELOG_RELEASES_API,
+		PackedStringArray(["Accept: application/vnd.github+json", "User-Agent: Outpost-Alpha"])
+	)
+	if err != OK:
+		_changelog_status.text = "OFFLINE HISTORY  •  GITHUB RELEASE FEED UNAVAILABLE"
+
+func _on_changelog_releases_loaded(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if _changelog_entries == null:
+		return
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		_changelog_status.text = "OFFLINE HISTORY  •  GITHUB RELEASE FEED UNAVAILABLE"
+		return
+	var entries: Array[Dictionary] = CHANGELOG_READER.releases_from_json(body.get_string_from_utf8())
+	if entries.is_empty():
+		_changelog_status.text = "OFFLINE HISTORY  •  NO PUBLISHED ALPHA NOTES RETURNED"
+		return
+	_changelog_status.text = "PUBLISHED ALPHA RELEASES  •  NEWEST FIRST  •  TIMES IN UTC"
+	_changelog_show_entries(entries, true)
 
 func _toggle_changelog() -> void:
 	if _changelog_panel == null:
@@ -779,6 +925,7 @@ func _toggle_changelog() -> void:
 		_changelog_dim.move_to_front()
 	_changelog_panel.visible = true
 	_changelog_panel.move_to_front()
+	_request_changelog_releases()
 
 func _apply_volume() -> void:
 	var master: int = AudioServer.get_bus_index("Master")
