@@ -478,7 +478,7 @@ func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: fl
 	# to valid nearby ground rather than silently removing every blocked chest.
 	var site: Vector3 = where
 	if not prop_placement.available(site, 0.8):
-			var found: bool = false
+		var found: bool = false
 		for i in range(1, 49):
 			var search_angle: float = float(i) * 2.39996
 			var radius: float = 1.6 + float(i / 8)
