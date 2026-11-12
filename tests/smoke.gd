@@ -122,6 +122,7 @@ func _test_game() -> void:
 	check(int(game.inventory.get("wood", 0)) == 1, "Reforging pays the full material cost")
 	game.menu.close_page()
 	game.inventory["stone"] = 6
+	game.inventory["wood"] = 4 # Fresh materials to test cancellation separately.
 	check(game.begin_craft("pickaxe"), "Can start another recipe after axe is already owned")
 	game.cancel_craft()
 	check(game.crafting.is_empty(), "Work can be cancelled")
@@ -134,7 +135,7 @@ func _test_game() -> void:
 	check(game.hero.tool_mesh == null and game.hero.sword_mesh.visible, "Putting pickaxe away restores sword")
 	game.inventory["pickaxe"] = 0
 	check(not game.select_quick_tool("pickaxe"), "Unowned pickaxe cannot be selected")
-	check(int(game.inventory.get("wood", 0)) == 1, "Cancellation never consumes ingredients")
+	check(int(game.inventory.get("wood", 0)) == 4, "Cancellation never consumes ingredients")
 	game.show_inventory()
 	check(game.menu.visible and game.menu.current_page == "bag", "Inventory tab opens")
 	game.show_equipment()
