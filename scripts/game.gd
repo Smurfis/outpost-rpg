@@ -1524,8 +1524,8 @@ func crafting_bonus(stat: String) -> float:
 			continue
 		seen[equipped] = true
 		var roll: Dictionary = best_craft_rolls.get(equipped, {})
-		if roll.get("bonuses", {}) is Dictionary:
-			total += float(roll["bonuses"].get(stat, 0))
+		var boosts: Dictionary = roll.get("bonuses", {})
+		total += float(boosts.get(stat, 0))
 	return total
 
 func has_crafting_affix(affix: String) -> bool:
