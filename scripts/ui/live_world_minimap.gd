@@ -2,7 +2,7 @@ extends Control
 ## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
 ## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
-const MAP_CACHE = preload("res://scripts/map/overworld_map_cache.gd")
+const MARKERS = preload("res://scripts/ui/map_marker_layer.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
@@ -19,8 +19,6 @@ var _sample_angle: float = 0.0 # Latest camera orbit; changes without texture up
 var _has_sample: bool = false
 var _refresh_count: int = 0
 var _relief_samples: int = 0 # Height-call counter for Android performance QA.
-var _map_cache: RefCounted
-var _map_cache_center := Vector2i(99999, 99999)
 
 func setup(game_ref: Node) -> void:
 	game = game_ref
@@ -28,7 +26,7 @@ func setup(game_ref: Node) -> void:
 func _ready() -> void:
 	name = "LiveWorldMinimap"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if game != null and game.diorama_map_enabled else CanvasItem.TEXTURE_FILTER_LINEAR
 	_image = Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGBA8)
 	_image.fill(Color.TRANSPARENT)
 	_texture = ImageTexture.create_from_image(_image)
@@ -43,14 +41,17 @@ func _process(delta: float) -> void:
 		visible = not in_dungeon
 	if in_dungeon:
 		return
+	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
+		_sample_angle = game.camera_angle
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		queue_redraw()
+		return
 	var player: Node3D = game.get("hero") as Node3D
 	if player == null:
 		return
 	_clock += delta
 	_sample_angle = float(game.get("camera_angle"))
 	var position_now: Vector3 = player.global_position
-	if bool(game.get("diorama_map_enabled")):
-		_update_experimental_cache(position_now)
 	var ground_shift := Vector2(position_now.x - _center.x, position_now.z - _center.z)
 	var distance_sq: float = ground_shift.length_squared()
 	# Cache the same world-aligned pixels while dragging the camera. Even a
@@ -64,22 +65,6 @@ func _process(delta: float) -> void:
 		_has_sample = true
 		_refresh_pixels()
 	queue_redraw()
-
-func _update_experimental_cache(player_position: Vector3) -> void:
-	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
-	if biome == null:
-		return
-	if _map_cache == null:
-		_map_cache = MAP_CACHE.new(biome)
-	var chunk := Vector2i(floori(player_position.x / MAP_CACHE.CHUNK_SIZE), floori(player_position.z / MAP_CACHE.CHUNK_SIZE))
-	if chunk != _map_cache_center:
-		_map_cache_center = chunk
-		# Centre first; the bounded queue never depends on camera yaw.
-		_map_cache.request_chunk(chunk)
-		for z in range(-1, 2):
-			for x in range(-1, 2):
-				_map_cache.request_chunk(chunk + Vector2i(x, z))
-	_map_cache.step(12)
 
 func _map_to_world(screen_local: Vector2) -> Vector2:
 	var c: float = cos(_sample_angle)
@@ -131,6 +116,9 @@ func _refresh_pixels() -> void:
 
 func _draw() -> void:
 	if game == null:
+		return
+	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
+		_draw_relief()
 		return
 	var diameter: float = minf(size.x, size.y)
 	if diameter <= 0.0:
@@ -211,3 +199,39 @@ func _draw() -> void:
 	var north: Vector2 = _world_to_map(Vector2(0.0, -1.0))
 	draw_string(ThemeDB.fallback_font, center + north * (radius - 13.0) + Vector2(-5.0, 5.0),
 		"N", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("fff3cc"))
+
+func _draw_relief() -> void:
+	var center: Vector2 = size * 0.5
+	var radius: float = minf(size.x, size.y) * 0.5 - 7
+	if radius <= 6: return
+	draw_circle(center, radius + 4, DARK_WOOD)
+	draw_circle(center, radius + 1, RIM)
+	var camera: Camera3D = game.world_map.mini_camera
+	var hero: Node3D = game.hero
+	var hero_pixel: Vector2 = camera.unproject_position(hero.global_position)
+	var points := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	for i in range(64):
+		var direction := Vector2.from_angle(float(i) * TAU / 64)
+		points.append(center + direction * (radius - 3))
+		uvs.append(hero_pixel / 192.0 + direction * 0.5)
+	draw_polygon(points, PackedColorArray([Color.WHITE]), uvs, game.world_map.mini_viewport.get_texture())
+	var scale_by: float = (radius - 3) * 2 / 192.0
+	var occupied: Dictionary = {}
+	for record in game.map_service.markers(true):
+		if record.get("category", "") in ["zones", "resources"]: continue
+		var point: Vector2 = center + (camera.unproject_position(record.position) - hero_pixel) * scale_by
+		if point.distance_to(center) > radius - 12 or point.distance_to(center) < 18: continue
+		var cell := Vector2i(point / 16)
+		if occupied.has(cell): continue
+		occupied[cell] = true
+		if record.has("disposition"):
+			MARKERS.glyph(self, point, record.disposition)
+		else:
+			var tint: Color = game.map_service.RARITY.color(int(record.get("quality", 0))) if record.category == "portals" else Color("e5bb71")
+			draw_rect(Rect2(point - Vector2(3,3), Vector2(6,6)), tint)
+		if occupied.size() >= 32: break
+	var heading: Vector2 = camera.unproject_position(hero.global_position - hero.visual.global_basis.z) - camera.unproject_position(hero.global_position)
+	MARKERS.glyph(self, center, "", true, heading.angle() + PI * 0.5)
+	var north: Vector2 = (camera.unproject_position(hero.global_position + Vector3.FORWARD) - camera.unproject_position(hero.global_position)).normalized()
+	draw_string(ThemeDB.fallback_font, center + north * (radius - 12) + Vector2(-4,4), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("fff3cc"))

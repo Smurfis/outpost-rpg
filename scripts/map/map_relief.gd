@@ -1,9 +1,12 @@
 extends Node3D
+const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
+const SURFACE = preload("res://scripts/map/map_surface.gdshader")
 ## Map-only geometry: no gameplay scene, collision, animation, AI or VFX.
-const MAX_MESHES: int = 96
+const MAX_MESHES: int = 256 # Entire current 16x16 chunk island; bounded for future worlds.
 const CHUNK: int = 12
 var service: Node
 var meshes: Dictionary = {}
+var mesh_versions: Dictionary = {}
 var queue: Array[Vector2i] = []
 var material: ShaderMaterial
 var focus := Vector3.ZERO
@@ -13,9 +16,9 @@ var build_count: int = 0
 func setup(source: Node) -> void:
 	service = source
 	material = ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = "shader_type spatial; render_mode unshaded, cull_disabled; uniform vec3 player_position; uniform float visible_radius = 18.0; varying vec3 at; void vertex(){ at = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; } void fragment(){ float light = mix(0.38, 1.0, 1.0 - smoothstep(visible_radius - 2.0, visible_radius, distance(at.xz, player_position.xz))); ALBEDO = COLOR.rgb * light; }"
-	material.shader = shader
+	material.shader = SURFACE
+	material.set_shader_parameter("atlas_texture", PALETTE.get_material().albedo_texture)
+	material.set_shader_parameter("coast_texture", PALETTE.coast_texture())
 
 func schedule(at: Vector3) -> void:
 	focus = at
@@ -31,9 +34,10 @@ func schedule(at: Vector3) -> void:
 		if not keys.has(key):
 			meshes[key].queue_free()
 			meshes.erase(key)
+			mesh_versions.erase(key)
 	queue.clear()
 	for key in keys:
-		if not meshes.has(key) or seen_revision != service.revision:
+		if not meshes.has(key) or mesh_versions.get(key, -1) != service.chunk_versions.get(key, 0):
 			queue.append(key)
 	seen_revision = service.revision
 
@@ -50,9 +54,11 @@ func tick() -> bool:
 	build(key)
 	return true
 
-func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tint: Color) -> void:
+func quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, tint: Color, tile: int = -1, light: float = 1.0) -> void:
 	st.set_color(tint)
+	st.set_uv2(Vector2(tile, light))
 	for vertex in [a, b, c, a, c, d]:
+		st.set_uv(Vector2(vertex.x, vertex.z) if is_equal_approx(a.y, b.y) and is_equal_approx(b.y, c.y) else Vector2(vertex.x + vertex.z, vertex.y))
 		st.add_vertex(vertex)
 
 func box(st: SurfaceTool, at: Vector3, dimensions: Vector3, tint: Color) -> void:
@@ -85,7 +91,7 @@ func build(key: Vector2i) -> void:
 			if int(cell.ground_tile) in [5, 6] and cell.zone == "inland":
 				tint = Color("a58a60")
 			var h: float = cell.height
-			quad(st, Vector3(x,h,z), Vector3(x,h,z+2), Vector3(x+2,h,z+2), Vector3(x+2,h,z), tint)
+			quad(st, Vector3(x,h,z), Vector3(x,h,z+2), Vector3(x+2,h,z+2), Vector3(x+2,h,z), tint, -2 if cell.zone == "water" else int(cell.ground_tile))
 			count += 1
 			if cell.zone == "water":
 				continue
@@ -98,10 +104,10 @@ func build(key: Vector2i) -> void:
 					continue
 				if direction.x != 0:
 					var edge: float = x + (2 if direction.x > 0 else 0)
-					quad(st, Vector3(edge,low,z),Vector3(edge,h,z),Vector3(edge,h,z+2),Vector3(edge,low,z+2),tint.darkened(0.35))
+					quad(st, Vector3(edge,low,z),Vector3(edge,h,z),Vector3(edge,h,z+2),Vector3(edge,low,z+2),Color("8b6546"), 16 if cell.zone in ["dry_sand", "wet_sand"] else 3, 0.65)
 				else:
 					var edge: float = z + (2 if direction.y > 0 else 0)
-					quad(st, Vector3(x,low,edge),Vector3(x,h,edge),Vector3(x+2,h,edge),Vector3(x+2,low,edge),tint.darkened(0.22))
+					quad(st, Vector3(x,low,edge),Vector3(x,h,edge),Vector3(x+2,h,edge),Vector3(x+2,low,edge),Color("8b6546"), 16 if cell.zone in ["dry_sand", "wet_sand"] else 3, 0.78)
 	for entry in service.scenery.values():
 		var at: Vector3 = entry.position
 		if Vector2i(floori(at.x / CHUNK), floori(at.z / CHUNK)) != key:
@@ -128,4 +134,5 @@ func build(key: Vector2i) -> void:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
 		meshes[key] = instance
+		mesh_versions[key] = service.chunk_versions.get(key, 0)
 	build_count += 1

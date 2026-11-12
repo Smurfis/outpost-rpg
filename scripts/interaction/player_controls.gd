@@ -42,6 +42,8 @@ func set_desktop(value: bool) -> void:
 	hide_inspection()
 
 func modal_open() -> bool:
+	if game.world_map != null and game.world_map.is_open():
+		return true
 	var hud = game.hud
 	var dungeon = game.get_node_or_null("Dungeons")
 	return (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or hud.top_menu_open or hud.control_settings_panel.visible or hud.skill_detail_panel.visible or hud.leave_menu_panel.visible or (dungeon != null and dungeon.dimmer != null and dungeon.dimmer.visible) or game.hero.interaction_locked
@@ -107,6 +109,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
+			return
+		if event.is_action_pressed("outpost_map"):
+			game.toggle_world_map()
+			get_viewport().set_input_as_handled()
 			return
 		var actions: Array[String] = ["ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "interact"]
 		for action in actions:
@@ -265,6 +271,9 @@ func _fail_route() -> void:
 	game.hud.toast("Movement stopped: destination is unreachable.")
 
 func close_interface() -> void:
+	if game.world_map != null and game.world_map.is_open():
+		game.world_map.close_map()
+		return
 	cancel()
 	game.focus_target = null
 	hide_inspection()

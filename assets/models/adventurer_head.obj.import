@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://nbgghh8csvqy"
+path="res://.godot/imported/adventurer_head.obj-fc1ae80eefe34235af5c0d0f67a6bc3d.mesh"
+
+[deps]
+
+files=["res://.godot/imported/adventurer_head.obj-fc1ae80eefe34235af5c0d0f67a6bc3d.mesh"]
+
+source_file="res://assets/models/adventurer_head.obj"
+dest_files=["res://.godot/imported/adventurer_head.obj-fc1ae80eefe34235af5c0d0f67a6bc3d.mesh", "res://.godot/imported/adventurer_head.obj-fc1ae80eefe34235af5c0d0f67a6bc3d.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

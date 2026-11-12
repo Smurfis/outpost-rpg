@@ -1,4 +1,19 @@
 extends CharacterBody3D
+signal combat_state_changed(active: bool)
+var in_combat: bool = false
+var combat_remaining: float = 0.0
+
+func enter_combat() -> void:
+	combat_remaining = 6.0
+	if not in_combat:
+		in_combat = true
+		combat_state_changed.emit(true)
+
+func update_combat(delta: float) -> void:
+	combat_remaining = maxf(0.0, combat_remaining - delta)
+	if in_combat and combat_remaining <= 0.0:
+		in_combat = false
+		combat_state_changed.emit(false)
 ## Outpost v0.5: modular original OBJ adventurer with animated limbs and equipment.
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
@@ -300,6 +315,7 @@ func set_cloak(equipped: bool) -> void:
 		cloak_pivot.visible = equipped
 
 func swing() -> void:
+	enter_combat()
 	# Set visible forward strike immediately; Android can render a frame before
 	# the physics callback updates the arm rotation.
 	combat_phase = 0.86
@@ -308,6 +324,7 @@ func swing() -> void:
 		right_arm.rotation.z = -0.31 * sin(combat_phase * PI)
 
 func play_whirlwind() -> void:
+	enter_combat()
 	if visual == null or sword_mesh == null or weapon_grip == null:
 		return
 	whirlwind_elapsed = 0.0
@@ -362,6 +379,7 @@ func _detect_surface_swimming() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	update_combat(delta)
 	elapsed += delta
 	var modal_open: bool = game.controls.modal_open() if game.controls != null else (game.menu != null and game.menu.visible) or interaction_locked
 	swimming = _detect_surface_swimming()
@@ -580,6 +598,8 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection
+	if actual > 0.0:
+		enter_combat()
 	# Station crafting is interrupted when combat damages the player, rather
 	# than leaving a modal trapping them while enemies keep attacking.
 	if actual > 0.0 and game.menu != null and game.menu.visible and game.menu.current_page == "craft":

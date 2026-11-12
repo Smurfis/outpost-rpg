@@ -18,6 +18,10 @@ const LEVELS = preload("res://scripts/progression/character_levels.gd")
 const CONTROLS = preload("res://scripts/interaction/player_controls.gd")
 const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+const MAP_SERVICE = preload("res://scripts/map/map_service.gd")
+const WORLD_MAP = preload("res://scripts/ui/world_map.gd")
+var map_service: Node
+var world_map: CanvasLayer
 var controls
 var prop_placement = PLACEMENT.new()
 var focus_target: Node3D
@@ -26,7 +30,7 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
-@export var diorama_map_enabled: bool = false # Experimental terrain cache; existing minimap remains the fallback.
+@export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
@@ -110,6 +114,9 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
+	map_service = MAP_SERVICE.new()
+	add_child(map_service)
+	map_service.setup(self)
 	# Title Play starts a fresh run; Continue reads the previous save.
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
@@ -141,12 +148,24 @@ func _ready() -> void:
 	controls = CONTROLS.new()
 	add_child(controls)
 	controls.setup(self)
+	world_map = WORLD_MAP.new()
+	add_child(world_map)
+	world_map.setup(self, map_service)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
+
+func toggle_world_map() -> void:
+	if world_map == null:
+		return
+	if world_map.is_open():
+		world_map.close_map()
+	elif controls == null or not controls.modal_open():
+		world_map.open_map()
 
 func _register_keys() -> void:
 	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [KEY_SPACE], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
 	if InputMap.has_action("outpost_jump"):
 		InputMap.erase_action("outpost_jump")
+	binds["map"] = [KEY_M]
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
@@ -980,7 +999,7 @@ func grant_item(item_id: String, amount: int, store_excess: bool = false) -> int
 	if fitting > 0:
 		inventory[item_id] = int(inventory.get(item_id, 0)) + fitting
 		if hud != null:
-			hud.record_loot(item_id, fitting)
+			hud.record_loot("copper" if item_id == "coins" else item_id, fitting)
 	var excess: int = amount - fitting
 	if excess > 0 and store_excess:
 		overflow_loot[item_id] = int(overflow_loot.get(item_id, 0)) + excess
@@ -1471,7 +1490,7 @@ func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
 	_save()
 	_refresh_menu()
 	if hud != null:
-		hud.toast("Party dungeon cleared! +%d coins • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+		hud.toast("Party dungeon cleared! +%d copper • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
 	return true
 
 func toggle_torch() -> void:
@@ -1500,9 +1519,13 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if map_service != null:
+		data["map_state"] = map_service.export_state()
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
+		if map_service != null:
+			map_service.dirty = false
 
 func _load() -> void:
 	if not FileAccess.file_exists(save_path):
@@ -1513,6 +1536,8 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	if map_service != null:
+		map_service.import_state(data.get("map_state", {}))
 	if data.get("opened_world_objects", {}) is Dictionary:
 		opened_world_objects = data["opened_world_objects"].duplicate(true)
 	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)

@@ -14,6 +14,7 @@ var world_id: String
 var discovered: Dictionary = {}
 var known: Dictionary = {}
 var scenery: Dictionary = {}
+var chunk_versions: Dictionary = {}
 var creatures: Array[Dictionary] = []
 var resources: Array[Dictionary] = []
 var preferences: Dictionary = {"mobs": true, "stations": true, "portals": true, "zones": true, "resources": false, "resource_type": "all"}
@@ -78,6 +79,7 @@ func observe_player() -> void:
 				continue
 			if not discovered.has(cell):
 				discovered[cell] = true
+				_touch_chunk(at)
 				added = true
 	var zone: String = ZONES.resolve(point, biome)
 	remember("zone:" + zone, zone, "zones", point)
@@ -92,8 +94,13 @@ func remember(id: String, label: String, category: String, point: Vector3, extra
 	var record := {"id": id, "label": label, "category": category, "position": point}
 	record.merge(extra)
 	known[id] = record
+	_touch_chunk(point)
 	dirty = true
 	changed.emit()
+
+func _touch_chunk(point: Vector3) -> void:
+	var key := Vector2i(floori(point.x / CACHE.CHUNK_SIZE), floori(point.z / CACHE.CHUNK_SIZE))
+	chunk_versions[key] = int(chunk_versions.get(key, 0)) + 1
 
 func refresh_entities() -> void:
 	creatures.clear()
@@ -116,6 +123,7 @@ func refresh_entities() -> void:
 		var at: Vector3 = record.position
 		if visibility_at(at) != 2 or at.distance_to(game.hero.global_position) > LIVE_RADIUS:
 			continue
+		record["entity"] = weakref(entity)
 		creatures.append(record)
 		if creatures.size() >= 64:
 			break
@@ -127,6 +135,7 @@ func refresh_entities() -> void:
 		var id: String = "%s:%d:%d" % [resource.kind, roundi(at.x * 10), roundi(at.z * 10)]
 		if not resource.active:
 			if scenery.erase(id):
+				_touch_chunk(at)
 				scenery_changed = true
 			continue
 		resources.append({"id": id, "position": at, "label": str(resource.kind).capitalize(), "category": "resources", "kind": resource.kind})
@@ -134,8 +143,9 @@ func refresh_entities() -> void:
 			continue
 		var dimensions := Vector3.ONE
 		if resource.resource_body != null and resource.resource_body.get_child_count() > 0:
-			dimensions = resource.resource_body.get_child(0).shape.size * resource.global_basis.get_scale()
+			dimensions = resource.resource_body.visual_dimensions * resource.global_basis.get_scale()
 		scenery[id] = {"position": at, "kind": resource.kind, "size": dimensions}
+		_touch_chunk(at)
 		scenery_changed = true
 	if scenery_changed:
 		revision += 1
@@ -148,7 +158,12 @@ func markers(close_zoom: bool = true) -> Array[Dictionary]:
 		if preferences.get(entry.category, true) and visibility_at(entry.position) > 0:
 			result.append(entry)
 	if close_zoom and preferences.mobs:
-		result.append_array(creatures)
+		for record in creatures:
+			var entity: Node = record.entity.get_ref()
+			if entity == null or not entity.is_inside_tree() or entity.is_queued_for_deletion(): continue
+			var live: Dictionary = entity.map_record()
+			if live.alive and live.visible_on_radar and live.dimension == "overworld" and visibility_at(live.position) == 2:
+				result.append(live)
 	if close_zoom and preferences.resources:
 		for entry in resources:
 			if preferences.resource_type == "all" or entry.kind == preferences.resource_type:
@@ -183,7 +198,10 @@ func import_state(data: Variant) -> void:
 	discovered.clear()
 	known.clear()
 	scenery.clear()
+	chunk_versions.clear()
 	if not data is Dictionary or data.get("schema") != 1 or data.get("world_id") != world_id:
+		revision += 1
+		changed.emit()
 		return
 	if data.get("cells") is Array:
 		for entry in data.cells.slice(0, 65536):

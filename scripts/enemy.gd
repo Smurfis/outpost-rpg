@@ -7,6 +7,12 @@ var hero
 var game
 var hp := 32.0
 var alive := true
+var map_disposition: String = "hostile"
+
+func map_record() -> Dictionary:
+	return {"id": "mob:%d" % get_instance_id(), "position": global_position,
+		"category": "creature", "label": "Wild boar", "dimension": "overworld",
+		"disposition": map_disposition, "alive": alive, "visible_on_radar": visible}
 var cooldown := 1.5
 var respawn := 0.0
 var spawn_pos := Vector3.ZERO
@@ -56,6 +62,7 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 			_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
 	add_to_group("enemies")
 	add_to_group("wild_boars")
+	add_to_group("map_creatures")
 
 func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
 	var n := MeshInstance3D.new()

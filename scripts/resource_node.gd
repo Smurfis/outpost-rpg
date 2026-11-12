@@ -9,6 +9,8 @@ const SOLID = preload("res://scripts/interaction/resource_collision.gd")
 # the local-space height or X/Z footprint for gameplay tuning.
 @export_range(0.0, 20.0, 0.05) var collision_height: float = 0.0
 @export_range(0.0, 20.0, 0.05) var collision_width: float = 0.0
+@export_range(0.1, 2.0, 0.05) var tree_trunk_width: float = 0.65
+@export_range(1.8, 4.0, 0.05) var tree_canopy_clearance: float = 2.05
 var resource_body: StaticBody3D
 var _harvest_tween: Tween
 var _mesh_scales: Dictionary = {}

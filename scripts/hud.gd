@@ -8,6 +8,7 @@ const ACTION_SKILL_LEVELS = preload("res://scripts/progression/character_levels.
 const HUD_V2 = preload("res://scripts/ui/hud_v2_components.gd")
 const ITEM_VIEW = preload("res://scripts/ui/outpost_item_view.gd")
 const LIVE_MINIMAP = preload("res://scripts/ui/live_world_minimap.gd")
+const CURRENCY = preload("res://scripts/inventory/currency.gd")
 const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
@@ -1215,13 +1216,13 @@ func _apply_wallet_layout() -> void:
 	wallet_popup_title.visible = false
 	wallet_collapse.visible = false
 	wallet_collapse.disabled = true
-	wallet_coin.visible = true
+	wallet_coin.visible = false
 	wallet_resource_icon.visible = false
 	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
-		(wallet_currency_rows[key] as Label).visible = true
+		(wallet_currency_rows[key] as Label).visible = key in ["gold", "silver", "copper"]
 	for key in wallet_currency_icons:
-		(wallet_currency_icons[key] as TextureRect).visible = true
+		(wallet_currency_icons[key] as TextureRect).visible = key in ["gold", "silver", "copper"]
 	_layout_player_chrome()
 
 func _short_currency(value: int) -> String:
@@ -1242,10 +1243,9 @@ func _refresh_wallet(inventory: Dictionary) -> void:
 	wallet_coin.tooltip_text = "Coins: %d" % coins
 	for key in wallet_currency_rows:
 		var label: Label = wallet_currency_rows[key] as Label
-		var actual: bool = inventory.has(key)
-		var balance: int = maxi(0, int(inventory.get(key, 0)))
-		label.text = _short_currency(balance) if actual else "—"
-		label.tooltip_text = "%s: %d" % [str(key).capitalize(), balance] if actual else "%s not yet in wallet" % str(key).capitalize()
+		var balance: int = CURRENCY.balance(inventory, str(key))
+		label.text = _short_currency(balance)
+		label.tooltip_text = "%s: %d" % [str(key).capitalize(), balance]
 	for key in inventory:
 		var id: String = str(key)
 		if id in ["coins", "copper", "silver", "gold", "gems", "torch", "spear", "axe", "pickaxe", "shield", "meal", "tonic", "stew", "cloak", "satchel", "iron_blade"]:
@@ -2373,7 +2373,7 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 	var currency_right: float = map_left_base - 172.0
 	var wallet_width: float = minf(545.0, maxf(0.0, currency_right - 354.0))
 	var currency_start: float = currency_right - wallet_width
-	var currency_cell: float = wallet_width / 5.0
+	var currency_cell: float = wallet_width / 3.0
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
@@ -2437,16 +2437,15 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
-	for i in range(5):
-		var key: String = ["coins", "copper", "silver", "gold", "gems"][i]
+	for i in range(3):
+		var key: String = ["gold", "silver", "copper"][i]
 		var x: float = currency_start + currency_cell * float(i)
 		var icon: TextureRect = wallet_currency_icons[key] as TextureRect
 		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 24.0) * unit,
 				Vector2(27.0, 27.0) * unit))
-		if i > 0:
-			var line: Label = wallet_currency_rows[key] as Label
-			_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
-					Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
+		var line: Label = wallet_currency_rows[key] as Label
+		_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
+				Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -3452,6 +3451,8 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if game != null and game.world_map != null and game.world_map.is_open():
+		return
 	if event is InputEventScreenTouch and desktop_mode and game.controls != null:
 		game.controls.set_desktop(false)
 	if skill_detail_panel != null and skill_detail_panel.visible:

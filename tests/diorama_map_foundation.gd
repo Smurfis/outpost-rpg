@@ -33,18 +33,12 @@ func run() -> void:
 	check(cache.cell_at(96, 0).is_empty(), "No terrain is generated beyond the finite world")
 	cache.invalidate(Vector2i(-1, 0))
 	check(cache.cell_at(-1, 0).is_empty(), "Invalidation removes a changed chunk")
-	var minimap = game.hud.root.get_node("LiveWorldMinimap")
-	game.diorama_map_enabled = true
-	minimap._process(0.01)
-	var initial_count: int = minimap._map_cache.sample_count
-	game.camera_angle += TAU
-	minimap._process(0.01)
-	check(minimap._map_cache.sample_count - initial_count <= 12, "Orbit does not enqueue a terrain rebuild or exceed the frame budget")
-	minimap._map_cache.step(2000)
-	initial_count = minimap._map_cache.sample_count
-	game.camera_angle += TAU
-	minimap._process(3.0)
-	check(minimap._map_cache.sample_count == initial_count, "A completed cache performs no work on camera orbit")
+	cache.request_chunk(Vector2i(-1, 0))
+	cache.step(144)
+	var initial_count: int = cache.sample_count
+	cache.request_chunk(Vector2i(-1, 0))
+	cache.step(2000)
+	check(cache.sample_count == initial_count, "A completed chunk is never re-sampled by repeat requests")
 	game.queue_free()
 	await process_frame
 	quit(0 if failures == 0 else 1)

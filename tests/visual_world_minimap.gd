@@ -25,6 +25,7 @@ func _run() -> void:
 		quit(1)
 		return
 	var game = scene.instantiate()
+	game.diorama_map_enabled = false # Keep coverage of the explicit legacy fallback.
 	root.add_child(game)
 	await process_frame
 	var mini: Control = game.hud.root.get_node_or_null("LiveWorldMinimap") as Control
