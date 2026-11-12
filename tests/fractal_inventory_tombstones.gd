@@ -35,6 +35,7 @@ func _run() -> void:
 	if return_button != null:
 		return_button.pressed.emit()
 	check(not game.menu.visible, "Return to World closes crafting instead of trapping player")
+	check(game.menu.completed_id == "", "Returning clears the old crafting receipt for next station visit")
 	game.inventory["wood"] = 10
 	game.inventory["stone"] = 4
 	game.show_inventory()
@@ -53,6 +54,7 @@ func _run() -> void:
 	game.menu.close_page()
 	game.inventory["wood"] = 8
 	game.inventory["spear"] = 1
+	game.spear_crafted = true
 	game.equipment["weapon"] = "spear"
 	game.best_craft_rolls["spear"] = {"rarity": 2}
 	game.on_player_defeated(game.hero.global_position)
