@@ -31,7 +31,7 @@ func configure(terrain) -> void:
 	for island in terrain.islands:
 		var center: Vector2i = island["center"]
 		var radius: float = float(island["radius"])
-		var start := Vector2i(center.x + roundi(radius * 0.55), center.y)
+		var start := Vector2i(center.x + roundi(radius * 0.55), center.y + 8)
 		# The approach is on the existing walkable hillside, immediately
 		# outside the cliff. The carved entrance is IN the raised rock face.
 		var first_height: int = maxi(1, terrain.height_at(start.x + 1, start.y))
