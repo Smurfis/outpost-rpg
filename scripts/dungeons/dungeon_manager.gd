@@ -409,6 +409,7 @@ func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 func _apply_reward(reward: Dictionary) -> void:
 	if game == null:
 		return
+	# Money belongs to the wallet, not the weighted backpack.
 	var pocket: Dictionary = game.inventory
 	pocket["coins"] = int(pocket.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
 	var currency_drops: Dictionary = reward.get("currencies", {})
@@ -416,21 +417,29 @@ func _apply_reward(reward: Dictionary) -> void:
 		if currency_drops.has(currency_id):
 			pocket[currency_id] = int(pocket.get(currency_id, 0)) + maxi(0, int(currency_drops[currency_id]))
 	game.experience += maxi(0, int(reward.get("xp", 0)))
+	# Dungeon rewards used to bypass grant_item and could permanently exceed
+	# carry capacity. Preserve what does not fit in the existing overflow stash.
+	var overflow_before: int = 0
+	for pending in game.overflow_loot.values():
+		overflow_before += maxi(0, int(pending))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
-		var key: String = str(item_id)
-		pocket[key] = int(pocket.get(key, 0)) + maxi(0, int(materials[item_id]))
+		game.grant_item(str(item_id), maxi(0, int(materials[item_id])), true)
 	for book in reward.get("books", []):
 		var id: String = str(book)
 		if id != "":
-			pocket[id] = int(pocket.get(id, 0)) + 1
+			game.grant_item(id, 1, true)
 	# Retain compatibility if an older reward object is supplied by an extension.
 	var legacy: String = str(reward.get("item", ""))
 	if legacy != "":
-		pocket[legacy] = int(pocket.get(legacy, 0)) + maxi(0, int(reward.get("amount", 0)))
+		game.grant_item(legacy, maxi(0, int(reward.get("amount", 0))), true)
+	var overflow_after: int = 0
+	for pending in game.overflow_loot.values():
+		overflow_after += maxi(0, int(pending))
+	if overflow_after > overflow_before and game.hud != null:
+		game.hud.toast("%d dungeon loot items stored safely; free bag space to claim them." % (overflow_after - overflow_before))
 	game._save()
 	game._refresh_menu()
-
 
 func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if active_instance == null:

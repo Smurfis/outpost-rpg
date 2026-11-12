@@ -49,6 +49,12 @@ jobs:
           grep -q "ROOM ARCHETYPES RESULT: 0 failures" dungeon_archetypes-preflight.log
           grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon_seams-preflight.log
           grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual_world_minimap-preflight.log
+      - name: Verify dungeon rewards cannot permanently slow the player
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_loot_slowdown.gd 2>&1 | tee dungeon-slowdown.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON SLOWDOWN:' dungeon-slowdown.log; then exit 1; fi
+          grep -q "DUNGEON SLOWDOWN RESULT: 0 failures" dungeon-slowdown.log
       - name: Launch scene for 120 frames
         run: |
           set -o pipefail
