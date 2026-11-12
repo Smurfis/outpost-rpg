@@ -9,7 +9,7 @@ const PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
 const CHUNK: int = 12
 const BUILD_BUDGET: int = 2
-var terrain: RefCounted
+var terrain
 var _loaded: Dictionary = {} # chunk origin -> meshes/collision/chest nodes
 var _pending: Array[Vector2i] = []
 var _center := Vector2i(99999, 99999)
