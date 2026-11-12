@@ -1,5 +1,15 @@
 # World map overhaul — Alpha v1061 recovery
 
+## Minimap navigation and dedicated expand icon
+
+Tap/click the circular minimap to request an ordinary pathfound movement
+destination, projected from the orthographic mini-camera. The distinct
+44px wood/gold square at the upper-right displays **two diagonally outward
+gold arrows**, using the original `map_expand.svg` icon. This expands the
+full-screen island map. The `M` key works on desktop. In combat the expand
+button is disabled while ordinary movement remains available; the map closes
+on combat entry. Dragging the minimap does not issue an accidental walk.
+
 ## Recovery continuation
 Recovered from `rescue/diorama-map-wip` at `5cae365`.
 A separate review branch fixes POI revision propagation, rejects impossible

@@ -31,6 +31,8 @@ var schedule_clock: float = 0.0
 var last_schedule := Vector3.INF
 var dirty: bool = true
 var input_guard_until: int = 0
+var mini_touch_index: int = -1
+var mini_touch_origin := Vector2.ZERO
 
 func setup(owner_game: Node, source: Node) -> void:
 	game = owner_game
@@ -214,7 +216,7 @@ func open_map() -> bool:
 	return true
 
 func close_map() -> void:
-	if screen == null:
+	if screen == null or not screen.visible:
 		return
 	screen.hide()
 	fingers.clear()
@@ -240,8 +242,11 @@ func _process(delta: float) -> void:
 		return
 	if not service.in_overworld():
 		if is_open(): close_map()
+		game.hud.map_expand_button.hide()
 		mini_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
+	game.hud.map_expand_button.visible = game.hud.minimap.visible
+	game.hud.map_expand_button.disabled = game.hero.in_combat
 	var blend: float = 1.0 - exp(-12.0 * delta)
 	var moving: bool = focus.distance_to(target_focus) > 0.01 or absf(view_span - target_span) > 0.01
 	if is_open():
@@ -345,17 +350,67 @@ func _select_result(index: int) -> void:
 	search_box.release_focus()
 	dirty = true
 
+func _minimap_hit(point: Vector2) -> bool:
+	if service.biome == null or not service.in_overworld() or not game.hud.minimap.visible:
+		return false
+	var mini: Control = game.hud.minimap
+	var rect: Rect2 = mini.get_global_rect()
+	return point.distance_to(rect.get_center()) < minf(rect.size.x, rect.size.y) * 0.5 - 11.0
+
+func _minimap_destination(point: Vector2) -> Vector3:
+	# The same real orthographic viewport drives both the circular relief
+	# pixels and click-to-move coordinates: no flat-world approximation.
+	var mini: Control = game.hud.minimap
+	var rect: Rect2 = mini.get_global_rect()
+	var radius: float = minf(rect.size.x, rect.size.y) * 0.5 - 11.0
+	var normalized: Vector2 = (point - rect.get_center()) / (2.0 * radius) + Vector2(0.5, 0.5)
+	var pixel: Vector2 = normalized * Vector2(mini_viewport.size)
+	var origin: Vector3 = mini_camera.project_ray_origin(pixel)
+	var direction: Vector3 = mini_camera.project_ray_normal(pixel)
+	if absf(direction.y) < 0.001:
+		return Vector3.INF
+	var land: Vector3 = origin + direction * ((game.hero.global_position.y - origin.y) / direction.y)
+	if not service.inside(land) or not service.biome.is_land_at(land.x, land.z):
+		return Vector3.INF
+	return land
+
+func _minimap_move(point: Vector2) -> bool:
+	if game.controls == null or game.controls.modal_open() or not _minimap_hit(point):
+		return false
+	var destination: Vector3 = _minimap_destination(point)
+	if not destination.is_finite():
+		return false
+	# Existing path planner validates solid terrain and obstacles. A failed
+	# route must not teleport, reveal map cells or switch to the map view.
+	return game.controls.move_to(destination)
+
 func _input(event: InputEvent) -> void:
 	if not is_open():
 		if Time.get_ticks_msec() < input_guard_until and (event is InputEventMouseButton or event is InputEventScreenTouch):
 			get_viewport().set_input_as_handled()
 			return
-		var pressed: bool = (event is InputEventScreenTouch and event.pressed and event.device != -1) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.device != -1)
-		if pressed and game.hud.minimap.visible:
-			var mini: Control = game.hud.minimap
-			if event.position.distance_to(mini.get_global_rect().get_center()) < mini.size.x * 0.5 - 7:
-				game.toggle_world_map()
+		if event is InputEventScreenTouch and event.device != -1:
+			if event.pressed and _minimap_hit(event.position):
+				mini_touch_index = event.index
+				mini_touch_origin = event.position
 				get_viewport().set_input_as_handled()
+			elif not event.pressed and event.index == mini_touch_index:
+				mini_touch_index = -1
+				if event.position.distance_to(mini_touch_origin) < 14.0:
+					_minimap_move(event.position)
+				get_viewport().set_input_as_handled()
+			return
+		if event is InputEventScreenDrag and event.index == mini_touch_index:
+			# Drags must never issue accidental tap-to-move commands.
+			if event.position.distance_to(mini_touch_origin) >= 14.0:
+				mini_touch_index = -1
+			get_viewport().set_input_as_handled()
+			return
+		# Android emulates mouse events after real touches; touch above owns
+		# movement on mobile so a second synthetic destination is impossible.
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and event.device != -1 and not OS.has_feature("mobile") and _minimap_hit(event.position):
+			_minimap_move(event.position)
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey:
 		if event.pressed and not event.echo:

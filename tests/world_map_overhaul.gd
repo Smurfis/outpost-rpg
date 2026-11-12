@@ -119,10 +119,17 @@ func run() -> void:
 	map.input_guard_until = 0
 	var mini_tap := InputEventScreenTouch.new()
 	mini_tap.device = 0
+	mini_tap.index = 7
 	mini_tap.pressed = true
-	mini_tap.position = game.hud.minimap.get_global_rect().get_center()
+	mini_tap.position = game.hud.minimap.get_global_rect().get_center() + Vector2(10, 10)
 	map._input(mini_tap)
-	check(map.is_open(), "Tapping the live minimap opens the full island map")
+	check(not map.is_open() and map.mini_touch_index == 7, "Minimap touch reserves movement instead of expanding the map")
+	mini_tap.pressed = false
+	map._input(mini_tap)
+	check(not map.is_open() and map.mini_touch_index == -1, "Minimap release does not open the world map")
+	check(game.hud.map_expand_button.get_node_or_null("ExpandArrowsIcon") != null, "Dedicated gold two-arrow expand button is separate from circular minimap")
+	game.hud.map_expand_button.pressed.emit()
+	check(map.is_open(), "Dedicated expand button opens full-screen island map")
 	map.close_map()
 	map.relief.schedule(game.hero.global_position)
 	for i in range(300): map.relief.tick()

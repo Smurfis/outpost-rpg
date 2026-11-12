@@ -49,6 +49,7 @@ var hero_portrait_art: TextureRect
 var hero_sigil: TextureRect
 var radial_level: Control
 var minimap: Control
+var map_expand_button: Button
 var clock_label: Label
 var zone_pill: Panel
 var zone_pill_text: Label
@@ -614,6 +615,29 @@ func _ready() -> void:
 	minimap.setup(game)
 	root.add_child(minimap)
 	_anchors(minimap, 0.811, 0.019, 0.980, 0.309)
+	# Minimap taps navigate. The separate gold two-arrow glyph expands the
+	# full-screen Diorama viewer without stealing the circular play surface.
+	map_expand_button = Button.new()
+	map_expand_button.name = "ExpandWorldMap"
+	map_expand_button.tooltip_text = "Expand world map (M)"
+	map_expand_button.focus_mode = Control.FOCUS_NONE
+	map_expand_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	SKIN.apply_button(map_expand_button, "wood")
+	root.add_child(map_expand_button)
+	var expand_icon := TextureRect.new()
+	expand_icon.name = "ExpandArrowsIcon"
+	expand_icon.texture = load("res://assets/ui/action_buttons/map_expand.svg") as Texture2D
+	expand_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	expand_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	expand_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	expand_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	map_expand_button.add_child(expand_icon)
+	expand_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	expand_icon.offset_left = 7
+	expand_icon.offset_top = 7
+	expand_icon.offset_right = -7
+	expand_icon.offset_bottom = -7
+	map_expand_button.pressed.connect(func(): game.toggle_world_map())
 	zone_pill = _panel(0.82, 0.012, 0.976, 0.050)
 	zone_pill.name = "MinimapZonePill"
 	zone_pill.add_theme_stylebox_override("panel", HUD_V2.utility_card())
@@ -2181,6 +2205,11 @@ func _layout_touch_hud() -> void:
 	# Make room for the location banner ABOVE (not on top of) the live map.
 	var map_top: float = 54.0 * scale
 	_place_px(minimap, screen, Rect2(screen.x - edge - map_side, map_top, map_side, map_side))
+	# Upper-right of the map square, outside most of the circular movement
+	# surface; 44px is a reliably finger-sized Android target.
+	_place_px(map_expand_button, screen, Rect2(screen.x - edge - 44.0 * scale,
+			map_top + 4.0 * scale, 44.0 * scale, 44.0 * scale))
+	map_expand_button.visible = minimap.visible
 	# The zone pill now sits just two scaled pixels above the round map.
 	var zone_top: float = map_top - 30.0 * scale
 	_place_px(zone_pill, screen, Rect2(screen.x - edge - map_side, zone_top, map_side, 30.0 * scale))

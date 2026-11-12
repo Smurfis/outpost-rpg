@@ -93,6 +93,17 @@ func _input(event: InputEvent) -> void:
 			close_interface()
 			get_viewport().set_input_as_handled()
 			return
+	# Desktop RMB orbits even above a decorative HUD panel. Some panels
+	# consume GUI mouse presses before _unhandled_input, which previously
+	# prevented the drag from starting in otherwise empty world-space.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and desktop and not OS.has_feature("mobile") and not modal_open():
+		if event.pressed:
+			rotating = true
+			hold_ground = false
+		else:
+			rotating = false
+		get_viewport().set_input_as_handled()
+		return
 	# Releases must always clear gestures, including over UI or outside a modal.
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
