@@ -26,6 +26,10 @@ var world_map: CanvasLayer
 var controls
 var prop_placement = PLACEMENT.new()
 var focus_target: Node3D
+# Last successfully attacked enemy stays in the central target HUD briefly.
+var recent_attack_target: Node3D
+var recent_target_seconds: float = 0.0
+const TARGET_HUD_NEARBY_RADIUS: float = 12.0
 var opened_world_objects: Dictionary = {}
 const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
@@ -193,6 +197,7 @@ func _process(delta: float) -> void:
 	_update_crafting(delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
+	recent_target_seconds = maxf(0.0, recent_target_seconds - delta)
 	_advance_whirlwind_ticks(delta)
 	for id in skill_cooldowns:
 		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
@@ -230,8 +235,6 @@ func _process(delta: float) -> void:
 	var hint: String = "Explore: iron, coal, clay, herbs, reeds, mushrooms and more."
 	if resource != null:
 		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
-	elif enemy != null:
-		hint = "%s nearby • use ATTACK" % enemy_display_name(enemy)
 	elif closest_station() != "":
 		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
@@ -702,6 +705,70 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Pig"
 	return enemy.name.replace("_", " ").capitalize()
 
+## Fixed screen-space target frame: recent attack takes priority, then an
+## explicit focus, then the closest living creature within radar distance.
+## Never display another dungeon floor or an already dead/unloaded target.
+func remember_attacked_enemy(target: Node3D) -> void:
+	if target_available(target) and target.is_in_group("enemies"):
+		recent_attack_target = target
+		recent_target_seconds = 6.0
+
+func target_for_hud() -> Node3D:
+	if hero == null:
+		return null
+	if recent_target_seconds > 0.0 and is_instance_valid(recent_attack_target) and target_available(recent_attack_target):
+		if hero.global_position.distance_to(recent_attack_target.global_position) <= 24.0:
+			return recent_attack_target
+	if valid_focus() and hero.global_position.distance_to(focus_target.global_position) <= 24.0:
+		return focus_target
+	var nearest: Node3D
+	var closest: float = TARGET_HUD_NEARBY_RADIUS
+	for candidate in get_tree().get_nodes_in_group("enemies"):
+		var creature: Node3D = candidate as Node3D
+		if not target_available(creature):
+			continue
+		var offset: Vector3 = creature.global_position - hero.global_position
+		if absf(offset.y) > 3.3:
+			continue
+		var distance: float = offset.length()
+		if distance < closest:
+			closest = distance
+			nearest = creature
+	return nearest
+
+func target_frame_data(target: Node3D) -> Dictionary:
+	if not target_available(target) or not target.is_in_group("enemies"):
+		return {}
+	# Test dummies and non-health actors may still carry the enemies group.
+	# Only actual numeric combat health may enter the HUD: float(null) errors
+	# at runtime on GDScript's Variant constructor path.
+	var raw_hp: Variant = target.get("hp")
+	if not (raw_hp is float or raw_hp is int):
+		return {}
+	var hp: float = maxf(0.0, float(raw_hp))
+	var raw_max: Variant = target.get("max_hp")
+	var maximum: float = maxf(1.0, hp)
+	if raw_max is float or raw_max is int:
+		maximum = maxf(1.0, float(raw_max))
+	var rank: String = ""
+	var accent: Color = Color("#907e71")
+	if target.is_in_group("dungeon_guardians"):
+		var rarity: int = int(target.get("quality"))
+		if target.name == "DungeonBoss":
+			rank = "BOSS"
+			accent = Color("#e3ae63")
+		elif rarity >= 3:
+			rank = "ELITE"
+			accent = Color("#d9ad57")
+		elif rarity >= 2:
+			rank = "RARE"
+			accent = Color("#b5c5d4")
+		elif rarity == 1:
+			rank = "UNCOMMON"
+			accent = Color("#9bba9e")
+	return {"id": target.get_instance_id(), "name": enemy_display_name(target),
+		"hp": hp, "max_hp": maximum, "rank": rank, "accent": accent}
+
 func _nearest_breakable():
 	if hero == null:
 		return null
@@ -748,6 +815,7 @@ func focus_nearest_enemy() -> void:
 			distance = delta
 			nearest = enemy
 	focus_target = nearest
+	recent_target_seconds = 0.0
 	if nearest == null:
 		hud.toast("No enemy nearby to focus.")
 
@@ -1387,6 +1455,7 @@ func _apply_whirlwind_tick() -> void:
 		if not is_instance_valid(enemy):
 			continue
 		var hit_point: Vector3 = enemy.global_position
+		remember_attacked_enemy(enemy)
 		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
 		hero.show_weapon_hit_effect(hit_point)
 		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
@@ -1454,6 +1523,7 @@ func use_weapon_skill(slot: int) -> bool:
 		_apply_whirlwind_tick()
 	else:
 		hero.swing()
+		remember_attacked_enemy(target)
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
 		hero.show_weapon_hit_effect(target.global_position)
 		if skill == "armor_break" and target_available(target):
@@ -1529,6 +1599,7 @@ func attack(selected: Node3D = null) -> void:
 	var target = selected if selected != null else focus_target if valid_focus() else _nearest_enemy()
 	if not target_available(target) or not target_in_range(target):
 		return
+	remember_attacked_enemy(target)
 	if coop != null and coop.in_party_dungeon():
 		var guardian = target
 		if guardian == null or not guardian.has_meta("encounter_slot"):

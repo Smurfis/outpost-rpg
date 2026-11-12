@@ -6,6 +6,7 @@ const CUBE_VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const ATTACK_TELEGRAPH = preload("res://scripts/vfx/attack_telegraph.gd")
 var hero: CharacterBody3D
 var dungeon: Node3D
+var max_hp: float = 24.0
 var hp: float = 24.0
 var alive: bool = true
 var cooldown: float = 0.0
@@ -41,6 +42,7 @@ func setup(player: CharacterBody3D, instance: Node3D, tier: int, at: Vector3, cr
 	heavy_charge_left = 0.0
 	position = at
 	hp = 24.0 + float(quality) * 15.0
+	max_hp = hp
 	name = "CryptGuardian"
 	collision_layer = 2
 	collision_mask = 1
@@ -110,6 +112,7 @@ func apply_affixes(entries: Array[Dictionary]) -> void:
 		speed_multiplier *= float(entry.get("speed", 1.0))
 		damage_taken_multiplier *= float(entry.get("defence", 1.0))
 		accent = entry.get("colour", accent)
+	max_hp = hp
 	display_name = "%s %s" % [" ".join(names), display_name]
 	affix_details = " • ".join(details)
 	affix_label = Label3D.new()
