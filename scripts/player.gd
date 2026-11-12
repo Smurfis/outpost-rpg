@@ -63,6 +63,7 @@ var visual_step_offset: Vector3 = Vector3.ZERO
 var step_hop_remaining: float = 0.0
 const STEP_HOP_DURATION: float = 0.28
 var last_gather: String = ""
+var gm_speed_multiplier: float = 1.0 # Temporary Alpha GM console; runtime only.
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
 @export_range(0.1, 2.0, 0.05) var max_resource_hop_height: float = 1.9
@@ -449,6 +450,7 @@ func _physics_process(delta: float) -> void:
 		speed *= 0.48
 	if gather_phase > 0.0:
 		speed *= 0.42
+	speed *= gm_speed_multiplier
 	# Separate short hit impulse from player steering. It decays rapidly,
 	# feels like voxel-sandbox combat, and cannot keep moving the character.
 	velocity.x = direction.x * speed + knockback_velocity.x
