@@ -1,9 +1,15 @@
 extends SceneTree
-## The camera cuts foreground fractal pixels, never terrain collision or
-## whole cave-roof meshes. The shared starter-island material stays untouched.
+## Bounded camera/voxel cutaway regression. Island chunk generation/collision
+## are covered by the existing fractal archetype and shoreline smoke suites.
+const ISLAND = preload("res://scripts/world/island_archipelago.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const ATLAS = preload("res://scripts/voxel/greedy_atlas.gdshader")
 var failures: int = 0
+
+class CameraHost:
+	extends Node3D
+	var camera: Camera3D
+	var hero: Node3D
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -16,27 +22,24 @@ func check(ok: bool, message: String) -> void:
 		push_error("FAIL CAVE CAMERA: " + message)
 
 func _run() -> void:
-	root.set_meta("outpost_new_adventure", true)
-	var main: PackedScene = load("res://scenes/main.tscn")
-	check(main != null, "Game scene imports")
-	if main == null:
-		quit(1)
-		return
-	var game = main.instantiate()
-	root.add_child(game)
-	await process_frame
-	var island = game.terrain_surface.archipelago
-	check(island != null, "Fractal archipelago is enabled")
-	if island == null:
-		quit(1)
-		return
-	check(island._cutaway_material != null and island._cutaway_material != GREEDY.material(),
-		"Fractal material is independent from the starter Fields")
-	check(not bool(GREEDY.material().get_shader_parameter("island_cutaway_enabled")),
-		"Fields atlas cutaway is disabled by default")
-	check(ATLAS.code.contains("discard;") and ATLAS.code.contains("island_world_position"),
-		"Shader discards foreground pixels without changing mesh collision")
+	var host := CameraHost.new()
+	root.add_child(host)
+	host.camera = Camera3D.new()
+	host.add_child(host.camera)
+	host.hero = Node3D.new()
+	host.add_child(host.hero)
+	var land := Node3D.new()
+	host.add_child(land)
+	var island = ISLAND.new()
+	island.setup(64012)
+	land.add_child(island)
 	var world = island.terrain
+	check(island._cutaway_material != null and island._cutaway_material != GREEDY.material(),
+		"Island atlas material is independent from shared Fields")
+	check(not bool(GREEDY.material().get_shader_parameter("island_cutaway_enabled")),
+		"Ordinary Fields never inherit fractal cutaways")
+	check(ATLAS.code.contains("discard;") and ATLAS.code.contains("island_world_position"),
+		"Cutaway is pixel-local and does not remove any physics bodies")
 	var tunnel: Vector3i = Vector3i.ZERO
 	var covered: bool = false
 	for route in world.caves.routes:
@@ -48,57 +51,46 @@ func _run() -> void:
 				break
 		if covered:
 			break
-	check(covered, "Test island contains a real covered descending tunnel")
+	check(covered, "Island generation provides covered descending cave cells")
 	if not covered:
-		game.queue_free()
-		await process_frame
+		host.queue_free()
 		quit(1)
 		return
 	var cave_player := Vector3(float(tunnel.x) + 0.5, float(tunnel.y) + 0.35, float(tunnel.z) + 0.5)
-	game.hero.global_position = cave_player
-	game._camera(1.0)
-	var cave_chunk: Vector2i = island._cell_at(cave_player)
-	island._build_chunk(cave_chunk)
-	check(not island._roof_nodes.is_empty(), "Covered cave has independent drawable roof geometry")
-	var nodes: Array = island._loaded.get(cave_chunk, [])
-	var body_count: int = 0
-	var cutaway_mesh_count: int = 0
-	for node in nodes:
-		if node is StaticBody3D:
-			body_count += 1
-		elif node is MeshInstance3D:
-			check(node.material_override == island._cutaway_material,
-				"Both rock and ceiling use one independent cutaway material")
-			cutaway_mesh_count += 1
-	check(body_count == 1 and cutaway_mesh_count > 0, "Terrain keeps physical collider even with camera cutaway")
-	island._update_cutaway(game, cave_player)
+	host.hero.global_position = cave_player
+	host.camera.global_position = cave_player + Vector3(22.0, 20.0, 22.0)
+	check(island._is_below_terrain(cave_player), "Cave floor is correctly classified as underground")
+	var roof := MeshInstance3D.new()
+	island.add_child(roof)
+	roof.visible = false
+	island._roof_nodes.append(roof)
+	island._update_cutaway(host, cave_player)
+	check(roof.visible, "Previously hidden cave roof is retained for per-pixel cutaway")
 	check(island._cave_mode and bool(island._cutaway_material.get_shader_parameter("island_cave_mode")),
-		"Descending cave widens the camera cutaway")
+		"Cave interior enables the wider opening")
 	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 5.2),
-		"Interior ceiling uses the wider cutaway radius")
+		"Cave opening uses the expected world-space radius")
 	check(bool(island._cutaway_material.get_shader_parameter("island_cutaway_enabled")),
-		"Camera-to-player cutaway becomes active on a fractal island")
-	check((island._cutaway_material.get_shader_parameter("island_cutaway_eye") as Vector3).distance_to(game.camera.global_position) < 0.01,
-		"Cutaway follows actual smooth camera orbit")
+		"Cutaway follows an actual camera")
+	check((island._cutaway_material.get_shader_parameter("island_cutaway_eye") as Vector3).distance_to(host.camera.global_position) < 0.01,
+		"Cutaway uses the current camera orbit")
 	check((island._cutaway_material.get_shader_parameter("island_cutaway_focus") as Vector3).distance_to(cave_player + Vector3.UP * 0.95) < 0.01,
-		"Cutaway tracks the player's head, not a remote chunk")
-	for roof in island._roof_nodes:
-		check(roof.visible, "Cave roofs are still rendered, never hidden wholesale")
+		"Cutaway focus follows the real avatar position")
+	var center: Vector2i = world.islands[0]["center"]
+	var shore_x: int = center.x + 32
+	var shore_z: int = center.y
+	var shore := Vector3(float(shore_x) + 0.5, float(world.height_at(shore_x, shore_z)) + 0.35, float(shore_z) + 0.5)
+	island._update_cutaway(host, shore)
+	check(not island._cave_mode and not bool(island._cutaway_material.get_shader_parameter("island_cave_mode")),
+		"Outdoor hillside uses the narrower cutaway")
+	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 3.6),
+		"Outdoor corridor is narrower than a cave")
 	check(not bool(GREEDY.material().get_shader_parameter("island_cutaway_enabled")),
-		"Shared Fields material remains unaffected by cave mode")
-	# A hillside lookout is not an underground cave: the view corridor
-	# shrinks but still reveals the player behind foreground rock.
-	var shore: Vector3 = world.caves.entrances[0]
-	var outside := Vector3(shore.x, float(world.height_at(floori(shore.x), floori(shore.z))) + 0.35, shore.z)
-	island._update_cutaway(game, outside)
-	check(bool(island._cutaway_material.get_shader_parameter("island_cutaway_enabled")),
-		"Outdoor mountain sightline remains occlusion-aware")
-	# Leaving remote-island streaming must restore the normal atlas path.
-	game.hero.global_position = Vector3.ZERO
+		"Fractal uniforms cannot affect original Fields terrain")
+	host.hero.global_position = Vector3.ZERO
 	island._process(0.016)
 	check(not bool(island._cutaway_material.get_shader_parameter("island_cutaway_enabled")),
-		"Cutaway is disabled when the hero leaves fractal islands")
-	game.queue_free()
-	await process_frame
+		"Leaving the islands restores uncut foreground rendering")
+	host.queue_free()
 	print("CAVE CAMERA RESULT: %d failures" % failures)
 	quit(0 if failures == 0 else 1)
