@@ -14,10 +14,16 @@ var _loaded: Dictionary = {} # chunk origin -> meshes/collision/chest nodes
 var _pending: Array[Vector2i] = []
 var _center := Vector2i(99999, 99999)
 var _roof_nodes: Array[MeshInstance3D] = []
+var _cutaway_material: ShaderMaterial
+var _cave_mode: bool = false
 
 func setup(world_seed: int) -> void:
 	terrain = DATA.new(world_seed)
 	name = "FractalArchipelago"
+	# Never mutate GREEDY's global material: other Fields chunks must not cut
+	# holes when the remote island camera enters a tunnel or a deep ravine.
+	_cutaway_material = GREEDY.material().duplicate() as ShaderMaterial
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 
 func _process(_delta: float) -> void:
 	if terrain == null:
@@ -30,20 +36,48 @@ func _process(_delta: float) -> void:
 		return
 	var position: Vector3 = hero.global_position
 	if not terrain.near_island(position):
+		if _cutaway_material != null:
+			_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		if not _loaded.is_empty():
 			_clear_stream()
 		return
 	_queue_near(position)
 	_build_pending()
-	# A physics-independent isometric cutaway: cave ceilings and overlying
-	# top faces fade out only while the hero is below the local surface.
+	_update_cutaway(game, position)
+
+func _is_below_terrain(position: Vector3) -> bool:
+	# Actual tunnel cells are definitive. A steep drop with high walls on
+	# several sides is also treated as a crevice, even outside carved caves.
 	var xi: int = floori(position.x)
 	var zi: int = floori(position.z)
-	var cave_floor: int = terrain.caves.floor_at(xi, zi)
-	var underground: bool = cave_floor != CAVES.INVALID_FLOOR and position.y < float(terrain.height_at(xi, zi)) - 0.8
+	var floor_y: int = terrain.caves.floor_at(xi, zi)
+	if floor_y != CAVES.INVALID_FLOOR and position.y < float(terrain.height_at(xi, zi)) - 0.8:
+		return true
+	var elevated: int = 0
+	for offset in [Vector2i(-3, 0), Vector2i(3, 0), Vector2i(0, -3), Vector2i(0, 3),
+			Vector2i(-3, -3), Vector2i(3, 3)]:
+		if float(terrain.height_at(xi + offset.x, zi + offset.y)) >= position.y + 3.5:
+			elevated += 1
+	return elevated >= 3
+
+func _update_cutaway(game: Node, position: Vector3) -> void:
+	if _cutaway_material == null:
+		return
+	var view: Camera3D = game.get("camera") as Camera3D
+	if view == null:
+		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
+		return
+	_cave_mode = _is_below_terrain(position)
+	# Shader discards *visual pixels only* along the view-to-player corridor.
+	# Keep the full visual roofs and their original physical collision alive.
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", true)
+	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
+	_cutaway_material.set_shader_parameter("island_cutaway_focus", position + Vector3.UP * 0.95)
+	_cutaway_material.set_shader_parameter("island_cutaway_eye", view.global_position)
+	_cutaway_material.set_shader_parameter("island_cutaway_radius", 5.2 if _cave_mode else 3.6)
 	for roof in _roof_nodes:
 		if is_instance_valid(roof):
-			roof.visible = not underground
+			roof.visible = true
 
 func is_land_at(x: float, z: float) -> bool:
 	return terrain != null and terrain.is_land_at(x, z)
@@ -173,7 +207,7 @@ func _build_chunk(key: Vector2i) -> void:
 		var ground := MeshInstance3D.new()
 		ground.name = "IslandRock_%d_%d" % [key.x, key.y]
 		ground.mesh = PALETTE.create_mesh(surface)
-		ground.material_override = GREEDY.material()
+		ground.material_override = _cutaway_material
 		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
@@ -181,7 +215,7 @@ func _build_chunk(key: Vector2i) -> void:
 		var lid := MeshInstance3D.new()
 		lid.name = "CaveCutaway_%d_%d" % [key.x, key.y]
 		lid.mesh = PALETTE.create_mesh(roof)
-		lid.material_override = GREEDY.material()
+		lid.material_override = _cutaway_material
 		add_child(lid)
 		members.append(lid)
 		meshed.append(lid)
