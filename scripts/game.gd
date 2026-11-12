@@ -3,6 +3,7 @@ extends Node3D
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
+const DUNGEON_RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const WILDLIFE = preload("res://scripts/creatures/overworld_wildlife.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
@@ -752,8 +753,15 @@ func target_frame_data(target: Node3D) -> Dictionary:
 		maximum = maxf(1.0, float(raw_max))
 	var rank: String = ""
 	var accent: Color = Color("#907e71")
+	var name_color: Color = Color("#f8ecdb")
+	var coloured_affixes: Array[Dictionary] = []
 	if target.is_in_group("dungeon_guardians"):
-		var rarity: int = int(target.get("quality"))
+		var rarity: int = DUNGEON_RARITY.bounded(int(target.get("quality")))
+		# Official dungeon rarity sets the creature portion of the name.
+		# Keep the existing gold/silver boss and elite frame accents separate.
+		name_color = DUNGEON_RARITY.color(rarity)
+		if rarity in [DUNGEON_RARITY.RARE, DUNGEON_RARITY.EPIC]:
+			name_color = name_color.lightened(0.22) # Readable against dark backing.
 		if target.name == "DungeonBoss":
 			rank = "BOSS"
 			accent = Color("#e3ae63")
@@ -766,8 +774,18 @@ func target_frame_data(target: Node3D) -> Dictionary:
 		elif rarity == 1:
 			rank = "UNCOMMON"
 			accent = Color("#9bba9e")
+		var original_affixes: Variant = target.get("affix_entries")
+		if original_affixes is Array:
+			for raw in original_affixes:
+				if not (raw is Dictionary):
+					continue
+				var label: String = str(raw.get("name", "")).strip_edges()
+				var tint: Variant = raw.get("colour", name_color)
+				if not label.is_empty() and tint is Color:
+					coloured_affixes.append({"text": label, "color": tint})
 	return {"id": target.get_instance_id(), "name": enemy_display_name(target),
-		"hp": hp, "max_hp": maximum, "rank": rank, "accent": accent}
+		"hp": hp, "max_hp": maximum, "rank": rank, "accent": accent,
+		"name_color": name_color, "affixes": coloured_affixes}
 
 func _nearest_breakable():
 	if hero == null:
