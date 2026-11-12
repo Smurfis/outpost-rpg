@@ -56,7 +56,9 @@ func _run() -> void:
 	hud._layout_touch_hud()
 	var smart: Button = hud.smart_button
 	var action: Button = hud.quick_buttons["skill_1"] as Button
-	verify(smart.size.x >= 122.0 and smart.size.y >= 122.0, "Interact is five percent larger")
+	var viewport: Vector2 = hud.get_viewport().get_visible_rect().size
+	var ui_scale: float = clampf(minf(viewport.x / 1280.0, viewport.y / 720.0), 0.8, 1.2)
+	verify(smart.size.x >= 122.0 * ui_scale and smart.size.y >= 122.0 * ui_scale, "Interact is five percent larger at mobile UI scale")
 	verify(action.size.x >= 75.0, "Combat ability grows three percent without shifting position")
 	verify(smart.get_global_rect().end.y < hud.xp_bar.get_global_rect().position.y, "Raised Interact remains clear of bottom XP")
 
@@ -160,6 +162,12 @@ func _run() -> void:
 	# This is the actual Android smart Interact touch route, not a direct
 	# call to menu.open(). A harvestable next to the loom previously stole
 	# the context and made CRAFT appear completely unresponsive.
+	# Place an explicit harvestable in range so station priority is tested even
+	# when the world placement system relocates the original resources.
+	var loom_gatherable = load("res://scripts/resource_node.gd").new()
+	game.add_child(loom_gatherable)
+	loom_gatherable.position = game.station_positions["loom"] + Vector3(1.2, 0.0, 0.0)
+	loom_gatherable.setup("fiber")
 	game.hero.global_position = game.station_positions["loom"] + Vector3(0.0, 0.35, 0.0)
 	verify(game._nearest_resource() != null, "Loom regression location has a nearby gatherable")
 	verify(str(game.smart_context().get("kind", "")) == "craft", "Station CRAFT outranks harvestables in interaction radius")
