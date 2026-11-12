@@ -459,19 +459,20 @@ func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, pr
 		return
 	# Raise a few centimetres above the coplanar voxel edge, not the next
 	# full block. Recheck both vertical and lateral collision at the new Y.
-	var upward: Vector3 = Vector3.UP * maxf(0.17, rise + 0.08)
+	var upward: Vector3 = Vector3.UP * maxf(0.26, rise + 0.12)
 	var original: Transform3D = global_transform
-	if test_move(original, upward):
+	# The character is *already touching* a floor-edge triangle, so
+	# test_move(original, upward) can report the existing overlap as an
+	# obstruction. Test the real prospective raised pose instead.
+	var raised: Transform3D = original.translated(upward)
+	if test_move(raised, forward):
 		return
-	if test_move(original.translated(upward), forward):
+	var chunk: Vector2i = remote._cell_at(landing)
+	if not remote._loaded.has(chunk):
 		return
-	# Real landing collision required: never nudge across unloaded terrain
-	# or let a character step out into the surrounding ocean.
-	var from: Vector3 = global_position + upward + forward + Vector3.UP
-	var to: Vector3 = from - Vector3.UP * 2.0
-	var query := PhysicsRayQueryParameters3D.create(from, to, collision_mask, [get_rid()])
-	var floor_hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	if floor_hit.is_empty() or (floor_hit.get("normal", Vector3.ZERO) as Vector3).y < 0.70:
+	# The generator's solid voxel field is canonical. A thin ray cast is
+	# unreliable precisely at a voxel seam; avoid teleporting into void.
+	if not remote.terrain.is_solid(floori(landing.x), floori(top) - 1, floori(landing.z)):
 		return
 	global_position += upward + forward
 	velocity.y = 0.0
