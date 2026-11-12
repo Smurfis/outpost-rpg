@@ -60,6 +60,19 @@ func _run() -> void:
 		"GM island command takes a playtester to generated island one")
 	check(game.terrain_surface.archipelago.loaded_chunk_count() > 0,
 		"GM teleport preloads the immediate island collision chunk")
+	# A sea-level character must remain buoyant when entering the first
+	# shallow beach voxel; the old version dropped swimming immediately.
+	var remote = game.terrain_surface.archipelago.terrain
+	var centre: Vector2i = remote.islands[0]["center"]
+	var beach_x: int = -9999
+	for x in range(centre.x + 50, centre.x + 12, -1):
+		if remote.is_land_at(float(x) + 0.5, float(centre.y) + 0.5) and remote.height_at(x, centre.y) == -3:
+			beach_x = x
+			break
+	check(beach_x != -9999, "Island has a submerged landing step")
+	if beach_x != -9999:
+		game.hero.global_position = Vector3(float(beach_x) + 0.5, -3.60, float(centre.y) + 0.5)
+		check(game.hero._detect_surface_swimming(), "Swim buoyancy remains active on the first island landing step")
 	GM.execute(game, ".home")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.01,
 		"GM home returns to original spawn")
