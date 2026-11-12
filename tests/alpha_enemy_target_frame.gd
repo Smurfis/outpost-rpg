@@ -93,7 +93,11 @@ func _run() -> void:
 		"Boss target draws an elite framed quarter-health bar")
 	guardian.queue_free()
 	await process_frame
-	boar.global_position = game.hero.global_position + Vector3(40.0, 0, 0)
+	# The world has other pigs/wolves. Move out of all creature radar radii
+	# instead of assuming this boar was the only eligible nearby target.
+	game.hero.global_position = Vector3(1800.0, 3.0, 1800.0)
+	game.focus_target = null
+	game.recent_target_seconds = 0.0
 	hud._update_enemy_target_frame()
 	verify(not frame.visible, "Target frame disappears outside creature radar range")
 	game.queue_free()
