@@ -29,7 +29,11 @@ var storage_grid: GridContainer
 var storage_scroll: ScrollContainer
 var storage_contents: Dictionary = {}
 var storage_label: String = ""
+var storage_tombstone_id: String = ""
 var storage_mode: bool = false
+var discard_dialog: ConfirmationDialog
+var pending_discard_id: String = ""
+var pending_discard_count: int = 0
 var header_label: Label
 var inventory_grid: GridContainer
 var scroll: ScrollContainer
@@ -233,6 +237,13 @@ func _ready() -> void:
 	item_info.name = "ItemInformation"
 	item_info.add_theme_constant_override("separation", 8)
 	item_card.add_child(item_info)
+	discard_dialog = ConfirmationDialog.new()
+	discard_dialog.name = "ConfirmDestroyInventoryStack"
+	discard_dialog.title = "Destroy items?"
+	discard_dialog.ok_button_text = "YES, DESTROY"
+	discard_dialog.cancel_button_text = "NO, KEEP"
+	discard_dialog.confirmed.connect(_confirm_discard)
+	add_child(discard_dialog)
 	get_viewport().size_changed.connect(_layout_windows)
 	_layout_windows()
 	visible = false
@@ -257,14 +268,20 @@ func open_page(page: String) -> void:
 		inventory_close_button.move_to_front()
 	refresh()
 
-func set_storage_view(label: String, contents: Dictionary) -> void:
-	# Read-only until a real, persistent storage service exposes transfers.
-	# The inventory must not create or destroy items from a visual preview.
+func set_storage_view(label: String, contents: Dictionary, tombstone_id: String = "") -> void:
+	# Tombstones are live, persisted containers. Other storage previews
+	# are still read-only until their own transfer services exist.
 	storage_label = label.strip_edges().substr(0, 40)
 	storage_contents = contents.duplicate(true)
+	storage_tombstone_id = tombstone_id
 
 func close_page() -> void:
 	item_card.visible = false
+	if discard_dialog != null:
+		discard_dialog.hide()
+	pending_discard_id = ""
+	pending_discard_count = 0
+	storage_tombstone_id = ""
 	visible = false
 
 func _layout_windows() -> void:
@@ -589,20 +606,41 @@ func _render_storage() -> void:
 			stored_keys.append(str(key))
 	stored_keys.sort()
 	for id in stored_keys:
-		var cell := PanelContainer.new()
+		var cell := Button.new()
 		cell.name = "ChestItem_" + id
-		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cell.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, false, true))
+		SKIN.apply_translucent_button(cell, "wood" if not storage_tombstone_id.is_empty() else "green")
+		cell.custom_minimum_size = Vector2(66, 69)
+		cell.disabled = storage_tombstone_id.is_empty()
+		if not cell.disabled:
+			cell.pressed.connect(_recover_from_tombstone.bind(id))
 		storage_grid.add_child(cell)
-		var stack := VBoxContainer.new()
-		cell.add_child(stack)
-		stack.add_child(_icon(id, 35))
+		var art: TextureRect = _icon(id, 35)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		art.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		cell.add_child(art)
 		var number := _text("×%d" % int(storage_contents[id]), 12, SKIN.CREAM)
 		number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stack.add_child(number)
-		cell.tooltip_text = id.replace("_", " ").capitalize()
+		number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		number.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		number.offset_top = -22
+		cell.add_child(number)
+		cell.tooltip_text = ("%s • tap to recover" if not cell.disabled else "%s • preview only") % id.replace("_", " ").capitalize()
 	if stored_keys.is_empty():
 		storage_grid.add_child(_text("Storage empty", 14, SKIN.INK))
+
+func _recover_from_tombstone(item_id: String) -> void:
+	if storage_tombstone_id.is_empty():
+		return
+	var recovered: int = game.take_tombstone_item(storage_tombstone_id, item_id)
+	if recovered <= 0:
+		if game.hud != null:
+			game.hud.toast("Bag full. Equip a bigger bag to recover more.")
+		return
+	if not game.death_tombstones.has(storage_tombstone_id):
+		menu.close_page()
+		return
+	storage_contents = game.tombstone_contents(storage_tombstone_id)
+	refresh()
 
 func _render_items() -> void:
 	_clear(inventory_grid)
@@ -618,6 +656,8 @@ func _render_items() -> void:
 		SKIN.apply_translucent_button(tile, "wood_selected" if id == selected_id else "wood")
 		tile.set("game_ref", game)
 		tile.set("item_id", id)
+		tile.set("allow_inventory_discard", not storage_mode)
+		tile.set("on_drop_outside", Callable(self, "_on_item_dragged_outside"))
 		tile.name = "Item_" + id
 		tile.custom_minimum_size = Vector2(slot_px, slot_px)
 		tile.tooltip_text = _item_tip(id)
@@ -752,6 +792,37 @@ func _render_details() -> void:
 		assign.custom_minimum_size = Vector2(0, 44)
 		assign.pressed.connect(_assign_selected)
 		item_info.add_child(assign)
+	if not storage_mode and game.can_discard_item(selected_id):
+		var destroy := _button("DESTROY STACK  •  CONFIRM", "wood")
+		destroy.name = "DestroySelectedInventoryStack"
+		destroy.custom_minimum_size = Vector2(0, 45)
+		destroy.pressed.connect(_request_discard.bind(selected_id))
+		item_info.add_child(destroy)
+
+func _on_item_dragged_outside(item_id: String) -> void:
+	# A rejected drop over a gear slot should not delete anything. The cursor
+	# must leave the whole bag window to count as a disposal gesture.
+	if not visible or storage_mode or window.get_global_rect().has_point(get_viewport().get_mouse_position()):
+		return
+	_request_discard(item_id)
+
+func _request_discard(item_id: String) -> void:
+	if not game.can_discard_item(item_id):
+		return
+	pending_discard_id = item_id
+	pending_discard_count = int(game.inventory.get(item_id, 0))
+	discard_dialog.dialog_text = "Permanently destroy %d × %s?\nThis cannot be undone." % [pending_discard_count, item_id.replace("_", " ").capitalize()]
+	discard_dialog.popup_centered(Vector2i(420, 180))
+
+func _confirm_discard() -> void:
+	var item_id: String = pending_discard_id
+	var count: int = pending_discard_count
+	pending_discard_id = ""
+	pending_discard_count = 0
+	if game.discard_item(item_id, count):
+		if selected_id == item_id and int(game.inventory.get(item_id, 0)) <= 0:
+			selected_id = ""
+		refresh()
 
 func _equip_selected() -> void:
 	if game.equip_item(selected_id):

@@ -5,11 +5,20 @@ var item_id: String = ""
 var target_slot: String = ""
 var game_ref
 var on_item_dropped: Callable
+var on_drop_outside: Callable
+var allow_inventory_discard: bool = false
+
+func _notification(what: int) -> void:
+	# Godot reports an unsuccessful drag when a bag tile is released outside
+	# any accepted target. Only the inventory tile registers that action.
+	if what == NOTIFICATION_DRAG_END and allow_inventory_discard and is_visible_in_tree():
+		if not get_viewport().gui_is_drag_successful() and on_drop_outside.is_valid():
+			on_drop_outside.call(item_id)
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	if item_id.is_empty() or game_ref == null or int(game_ref.inventory.get(item_id, 0)) < 1:
 		return null
-	if str(game_ref.equipment_slot(item_id)) == "":
+	if str(game_ref.equipment_slot(item_id)) == "" and not allow_inventory_discard:
 		return null
 	var preview := PanelContainer.new()
 	var text := Label.new()
