@@ -18,7 +18,7 @@ func _init(source: Node) -> void:
 func request_chunk(key: Vector2i) -> void:
 	if chunks.has(key) or pending.has(key) or (not _working.is_empty() and key == _working_key):
 		return
-	var half: int = int(biome.get("map_half"))
+	var half: int = int(biome.get("map_world_half"))
 	if key.x * CHUNK_SIZE >= half or (key.x + 1) * CHUNK_SIZE <= -half or key.y * CHUNK_SIZE >= half or (key.y + 1) * CHUNK_SIZE <= -half:
 		return
 	if pending.size() >= MAX_CHUNKS:
