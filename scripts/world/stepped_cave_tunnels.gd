@@ -19,10 +19,10 @@ func configure(terrain) -> void:
 	for island in terrain.islands:
 		var center: Vector2i = island["center"]
 		var radius: float = island["radius"]
-		var start := Vector2i(center.x + roundi(radius * 0.55), center.y)
+		var start := Vector2i(center.x + roundi(radius * 0.80), center.y)
 		var first_height: int = maxi(1, terrain.height_at(start.x, start.y))
 		var route: Array = []
-		var steps: int = mini(28, roundi(radius * 0.72))
+		var steps: int = mini(38, roundi(radius * 0.96))
 		for step in range(steps):
 			# Westward inward motion with bounded 1-tile lateral changes.
 			var bend: int = roundi(sin(float(step) * 0.22) * 2.0)
