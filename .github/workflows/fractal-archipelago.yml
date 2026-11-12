@@ -58,6 +58,12 @@ jobs:
           timeout --signal=TERM --kill-after=5s 30s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_camera_cutaway.gd 2>&1 | tee cave-camera.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CAVE CAMERA:' cave-camera.log; then exit 1; fi
           grep -q 'CAVE CAMERA RESULT: 0 failures' cave-camera.log
+      - name: Walk a real character into every widened hillside cave
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/fractal_cave_entry_walk.gd 2>&1 | tee cave-entry.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CAVE ENTRY:' cave-entry.log; then exit 1; fi
+          grep -q 'CAVE ENTRY RESULT: 0 failures' cave-entry.log
       - name: Exercise desktop chat and GM island teleport
         run: |
           set -o pipefail
