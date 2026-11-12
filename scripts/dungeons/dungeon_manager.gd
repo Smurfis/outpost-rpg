@@ -7,7 +7,6 @@ const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
 const PIXEL_SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
-const MINIMAP = preload("res://scripts/dungeons/dungeon_minimap.gd")
 @export var save_path: String = "user://outpost_dungeon_clear_v1.json"
 const INTERACTION_RADIUS: float = 3.25
 
@@ -20,8 +19,8 @@ var chunks: Dictionary = {}
 var entrances: Dictionary = {}
 var completed_ids: Dictionary = {}
 var floor_checkpoints: Dictionary = {}
+var broken_props: Dictionary = {}
 var active_bonus_id: int = -1
-var minimap: Control
 var active_instance
 var active_info: Dictionary = {}
 var return_position: Vector3 = Vector3.ZERO
@@ -184,10 +183,6 @@ func _update_dungeon_action() -> void:
 	var total: int = int(active_instance.floor_count)
 	progress_label.text = "%s  •  FLOOR %d/%d  •  %s  •  %d GUARD(S)" % [title, current, total, str(active_instance.layout.get("pattern", "")).to_upper(), remaining]
 	progress_label.add_theme_color_override("font_color", RARITY.color(int(active_info.get("quality", 0))))
-	if minimap != null and minimap.instance != active_instance:
-		minimap.setup(active_instance)
-	if minimap != null:
-		minimap.visible = true
 	var distance: float = _flat_distance(hero.global_position, active_instance.chest_world_position())
 	if approaching_chest:
 		if distance <= INTERACTION_RADIUS:
@@ -313,15 +308,14 @@ func _enter_confirmed() -> void:
 	# A new isolated cell, out of reach of the current overworld geometry.
 	dungeon.position = Vector3(1800.0 + float(run_number % 30) * 65.0, 0.0, 1800.0)
 	var checkpoint: int = int(floor_checkpoints.get(str(active_info["id"]), 1))
-	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint)
+	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint, broken_props.get(str(active_info["id"]), []))
 	dungeon.chest_selected.connect(_on_chest_selected)
 	dungeon.stairs_selected.connect(_on_stairs_selected)
 	dungeon.bonus_selected.connect(_on_bonus_selected)
+	dungeon.prop_broken.connect(_on_prop_broken)
 	dungeon.floor_changed.connect(_on_floor_changed)
 	dungeon.completed.connect(_on_dungeon_completed)
 	active_instance = dungeon
-	if minimap != null:
-		minimap.setup(dungeon)
 	hero.global_position = dungeon.hero_spawn_point()
 	hero.velocity = Vector3.ZERO
 	action_button.visible = false
@@ -369,10 +363,24 @@ func _on_floor_changed(instance: Node3D, floor_number: int, floor_count: int) ->
 		return
 	floor_checkpoints[str(active_info.get("id", ""))] = floor_number
 	_save_clears()
-	if minimap != null:
-		minimap.setup(instance)
 	if game.hud != null:
 		game.hud.toast("Floor %d/%d — enemies grow stronger, rewards improve." % [floor_number, floor_count])
+
+## Saved immediately so exiting and re-entering a checkpoint cannot
+## regenerate the same gold-bearing barrel indefinitely.
+func _on_prop_broken(instance: Node3D, prop_id: String, reward: Dictionary) -> void:
+	if instance != active_instance or active_instance == null:
+		return
+	var dungeon_id: String = str(active_info.get("id", ""))
+	var broken: Array = broken_props.get(dungeon_id, [])
+	if prop_id in broken:
+		return
+	broken.append(prop_id)
+	broken_props[dungeon_id] = broken
+	_apply_reward(reward)
+	_save_clears()
+	if game != null and game.hud != null:
+		game.hud.record_loot("coins", int(reward.get("coins", 0)))
 
 func _on_bonus_selected(instance: Node3D, id: int) -> void:
 	if instance != active_instance or hero == null:
@@ -403,6 +411,10 @@ func _apply_reward(reward: Dictionary) -> void:
 		return
 	var pocket: Dictionary = game.inventory
 	pocket["coins"] = int(pocket.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	var currency_drops: Dictionary = reward.get("currencies", {})
+	for currency_id in ["copper", "silver", "gold", "gems"]:
+		if currency_drops.has(currency_id):
+			pocket[currency_id] = int(pocket.get(currency_id, 0)) + maxi(0, int(currency_drops[currency_id]))
 	game.experience += maxi(0, int(reward.get("xp", 0)))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
@@ -427,6 +439,7 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if succeeded:
 		completed_ids[cleared_id] = true
 		floor_checkpoints.erase(cleared_id)
+		broken_props.erase(cleared_id)
 		_save_clears()
 		_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
@@ -443,8 +456,6 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	approaching_chest = false
 	leave_button.visible = false
 	progress_label.visible = false
-	if minimap != null:
-		minimap.setup(null)
 	action_button.visible = false
 	action_button.disabled = false
 	active_bonus_id = -1
@@ -483,6 +494,9 @@ func _load_clears() -> void:
 	var saved_progress: Variant = parsed.get("checkpoints", {})
 	if saved_progress is Dictionary:
 		floor_checkpoints = saved_progress.duplicate()
+	var saved_breakables: Variant = parsed.get("broken_props", {})
+	if saved_breakables is Dictionary:
+		broken_props = saved_breakables.duplicate(true)
 	var saved: Variant = parsed.get("completed", [])
 	if saved is Array:
 		for entry in saved:
@@ -491,7 +505,7 @@ func _load_clears() -> void:
 func _save_clears() -> void:
 	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"version": 2, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints}))
+		file.store_string(JSON.stringify({"version": 3, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints, "broken_props": broken_props}))
 		file.close()
 
 func _build_interface() -> void:
@@ -526,12 +540,6 @@ func _build_interface() -> void:
 	screen.add_child(progress_label)
 	_layout(progress_label, 0.240, 0.195, 0.625, 0.26)
 	progress_label.visible = false
-	minimap = MINIMAP.new()
-	minimap.tooltip_text = "Dungeon map: pale rooms, green bonus caches, gold stairs, orange boss"
-	screen.add_child(minimap)
-	_layout(minimap, 0.812, 0.415, 0.966, 0.704)
-	minimap.visible = false
-
 	dimmer = ColorRect.new()
 	dimmer.color = Color(0.01, 0.02, 0.04, 0.77)
 	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP

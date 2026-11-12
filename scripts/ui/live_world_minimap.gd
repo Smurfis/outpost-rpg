@@ -5,6 +5,7 @@ const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const MARKERS = preload("res://scripts/ui/map_marker_layer.gd")
 const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
+const DUNGEON_ROOM_STEP: float = 13.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
 const MOVEMENT_REFRESH_DISTANCE: float = 1.4
 const RIM: Color = Color("cba668")
@@ -34,12 +35,14 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if game == null or not is_instance_valid(game):
 		return
-	# Use the existing topological dungeon map until a unified map feature.
+	# One circular map for both Diorama and dungeons.
 	var manager: Node = game.get_node_or_null("Dungeons")
-	var in_dungeon: bool = manager != null and manager.get("active_instance") != null
-	if visible == in_dungeon:
-		visible = not in_dungeon
-	if in_dungeon:
+	var dungeon: Node3D = manager.get("active_instance") as Node3D if manager != null else null
+	if not visible:
+		visible = true
+	if dungeon != null and is_instance_valid(dungeon):
+		_sample_angle = float(game.get("camera_angle"))
+		queue_redraw()
 		return
 	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
 		_sample_angle = game.camera_angle
@@ -116,6 +119,20 @@ func _refresh_pixels() -> void:
 
 func _draw() -> void:
 	if game == null:
+		return
+	var manager: Node = game.get_node_or_null("Dungeons")
+	var dungeon: Node3D = manager.get("active_instance") as Node3D if manager != null else null
+	if dungeon != null and is_instance_valid(dungeon):
+		var diameter: float = minf(size.x, size.y)
+		if diameter <= 0.0:
+			return
+		var center: Vector2 = size * 0.5
+		var radius: float = diameter * 0.5 - 7.0
+		var interior: float = radius - 5.0
+		draw_circle(center, radius + 4.0, DARK_WOOD)
+		draw_circle(center, radius, INNER_WOOD)
+		draw_circle(center, radius - 2.0, RIM)
+		_draw_dungeon_rooms(dungeon, center, interior, radius)
 		return
 	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
 		_draw_relief()
@@ -235,3 +252,53 @@ func _draw_relief() -> void:
 	MARKERS.glyph(self, center, "", true, heading.angle() + PI * 0.5)
 	var north: Vector2 = (camera.unproject_position(hero.global_position + Vector3.FORWARD) - camera.unproject_position(hero.global_position)).normalized()
 	draw_string(ThemeDB.fallback_font, center + north * (radius - 12) + Vector2(-4,4), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("fff3cc"))
+
+## Same circular HUD slot, border and camera-relative orientation as the
+## overworld map; not a second draggable, screen-blocking dungeon overlay.
+## Entire topology fits inside the ring, with exact player position as a dot.
+func _draw_dungeon_rooms(dungeon: Node3D, center: Vector2, interior: float, radius: float) -> void:
+	var rooms: Array = dungeon.layout.get("rooms", [])
+	if rooms.is_empty():
+		return
+	var smallest := Vector2(INF, INF)
+	var largest := Vector2(-INF, -INF)
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		var pos := Vector2(float(grid.x), float(grid.y))
+		smallest = smallest.min(pos)
+		largest = largest.max(pos)
+	var middle: Vector2 = (smallest + largest) * 0.5
+	var farthest: float = 0.5
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		farthest = maxf(farthest, (Vector2(float(grid.x), float(grid.y)) - middle).length())
+	var scale_by: float = minf(27.0, (interior - 15.0) / farthest)
+	var points: Dictionary = {}
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		var relative := (Vector2(float(grid.x), float(grid.y)) - middle) * scale_by
+		points[int(room["id"])] = center + _world_to_map(relative)
+	for link in dungeon.layout.get("edges", []):
+		draw_line(points[link.x], points[link.y], Color("73969b"), 5.0, true)
+		draw_line(points[link.x], points[link.y], Color("b1c2b2"), 2.0, true)
+	for room in rooms:
+		var id: int = int(room["id"])
+		var colour: Color = Color("a9b7ae")
+		match str(room.get("role", "normal")):
+			"start": colour = Color("83bdd5")
+			"stairs": colour = Color("f6c974")
+			"boss": colour = Color("ed7d68")
+			"treasure": colour = Color("9bdcb0")
+		var at: Vector2 = points[id]
+		draw_circle(at, 7.0, DARK_WOOD)
+		draw_rect(Rect2(at - Vector2.ONE * 4.6, Vector2.ONE * 9.2), colour, true)
+	var hero: Node3D = dungeon.hero as Node3D
+	if hero != null and is_instance_valid(hero):
+		var delta: Vector3 = hero.global_position - dungeon.global_position
+		var hero_grid := Vector2(delta.x, delta.z) / DUNGEON_ROOM_STEP
+		var map_pos: Vector2 = center + _world_to_map((hero_grid - middle) * scale_by)
+		draw_circle(map_pos, 6.8, Color("241d1a"))
+		draw_circle(map_pos, 4.7, Color("fff1a5"))
+	draw_arc(center, radius - 4.0, 0.0, TAU, 72, Color("d8ad68", 0.80), 1.4, true)
+	draw_string(ThemeDB.fallback_font, center + Vector2(-22, radius - 15.0),
+		"F%d/%d" % [int(dungeon.current_floor), int(dungeon.floor_count)], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("ffe6a3"))
