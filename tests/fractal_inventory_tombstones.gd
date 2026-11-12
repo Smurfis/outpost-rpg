@@ -27,6 +27,8 @@ func _run() -> void:
 	game.set_process(false)
 	game.hero.set_physics_process(false)
 	game.show_crafting()
+	# Force the Workbench recipe context for a deterministic UI receipt.
+	game.menu.selected_station = "workbench"
 	game.menu.on_craft_completed("spear")
 	var return_button: Button = game.menu.details.find_child("CraftResultReturnToWorld", true, false) as Button
 	check(return_button != null, "Completed craft offers a prominent Return to World button")
