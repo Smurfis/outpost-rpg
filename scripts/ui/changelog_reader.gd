@@ -119,5 +119,5 @@ static func _parse_line(raw: String) -> Dictionary:
 		kind = "body"
 		line = line.substr(2)
 	# Keep the display readable without introducing unsafe BBCode or raw URLs.
-	line = line.replace("**", "").replace("__", "").replace("\`", "")
+	line = line.replace("**", "").replace("__", "").replace("`", "")
 	return {"kind": kind, "text": line.strip_edges()}
