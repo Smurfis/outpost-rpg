@@ -1,7 +1,6 @@
 extends "res://scripts/enemy.gd"
-## Fractal-branch GM-only test boss using Quaternius CC0 Demon.gltf.
-## Does not redistribute or approximate mesh data from the Warcraft Pitlord
-## reference (ArtsByKev free file: educational/explorative use only).
+## Original GM-only Abyssal Overlord boss, using the animated Quaternius
+## Cube World Demon.gltf (CC0, commercially reusable). No Warcraft assets.
 const CUBE_ART = preload("res://scripts/creatures/cube_world_visual.gd")
 const TELEGRAPH = preload("res://scripts/vfx/attack_telegraph.gd")
 var heavy_timer: float = 4.5
@@ -10,12 +9,12 @@ var warning: Node3D
 
 func setup_gm(game_ref: Node, player_ref: CharacterBody3D, at: Vector3) -> void:
 	super.setup(game_ref, player_ref, at)
-	name = "PitlordTestBoss"
-	map_label = "Abyssal Pitlord"
-	kill_kind = "pitlord"
+	name = "AbyssalOverlordBoss"
+	map_label = "Abyssal Overlord"
+	kill_kind = "overlord"
 	remove_on_death = true
 	remove_from_group("wild_boars")
-	add_to_group("gm_pitlords")
+	add_to_group("gm_overlords")
 	max_hp = 420.0
 	hp = max_hp
 	move_speed = 2.05
@@ -42,7 +41,7 @@ func setup_gm(game_ref: Node, player_ref: CharacterBody3D, at: Vector3) -> void:
 	if demon.configure("demon", 1.16):
 		avatar = demon
 	else:
-		push_error("GM Pitlord requires the existing CC0 Quaternius demon model.")
+		push_error("GM Abyssal Overlord requires the existing CC0 Quaternius demon model.")
 
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)

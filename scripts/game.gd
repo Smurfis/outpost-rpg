@@ -715,8 +715,8 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Enemy"
 	if enemy.is_in_group("dungeon_guardians"):
 		return str(enemy.get("display_name"))
-	if enemy.is_in_group("gm_pitlords"):
-		return "Abyssal Pitlord"
+	if enemy.is_in_group("gm_overlords"):
+		return "Abyssal Overlord"
 	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
 		return "Wild boar"
 	if enemy.is_in_group("wild_raccoons") or enemy.name.begins_with("WildRaccoon"):
@@ -776,7 +776,7 @@ func target_frame_data(target: Node3D) -> Dictionary:
 	var accent: Color = Color("#907e71")
 	var name_color: Color = Color("#f8ecdb")
 	var coloured_affixes: Array[Dictionary] = []
-	if target.is_in_group("gm_pitlords"):
+	if target.is_in_group("gm_overlords"):
 		rank = "BOSS"
 		accent = Color("#e3ae63")
 		name_color = Color("#f5c97b")
@@ -1741,11 +1741,11 @@ func attack(selected: Node3D = null) -> void:
 func on_enemy_killed(kind: String = "boar") -> void:
 	kills += 1
 	var is_wolf: bool = kind == "wolf"
-	var is_boss: bool = kind == "pitlord"
+	var is_boss: bool = kind == "overlord"
 	var hide: int = 6 if is_boss else 2 if is_wolf else 1
 	var coins: int = 60 if is_boss else 5 if is_wolf else 2 if kind in ["pig", "raccoon"] else 3
 	var xp: int = 150 if is_boss else 16 if is_wolf else 8 if kind in ["pig", "raccoon"] else 12
-	var label: String = "Abyssal Pitlord" if is_boss else "Wolf" if is_wolf else "Pig" if kind == "pig" else "Raccoon" if kind == "raccoon" else "Boar"
+	var label: String = "Abyssal Overlord" if is_boss else "Wolf" if is_wolf else "Pig" if kind == "pig" else "Raccoon" if kind == "raccoon" else "Boar"
 	grant_item("hide", hide, true)
 	grant_item("coins", coins, true)
 	gain_experience(xp)
