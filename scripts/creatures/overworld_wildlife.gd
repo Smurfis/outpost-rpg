@@ -157,6 +157,7 @@ func _respawn() -> void:
 	global_position = spawn_pos
 	collision_layer = 2
 	collision_mask = 1
+	visible = true
 	visual.visible = true
 	avatar.revive()
 	_choose_wander()
@@ -190,6 +191,7 @@ func receive_damage(amount: float) -> void:
 		velocity = Vector3.ZERO
 		CRUMBLE.spawn(game, self, visual)
 		visual.visible = false
+		visible = false
 		game.on_enemy_killed(species)
 	else:
 		avatar.play_event("Headbutt" if species != "wolf" else "Idle")
