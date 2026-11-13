@@ -199,6 +199,7 @@ func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 		# The burst lives under the world, not the respawning enemy.
 		CRUMBLE.spawn(game, self, visual)
 		visual.visible = false
+		visible = false # Dead actor is hidden from targeting/map until its original respawn.
 		collision_layer = 0
 		collision_mask = 0
 		respawn = 20.0
