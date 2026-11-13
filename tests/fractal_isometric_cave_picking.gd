@@ -60,6 +60,34 @@ func _run() -> void:
 			((click.get("normal", Vector3.ZERO) as Vector3).y > 0.7 and
 			absf((click.get("position", Vector3.INF) as Vector3).y - float(destination.y)) < 1.1)),
 			"Island %d screen-space click resolves cave level instead of an occluding wall/roof" % [index + 1])
+		# The cavern cache has genuine pick-only collision geometry.
+		# Clicking it from the interior must not be stolen by the roof.
+		var near_cache: Vector3i = route[maxi(0, route.size() - 5)]
+		var cache_pos := Vector3(float(near_cache.x) + 0.5, float(near_cache.y) + 0.10, float(near_cache.z) + 0.5)
+		game.hero.global_position = cache_pos
+		game.hero.velocity = Vector3.ZERO
+		streamer._queue_near(cache_pos)
+		for preload in range(55):
+			streamer._build_pending()
+		game.camera_focus_smooth = Vector3.ZERO
+		game._camera(0.3)
+		streamer._update_cutaway(game, cache_pos)
+		var chest: Node3D = null
+		for entity in streamer.get_children():
+			if entity is Node3D and str(entity.name) == "IslandCaveChest_%d" % index:
+				chest = entity
+				break
+		check(chest != null, "Island %d cache exists in the real streamed cavern" % [index + 1])
+		if chest != null:
+			var chest_screen: Vector2 = game.camera.unproject_position(chest.global_position + Vector3.UP * 0.55)
+			var chest_pick: Dictionary = PICKER.resolve(game, chest_screen)
+			print("ISO CHEST PICK: island=%d screen=%s target=%s" % [
+				index + 1, str(chest_screen), str(chest_pick.get("target", null))])
+			check(chest_pick.get("target") == chest,
+				"Island %d clicking a cave chest works behind the clipped roof" % [index + 1])
+			var chest_path: PackedVector3Array = PATH.plan_world(game, cache_pos, chest.global_position, 2.65)
+			check(not chest_path.is_empty(),
+				"Island %d cave path can approach and interact with the chest" % [index + 1])
 	game.queue_free()
 	await process_frame
 	print("ISOMETRIC PICK RESULT: %d failures" % failures)
