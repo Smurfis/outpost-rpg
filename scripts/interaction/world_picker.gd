@@ -26,6 +26,54 @@ static func _add_shapes(node: Node3D, target: Node3D, area: Area3D) -> void:
 		if child is Node3D and child != area and not child is CollisionObject3D:
 			_add_shapes(child, target, area)
 
+static func _cave_screen_pick(game: Node3D, screen: Vector2, remote: Variant,
+		ray_origin: Vector3, ray_end: Vector3) -> Dictionary:
+	# Only assist clicks while truly standing at the altitude of a carved
+	# cave. Above-ground players cannot select through hidden mountain rock.
+	if remote == null or remote.terrain == null:
+		return {}
+	var cave = remote.terrain.caves
+	var hero: Vector3 = game.hero.global_position
+	var hero_floor: int = cave.floor_at(floori(hero.x), floori(hero.z))
+	if hero_floor == -99999 or absf(hero.y - float(hero_floor)) > 2.0:
+		return {}
+	# Pick-only areas give chests / interactables priority over ground and
+	# avoid the invisible stone colliders that shader clipping leaves behind.
+	var pick_ray := PhysicsRayQueryParameters3D.create(
+		ray_origin, ray_end, PICK_LAYER, [game.hero.get_rid()])
+	pick_ray.collide_with_areas = true
+	var picked: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(pick_ray)
+	if not picked.is_empty():
+		var collider: Variant = picked.get("collider")
+		if collider is CollisionObject3D:
+			var object: Variant = collider.get_meta("world_target", null)
+			if object is Node3D and is_instance_valid(object) and object.is_visible_in_tree():
+				var at: Vector3 = object.global_position
+				if at.distance_to(hero) < 12.0 and cave.has_cave(floori(at.x), floori(at.z)):
+					picked["target"] = object
+					return picked
+	# For a click inside the cave, the camera ray can hit a solid outer
+	# cliff even though the floor target is on screen. Choose the CLOSEST
+	# projected carved-floor voxel, never a guessed point through rock.
+	var closest: float = 25.0 # Pixels, enough for half a voxel at 19m zoom.
+	var result: Dictionary = {}
+	for x in range(floori(hero.x) - 8, floori(hero.x) + 9):
+		for z in range(floori(hero.z) - 8, floori(hero.z) + 9):
+			var floor_y: int = cave.floor_at(x, z)
+			if floor_y == -99999:
+				continue
+			if not remote.terrain.is_solid(x, floor_y - 1, z) or remote.terrain.is_solid(x, floor_y + 1, z):
+				continue
+			var point := Vector3(float(x) + 0.5, float(floor_y) + 0.10, float(z) + 0.5)
+			if game.camera.is_position_behind(point):
+				continue
+			var difference: float = game.camera.unproject_position(point).distance_to(screen)
+			if difference < closest:
+				closest = difference
+				result = {"position": point, "normal": Vector3.UP, "target": null, "cave_pick": true}
+	return result
+
+
 static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 	var origin: Vector3 = game.camera.project_ray_origin(screen)
 	var direction: Vector3 = game.camera.project_ray_normal(screen)
@@ -34,6 +82,7 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 	var archipelago: Variant = null
 	if game.terrain_surface != null:
 		archipelago = game.terrain_surface.get("archipelago")
+	var cave_fallback: Dictionary = _cave_screen_pick(game, screen, archipelago, origin, end)
 	# Gameplay colliders stay solid when a roof is culled visually.
 	# Continue the *same* click ray past only the clipped roof triangles;
 	# never exclude the whole island body, which also owns the cave floor.
@@ -59,5 +108,10 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 				return hit
 			target = target.get_parent() as Node3D
 		hit["target"] = null
+		# When the camera's ray hits a front-facing solid island wall but
+		# the click projects onto an actual carved cave floor, use that
+		# nearby floor. Never skip collision in the movement planner.
+		if not cave_fallback.is_empty() and collider.name.begins_with("IslandCollision_"):
+			return cave_fallback
 		return hit
-	return {}
+	return cave_fallback
