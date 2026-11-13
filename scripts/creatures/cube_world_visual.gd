@@ -4,6 +4,7 @@ extends Node3D
 const ROOT: String = "res://assets/third_party/quaternius_cube_world/"
 const MODEL_PATHS: Dictionary = {
 	"pig": "Animals/glTF/Pig.gltf",
+	"raccoon": "Animals/glTF/Raccoon.gltf",
 	"wolf": "Animals/glTF/Wolf.gltf",
 	"skeleton": "Enemies/glTF/Skeleton.gltf",
 	"goblin": "Enemies/glTF/Goblin.gltf",

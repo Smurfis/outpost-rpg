@@ -237,7 +237,7 @@ func _process(delta: float) -> void:
 		hud.toast("Recovered from beneath the seabed.")
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
-		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
+		goal = "Hunt one wild raccoon in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
 	var resource = _nearest_resource() if controls == null or not controls.desktop else null
 	if resource != last_hit_node:
 		if is_instance_valid(last_hit_node):
@@ -679,12 +679,12 @@ func _resources() -> void:
 
 
 func _enemies() -> void:
-	# Original voxel boar spawns are untouched. Quaternius pigs and wolves
-	# are separate animated creatures; a pig is not a boar replacement.
+	# Replace the three former voxel boars with animated wild raccoons.
+	# Passive pigs and hostile wolves remain distinct species.
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
-		var boar = ENEMY.new()
-		add_child(boar)
-		boar.setup(self, hero, pos)
+		var raccoon = ENEMY.new()
+		add_child(raccoon)
+		raccoon.setup(self, hero, pos)
 	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
 		var pig = WILDLIFE.new()
 		add_child(pig)
@@ -711,8 +711,8 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Enemy"
 	if enemy.is_in_group("dungeon_guardians"):
 		return str(enemy.get("display_name"))
-	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
-		return "Wild boar"
+	if enemy.is_in_group("wild_raccoons") or enemy.name.begins_with("WildRaccoon"):
+		return "Wild raccoon"
 	if enemy.is_in_group("wild_wolves"):
 		return "Wolf"
 	if enemy.is_in_group("wild_pigs"):
@@ -1726,13 +1726,13 @@ func attack(selected: Node3D = null) -> void:
 	# World-space damage numbers already come from each mob's hit feedback.
 	# No giant per-swing notification is needed, and no boar assumptions.
 
-func on_enemy_killed(kind: String = "boar") -> void:
+func on_enemy_killed(kind: String = "raccoon") -> void:
 	kills += 1
 	var is_wolf: bool = kind == "wolf"
 	var hide: int = 2 if is_wolf else 1
 	var coins: int = 5 if is_wolf else 2 if kind == "pig" else 3
 	var xp: int = 16 if is_wolf else 8 if kind == "pig" else 12
-	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Boar"
+	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Raccoon" if kind == "raccoon" else "Creature"
 	grant_item("hide", hide, true)
 	grant_item("coins", coins, true)
 	gain_experience(xp)
