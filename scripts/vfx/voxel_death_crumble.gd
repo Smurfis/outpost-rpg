@@ -64,9 +64,9 @@ func _build_from_rig(rig: Node3D, origin: Vector3) -> void:
 				continue
 			var arrays: Array = mesh.surface_get_arrays(surface)
 			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-			var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
-			var vertex_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] is PackedInt32Array else PackedInt32Array()
+			var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV] if arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array else PackedVector2Array()
+			var vertex_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR] if arrays[Mesh.ARRAY_COLOR] is PackedColorArray else PackedColorArray()
 			if vertices.is_empty():
 				continue
 			var material: Material = source.get_active_material(surface)
@@ -118,8 +118,8 @@ func _build_from_rig(rig: Node3D, origin: Vector3) -> void:
 						var tint: Color = base_color
 						if picture != null and not uvs.is_empty() and a < uvs.size() and b < uvs.size() and c < uvs.size():
 							var uv: Vector2 = uvs[a] * w0 + uvs[b] * w1 + uvs[c] * w2
-							var px: int = clampi(floori(posmod(uv.x, 1.0) * picture.get_width()), 0, picture.get_width() - 1)
-							var py: int = clampi(floori(posmod(uv.y, 1.0) * picture.get_height()), 0, picture.get_height() - 1)
+							var px: int = clampi(floori(fposmod(uv.x, 1.0) * picture.get_width()), 0, picture.get_width() - 1)
+							var py: int = clampi(floori(fposmod(uv.y, 1.0) * picture.get_height()), 0, picture.get_height() - 1)
 							tint *= picture.get_pixel(px, py)
 						if not vertex_colors.is_empty() and a < vertex_colors.size() and b < vertex_colors.size() and c < vertex_colors.size():
 							tint *= vertex_colors[a] * w0 + vertex_colors[b] * w1 + vertex_colors[c] * w2
