@@ -42,6 +42,10 @@ func _run() -> void:
 		"Isometric cutaway uses roof-face normals rather than deleting all foreground rock")
 	check(ATLAS.code.contains("bool roof_face") and ATLAS.code.contains("bool overhead"),
 		"Cutaway clips only ceiling faces high above the avatar; not cliff walls or floor")
+	check(ATLAS.code.contains("floor(island_world_position.xz") and
+		ATLAS.code.contains("lessThanEqual(cell_distance") and
+		not ATLAS.code.contains("near_sightline"),
+		"Shader removes only voxel-snapped blocks directly overhead, never a diagonal camera corridor")
 	var tunnel: Vector3i = Vector3i.ZERO
 	var covered: bool = false
 	for route in world.caves.routes:
@@ -69,9 +73,9 @@ func _run() -> void:
 	island._update_cutaway(host, cave_player)
 	check(roof.visible, "Previously hidden cave roof is retained for per-pixel cutaway")
 	check(island._cave_mode and island._cutaway_material.get_shader_parameter("island_cave_mode") == true,
-		"Cave interior enables the wider opening")
-	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 3.2),
-		"Cave opening uses the expected world-space radius")
+		"Cave interior enables the local overhead cutout")
+	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 1.5),
+		"Cave opening is limited to one neighbouring block (3x3 footprint)")
 	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == true,
 		"Cutaway follows an actual camera")
 	check((island._cutaway_material.get_shader_parameter("island_cutaway_eye") as Vector3).distance_to(host.camera.global_position) < 0.01,
@@ -82,9 +86,28 @@ func _run() -> void:
 	# never through a wall or the walkable cave floor in that body.
 	var body := StaticBody3D.new()
 	body.set_meta("island_roof_shape_index", 1)
-	var inside: Vector3 = island._cutaway_focus + (island._cutaway_eye - island._cutaway_focus) * 0.5
-	var roof_hit: Dictionary = {"collider": body, "shape": 1, "position": inside}
-	check(island.cutaway_hides_hit(roof_hit), "World picking can pass a visually clipped cave ceiling")
+	var inside: Vector3 = Vector3(cave_player.x, island._cutaway_focus.y + 3.0, cave_player.z)
+	var roof_hit: Dictionary = {"collider": body, "shape": 1, "position": inside, "normal": Vector3.UP}
+	check(island.cutaway_hides_hit(roof_hit), "Picking passes through an overhead roof cube inside the 3x3 cutout")
+	for dx in [-1, 0, 1]:
+		for dz in [-1, 0, 1]:
+			roof_hit["position"] = Vector3(
+				float(floori(cave_player.x) + dx) + 0.5,
+				island._cutaway_focus.y + 3.0,
+				float(floori(cave_player.z) + dz) + 0.5)
+			check(island.cutaway_hides_hit(roof_hit),
+				"Overhead roof cube %d,%d is within the 3x3 mask" % [dx, dz])
+	roof_hit["position"] = inside + Vector3(2.0, 0, 0)
+	check(not island.cutaway_hides_hit(roof_hit),
+		"A roof just two blocks away remains visible and blocks picking")
+	roof_hit["position"] = inside + Vector3(0, 0, 2.0)
+	check(not island.cutaway_hides_hit(roof_hit),
+		"Cutout never reaches two blocks behind the player")
+	roof_hit["position"] = inside
+	roof_hit["normal"] = Vector3.RIGHT
+	check(not island.cutaway_hides_hit(roof_hit),
+		"Vertical cliff faces always stay solid and visible")
+	roof_hit["normal"] = Vector3.UP
 	roof_hit["shape"] = 0
 	check(not island.cutaway_hides_hit(roof_hit), "World picking retains physical stone walls and cave floor")
 	roof_hit["shape"] = 1
@@ -98,8 +121,8 @@ func _run() -> void:
 	island._update_cutaway(host, shore)
 	check(not island._cave_mode and not island._cutaway_material.get_shader_parameter("island_cave_mode") == true,
 		"Outdoor hillside uses the narrower cutaway")
-	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 3.6),
-		"Outdoor camera keeps its original radius metadata")
+	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 1.5),
+		"Outdoor camera keeps the same tiny debug radius but disables all cutaways")
 	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == false,
 		"Outdoor mountain stays physically and visually opaque; hero can receive an outline")
 	check(GREEDY.material().get_shader_parameter("island_cutaway_enabled") != true,

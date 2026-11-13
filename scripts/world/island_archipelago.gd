@@ -10,6 +10,8 @@ const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
 const HERO_OUTLINE = preload("res://scripts/voxel/occluded_hero_outline.gdshader")
 const CHUNK: int = 12
 const BUILD_BUDGET: int = 2
+const CAVE_OVERHEAD_BLOCK_RADIUS: int = 1 # Exactly 3x3 roof blocks, centred on the avatar.
+const CAVE_HEAD_CLEARANCE: float = 1.25
 var terrain
 var _loaded: Dictionary = {} # chunk origin -> meshes/collision/chest nodes
 var _pending: Array[Vector2i] = []
@@ -19,7 +21,7 @@ var _cutaway_material: ShaderMaterial
 var _cave_mode: bool = false
 var _cutaway_focus: Vector3 = Vector3.ZERO
 var _cutaway_eye: Vector3 = Vector3.ZERO
-var _cutaway_radius: float = 3.2
+var _cutaway_radius: float = 1.5
 var _outline_material: ShaderMaterial
 var _outline_meshes: Array[MeshInstance3D] = []
 var _outline_active: bool = false
@@ -86,7 +88,7 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 	var inside_roofed_cave: bool = cave_floor != CAVES.INVALID_FLOOR and _cave_mode
 	_cutaway_focus = position + Vector3.UP * 0.95
 	_cutaway_eye = view.global_position
-	_cutaway_radius = 3.2 if inside_roofed_cave else 3.6
+	_cutaway_radius = 1.5 # Limit the hole to the 3x3 overhead voxel footprint.
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", inside_roofed_cave)
 	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
 	_cutaway_material.set_shader_parameter("island_cutaway_focus", _cutaway_focus)
@@ -96,9 +98,21 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 		if is_instance_valid(roof):
 			roof.visible = true
 
+func _is_cut_overhead_block(at: Vector3, normal: Vector3) -> bool:
+	# Keep the pick-through rule identical to the voxel-snapped roof shader:
+	# one block to either side of the player's current X/Z voxel, and only
+	# horizontal faces higher than the hero's head. Never disable collision.
+	if absf(normal.y) <= 0.88 or at.y <= _cutaway_focus.y + CAVE_HEAD_CLEARANCE:
+		return false
+	var block := Vector2i(floori(at.x - 0.001), floori(at.z - 0.001))
+	var player_block := Vector2i(floori(_cutaway_focus.x), floori(_cutaway_focus.z))
+	return absi(block.x - player_block.x) <= CAVE_OVERHEAD_BLOCK_RADIUS and \
+		absi(block.y - player_block.y) <= CAVE_OVERHEAD_BLOCK_RADIUS
+
+
 func cutaway_hides_hit(hit: Dictionary) -> bool:
-	# Shared CPU equivalent of the cave roof shader's local cutout. A
-	# pick-through ray must never ignore walls, floors or an entire chunk.
+	# Ray picking passes ONLY the exact overhead roof cells hidden by the
+	# shader. No body-wide exclusions; sidewalls and terrain floors remain.
 	if _cutaway_material == null or _cutaway_material.get_shader_parameter("island_cutaway_enabled") != true:
 		return false
 	var collider: Variant = hit.get("collider")
@@ -106,19 +120,8 @@ func cutaway_hides_hit(hit: Dictionary) -> bool:
 		return false
 	if int(hit.get("shape", -1)) != int(collider.get_meta("island_roof_shape_index")):
 		return false
-	var at: Vector3 = hit.get("position", Vector3.ZERO)
-	if at.y <= _cutaway_focus.y + 1.75:
-		return false
-	var eye_ray: Vector3 = _cutaway_eye - _cutaway_focus
-	var span: float = eye_ray.length_squared()
-	if span < 0.001:
-		return false
-	var along: float = (at - _cutaway_focus).dot(eye_ray) / span
-	if along <= 0.025 or along >= 1.12:
-		return false
-	var nearest: Vector3 = _cutaway_focus + eye_ray * clampf(along, 0.0, 1.0)
-	return Vector2(at.x - nearest.x, at.z - nearest.z).length() < _cutaway_radius
-
+	return _is_cut_overhead_block(hit.get("position", Vector3.ZERO),
+		hit.get("normal", Vector3.ZERO))
 
 func _set_hero_outline(hero: Node3D, enabled: bool) -> void:
 	if not hero is CollisionObject3D or _outline_material == null:
