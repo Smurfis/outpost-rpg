@@ -38,8 +38,10 @@ func _run() -> void:
 		"Island atlas material is independent from shared Fields")
 	check(GREEDY.material().get_shader_parameter("island_cutaway_enabled") != true,
 		"Ordinary Fields never inherit fractal cutaways")
-	check(ATLAS.code.contains("discard;") and ATLAS.code.contains("island_world_position"),
-		"Cutaway is pixel-local and does not remove any physics bodies")
+	check(ATLAS.code.contains("discard;") and ATLAS.code.contains("island_world_normal"),
+		"Isometric cutaway uses roof-face normals rather than deleting all foreground rock")
+	check(ATLAS.code.contains("bool roof_face") and ATLAS.code.contains("bool overhead"),
+		"Cutaway clips only ceiling faces high above the avatar; not cliff walls or floor")
 	var tunnel: Vector3i = Vector3i.ZERO
 	var covered: bool = false
 	for route in world.caves.routes:
@@ -68,7 +70,7 @@ func _run() -> void:
 	check(roof.visible, "Previously hidden cave roof is retained for per-pixel cutaway")
 	check(island._cave_mode and island._cutaway_material.get_shader_parameter("island_cave_mode") == true,
 		"Cave interior enables the wider opening")
-	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 5.2),
+	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 3.2),
 		"Cave opening uses the expected world-space radius")
 	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == true,
 		"Cutaway follows an actual camera")
@@ -76,6 +78,19 @@ func _run() -> void:
 		"Cutaway uses the current camera orbit")
 	check((island._cutaway_material.get_shader_parameter("island_cutaway_focus") as Vector3).distance_to(cave_player + Vector3.UP * 0.95) < 0.01,
 		"Cutaway focus follows the real avatar position")
+	# Picking is allowed through exactly the clipped roof shape, but
+	# never through a wall or the walkable cave floor in that body.
+	var body := StaticBody3D.new()
+	body.set_meta("island_roof_shape_index", 1)
+	var inside: Vector3 = island._cutaway_focus + (island._cutaway_eye - island._cutaway_focus) * 0.5
+	var roof_hit: Dictionary = {"collider": body, "shape": 1, "position": inside}
+	check(island.cutaway_hides_hit(roof_hit), "World picking can pass a visually clipped cave ceiling")
+	roof_hit["shape"] = 0
+	check(not island.cutaway_hides_hit(roof_hit), "World picking retains physical stone walls and cave floor")
+	roof_hit["shape"] = 1
+	roof_hit["position"] = island._cutaway_focus
+	check(not island.cutaway_hides_hit(roof_hit), "World picking retains ground at player altitude")
+	body.free()
 	var center: Vector2i = world.islands[0]["center"]
 	var shore_x: int = center.x + 32
 	var shore_z: int = center.y
@@ -84,7 +99,9 @@ func _run() -> void:
 	check(not island._cave_mode and not island._cutaway_material.get_shader_parameter("island_cave_mode") == true,
 		"Outdoor hillside uses the narrower cutaway")
 	check(is_equal_approx(float(island._cutaway_material.get_shader_parameter("island_cutaway_radius")), 3.6),
-		"Outdoor corridor is narrower than a cave")
+		"Outdoor camera keeps its original radius metadata")
+	check(island._cutaway_material.get_shader_parameter("island_cutaway_enabled") == false,
+		"Outdoor mountain stays physically and visually opaque; hero can receive an outline")
 	check(GREEDY.material().get_shader_parameter("island_cutaway_enabled") != true,
 		"Fractal uniforms cannot affect original Fields terrain")
 	host.hero.global_position = Vector3.ZERO

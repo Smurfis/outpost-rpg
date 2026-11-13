@@ -6,6 +6,7 @@ const GRID_STEP: float = 1.0
 const APPROACH_RADIUS: float = 2.65
 const STATION_SOLID_RADIUS: float = 1.70
 const WORLD_PADDING: int = 7
+const CAVE_PATH = preload("res://scripts/navigation/fractal_cave_path.gd")
 
 static func _ground(surface: Node, x: float, z: float) -> float:
 	if surface != null and surface.has_method("surface_y_at"):
@@ -72,6 +73,11 @@ static func plan(start: Vector3, station_id: String, stations: Dictionary, surfa
 	return output
 
 static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: float = 0.0) -> PackedVector3Array:
+	# Use the actual carved 3D floor when both ends are within a cavern.
+	# A sky-down physics ray would otherwise pick the mountain roof.
+	var cavern: Dictionary = CAVE_PATH.try_plan(game, start, target, reach)
+	if cavern.get("applicable", false):
+		return cavern.get("path", PackedVector3Array())
 	# Reuse the station grid/perimeter model, but validate each edge against
 	# actual loaded voxel/dungeon colliders (including cliffs and walls).
 	var result := PackedVector3Array()
@@ -89,10 +95,22 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 			excluded.append(enemy.get_rid())
 	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
 	var top: float = maxf(start.y, target.y) + 5.0
+	var archipelago: Variant = game.terrain_surface.get("archipelago") if game.terrain_surface != null else null
 	for x in range(minimum.x, maximum.x + 1):
 		for z in range(minimum.y, maximum.y + 1):
 			var cell := Vector2i(x, z)
-			var query := PhysicsRayQueryParameters3D.create(Vector3(x, top, z), Vector3(x, minf(start.y, target.y) - 6.0, z), 1, excluded)
+			var ray_top: float = top
+			var ray_bottom: float = minf(start.y, target.y) - 6.0
+			# Inside a roofed fractal cave the highest solid surface is the
+			# mountain roof. A ray from above will select that roof as a
+			# walking node, making clicks in the tunnel impossible to route.
+			# Sample from inside the carved air column down to its true floor.
+			if archipelago != null and archipelago.terrain != null:
+				var floor_y: int = archipelago.terrain.caves.floor_at(x, z)
+				if floor_y != -99999:
+					ray_top = float(floor_y) + 1.60
+					ray_bottom = float(floor_y) - 2.0
+			var query := PhysicsRayQueryParameters3D.create(Vector3(x, ray_top, z), Vector3(x, ray_bottom, z), 1, excluded)
 			var hit: Dictionary = space.intersect_ray(query)
 			if hit.is_empty() or (hit.normal as Vector3).y < 0.7:
 				continue

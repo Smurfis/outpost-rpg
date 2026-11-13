@@ -7,6 +7,7 @@ const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+const HERO_OUTLINE = preload("res://scripts/voxel/occluded_hero_outline.gdshader")
 const CHUNK: int = 12
 const BUILD_BUDGET: int = 2
 var terrain
@@ -16,6 +17,12 @@ var _center := Vector2i(99999, 99999)
 var _roof_nodes: Array[MeshInstance3D] = []
 var _cutaway_material: ShaderMaterial
 var _cave_mode: bool = false
+var _cutaway_focus: Vector3 = Vector3.ZERO
+var _cutaway_eye: Vector3 = Vector3.ZERO
+var _cutaway_radius: float = 3.2
+var _outline_material: ShaderMaterial
+var _outline_meshes: Array[MeshInstance3D] = []
+var _outline_active: bool = false
 
 func setup(world_seed: int) -> void:
 	terrain = DATA.new(world_seed)
@@ -24,6 +31,8 @@ func setup(world_seed: int) -> void:
 	# holes when the remote island camera enters a tunnel or a deep ravine.
 	_cutaway_material = GREEDY.material().duplicate() as ShaderMaterial
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
+	_outline_material = ShaderMaterial.new()
+	_outline_material.shader = HERO_OUTLINE
 
 func _process(_delta: float) -> void:
 	if terrain == null:
@@ -38,12 +47,14 @@ func _process(_delta: float) -> void:
 	if not terrain.near_island(position):
 		if _cutaway_material != null:
 			_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
+		_set_hero_outline(hero, false)
 		if not _loaded.is_empty():
 			_clear_stream()
 		return
 	_queue_near(position)
 	_build_pending()
 	_update_cutaway(game, position)
+	_update_hero_visibility(game, hero)
 
 func _is_below_terrain(position: Vector3) -> bool:
 	# Actual tunnel cells are definitive. A steep drop with high walls on
@@ -68,16 +79,99 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		return
 	_cave_mode = _is_below_terrain(position)
-	# Shader discards *visual pixels only* along the view-to-player corridor.
-	# Keep the full visual roofs and their original physical collision alive.
-	_cutaway_material.set_shader_parameter("island_cutaway_enabled", true)
+	var xi: int = floori(position.x)
+	var zi: int = floori(position.z)
+	var cave_floor: int = terrain.caves.floor_at(xi, zi)
+	# Outdoor crevices use the highlighted avatar, not missing mountains.
+	var inside_roofed_cave: bool = cave_floor != CAVES.INVALID_FLOOR and _cave_mode
+	_cutaway_focus = position + Vector3.UP * 0.95
+	_cutaway_eye = view.global_position
+	_cutaway_radius = 3.2 if inside_roofed_cave else 3.6
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", inside_roofed_cave)
 	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
-	_cutaway_material.set_shader_parameter("island_cutaway_focus", position + Vector3.UP * 0.95)
-	_cutaway_material.set_shader_parameter("island_cutaway_eye", view.global_position)
-	_cutaway_material.set_shader_parameter("island_cutaway_radius", 5.2 if _cave_mode else 3.6)
+	_cutaway_material.set_shader_parameter("island_cutaway_focus", _cutaway_focus)
+	_cutaway_material.set_shader_parameter("island_cutaway_eye", _cutaway_eye)
+	_cutaway_material.set_shader_parameter("island_cutaway_radius", _cutaway_radius)
 	for roof in _roof_nodes:
 		if is_instance_valid(roof):
 			roof.visible = true
+
+func cutaway_hides_hit(hit: Dictionary) -> bool:
+	# Shared CPU equivalent of the cave roof shader's local cutout. A
+	# pick-through ray must never ignore walls, floors or an entire chunk.
+	if _cutaway_material == null or _cutaway_material.get_shader_parameter("island_cutaway_enabled") != true:
+		return false
+	var collider: Variant = hit.get("collider")
+	if not collider is CollisionObject3D or not collider.has_meta("island_roof_shape_index"):
+		return false
+	if int(hit.get("shape", -1)) != int(collider.get_meta("island_roof_shape_index")):
+		return false
+	var at: Vector3 = hit.get("position", Vector3.ZERO)
+	if at.y <= _cutaway_focus.y + 1.75:
+		return false
+	var eye_ray: Vector3 = _cutaway_eye - _cutaway_focus
+	var span: float = eye_ray.length_squared()
+	if span < 0.001:
+		return false
+	var along: float = (at - _cutaway_focus).dot(eye_ray) / span
+	if along <= 0.025 or along >= 1.12:
+		return false
+	var nearest: Vector3 = _cutaway_focus + eye_ray * clampf(along, 0.0, 1.0)
+	return Vector2(at.x - nearest.x, at.z - nearest.z).length() < _cutaway_radius
+
+
+func _set_hero_outline(hero: Node3D, enabled: bool) -> void:
+	if not hero is CollisionObject3D or _outline_material == null:
+		return
+	if _outline_meshes.is_empty():
+		var rig: Variant = hero.get("visual")
+		if not rig is Node3D:
+			return
+		for child in rig.find_children("*", "MeshInstance3D", true, false):
+			if child is MeshInstance3D:
+				_outline_meshes.append(child)
+	if _outline_active == enabled:
+		return
+	_outline_active = enabled
+	for mesh in _outline_meshes:
+		if not is_instance_valid(mesh):
+			continue
+		if enabled:
+			if mesh.material_overlay == null:
+				mesh.material_overlay = _outline_material
+		elif mesh.material_overlay == _outline_material:
+			mesh.material_overlay = null
+
+
+func _update_hero_visibility(game: Node, hero: Node3D) -> void:
+	if not hero is CollisionObject3D:
+		return
+	var view: Camera3D = game.get("camera") as Camera3D
+	if view == null:
+		_set_hero_outline(hero, false)
+		return
+	var focus: Vector3 = hero.global_position + Vector3.UP * 0.98
+	var origin: Vector3 = view.global_position
+	var direction: Vector3 = (focus - origin).normalized()
+	var end: Vector3 = focus
+	var covered: bool = false
+	# A clipped ceiling still has collision. Skip only cutaway roof hits,
+	# then highlight the avatar if a genuinely visible wall occludes it.
+	for attempt in range(18):
+		var query := PhysicsRayQueryParameters3D.create(origin, end, 1, [hero.get_rid()])
+		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			break
+		if cutaway_hides_hit(hit) and hit.position.distance_to(end) > 1.5:
+			origin = hit.position + direction * 0.11
+			if origin.distance_to(end) < 0.3:
+				break
+			continue
+		var collider: Variant = hit.get("collider")
+		covered = collider is Node and str(collider.name).begins_with("IslandCollision_") and hit.position.distance_to(focus) > 1.15
+		break
+	_set_hero_outline(hero, covered)
+
 
 func is_land_at(x: float, z: float) -> bool:
 	return terrain != null and terrain.is_land_at(x, z)
@@ -207,7 +301,8 @@ func _build_chunk(key: Vector2i) -> void:
 		var ground := MeshInstance3D.new()
 		ground.name = "IslandRock_%d_%d" % [key.x, key.y]
 		ground.mesh = PALETTE.create_mesh(surface)
-		ground.material_override = _cutaway_material
+		# Exterior cliffs and walking surfaces never become transparent.
+		ground.material_override = GREEDY.material()
 		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
@@ -225,7 +320,10 @@ func _build_chunk(key: Vector2i) -> void:
 		body.name = "IslandCollision_%d_%d" % [key.x, key.y]
 		body.collision_layer = 1
 		body.collision_mask = 1
+		var shape_index: int = 0
 		for mesh in meshed:
+			if mesh.name.begins_with("CaveCutaway_"):
+				body.set_meta("island_roof_shape_index", shape_index)
 			var collider := CollisionShape3D.new()
 			var collision_mesh: ConcavePolygonShape3D = mesh.mesh.create_trimesh_shape()
 			# Match the established Outpost terrain collision contract.
@@ -234,6 +332,7 @@ func _build_chunk(key: Vector2i) -> void:
 			collision_mesh.backface_collision = true
 			collider.shape = collision_mesh
 			body.add_child(collider)
+			shape_index += 1
 		add_child(body)
 		members.append(body)
 	# The cavern chest uses the existing persistent loot contract.

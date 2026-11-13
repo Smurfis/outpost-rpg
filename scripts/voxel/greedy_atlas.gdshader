@@ -16,9 +16,11 @@ uniform vec3 island_cutaway_focus = vec3(0.0);
 uniform vec3 island_cutaway_eye = vec3(0.0);
 uniform float island_cutaway_radius = 3.6;
 varying vec3 island_world_position;
+varying vec3 island_world_normal;
 
 void vertex() {
 	island_world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	island_world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
 
 float pixel_hash(vec2 p) {
@@ -26,24 +28,21 @@ float pixel_hash(vec2 p) {
 }
 
 void fragment() {
-	// Cut away only pixels between the camera and hero, *above* the walking
-	// surface. Camera orbiting a cliff no longer hides the character, while
-	// floor collision and the rest of the mountain remain completely intact.
-	// The extra cave opening reveals the chamber ceiling without hiding
-	// entire 12x12 roof meshes/chunks (which previously exposed blue holes).
-	if (island_cutaway_enabled) {
+	// Isometric cave cutaway: ONLY the already separated cave-roof mesh
+	// uses this material. Never discard vertical cliffs, cave side walls,
+	// or walkable floors: those broad cuts exposed bright ocean through
+	// giant oval holes when the player stood behind a mountain.
+	// Exterior hills stay intact and use the player-outline fallback.
+	if (island_cutaway_enabled && island_cave_mode) {
 		vec3 eye_ray = island_cutaway_eye - island_cutaway_focus;
 		float span_squared = max(dot(eye_ray, eye_ray), 0.0001);
 		float along = dot(island_world_position - island_cutaway_focus, eye_ray) / span_squared;
 		vec3 nearest = island_cutaway_focus + clamp(along, 0.0, 1.0) * eye_ray;
-		float in_front = step(0.025, along) * (1.0 - step(1.12, along));
-		float horizontal_distance = distance(island_world_position.xz, nearest.xz);
-		bool above_walkway = island_world_position.y > island_cutaway_focus.y - 0.25;
-		bool in_sightline = in_front > 0.5 && horizontal_distance < island_cutaway_radius;
-		bool cave_ceiling = island_cave_mode
-			&& distance(island_world_position.xz, island_cutaway_focus.xz) < island_cutaway_radius * 1.65
-			&& island_world_position.y > island_cutaway_focus.y + 0.8;
-		if (above_walkway && (in_sightline || cave_ceiling)) {
+		bool roof_face = abs(island_world_normal.y) > 0.88;
+		bool overhead = island_world_position.y > island_cutaway_focus.y + 1.75;
+		bool on_camera_side = along > 0.025 && along < 1.12;
+		bool near_sightline = distance(island_world_position.xz, nearest.xz) < island_cutaway_radius;
+		if (roof_face && overhead && on_camera_side && near_sightline) {
 			discard;
 		}
 	}
