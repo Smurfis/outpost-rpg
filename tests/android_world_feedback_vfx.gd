@@ -63,18 +63,22 @@ func _run() -> void:
 		boar.receive_damage(100.0)
 		check(not boar.alive and not boar.visible, "Defeated boar still follows original respawn rules")
 		var lethal_visual: bool = false
-		for child in get_nodes_in_group("outpost_pixel_feedback"):
-			if child.get_node_or_null("PixelFragments") != null and bool(child.get("_lethal")):
+		for child in get_nodes_in_group("outpost_death_crumbles"):
+			if child.cube_count() >= 20 and child.get_node_or_null("ScatteredVoxelCubes") != null:
 				lethal_visual = true
-		check(lethal_visual, "Enemy death triggers voxel disintegration")
+		check(lethal_visual, "Enemy death swaps the model for source-coloured voxel cubes")
 	game.hero.health = 5.0
+	var crumble_before: int = get_nodes_in_group("outpost_death_crumbles").size()
+	var death_point: Vector3 = game.hero.global_position
 	game.hero.take_hit(9.0)
 	check(is_equal_approx(game.hero.health, 100.0), "Hero defeat preserves current solo respawn behavior")
+	check(game.hero.visual.visible, "Hero appears again immediately after respawning")
 	var hero_burst: bool = false
-	for child in get_nodes_in_group("outpost_pixel_feedback"):
-		if child.get_node_or_null("PixelFragments") != null and bool(child.get("_lethal")):
+	for child in get_nodes_in_group("outpost_death_crumbles"):
+		if child.global_position.distance_to(death_point) < 0.02 and child.cube_count() >= 20:
 			hero_burst = true
-	check(hero_burst, "Hero defeat also creates pixel burst")
+	check(hero_burst and get_nodes_in_group("outpost_death_crumbles").size() == crumble_before + 1,
+		"Hero defeat leaves a real voxel crumble at the original death point")
 	var before_count: int = world.loaded_chunk_count()
 	game.hero.global_position = Vector3(78.0, 3.5, 78.0)
 	# Procedural portals are enabled in real Play -> loading workflows;
