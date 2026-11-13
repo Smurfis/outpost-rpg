@@ -60,8 +60,6 @@ func _build_from_rig(rig: Node3D, origin: Vector3) -> void:
 		for surface in range(mesh.get_surface_count()):
 			if candidates >= MAX_SAMPLES:
 				break
-			if mesh.surface_get_primitive_type(surface) != Mesh.PRIMITIVE_TRIANGLES:
-				continue
 			var arrays: Array = mesh.surface_get_arrays(surface)
 			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] is PackedInt32Array else PackedInt32Array()
