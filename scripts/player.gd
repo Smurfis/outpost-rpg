@@ -18,6 +18,7 @@ func update_combat(delta: float) -> void:
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
 const WHIRLWIND_TRAIL = preload("res://scripts/vfx/whirlwind_sword_trail.gd")
 const WATER_SURFACE_Y: float = -2.82
@@ -719,10 +720,16 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
 	var defeated: bool = health <= 0.0
-	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated)
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated, defeated)
 	if defeated:
+		# Solo Outpost respawns the hero immediately. Drop the visual as
+		# coloured cubes at the death location, then show the same rig at
+		# the original spawn so the controls/save loop remain unchanged.
+		CRUMBLE.spawn(game, self, visual)
+		visual.visible = false
 		knockback_velocity = Vector3.ZERO
 		game.on_player_defeated(global_position)
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
+		visual.visible = true
 
