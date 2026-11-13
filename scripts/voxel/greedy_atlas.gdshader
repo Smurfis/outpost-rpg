@@ -14,7 +14,8 @@ uniform bool island_cutaway_enabled = false;
 uniform bool island_cave_mode = false;
 uniform vec3 island_cutaway_focus = vec3(0.0);
 uniform vec3 island_cutaway_eye = vec3(0.0);
-uniform float island_cutaway_radius = 3.6;
+// Maximum horizontal span is clamped to the 3 x 3 voxel grid around hero.
+uniform float island_cutaway_radius = 1.5;
 varying vec3 island_world_position;
 varying vec3 island_world_normal;
 
@@ -28,21 +29,23 @@ float pixel_hash(vec2 p) {
 }
 
 void fragment() {
-	// Isometric cave cutaway: ONLY the already separated cave-roof mesh
-	// uses this material. Never discard vertical cliffs, cave side walls,
-	// or walkable floors: those broad cuts exposed bright ocean through
-	// giant oval holes when the player stood behind a mountain.
-	// Exterior hills stay intact and use the player-outline fallback.
+	// Minecraft/Diorama-style cutaway: lift ONLY a few blocks immediately
+	// above the adventurer. The previous eye-to-player corridor cut a long
+	// diagonal swathe across the mountain and revealed the blue ocean.
+	// The roof material is separate from all walkable ground/cliff walls.
 	if (island_cutaway_enabled && island_cave_mode) {
-		vec3 eye_ray = island_cutaway_eye - island_cutaway_focus;
-		float span_squared = max(dot(eye_ray, eye_ray), 0.0001);
-		float along = dot(island_world_position - island_cutaway_focus, eye_ray) / span_squared;
-		vec3 nearest = island_cutaway_focus + clamp(along, 0.0, 1.0) * eye_ray;
+		// Only horizontal, overhead cavern roof faces. Cave floors and
+		// vertical stone walls always remain visible and collidable.
 		bool roof_face = abs(island_world_normal.y) > 0.88;
-		bool overhead = island_world_position.y > island_cutaway_focus.y + 1.75;
-		bool on_camera_side = along > 0.025 && along < 1.12;
-		bool near_sightline = distance(island_world_position.xz, nearest.xz) < island_cutaway_radius;
-		if (roof_face && overhead && on_camera_side && near_sightline) {
+		bool overhead = island_world_position.y > island_cutaway_focus.y + 1.25;
+		// Snap the clipping footprint to the one-metre voxel grid to
+		// avoid shimmering or cutting into partial cliffside triangles.
+		vec2 roof_cell = floor(island_world_position.xz - vec2(0.001));
+		vec2 player_cell = floor(island_cutaway_focus.xz);
+		vec2 cell_distance = abs(roof_cell - player_cell);
+		float max_cells = min(floor(island_cutaway_radius), 1.0);
+		bool directly_above = all(lessThanEqual(cell_distance, vec2(max_cells)));
+		if (roof_face && overhead && directly_above) {
 			discard;
 		}
 	}
