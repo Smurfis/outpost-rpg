@@ -28,16 +28,26 @@ static func _add_shapes(node: Node3D, target: Node3D, area: Area3D) -> void:
 
 static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 	var origin: Vector3 = game.camera.project_ray_origin(screen)
-	var end: Vector3 = origin + game.camera.project_ray_normal(screen) * game.camera.far
+	var direction: Vector3 = game.camera.project_ray_normal(screen)
+	var end: Vector3 = origin + direction * game.camera.far
 	var excluded: Array[RID] = [game.hero.get_rid()]
-	# Inactive nodes retain their pick shapes to avoid physics mutations during
-	# harvest. Skip them and continue along the same ray, including terrain.
-	for _attempt in range(12):
+	var archipelago: Variant = null
+	if game.terrain_surface != null:
+		archipelago = game.terrain_surface.get("archipelago")
+	# Gameplay colliders stay solid when a roof is culled visually.
+	# Continue the *same* click ray past only the clipped roof triangles;
+	# never exclude the whole island body, which also owns the cave floor.
+	for _attempt in range(48):
 		var query := PhysicsRayQueryParameters3D.create(origin, end, 1 | 2 | 8 | PICK_LAYER, excluded)
 		query.collide_with_areas = true
 		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
 		if hit.is_empty():
 			return {}
+		if archipelago != null and archipelago.has_method("cutaway_hides_hit") and archipelago.cutaway_hides_hit(hit):
+			origin = (hit.position as Vector3) + direction * 0.13
+			if origin.distance_to(end) < 0.2:
+				return {}
+			continue
 		var collider: Node3D = hit.collider
 		var target: Node3D = collider.get_meta("world_target", collider)
 		if not target.is_visible_in_tree() or (target.is_in_group("resources") and not target.active):
