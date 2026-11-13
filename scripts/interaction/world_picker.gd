@@ -91,7 +91,7 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 		query.collide_with_areas = true
 		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
 		if hit.is_empty():
-			return {}
+			return cave_fallback
 		if archipelago != null and archipelago.has_method("cutaway_hides_hit") and archipelago.cutaway_hides_hit(hit):
 			origin = (hit.position as Vector3) + direction * 0.13
 			if origin.distance_to(end) < 0.2:
