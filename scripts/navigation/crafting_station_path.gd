@@ -6,6 +6,7 @@ const GRID_STEP: float = 1.0
 const APPROACH_RADIUS: float = 2.65
 const STATION_SOLID_RADIUS: float = 1.70
 const WORLD_PADDING: int = 7
+const CAVE_PATH = preload("res://scripts/navigation/fractal_cave_path.gd")
 
 static func _ground(surface: Node, x: float, z: float) -> float:
 	if surface != null and surface.has_method("surface_y_at"):
@@ -72,6 +73,11 @@ static func plan(start: Vector3, station_id: String, stations: Dictionary, surfa
 	return output
 
 static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: float = 0.0) -> PackedVector3Array:
+	# Use the actual carved 3D floor when both ends are within a cavern.
+	# A sky-down physics ray would otherwise pick the mountain roof.
+	var cavern: Dictionary = CAVE_PATH.try_plan(game, start, target, reach)
+	if cavern.get("applicable", false):
+		return cavern.get("path", PackedVector3Array())
 	# Reuse the station grid/perimeter model, but validate each edge against
 	# actual loaded voxel/dungeon colliders (including cliffs and walls).
 	var result := PackedVector3Array()
