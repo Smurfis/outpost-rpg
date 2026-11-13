@@ -11,7 +11,7 @@ static func execute(game: Node, raw: String) -> String:
 	var cmd: String = words[0].to_lower()
 	match cmd:
 		".help":
-			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
+			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .map islands true|false  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
 		".where", ".pos":
 			var p: Vector3 = game.hero.global_position
 			return "Position: X %.1f  Y %.1f  Z %.1f" % [p.x, p.y, p.z]
@@ -93,6 +93,16 @@ static func execute(game: Node, raw: String) -> String:
 			var at: Vector3 = Vector3(float(centre.x), float(remote.terrain.height_at(centre.x, centre.y)) + 0.6, float(centre.y))
 			_move(game, at)
 			return "Island %d at X %d  Z %d." % [number, centre.x, centre.y]
+		".map":
+			if words.size() != 3 or words[1].to_lower() != "islands" or words[2].to_lower() not in ["true", "false"]:
+				return "Usage: .map islands true|false"
+			var map: Variant = game.get("world_map")
+			if map == null or not map.has_method("set_island_circles_visible"):
+				return "Island map markers are unavailable on this build."
+			var enabled: bool = words[2].to_lower() == "true"
+			if not map.set_island_circles_visible(enabled):
+				return "Island map markers are unavailable on this build."
+			return "Island map circles enabled." if enabled else "Island map circles hidden."
 		".clear":
 			return "__CHAT_CLEAR__"
 		_:

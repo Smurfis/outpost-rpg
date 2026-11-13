@@ -14,10 +14,38 @@ static func glyph(canvas: CanvasItem, at: Vector2, disposition: String, player: 
 	elif disposition == "neutral":
 		canvas.draw_polyline(PackedVector2Array([at+Vector2(0,-6),at+Vector2(6,0),at+Vector2(0,6),at+Vector2(-6,0),at+Vector2(0,-6)]), tint, 2)
 
+func _draw_island_circles() -> void:
+	if not map.show_island_circles or not map.has_remote_islands:
+		return
+	var remote: Variant = map.service.biome.archipelago
+	if remote == null or remote.terrain == null:
+		return
+	# Project the *real* procedural island footprint onto the tilted
+	# Diorama map. These are debugging rings, not fog-of-war discovery.
+	var bounds: Rect2 = Rect2(Vector2.ZERO, size).grow(96.0)
+	for i in range(remote.terrain.islands.size()):
+		var island: Dictionary = remote.terrain.islands[i]
+		var origin: Vector2i = island["center"]
+		var radius: float = float(island["radius"]) + 3.0
+		var centre: Vector2 = map.project(Vector3(float(origin.x), -2.0, float(origin.y)))
+		if not bounds.has_point(centre):
+			continue
+		var ring := PackedVector2Array()
+		for segment in range(49):
+			var angle: float = TAU * float(segment) / 48.0
+			var at := Vector3(float(origin.x) + cos(angle) * radius,
+				-2.0, float(origin.y) + sin(angle) * radius)
+			ring.append(map.project(at))
+		draw_polyline(ring, Color("80909d", 0.92), 2.5, true)
+		draw_circle(centre, 4.0, Color("e6c88b"))
+		draw_string(ThemeDB.fallback_font, centre + Vector2(10.0, -7.0),
+			"ISLAND %d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("e6c88b"))
+
 func _draw() -> void:
 	if map == null or not map.is_open():
 		return
 	hits.clear()
+	_draw_island_circles()
 	var service: Node = map.service
 	var hero: Node3D = map.game.hero
 	var hero_at: Vector2 = map.project(hero.global_position)

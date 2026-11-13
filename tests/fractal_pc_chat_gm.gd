@@ -37,6 +37,26 @@ func _run() -> void:
 	chat._submit("Hello Outpost")
 	check(not chat.chat_open and chat.lines.back().contains("Hello Outpost"), "Normal message is shown and Enter closes input")
 	check(GM.execute(game, ".help").contains(".tp"), "Everyone can list GM commands")
+	# The GM overlay is opt-in; rings should never create discovered terrain
+	# or persist in a save. The existing uncharted silhouettes are separate.
+	var world_map = game.world_map
+	check(not world_map.show_island_circles, "Island location rings start disabled")
+	var discovered_before: int = game.map_service.discovered.size()
+	var revision_before: int = game.map_service.revision
+	check(GM.execute(game, ".map islands true") == "Island map circles enabled.",
+		"GM can enable island circles on the world map")
+	check(world_map.show_island_circles and world_map.has_remote_islands,
+		"Enabled map toggle targets the three real fractal islands")
+	check(GM.execute(game, ".map islands false") == "Island map circles hidden.",
+		"GM can hide island circles again")
+	check(not world_map.show_island_circles, "Off means rings no longer render")
+	check(GM.execute(game, ".map islands invalid").begins_with("Usage:"),
+		"GM rejects invalid map flag values")
+	check(not world_map.show_island_circles, "Malformed map command cannot change visibility")
+	check(game.map_service.discovered.size() == discovered_before and game.map_service.revision == revision_before,
+		"GM island circles do not reveal land or mutate exploration data")
+	check(world_map.mini_camera.cull_mask == 1,
+		"GM island circles never change the minimap")
 	var initial: int = int(game.inventory.get("wood", 0))
 	var given: String = GM.execute(game, ".give wood 2")
 	check(given.begins_with("Granted ") and int(game.inventory.get("wood", 0)) >= initial,

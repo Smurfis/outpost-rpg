@@ -7,6 +7,7 @@ const PITCH: float = deg_to_rad(50.0)
 var game: Node
 var service: Node
 var has_remote_islands: bool = false
+var show_island_circles: bool = false # Temporary GM-only debug overlay, off by default.
 var screen: Control
 var map_art: TextureRect
 var map_viewport: SubViewport
@@ -208,6 +209,17 @@ func overview() -> void:
 	var extent: float = maxf(right - left, south - north)
 	target_span = extent * sqrt(2.0) * maxf(sin(PITCH), 1.0 / aspect) * 1.20
 	dirty = true
+
+func set_island_circles_visible(enabled: bool) -> bool:
+	# Never change discovered cells or reveal terrain; only toggle the
+	# ring overlay in the full Diorama map. Not part of the minimap.
+	if not has_remote_islands or service.biome.archipelago.terrain == null:
+		return false
+	show_island_circles = enabled
+	if marker_layer != null:
+		marker_layer.queue_redraw()
+	dirty = true
+	return true
 
 func centre_player() -> void:
 	target_focus = game.hero.global_position
