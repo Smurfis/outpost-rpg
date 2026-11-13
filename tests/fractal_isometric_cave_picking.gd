@@ -67,7 +67,7 @@ func _run() -> void:
 		game.hero.global_position = cache_pos
 		game.hero.velocity = Vector3.ZERO
 		streamer._queue_near(cache_pos)
-		for preload in range(55):
+		for chunk_attempt in range(55):
 			streamer._build_pending()
 		game.camera_focus_smooth = Vector3.ZERO
 		game._camera(0.3)
