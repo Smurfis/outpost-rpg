@@ -14,8 +14,9 @@ var _caption: Label3D
 var _damage: int = 0
 var _tone: Color = Color.WHITE
 var _lethal: bool = false
+var _number_only: bool = false
 
-static func emit_feedback(parent: Node3D, at: Vector3, damage: float, tone: Color = Color("ffe1a0"), lethal: bool = false) -> Node3D:
+static func emit_feedback(parent: Node3D, at: Vector3, damage: float, tone: Color = Color("ffe1a0"), lethal: bool = false, number_only: bool = false) -> Node3D:
 	if parent == null:
 		return null
 	var feedback = load("res://scripts/vfx/pixel_feedback.gd").new()
@@ -24,6 +25,7 @@ static func emit_feedback(parent: Node3D, at: Vector3, damage: float, tone: Colo
 	feedback._damage = maxi(0, roundi(damage))
 	feedback._tone = tone
 	feedback._lethal = lethal
+	feedback._number_only = number_only
 	parent.add_child(feedback)
 	feedback.global_position = at
 	return feedback
@@ -43,7 +45,7 @@ func _ready() -> void:
 	_parts.transform_format = MultiMesh.TRANSFORM_3D
 	_parts.use_colors = true
 	_parts.mesh = mesh
-	var count: int = SHARD_COUNT_DEATH if _lethal else SHARD_COUNT_HIT
+	var count: int = 0 if _number_only else SHARD_COUNT_DEATH if _lethal else SHARD_COUNT_HIT
 	_parts.instance_count = count
 	var cloud := MultiMeshInstance3D.new()
 	cloud.name = "PixelFragments"
