@@ -52,6 +52,29 @@ static func _cave_screen_pick(game: Node3D, screen: Vector2, remote: Variant,
 				if at.distance_to(hero) < 12.0 and cave.has_cave(floori(at.x), floori(at.z)):
 					picked["target"] = object
 					return picked
+	# A cave mesh may block the ray to a physically reachable chest even
+	# when the projected icon is directly under the mouse. Check only actual
+	# loaded cave interactables near the player and require a close screen
+	# hit; subsequent approach still runs the normal physical path checks.
+	var nearest_interact_pixel: float = 28.0
+	var nearest_interactable: Node3D = null
+	for entity in game.get_tree().get_nodes_in_group("world_interactables"):
+		if not entity is Node3D or not entity.is_inside_tree() or not entity.is_visible_in_tree():
+			continue
+		var location: Vector3 = entity.global_position
+		if location.distance_to(hero) > 12.0 or not cave.has_cave(floori(location.x), floori(location.z)):
+			continue
+		for vertical_offset in [0.35, 0.70, 1.0]:
+			var projected: Vector3 = location + Vector3.UP * vertical_offset
+			if game.camera.is_position_behind(projected):
+				continue
+			var pixel_distance: float = game.camera.unproject_position(projected).distance_to(screen)
+			if pixel_distance < nearest_interact_pixel:
+				nearest_interact_pixel = pixel_distance
+				nearest_interactable = entity
+	if nearest_interactable != null:
+		return {"target": nearest_interactable, "position": nearest_interactable.global_position,
+			"normal": Vector3.UP, "cave_pick": true}
 	# For a click inside the cave, the camera ray can hit a solid outer
 	# cliff even though the floor target is on screen. Choose the CLOSEST
 	# projected carved-floor voxel, never a guessed point through rock.
