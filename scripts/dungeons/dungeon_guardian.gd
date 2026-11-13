@@ -4,6 +4,7 @@ const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 const RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
 const CUBE_VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const ATTACK_TELEGRAPH = preload("res://scripts/vfx/attack_telegraph.gd")
+const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 var hero: CharacterBody3D
 var dungeon: Node3D
 var max_hp: float = 24.0
@@ -266,9 +267,11 @@ func receive_damage(amount: float) -> void:
 		collision_layer = 0
 		collision_mask = 0
 		remove_from_group("enemies")
-		if avatar != null:
-			avatar.play_event("Death")
-			death_left = 1.05
+		# All guardian appearances, including old handcrafted/elite meshes,
+		# crumble using the actor\'s actual material and mesh surface colours.
+		CRUMBLE.spawn(dungeon if dungeon != null else get_parent(), self, visual)
+		visual.visible = false
+		death_left = 1.05
 		if dungeon != null and is_instance_valid(dungeon):
 			dungeon.guardian_defeated()
 		if death_left <= 0.0:

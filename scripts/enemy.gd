@@ -5,6 +5,7 @@ const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd") # Mode
 const VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const BOAR_STYLE = preload("res://scripts/creatures/boar_style.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 var hero
 var game
 var max_hp: float = 32.0
@@ -190,12 +191,15 @@ func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 	hp -= amount
 	if trigger_recoil and hp > 0.0 and is_instance_valid(hero):
 		apply_knockback(hero.global_position)
-	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0)
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0, hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		death_display = 1.2
-		if avatar != null:
-			avatar.play_event("Death")
+		# Replace the model instantly with its own colour-matched falling cubes.
+		# The burst lives under the world, not the respawning enemy.
+		CRUMBLE.spawn(game, self, visual)
+		visual.visible = false
+		visible = false # Dead actor is hidden from targeting/map until its original respawn.
 		collision_layer = 0
 		collision_mask = 0
 		respawn = 20.0
