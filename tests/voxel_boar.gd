@@ -1,6 +1,5 @@
 extends SceneTree
-## Kept at the original test path for existing CI jobs. The voxel boar
-## is now a Quaternius animated raccoon, with the same hostile gameplay.
+## Existing CI test path retained: upgraded Cube World boars AND added raccoons.
 var failures: int = 0
 
 func _initialize() -> void:
@@ -25,26 +24,27 @@ func _run() -> void:
 		game.voxel_art_enabled = voxel
 		root.add_child(game)
 		await process_frame
-		var raccoons: Array = []
-		for child in game.get_children():
-			if child is CharacterBody3D and child.is_in_group("wild_raccoons"):
-				raccoons.append(child)
-		check(raccoons.size() == 3, "Three wild raccoons spawn in voxel mode %s" % str(voxel))
-		check(get_nodes_in_group("wild_boars").is_empty(), "The old boar population is gone")
-		if not raccoons.is_empty():
-			var target = raccoons[0]
-			check(target.name == "WildRaccoon" and target.alive, "Raccoon is a living hostile mob")
-			check(target.avatar != null and target.avatar.model != null, "Imported raccoon replaces old mesh")
-			check(target.avatar.animator != null, "Imported raccoon is animated")
-			for clip in ["idle", "walk", "run", "headbutt", "death"]:
-				check(target.avatar.animation_names.has(clip), "Raccoon clip %s exists" % clip)
-			check(target.collision_layer == 2 and target.collision_mask == 1,
-				"Raccoon preserves terrain collision and enemy targeting")
-			check(target.hp == 32.0, "Raccoon starts with original hostile health")
-			var start_hp: float = target.hp
+		var boars: Array = get_nodes_in_group("wild_boars")
+		var raccoons: Array = get_nodes_in_group("wild_raccoons")
+		check(boars.size() == 3, "Three boars spawn in voxel mode %s" % str(voxel))
+		check(raccoons.size() == 2, "Raccoons do not replace the boar population")
+		if not boars.is_empty():
+			var target = boars[0]
+			check(target.name == "WildBoar" and target.alive, "Boar remains a hostile creature")
+			check(target.avatar != null and target.avatar.model != null, "Boar uses the animated pig rig")
+			check(target.avatar.animator != null, "Boar has native animation")
+			check(target.avatar.model.get_node_or_null("BoarAccents") != null, "Distinct tusks and bristles decorate boar")
+			check(target.collision_layer == 2 and target.collision_mask == 1, "Boar preserves original hitbox")
+			check(target.hp == 32.0, "Boar starts with original health")
+			var previous: float = target.hp
 			target.receive_damage(5.0)
-			check(target.hp == start_hp - 5.0 and target.alive, "Raccoon takes normal combat damage")
-			check(game.enemy_display_name(target) == "Wild raccoon", "Target HUD uses new species name")
+			check(target.hp == previous - 5.0, "Boar still takes original combat damage")
+			check(game.enemy_display_name(target) == "Wild boar", "Target HUD identifies boar")
+		if not raccoons.is_empty():
+			var raccoon = raccoons[0]
+			check(raccoon.species == "raccoon" and raccoon.avatar.model != null,
+				"Raccoon has an independent animated mesh")
+			check(raccoon.map_record()["disposition"] == "neutral", "Neutral map marker is retained")
 		game.queue_free()
 		await process_frame
 	print("VOXEL BOAR RESULT: %d failed assertion(s)." % failures)

@@ -17,7 +17,7 @@ func check(ok: bool, desc: String) -> void:
 		push_error("FAIL CUBE CREATURE: " + desc)
 
 func _run() -> void:
-	for kind in ["pig", "wolf", "raccoon", "skeleton", "goblin"]:
+	for kind in ["pig", "wolf", "raccoon", "demon", "skeleton", "goblin"]:
 		var avatar = VISUAL.new()
 		root.add_child(avatar)
 		check(avatar.configure(kind, 0.7), "Native model instantiates: " + kind)
@@ -25,7 +25,7 @@ func _run() -> void:
 		check(avatar.model != null and is_equal_approx(avatar.model.rotation.y, PI),
 			"Imported +Z artwork is turned to face Outpost -Z: " + kind)
 		var motions: Array = ["Idle", "Walk", "Run", "Death"]
-		if kind in ["skeleton", "goblin"]:
+		if kind in ["skeleton", "goblin", "demon"]:
 			motions.append_array(["Attack", "HitRecieve"])
 		else:
 			motions.append("Headbutt")
@@ -48,14 +48,20 @@ func _run() -> void:
 	var wolves: Array[Node] = get_nodes_in_group("wild_wolves")
 	check(pigs.size() == 2, "Two animated pigs in the live overworld")
 	check(wolves.size() == 2, "Two animated wolves in the live overworld")
+	var boars: Array[Node] = get_nodes_in_group("wild_boars")
 	var raccoons: Array[Node] = get_nodes_in_group("wild_raccoons")
-	check(raccoons.size() == 3, "Three animated raccoons replace original boars")
-	check(get_nodes_in_group("wild_boars").is_empty(), "Old boars no longer spawn")
+	check(boars.size() == 3, "Three upgraded animated boars remain in the overworld")
+	check(raccoons.size() == 2, "Two additional animated raccoons roam separately")
+	check(get_nodes_in_group("gm_pitlords").is_empty(), "The GM boss does not auto-spawn")
+	if not boars.is_empty():
+		var boar = boars[0]
+		check(boar.avatar != null and boar.avatar.animator != null, "Boar uses the animated kit rig")
+		check(boar.avatar.model.get_node_or_null("BoarAccents") != null, "Boar adds tusks and bristles")
+		check(boar.map_record().get("label") == "Wild boar", "Diorama map retains boar label")
 	if not raccoons.is_empty():
 		var raccoon = raccoons[0]
-		check(raccoon.avatar != null and raccoon.avatar.animator != null, "Raccoon has an animated Cube World rig")
-		check(raccoon.hp == 32.0 and raccoon.collision_layer == 2, "Raccoon preserves hostile health and collision")
-		check(raccoon.map_record().get("label") == "Wild raccoon", "Diorama map identifies the replacement")
+		check(raccoon.species == "raccoon" and raccoon.avatar.animator != null, "Raccoon is an independent wildlife species")
+		check(raccoon.map_record().get("disposition") == "neutral", "Raccoon is a yellow neutral map creature")
 	if not pigs.is_empty():
 		var pig = pigs[0]
 		check(pig.species == "pig" and pig.alive and pig.hp > 0, "Pig has real health / is targetable")

@@ -8,6 +8,7 @@ const MODEL_PATHS: Dictionary = {
 	"wolf": "Animals/glTF/Wolf.gltf",
 	"skeleton": "Enemies/glTF/Skeleton.gltf",
 	"goblin": "Enemies/glTF/Goblin.gltf",
+	"demon": "Enemies/glTF/Demon.gltf",
 }
 var model: Node3D
 var animator: AnimationPlayer

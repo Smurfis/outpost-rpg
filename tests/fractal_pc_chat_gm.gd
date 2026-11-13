@@ -96,6 +96,22 @@ func _run() -> void:
 	GM.execute(game, ".home")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.01,
 		"GM home returns to original spawn")
+	check(get_nodes_in_group("gm_pitlords").is_empty(), "Pitlord boss never spawns without a GM command")
+	check(GM.execute(game, ".spawn dragon").begins_with("Usage:"), "Unknown spawn types cannot be invoked")
+	var spawn_result: String = GM.execute(game, ".spawn pitlord")
+	check(spawn_result.begins_with("Spawned Abyssal Pitlord"), "GM spawn creates the Pitlord test boss")
+	var bosses: Array[Node] = get_nodes_in_group("gm_pitlords")
+	check(bosses.size() == 1, "Pitlord spawn is limited to one active boss")
+	check(GM.execute(game, ".spawn pitlord").contains("already spawned"), "Repeated command cannot spam bosses")
+	if not bosses.is_empty():
+		var boss = bosses[0]
+		check(boss.avatar != null and boss.avatar.animator != null, "Pitlord uses the animated CC0 Demon asset")
+		check(boss.max_hp >= 400.0 and boss.melee_damage >= 20.0, "Pitlord is a combat boss, not scenery")
+		var boss_data: Dictionary = game.target_frame_data(boss)
+		check(boss_data.get("rank") == "BOSS" and boss_data.get("name") == "Abyssal Pitlord",
+			"Boss rarity name and HP are exposed to the transparent target HUD")
+	check(GM.execute(game, ".despawn pitlord").begins_with("Despawned 1"), "GM despawn clears the test boss")
+	check(get_nodes_in_group("gm_pitlords").is_empty(), "Pitlord leaves no automatic spawns")
 	chat.open_chat()
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE

@@ -1,8 +1,9 @@
 extends CharacterBody3D
 const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
-## Wild raccoon: animated Cube World creature with original pursuit, melee and respawn.
+## Wild boar: animated Cube World rig, bristled back and tusks, original hostile AI.
 const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd") # Model-import failure fallback.
 const VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
+const BOAR_STYLE = preload("res://scripts/creatures/boar_style.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var hero
 var game
@@ -10,10 +11,19 @@ var max_hp: float = 32.0
 var hp := 32.0
 var alive := true
 var map_disposition: String = "hostile"
+var map_label: String = "Wild boar"
+var kill_kind: String = "boar"
+var move_speed: float = 2.0
+var aggro_radius: float = 8.0
+var melee_damage: float = 9.0
+var attack_reach: float = 1.8
+var stop_distance: float = 1.45
+var attack_event: String = "Headbutt"
+var remove_on_death: bool = false
 
 func map_record() -> Dictionary:
 	return {"id": "mob:%d" % get_instance_id(), "position": global_position,
-		"category": "creature", "label": "Wild raccoon", "dimension": "overworld",
+		"category": "creature", "label": map_label, "dimension": "overworld",
 		"disposition": map_disposition, "alive": alive, "visible_on_radar": visible}
 var cooldown := 1.5
 var respawn := 0.0
@@ -36,7 +46,7 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	hero = hero_ref
 	position = at
 	spawn_pos = at
-	name = "WildRaccoon"
+	name = "WildBoar"
 	collision_layer = 2 # Melee checks use distance. Ignore player collision layer 1.
 	collision_mask = 1 # Still collide with terrain.
 	var capsule := CapsuleShape3D.new()
@@ -51,13 +61,16 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	# Import the pack creature once per actor; visual animations do not own combat physics.
 	avatar = VISUAL.new()
 	visual.add_child(avatar)
-	if not avatar.configure("raccoon", 0.95):
-		push_warning("Quaternius Raccoon unavailable; using cached voxel fallback.")
+	if avatar.configure("pig", 1.04):
+		BOAR_STYLE.decorate(avatar.model)
+	else:
+		push_warning("Animated boar unavailable; using voxel boar fallback.")
+		visual.remove_child(avatar)
 		avatar.queue_free()
 		avatar = null
 		visual.add_child(VOXEL_CREATURES.create_boar())
 	add_to_group("enemies")
-	add_to_group("wild_raccoons")
+	add_to_group("wild_boars")
 	add_to_group("map_creatures")
 
 func _physics_process(delta: float) -> void:
@@ -66,8 +79,11 @@ func _physics_process(delta: float) -> void:
 			death_display -= delta
 			if death_display <= 0.0:
 				visual.visible = false
+		if remove_on_death and death_display <= 0.0:
+			queue_free()
+			return
 		respawn -= delta
-		if respawn <= 0.0:
+		if not remove_on_death and respawn <= 0.0:
 			alive = true
 			hp = max_hp
 			death_display = 0.0
@@ -102,11 +118,11 @@ func _physics_process(delta: float) -> void:
 	direction.y = 0
 	var dist := direction.length()
 	var pursuit := Vector3.ZERO
-	if dist < 8.0 and dist > 1.45:
+	if dist < aggro_radius and dist > stop_distance:
 		pursuit = direction.normalized()
 	# A physical short recoil breaks up pursuit without teleportation.
-	velocity.x = pursuit.x * 2.0 + knockback_velocity.x
-	velocity.z = pursuit.z * 2.0 + knockback_velocity.z
+	velocity.x = pursuit.x * move_speed + knockback_velocity.x
+	velocity.z = pursuit.z * move_speed + knockback_velocity.z
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 12.0)
 	var grounded: bool = is_on_floor()
 	if can_fly:
@@ -120,26 +136,26 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if not can_fly and grounded and is_on_wall() and pursuit.length_squared() > 0.01:
 		var before: Vector3 = global_position
-		var step_rise: float = VOXEL_STEP.try_step(self, pursuit * 2.0 * delta, max_climb_height)
+		var step_rise: float = VOXEL_STEP.try_step(self, pursuit * move_speed * delta, max_climb_height)
 		if step_rise > 0.0:
 			visual_step_offset += before - global_position
 			visual_step_offset = visual_step_offset.limit_length(1.0)
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
 	visual.position = visual_step_offset
-	# Raccoons also face the hero after stopping to attack.
+	# Boars and GM bosses face the hero when stopping to attack.
 	var facing: Vector3 = pursuit
-	if dist <= 1.45 and dist > 0.02:
+	if dist <= stop_distance and dist > 0.02:
 		facing = direction.normalized()
 	if facing.length_squared() > 0.02:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(delta * 10.0, 1.0))
 	if avatar != null:
-		avatar.play_motion(2.0 if pursuit.length_squared() > 0.02 else 0.0)
+		avatar.play_motion(move_speed if pursuit.length_squared() > 0.02 else 0.0)
 	cooldown -= delta
-	if dist < 1.8 and cooldown <= 0.0:
+	if dist < attack_reach and cooldown <= 0.0:
 		cooldown = 1.7
 		if avatar != null:
-			avatar.play_event("Headbutt")
-		hero.take_hit(9.0, global_position)
+			avatar.play_event(attack_event)
+		hero.take_hit(melee_damage, global_position)
 
 func apply_knockback(source: Vector3, strength: float = 6.8) -> void:
 	var push: Vector3 = global_position - source
@@ -183,4 +199,4 @@ func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 		collision_layer = 0
 		collision_mask = 0
 		respawn = 20.0
-		game.on_enemy_killed("raccoon")
+		game.on_enemy_killed(kill_kind)

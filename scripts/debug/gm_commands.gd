@@ -3,6 +3,7 @@ extends RefCounted
 ## so every tester can use them. Do not trust this as multiplayer authority.
 const MAX_TELEPORT: float = 380.0
 const MAX_GIVE: int = 99
+const PITLORD = preload("res://scripts/creatures/gm_pitlord.gd")
 
 static func execute(game: Node, raw: String) -> String:
 	var words: PackedStringArray = raw.strip_edges().split(" ", false)
@@ -11,7 +12,7 @@ static func execute(game: Node, raw: String) -> String:
 	var cmd: String = words[0].to_lower()
 	match cmd:
 		".help":
-			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .map islands true|false  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
+			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .map islands true|false  .spawn pitlord  .despawn pitlord  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
 		".where", ".pos":
 			var p: Vector3 = game.hero.global_position
 			return "Position: X %.1f  Y %.1f  Z %.1f" % [p.x, p.y, p.z]
@@ -103,6 +104,33 @@ static func execute(game: Node, raw: String) -> String:
 			if not map.set_island_circles_visible(enabled):
 				return "Island map markers are unavailable on this build."
 			return "Island map circles enabled." if enabled else "Island map circles hidden."
+		".spawn":
+			if words.size() != 2 or words[1].to_lower() != "pitlord":
+				return "Usage: .spawn pitlord"
+			if game.hero == null:
+				return "No player is loaded."
+			if not game.get_tree().get_nodes_in_group("gm_pitlords").is_empty():
+				return "A Pitlord is already spawned. Use .despawn pitlord first."
+			var at: Vector3 = game.hero.global_position + Vector3(4.0, 0.0, 2.0)
+			var biome: Node = game.terrain_surface
+			if biome != null and biome.has_method("map_cell_at"):
+				var cell: Dictionary = biome.map_cell_at(floori(at.x), floori(at.z))
+				if str(cell.get("zone", "")) == "water":
+					return "Stand on dry land to spawn the Pitlord."
+				at.y = float(cell.get("ground_height", at.y)) + 0.20
+			var boss = PITLORD.new()
+			game.add_child(boss)
+			boss.setup_gm(game, game.hero, at)
+			return "Spawned Abyssal Pitlord (GM-only test boss)."
+		".despawn":
+			if words.size() != 2 or words[1].to_lower() != "pitlord":
+				return "Usage: .despawn pitlord"
+			var removed: int = 0
+			for existing in game.get_tree().get_nodes_in_group("gm_pitlords"):
+				existing.remove_from_group("gm_pitlords")
+				existing.queue_free()
+				removed += 1
+			return "Despawned %d Pitlord boss(es)." % removed
 		".clear":
 			return "__CHAT_CLEAR__"
 		_:
