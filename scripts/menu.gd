@@ -2,15 +2,19 @@ extends CanvasLayer
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
+const INVENTORY_WINDOW = preload("res://scripts/ui/albion_inventory_window.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
 var game
 var shell: Control
 var popup_frame: PanelContainer
+var inventory_window: Control
+var dismiss_button: Button
+var emergency_close: Button
 var title: Label
 var subtitle: Label
+var station_badge: TextureRect
 var header_buttons: Dictionary = {}
-var close_button: Button
 var station_tabs: HBoxContainer
 var recipes_list: VBoxContainer
 var details: VBoxContainer
@@ -34,7 +38,7 @@ var preview_rig: Node3D
 var preview_angle: float = 0.0
 var station_names: Dictionary = {"workbench":"WOODWORK", "forge":"FORGE", "loom":"LOOM", "campfire":"CAMPFIRE", "enchanting":"ENCHANT"}
 var action_names: Dictionary = {"workbench":"HAMMER", "forge":"STRIKE", "loom":"WEAVE", "campfire":"STIR", "enchanting":"IMBUE"}
-var item_ids: Array = ["wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2", "fiery_weapon"]
+var item_ids: Array = ["shrimp", "shrimp_net", "cooked_shrimp", "wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds", "hide", "coins", "iron_ingot", "linen", "bricks", "meal", "tonic", "stew", "cooked_shrimp", "spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "backpack_t1", "backpack_t2", "wood_satchel_t1", "wood_satchel_t2", "ore_satchel_t1", "ore_satchel_t2", "fiery_weapon"]
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -49,57 +53,63 @@ func _ready() -> void:
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shade := ColorRect.new()
 	shade.color = Color(0.02, 0.01, 0.01, 0.22)
-	shade.name = "OutsideDismissBackdrop"
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	shade.gui_input.connect(_on_shade_input)
+	shade.gui_input.connect(_dismiss_from_shade)
 	shell.add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var frame := PanelContainer.new()
 	frame.name = "CompactMenuFrame"
-	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	frame.add_theme_stylebox_override("panel", SKIN.modal_panel())
+	frame.clip_contents = true
 	shell.add_child(frame)
 	popup_frame = frame
 	_layout_popup()
 	get_viewport().size_changed.connect(_layout_popup)
 	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 6)
+	page.add_theme_constant_override("separation", 10)
 	frame.add_child(page)
 	var header := HBoxContainer.new()
 	page.add_child(header)
-	title = _label("OUTPOST  •  CRAFTING", 25, Color("fff0ce"))
+	station_badge = TextureRect.new()
+	station_badge.name = "InteractedStationIcon"
+	station_badge.custom_minimum_size = Vector2(61, 61)
+	station_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	station_badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	station_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	station_badge.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	header.add_child(station_badge)
+	title = _label("CRAFTING STATION", 25, Color("fff0ce"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var bag := Button.new()
 	bag.text = "BAG"
 	bag.custom_minimum_size = Vector2(66, 48)
-	SKIN.apply_button(bag, "wood")
+	SKIN.apply_translucent_button(bag, "wood")
 	bag.pressed.connect(_switch_bag)
 	header_buttons["bag"] = bag
 	header.add_child(bag)
 	var gear := Button.new()
 	gear.text = "GEAR"
 	gear.custom_minimum_size = Vector2(67, 48)
-	SKIN.apply_button(gear, "wood")
+	SKIN.apply_translucent_button(gear, "wood")
 	gear.pressed.connect(_switch_equipment)
 	header_buttons["equipment"] = gear
 	header.add_child(gear)
 	var craft := Button.new()
 	craft.text = "CRAFT"
 	craft.custom_minimum_size = Vector2(74, 48)
-	SKIN.apply_button(craft, "wood")
+	SKIN.apply_translucent_button(craft, "wood")
 	craft.pressed.connect(_switch_craft)
 	header_buttons["craft"] = craft
 	header.add_child(craft)
-	close_button = Button.new()
-	close_button.name = "CloseBagCraftMenu"
-	close_button.text = "CLOSE  X"
-	close_button.tooltip_text = "Close inventory / crafting"
-	close_button.custom_minimum_size = Vector2(96, 52)
-	close_button.mouse_filter = Control.MOUSE_FILTER_STOP
-	close_button.focus_mode = Control.FOCUS_NONE
-	SKIN.apply_button(close_button, "red")
-	close_button.pressed.connect(close_page)
-	header.add_child(close_button)
+	var close := Button.new()
+	SKIN.apply_close_button(close, 57.0)
+	close.name = "CraftModalClose"
+	close.tooltip_text = "Return to game"
+	close.focus_mode = Control.FOCUS_ALL
+	close.pressed.connect(close_page)
+	dismiss_button = close
+	header.add_child(close)
 	subtitle = _label("", 16, Color("f4d9a6"))
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_OFF
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -114,19 +124,20 @@ func _ready() -> void:
 	station_tabs = HBoxContainer.new()
 	station_tabs.add_theme_constant_override("separation", 6)
 	page.add_child(station_tabs)
+	station_tabs.visible = false # Single real-world station, never a five-tab hub.
 	var panes := HBoxContainer.new()
 	panes.add_theme_constant_override("separation", 8)
 	panes.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var surface := PanelContainer.new()
-	surface.add_theme_stylebox_override("panel", SKIN.box("parchment"))
+	surface.add_theme_stylebox_override("panel", SKIN.translucent_surface(true))
 	surface.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	page.add_child(surface)
 	surface.add_child(panes)
 	left_scroll = TOUCH_SCROLL.new()
 	left_scroll.name = "RecipeSwipeList"
-	left_scroll.custom_minimum_size = Vector2(250, 0)
+	left_scroll.custom_minimum_size = Vector2(206, 0)
 	left_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_scroll.size_flags_stretch_ratio = 0.79
+	left_scroll.size_flags_stretch_ratio = 0.94
 	left_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(left_scroll)
 	recipes_list = VBoxContainer.new()
@@ -135,28 +146,46 @@ func _ready() -> void:
 	left_scroll.add_child(recipes_list)
 	right_scroll = TOUCH_SCROLL.new()
 	right_scroll.name = "CraftingDetailsSwipe"
-	right_scroll.custom_minimum_size = Vector2(270, 0)
+	right_scroll.custom_minimum_size = Vector2(230, 0)
 	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_scroll.size_flags_stretch_ratio = 1.21
+	right_scroll.size_flags_stretch_ratio = 1.06
 	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panes.add_child(right_scroll)
 	details = VBoxContainer.new()
 	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	details.add_theme_constant_override("separation", 7)
 	right_scroll.add_child(details)
+	inventory_window = INVENTORY_WINDOW.new()
+	inventory_window.setup(game, self)
+	add_child(inventory_window)
+	inventory_window.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	inventory_window.visible = false
+	# Keep an emergency close as a fallback for crafting only. Bag and Gear
+	# own their red X in the top-right of the real InventoryWindow; the
+	# previous emergency X floated on the FAR LEFT of the screen.
+	emergency_close = Button.new()
+	emergency_close.name = "EmergencyBackToGame"
+	emergency_close.position = Vector2(12, 12)
+	emergency_close.size = Vector2(50, 50)
+	emergency_close.focus_mode = Control.FOCUS_ALL
+	emergency_close.mouse_filter = Control.MOUSE_FILTER_STOP
+	SKIN.apply_close_button(emergency_close, 50)
+	emergency_close.tooltip_text = "Emergency exit from Bag or Gear"
+	emergency_close.pressed.connect(close_page)
+	add_child(emergency_close)
 	visible = false
 
 func _layout_popup() -> void:
 	# Stable *pixel* dimensions rather than a huge percentage of ultra-wide
 	# mobile screens. Leave the game visible around the frame, but keep
-	# sufficient space for five station tabs and large thumb targets.
+	# enough room for a single-station icon, recipe list and details.
 	if popup_frame == null:
 		return
 	var bounds: Vector2 = get_viewport().get_visible_rect().size
 	var max_width: float = maxf(300.0, bounds.x - 30.0)
 	var max_height: float = maxf(320.0, bounds.y - 34.0)
-	var width_px: float = minf(clampf(bounds.x * 0.60, 620.0, 880.0), max_width)
-	var height_px: float = minf(clampf(bounds.y * 0.73, 450.0, 600.0), max_height)
+	var width_px: float = minf(clampf(bounds.x * 0.68, 620.0, 900.0), max_width)
+	var height_px: float = minf(clampf(bounds.y * 0.68, 380.0, 565.0), max_height)
 	popup_frame.anchor_left = 0.5
 	popup_frame.anchor_right = 0.5
 	popup_frame.anchor_top = 0.5
@@ -165,6 +194,8 @@ func _layout_popup() -> void:
 	popup_frame.offset_right = width_px * 0.5
 	popup_frame.offset_top = -height_px * 0.5
 	popup_frame.offset_bottom = height_px * 0.5
+	if emergency_close != null:
+		emergency_close.position = Vector2(maxf(8.0, (bounds.x - width_px) * 0.5 - 61.0), maxf(10.0, (bounds.y - height_px) * 0.5 + 6.0))
 
 func _style(background: Color, border: Color = Color.TRANSPARENT, radius: int = 8) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -219,7 +250,7 @@ func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	var container := PanelContainer.new()
 	# Text in these nested detail cards is cream/gold, so use dark carved
 	# wood instead of a light item-card surface with unreadable cream text.
-	container.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	container.add_theme_stylebox_override("panel", SKIN.translucent_surface())
 	target.add_child(container)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
@@ -227,17 +258,13 @@ func _column_panel(target: Node, color: Color) -> VBoxContainer:
 	return column
 
 func _switch_bag() -> void:
-	current_page = "bag"
-	refresh()
+	open("bag")
 
 func _switch_craft() -> void:
-	current_page = "craft"
-	craft_step = "browse"
-	refresh()
+	open("craft")
 
 func _switch_equipment() -> void:
-	current_page = "equipment"
-	refresh()
+	open("equipment")
 
 func open(page: String) -> void:
 	if visible and current_page == page:
@@ -247,13 +274,28 @@ func open(page: String) -> void:
 	if page == "craft" and game.crafting.is_empty():
 		craft_step = "browse"
 	visible = true
+	if emergency_close != null:
+		emergency_close.visible = false # The actual inventory header has its own tested red X.
+		emergency_close.move_to_front()
 	if game.hud != null:
 		game.hud.move_vector = Vector2.ZERO
-	if page == "craft" and game.crafting.is_empty():
-		var station: String = game.closest_station()
-		if station != "":
+	if page in ["bag", "equipment", "storage"]:
+		shell.visible = false
+		inventory_window.open_page(page)
+		return
+	shell.visible = true
+	inventory_window.close_page()
+	if page == "craft":
+		# Lock the UI to the world object actually interacted with. Never
+		# silently keep an old forge recipe while looking at a campfire.
+		var station: String = str(game.crafting.get("station", "")) if not game.crafting.is_empty() else game.closest_station()
+		if station != selected_station:
 			selected_station = station
-		if selected_id == "":
+			selected_id = _first_recipe(station)
+			loaded.clear()
+			if game.crafting.is_empty():
+				completed_id = "" # Old bench receipt cannot appear at a new station.
+		elif selected_id == "":
 			selected_id = _first_recipe(selected_station)
 	# Never throw an already-open Prepare step away when returning from another
 	# modal; only new sessions and explicit navigation reset the workflow.
@@ -261,18 +303,51 @@ func open(page: String) -> void:
 		craft_step = "browse"
 	refresh()
 
+func open_storage(label: String, contents: Dictionary) -> void:
+	# Display-only adapter for future real chest/bag storage providers.
+	# Transfers require persistent authoritative storage; not mocked here.
+	inventory_window.set_storage_view(label, contents)
+	open("storage")
+
 func close_page() -> void:
 	visible = false
+	shell.visible = false
+	if inventory_window != null:
+		inventory_window.close_page()
 
-func _on_shade_input(event: InputEvent) -> void:
-	# Tapping anywhere OUTSIDE the frame is a reliable Android fallback.
-	# The frame lies above this backdrop and continues to receive bag clicks.
+func _dismiss_from_shade(event: InputEvent) -> void:
 	if not visible:
 		return
-	if event is InputEventScreenTouch and event.pressed:
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		close_page()
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		close_page()
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
 		close_page()
 		get_viewport().set_input_as_handled()
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		return
+	# Handle this escape region before any Control can swallow the event.
+	# Android often has no hardware Back button in landscape immersive mode.
+	var pressed: bool = false
+	var pointer := Vector2.ZERO
+	if event is InputEventScreenTouch:
+		pressed = (event as InputEventScreenTouch).pressed
+		pointer = (event as InputEventScreenTouch).position
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		pressed = (event as InputEventMouseButton).pressed
+		pointer = (event as InputEventMouseButton).position
+	# Physical Android tap routing for the red X; GUI pressed/released can
+	# be swallowed by the fullscreen inventory shade. Always close on DOWN.
+	var inventory_x: Button = inventory_window.inventory_close_button if inventory_window != null else null
+	if pressed and current_page in ["bag", "equipment", "storage"] and inventory_window.visible and inventory_x != null and inventory_x.get_global_rect().grow(8.0).has_point(pointer):
+		close_page()
+		get_viewport().set_input_as_handled()
+		return
+	if pressed and ((emergency_close != null and emergency_close.visible and emergency_close.get_global_rect().grow(10.0).has_point(pointer)) or (current_page == "craft" and dismiss_button != null and dismiss_button.get_global_rect().grow(8.0).has_point(pointer))):
 		close_page()
 		get_viewport().set_input_as_handled()
 
@@ -296,13 +371,16 @@ func _recipe_change(id: String) -> void:
 	if not game.crafting.is_empty():
 		return
 	selected_id = id
-	craft_step = "detail" # One recipe at a time on small touchscreens.
+	craft_step = "detail" # Detail remains alongside the recipe list.
 	loaded.clear()
 	completed_id = ""
 	refresh()
 
 func refresh() -> void:
 	if not visible:
+		return
+	if current_page == "bag" or current_page == "equipment":
+		inventory_window.refresh()
 		return
 	progress_bar = null
 	work_counter = null
@@ -312,10 +390,12 @@ func refresh() -> void:
 	for page_key in header_buttons:
 		var button: Button = header_buttons[page_key] as Button
 		if button != null:
-			SKIN.apply_button(button, "wood_selected" if current_page == str(page_key) else "wood")
+			# No redundant BAG / GEAR / CRAFT navigation in a station modal.
+			button.visible = false
 	_clear(station_tabs)
 	_clear(craft_stage_strip)
-	craft_stage_strip.visible = current_page == "craft"
+	craft_stage_strip.visible = false
+	station_tabs.visible = false
 	_clear(recipes_list)
 	_clear(details)
 	if current_page == "bag":
@@ -324,13 +404,13 @@ func refresh() -> void:
 		_render_equipment()
 	else:
 		_render_craft()
-	# The prior two-column recipe browser was cramped on a phone. Browse
-	# full-width, tap a recipe for a focused popup, then Prepare / Work.
-	var recipe_browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == "" and craft_step == "browse"
-	left_scroll.visible = current_page != "craft" or recipe_browse
-	right_scroll.visible = current_page != "craft" or not recipe_browse
-	left_scroll.scroll_vertical = 0 if current_page == "craft" and recipe_browse else left_scroll.scroll_vertical
-	right_scroll.scroll_vertical = 0 if current_page == "craft" and not recipe_browse else right_scroll.scroll_vertical
+	# Albion-like layout: always see station recipes on the left and the
+	# selected item/required materials on the right. During active crafting
+	# focus the right on the real work action (not a dead recipe selector).
+	var browse: bool = current_page == "craft" and game.crafting.is_empty() and completed_id == ""
+	left_scroll.visible = current_page != "craft" or browse
+	right_scroll.visible = true
+	right_scroll.scroll_vertical = 0 if current_page == "craft" else right_scroll.scroll_vertical
 
 func _render_bag() -> void:
 	title.text = "OUTPOST  •  BAG"
@@ -381,7 +461,7 @@ func _render_bag() -> void:
 		tab.text = {"all": "ALL", "material": "MATS", "equipment": "GEAR", "consumable": "FOOD"}[category]
 		tab.custom_minimum_size = Vector2(60, 42)
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		SKIN.apply_button(tab, "wood_selected" if bag_filter == category else "wood")
+		SKIN.apply_translucent_button(tab, "wood_selected" if bag_filter == category else "wood")
 		tab.add_theme_font_size_override("font_size", 15)
 		tab.pressed.connect(_set_bag_filter.bind(category))
 		filters.add_child(tab)
@@ -411,7 +491,7 @@ func _render_bag() -> void:
 		slot.tooltip_text = item.replace("_", " ").capitalize() + " x%d" % qty
 		slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			slot.add_theme_stylebox_override(state, SKIN.box("parchment_light") if item == selected_bag_id else SKIN.box("item"))
+			slot.add_theme_stylebox_override(state, SKIN.translucent_surface(true, item == selected_bag_id or state in ["hover", "pressed"], true))
 		slot.pressed.connect(_bag_select.bind(item))
 		grid.add_child(slot)
 		var art: TextureRect = _icon(item, 45)
@@ -440,7 +520,7 @@ func _render_bag() -> void:
 			var gold_outline := Panel.new()
 			gold_outline.name = "SelectedItemBorder"
 			gold_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			gold_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
+			gold_outline.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, true, true))
 			slot.add_child(gold_outline)
 			gold_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		if game.is_equipped(item):
@@ -470,12 +550,12 @@ func _render_bag() -> void:
 			description = str(recipe.get("desc", description))
 			break
 	detail.add_child(_label(description, 17, SKIN.CREAM))
-	if focused in ["meal", "tonic", "stew"]:
+	if focused in ["meal", "tonic", "stew", "cooked_shrimp"]:
 		var slot: String = "potion" if focused == "tonic" else "consumable"
 		var assign := Button.new()
 		assign.text = "ASSIGN TO " + slot.to_upper() + " RADIAL"
 		assign.custom_minimum_size = Vector2(0, 48)
-		SKIN.apply_button(assign, "wood")
+		SKIN.apply_translucent_button(assign, "wood")
 		assign.pressed.connect(_assign_quick.bind(slot, focused))
 		detail.add_child(assign)
 		var use_button := Button.new()
@@ -494,7 +574,7 @@ func _render_bag() -> void:
 	var gear_button := Button.new()
 	gear_button.text = "VIEW EQUIPMENT"
 	gear_button.custom_minimum_size = Vector2(0, 48)
-	SKIN.apply_button(gear_button, "wood")
+	SKIN.apply_translucent_button(gear_button, "wood")
 	gear_button.pressed.connect(_switch_equipment)
 	detail.add_child(gear_button)
 
@@ -510,7 +590,7 @@ func _set_bag_filter(category: String) -> void:
 func _bag_type(id: String) -> String:
 	if id in ["spear", "iron_blade", "shield", "torch", "cloak", "axe", "pickaxe", "satchel"] or CARRY.is_bag(id):
 		return "EQUIPMENT"
-	if id in ["meal", "tonic", "stew"]:
+	if id in ["meal", "tonic", "stew", "cooked_shrimp"]:
 		return "CONSUMABLE"
 	return "MATERIAL"
 
@@ -570,7 +650,7 @@ func _render_equipment() -> void:
 			option.text = ("EQUIPPED  " if game.is_equipped(item_id) else "EQUIP  ") + item_id.replace("_", " ").capitalize() + ("  %s" % "★".repeat(int(game.bag_quality.get(item_id, 0))) if CARRY.is_bag(item_id) else "")
 			option.custom_minimum_size = Vector2(0, 50)
 			option.disabled = game.is_equipped(item_id)
-			SKIN.apply_button(option, "wood_selected" if game.is_equipped(item_id) else "green")
+			SKIN.apply_translucent_button(option, "wood_selected" if game.is_equipped(item_id) else "green")
 			option.pressed.connect(_equip_click.bind(item_id))
 			holder.add_child(option)
 	_render_preview()
@@ -641,7 +721,7 @@ func _render_craft_steps() -> void:
 		var card := PanelContainer.new()
 		card.name = "CraftStage_%d" % (index + 1)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.add_theme_stylebox_override("panel", SKIN.box("wood_selected" if index == active else "wood"))
+		card.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, index == active, true))
 		craft_stage_strip.add_child(card)
 		var text_label := _label(["1  SELECT", "2  PREPARE", "3  WORK", "4  COLLECT"][index], 15, SKIN.GOLD if index == active else SKIN.CREAM)
 		text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -650,27 +730,35 @@ func _render_craft_steps() -> void:
 		card.add_child(text_label)
 
 func _render_craft() -> void:
-	title.text = "OUTPOST  ◆  HANDCRAFTING"
-	var nearby: String = game.closest_station()
-	var stage_label: String = "1/4  CHOOSE RECIPE"
+	# This screen belongs to exactly ONE station, chosen by world proximity
+	# (or the active crafting job). No wood/forge/loom/campfire/enchant tabs.
+	var station: String = selected_station
+	station_badge.visible = station_names.has(station)
+	if station_badge.visible:
+		station_badge.texture = load("res://assets/ui/icons/station_" + station + ".svg") as Texture2D
+		title.text = str(station_names[station]) + "  •  CRAFTING"
+	else:
+		station_badge.texture = null
+		title.text = "CRAFTING STATION"
+	if station.is_empty():
+		subtitle.text = "Move closer to a crafting station to see its items."
+		recipes_list.add_child(_label("No crafting station nearby.", 18, SKIN.INK))
+		details.add_child(_label("Use INTERACT beside a workbench, forge, loom, campfire or enchanting table.", 18, SKIN.INK))
+		return
+	var count: int = 0
+	for candidate in game.recipes:
+		if str(candidate.get("station", "workbench")) == station:
+			count += 1
 	if not game.crafting.is_empty():
-		stage_label = "3/4  WORK STATION"
+		subtitle.text = "WORK IN PROGRESS  •  " + str(station_names[station])
 	elif completed_id != "":
-		stage_label = "4/4  COMPLETE"
-	elif craft_step == "prepare":
-		stage_label = "2/4  PREPARE MATERIALS"
-	elif craft_step == "detail":
-		stage_label = "1/4  INSPECT ITEM"
-	_render_craft_steps()
-	subtitle.text = "%s    •    %s" % [stage_label, ("AT " + nearby.capitalize()) if nearby != "" else "BROWSE RECIPES FROM ANYWHERE"]
-	for station_id in ["workbench", "forge", "loom", "campfire", "enchanting"]:
-		var tab := Button.new()
-		tab.text = str(station_names[station_id])
-		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tab.disabled = not game.crafting.is_empty() and selected_station != station_id
-		SKIN.apply_button(tab, "wood_selected" if selected_station == station_id else "wood")
-		tab.pressed.connect(_station_change.bind(station_id))
-		station_tabs.add_child(tab)
+		subtitle.text = "ITEM COMPLETE  •  " + str(station_names[station])
+	else:
+		subtitle.text = "NEARBY " + str(station_names[station]) + "  •  %d recipes" % count
+	# Selection remains in sync with the interacted station even after moving
+	# between stations, and no recipe from another bench can leak through.
+	if selected_id.is_empty() or str(game._recipe_by_id(selected_id).get("station", "")) != station:
+		selected_id = _first_recipe(station)
 	for recipe in game.recipes:
 		if str(recipe.get("station", "workbench")) != selected_station:
 			continue
@@ -694,7 +782,7 @@ func _render_craft() -> void:
 		choose.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		choose.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
-			choose.add_theme_stylebox_override(state, SKIN.box("parchment_light") if selected_id == id else SKIN.box("item"))
+			choose.add_theme_stylebox_override(state, SKIN.translucent_surface(true, selected_id == id or state in ["hover", "pressed"], true))
 		choose.disabled = not game.crafting.is_empty()
 		choose.pressed.connect(_recipe_change.bind(id))
 		recipes_list.add_child(choose)
@@ -744,13 +832,8 @@ func _render_craft() -> void:
 		badge.anchor_top = 0.10
 		badge.anchor_bottom = 0.42
 		choose.add_child(badge)
-		if selected_id == id:
-			var selection_outline := Panel.new()
-			selection_outline.name = "SelectedRecipeBorder"
-			selection_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			selection_outline.add_theme_stylebox_override("panel", SKIN.box("wood_selected"))
-			choose.add_child(selection_outline)
-			selection_outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		# Selected recipe is already highlighted by its parchment surface.
+		# An extra full-card outline hid text and recreated opaque borders.
 	if not game.crafting.is_empty():
 		_render_work()
 	elif completed_id != "":
@@ -758,10 +841,18 @@ func _render_craft() -> void:
 	else:
 		if selected_id == "" or game._recipe_by_id(selected_id).is_empty() or str(game._recipe_by_id(selected_id).get("station", "")) != selected_station:
 			selected_id = _first_recipe(selected_station)
-		if craft_step == "prepare":
-			_render_prepare()
-		else:
-			_render_recipe()
+		_render_recipe() # One-step craft action; no ingredient-loading menu.
+
+func _craft_selected() -> void:
+	# Skip the extra Prepare/Load screens for ordinary station crafting:
+	# the authoritative game service still validates station, inventory,
+	# unique equipment and character level before consuming materials.
+	if selected_id.is_empty() or not game.can_craft(selected_id):
+		return
+	if game.begin_craft(selected_id):
+		loaded.clear()
+		completed_id = ""
+		refresh()
 
 func _begin_prepare() -> void:
 	craft_step = "prepare"
@@ -778,12 +869,7 @@ func _render_recipe() -> void:
 	if recipe.is_empty():
 		details.add_child(_label("Choose a recipe to see its requirements.", 20, Color("f5deb0")))
 		return
-	var browse_back := Button.new()
-	browse_back.text = "‹  ALL RECIPES"
-	browse_back.custom_minimum_size = Vector2(0, 58)
-	SKIN.apply_button(browse_back, "wood")
-	browse_back.pressed.connect(_back_to_browse)
-	details.add_child(browse_back)
+	# Recipes remain visible alongside details; no back-navigation button.
 	var product_id: String = str(recipe.get("result", ""))
 	var intro := _column_panel(details, Color("5f3b29"))
 	var head := HBoxContainer.new()
@@ -812,11 +898,12 @@ func _render_recipe() -> void:
 		row.add_child(_ingredient_state_icon(own >= need))
 		row.add_child(_label("%s    %d / %d" % [id.capitalize(), own, need], 18, Color("#32542c") if own >= need else Color("#88422d")))
 	var next := Button.new()
-	next.text = "ENHANCE  ◆  PREPARE" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "NEXT  ◆  PREPARE ITEM"
+	next.name = "StationCraftAction"
+	next.text = "IMPROVE QUALITY" if CARRY.is_bag(product_id) and int(game.inventory.get(product_id, 0)) > 0 else "CRAFT  ◆  %s" % str(recipe.get("name", "ITEM")).to_upper()
 	next.custom_minimum_size = Vector2(0, 56)
 	SKIN.apply_button(next, "green")
-	next.disabled = game.owns_unique(product_id) or (CARRY.is_bag(product_id) and int(game.bag_quality.get(product_id, 0)) >= 3) or (selected_id == "fiery_weapon" and game.character_level() < 3)
-	next.pressed.connect(_begin_prepare)
+	next.disabled = not game.can_craft(selected_id)
+	next.pressed.connect(_craft_selected)
 	details.add_child(next)
 	if game.owns_unique(product_id):
 		details.add_child(_label("Already owned — unique equipment cannot be duplicated.", 15, Color("ffe2a6")))
@@ -824,8 +911,8 @@ func _render_recipe() -> void:
 		details.add_child(_label("Maximum 3 stars. Select a different bag or tier.", 15, SKIN.GOLD))
 	elif selected_id == "fiery_weapon" and game.character_level() < 3:
 		details.add_child(_label("Gain character levels before using this bench.", 15, SKIN.GOLD))
-	elif not game.near_station(selected_station):
-		details.add_child(_label("You can browse anywhere. Craft beside the matching station.", 14, Color("ffe2a6")))
+	elif not game.can_craft(selected_id):
+		details.add_child(_label(game.craft_block_reason(selected_id), 14, Color("88422d")))
 
 func _render_prepare() -> void:
 	var recipe: Dictionary = game._recipe_by_id(selected_id)
@@ -857,7 +944,7 @@ func _render_prepare() -> void:
 		var available: bool = owned >= needed
 		var slot := Button.new()
 		slot.custom_minimum_size = Vector2(0, 56)
-		SKIN.apply_button(slot, "wood_selected" if loaded_now else "parchment_light")
+		SKIN.apply_translucent_button(slot, "wood_selected" if loaded_now else "parchment_light")
 		slot.disabled = not available or game.owns_unique(product_id)
 		slot.text = ("✓ LOADED   " if loaded_now else "LOAD   ") + id.replace("_", " ").capitalize() + "   " + str(owned) + "/" + str(needed)
 		slot.pressed.connect(_toggle_ingredient.bind(id))
@@ -882,7 +969,7 @@ func _render_prepare() -> void:
 	var back := Button.new()
 	back.text = "BACK TO RECIPES"
 	back.custom_minimum_size = Vector2(0, 42)
-	SKIN.apply_button(back, "wood")
+	SKIN.apply_translucent_button(back, "wood")
 	back.pressed.connect(_back_to_browse)
 	details.add_child(back)
 	if not game.near_station(selected_station):
@@ -989,7 +1076,7 @@ func _render_result() -> void:
 	result.add_child(_icon(completed_id, 126))
 	result.add_child(_label(completed_id.replace("_", " ").capitalize() + (" • now %s!" % "★".repeat(int(game.bag_quality.get(completed_id, 0))) if CARRY.is_bag(completed_id) else " added to your inventory!"), 21, Color("c3e9b7")))
 	var again := Button.new()
-	again.text = "CHOOSE ANOTHER RECIPE"
+	again.text = "CRAFT ANOTHER"
 	again.custom_minimum_size = Vector2(0, 52)
 	SKIN.apply_button(again, "green")
 	again.pressed.connect(_clear_result)
@@ -1000,11 +1087,7 @@ func _clear_result() -> void:
 	selected_id = _first_recipe(selected_station)
 	refresh()
 
-func _input(event: InputEvent) -> void:
-	if not visible or not event.is_action_pressed("ui_cancel"):
-		return
-	if current_page == "craft" and craft_step != "browse" and game.crafting.is_empty():
-		_back_to_browse()
-	else:
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
 		close_page()
-	get_viewport().set_input_as_handled()
+		get_viewport().set_input_as_handled()

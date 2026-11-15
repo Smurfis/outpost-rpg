@@ -160,3 +160,96 @@ static func apply_button(button: Button, kind: String = "wood") -> void:
 	button.add_theme_constant_override("outline_size", 2)
 	button.focus_mode = Control.FOCUS_NONE
 	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+## Shared station / inventory / changelog styles. Nine-slice image frames were
+## letting underlying panels and borders protrude on Android. This small set of
+## styles is drawn from the same warm brown/bronze palette and has explicit
+## margins, readable content and a genuine circular close target.
+static func modal_panel() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#33241f")
+	style.border_color = Color("#b98e54")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(10)
+	style.shadow_color = Color(0.025, 0.015, 0.015, 0.42)
+	style.shadow_size = 8
+	return style
+
+static func modal_section(light: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#eed1a0") if light else Color("#483027")
+	style.border_color = Color("#a27643")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(8)
+	return style
+
+static func red_close_button() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#a83b35")
+	style.border_color = Color("#f4c58d")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(100)
+	style.set_content_margin_all(0)
+	style.anti_aliasing = true
+	return style
+
+static func apply_close_button(button: Button, size_px: float = 54.0) -> void:
+	button.text = "×"
+	button.custom_minimum_size = Vector2(size_px, size_px)
+	button.focus_mode = Control.FOCUS_ALL
+	button.mouse_filter = Control.MOUSE_FILTER_STOP
+	var normal: StyleBoxFlat = red_close_button()
+	var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color("#cf4940")
+	var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color("#77302b")
+	for state in ["normal", "disabled"]:
+		button.add_theme_stylebox_override(state, normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("focus", flat("transparent"))
+	button.add_theme_font_size_override("font_size", 31)
+	button.add_theme_color_override("font_color", Color("#fff4dd"))
+	button.add_theme_color_override("font_hover_color", Color("#ffffff"))
+	button.add_theme_color_override("font_pressed_color", Color("#fff4dd"))
+	button.add_theme_color_override("font_outline_color", Color("#502019"))
+	button.add_theme_constant_override("outline_size", 2)
+	button.tooltip_text = "Close and return to game"
+
+## Flat translucent panels avoid cut-out holes and stretched nine-slice edges
+## on Android. Light surfaces retain dark-ink text contrast; dark surfaces
+## carry cream/gold text. No texture assets, and no synthetic alpha masks.
+static func translucent_surface(light: bool = false, selected: bool = false, compact: bool = false) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	if light:
+		style.bg_color = Color(0.92, 0.82, 0.66, 0.91 if selected else 0.87)
+		style.border_color = Color(0.79, 0.57, 0.33, 0.95 if selected else 0.64)
+	else:
+		style.bg_color = Color(0.16, 0.11, 0.11, 0.84 if selected else 0.70)
+		style.border_color = Color(0.94, 0.74, 0.42, 0.94 if selected else 0.47)
+	style.set_border_width_all(2 if selected else 1)
+	style.set_corner_radius_all(6 if compact else 9)
+	style.set_content_margin_all(4.0 if compact else 8.0)
+	style.anti_aliasing = false
+	return style
+
+## Opt-in visual replacement for old wood-button nine-slice styles.
+## Retains original Button pressed callbacks, input filters, sizes and labels.
+static func apply_translucent_button(button: Button, kind: String = "wood") -> void:
+	apply_button(button, kind)
+	var light: bool = kind.begins_with("parchment")
+	var selected: bool = kind == "wood_selected"
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var active: bool = selected or state in ["hover", "pressed"]
+		var style: StyleBoxFlat = translucent_surface(light, active, true)
+		if kind == "green":
+			style.border_color = Color("#9dca8d")
+		elif kind == "red":
+			style.border_color = Color("#e2a287")
+		if state == "disabled":
+			style.bg_color.a *= 0.57
+			style.border_color.a *= 0.57
+		button.add_theme_stylebox_override(state, style)
+	button.add_theme_stylebox_override("focus", flat("transparent"))

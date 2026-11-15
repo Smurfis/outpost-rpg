@@ -1,24 +1,16 @@
 extends Control
-## Outpost overworld minimap: flat-shaded biome colors and cached camera-relative display.
-## Camera orbit never triggers a terrain resample; grass and paths have coherent solid fill.
-const RESOLUTION: int = 48
+## Outpost overworld minimap: camera-relative GPU display of cached world-aligned pixels.
+## Camera orbit must NEVER trigger a CPU terrain resample; all artwork is original.
+const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+const MARKERS = preload("res://scripts/ui/map_marker_layer.gd")
+const RESOLUTION: int = 64
 const MAP_RADIUS: float = 46.0
+const DUNGEON_ROOM_STEP: float = 13.0
 const MIN_SAMPLE_INTERVAL: float = 0.24
-const IDLE_REFRESH_INTERVAL: float = 2.0
 const MOVEMENT_REFRESH_DISTANCE: float = 1.4
 const RIM: Color = Color("cba668")
 const DARK_WOOD: Color = Color("382719")
 const INNER_WOOD: Color = Color("765033")
-# A deliberately restrained cartographic palette. The terrain's randomized
-# pixel-art variations belong in the 3D world, NOT in a navigational map.
-const MAP_GRASS: Color = Color("6f9a51")
-const MAP_PATH: Color = Color("b69c70")
-const MAP_STONE: Color = Color("899095")
-const MAP_SOIL: Color = Color("92724e")
-const MAP_DRY_SAND: Color = Color("ddc591")
-const MAP_WET_SAND: Color = Color("ada17e")
-const MAP_WATER: Color = Color("337e9b")
-const MAP_SHORE: Color = Color("a9b67e")
 var game: Node
 var _image: Image
 var _texture: ImageTexture
@@ -27,6 +19,7 @@ var _center: Vector3 = Vector3.ZERO # Last texture sample, NOT the player marker
 var _sample_angle: float = 0.0 # Latest camera orbit; changes without texture updates.
 var _has_sample: bool = false
 var _refresh_count: int = 0
+var _relief_samples: int = 0 # Height-call counter for Android performance QA.
 
 func setup(game_ref: Node) -> void:
 	game = game_ref
@@ -34,7 +27,7 @@ func setup(game_ref: Node) -> void:
 func _ready() -> void:
 	name = "LiveWorldMinimap"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if game != null and game.diorama_map_enabled else CanvasItem.TEXTURE_FILTER_LINEAR
 	_image = Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGBA8)
 	_image.fill(Color.TRANSPARENT)
 	_texture = ImageTexture.create_from_image(_image)
@@ -42,12 +35,19 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if game == null or not is_instance_valid(game):
 		return
-	# Use the existing topological dungeon map until a unified map feature.
+	# One circular map for both Diorama and dungeons.
 	var manager: Node = game.get_node_or_null("Dungeons")
-	var in_dungeon: bool = manager != null and manager.get("active_instance") != null
-	if visible == in_dungeon:
-		visible = not in_dungeon
-	if in_dungeon:
+	var dungeon: Node3D = manager.get("active_instance") as Node3D if manager != null else null
+	if not visible:
+		visible = true
+	if dungeon != null and is_instance_valid(dungeon):
+		_sample_angle = float(game.get("camera_angle"))
+		queue_redraw()
+		return
+	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
+		_sample_angle = game.camera_angle
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		queue_redraw()
 		return
 	var player: Node3D = game.get("hero") as Node3D
 	if player == null:
@@ -62,7 +62,7 @@ func _process(delta: float) -> void:
 	# A small shift is smoothly offset at draw time to centre the player.
 	if not _has_sample or distance_sq >= 16.0 or (
 		_clock >= MIN_SAMPLE_INTERVAL and distance_sq >= MOVEMENT_REFRESH_DISTANCE * MOVEMENT_REFRESH_DISTANCE
-	) or _clock >= IDLE_REFRESH_INTERVAL:
+	):
 		_clock = 0.0
 		_center = position_now
 		_has_sample = true
@@ -79,12 +79,23 @@ func _world_to_map(world_delta: Vector2) -> Vector2:
 	var s: float = sin(_sample_angle)
 	return Vector2(world_delta.x * c - world_delta.y * s, world_delta.x * s + world_delta.y * c)
 
+static func terrain_colour(zone: String) -> Color:
+	# One consistent colour per *actual coast classification*, never a
+	# random tint based on terrain tile hash or player-relative grid pixel.
+	match zone:
+		"water": return Color("28677b")
+		"wet_sand": return Color("aba282")
+		"dry_sand": return Color("ddc696")
+		"grass_sand": return Color("91a96a")
+		"coastal_soil": return Color("78975c")
+		_: return Color("719a51")  # All inland grass is the SAME green.
+
 func _refresh_pixels() -> void:
 	var biome: Node = game.get_node_or_null("VoxelAtmosphere")
 	var half_extent: float = float(biome.get("map_half")) if biome != null else 0.0
 	for py in range(RESOLUTION):
 		for px in range(RESOLUTION):
-			# World-aligned: rotation happens via a single cheap canvas transform.
+			# World-aligned, camera rotation applied in _draw().
 			var local := Vector2((float(px) + 0.5) / float(RESOLUTION) * 2.0 - 1.0,
 				(float(py) + 0.5) / float(RESOLUTION) * 2.0 - 1.0)
 			if local.length_squared() >= 0.96:
@@ -92,45 +103,53 @@ func _refresh_pixels() -> void:
 				continue
 			var wx: float = _center.x + local.x * MAP_RADIUS
 			var wz: float = _center.z + local.y * MAP_RADIUS
-			var colour: Color = MAP_GRASS
+			var region: String = "inland"
 			if biome != null:
 				if absf(wx) >= half_extent or absf(wz) >= half_extent:
-					colour = MAP_WATER
+					region = "water"
 				else:
-					var zone: String = str(biome.coast_zone_at(wx, wz))
-					match zone:
-						"water": colour = MAP_WATER
-						"wet_sand": colour = MAP_WET_SAND
-						"dry_sand": colour = MAP_DRY_SAND
-						"grass_sand": colour = MAP_SHORE
-						"coastal_soil": colour = MAP_SOIL
-						_:
-							var tile: int = int(biome._ground_tile(floori(wx), floori(wz)))
-							match tile:
-								3: colour = MAP_SOIL
-								4: colour = MAP_STONE
-								5, 6: colour = MAP_PATH
-								_: colour = MAP_GRASS # All grass and moss shades merge
-			# No hashed ink, light flecks or pixel-level random colour noise.
-			_image.set_pixel(px, py, colour)
+					region = str(biome.coast_zone_at(wx, wz))
+			# No per-pixel noise, no per-voxel green variants, no elevation
+			# tinting. These re-sampled details created checkerboard flashes
+			# on recentering. Actual tree and station markers still render
+			# separately in world space, not inside the texture.
+			_image.set_pixel(px, py, terrain_colour(region))
 	_texture.update(_image)
 	_refresh_count += 1
 
 func _draw() -> void:
 	if game == null:
 		return
+	var manager: Node = game.get_node_or_null("Dungeons")
+	var dungeon: Node3D = manager.get("active_instance") as Node3D if manager != null else null
+	if dungeon != null and is_instance_valid(dungeon):
+		var diameter: float = minf(size.x, size.y)
+		if diameter <= 0.0:
+			return
+		var center: Vector2 = size * 0.5
+		var radius: float = diameter * 0.5 - 7.0
+		var interior: float = radius - 5.0
+		draw_circle(center, radius + 4.0, DARK_WOOD)
+		draw_circle(center, radius, INNER_WOOD)
+		draw_circle(center, radius - 2.0, RIM)
+		_draw_dungeon_rooms(dungeon, center, interior, radius)
+		return
+	if bool(game.get("diorama_map_enabled")) and game.world_map != null:
+		_draw_relief()
+		return
 	var diameter: float = minf(size.x, size.y)
 	if diameter <= 0.0:
 		return
 	var center: Vector2 = size * 0.5
-	var radius: float = diameter * 0.5 - 9.0
-	var interior: float = radius - 7.0
-	# Chunky carved-wood + brass bezel around a high-contrast inset map.
-	draw_circle(center + Vector2(0.0, 2.0), radius + 8.0, Color("1e1712"))
-	draw_circle(center, radius + 5.0, DARK_WOOD)
-	draw_circle(center, radius + 1.0, INNER_WOOD)
+	var radius: float = diameter * 0.5 - 7.0
+	var interior: float = radius - 5.0
+	# Slim bronze + carved-wood bezel matches the new compact map footer.
+	# Same world-locked sample and camera-relative rotation: visual pass only.
+	draw_circle(center + Vector2(0.0, 1.0), radius + 4.0, Color("1e1712"))
+	draw_circle(center, radius + 2.0, DARK_WOOD)
+	draw_circle(center, radius, INNER_WOOD)
 	draw_circle(center, radius - 2.0, RIM)
-	draw_circle(center, radius - 5.0, Color("182c2b"))
+	draw_circle(center, radius - 4.0, Color("182c2b"))
 	var player: Node3D = game.get("hero") as Node3D
 	if _texture != null:
 		var display_offset := Vector2.ZERO
@@ -163,6 +182,20 @@ func _draw() -> void:
 				draw_circle(center + offset, 5.0, DARK_WOOD)
 				draw_circle(center + offset, 3.1, marker)
 				draw_circle(center + offset + Vector2(-1.0, -1.0), 1.1, Color("fff2c7"))
+		# Only real world trees are marked; this pass does not invent
+		# stream-chunk positions or add costly terrain samples on camera orbit.
+		for thing in game.get_children():
+			if not (thing is MeshInstance3D) or not str(thing.name).begins_with("VoxelTree"):
+				continue
+			var tree: MeshInstance3D = thing as MeshInstance3D
+			var relative := Vector2(tree.global_position.x - player.global_position.x, tree.global_position.z - player.global_position.z)
+			var offset: Vector2 = _world_to_map(relative) * (interior / MAP_RADIUS)
+			if offset.length_squared() >= (interior - 7.0) * (interior - 7.0):
+				continue
+			var variety: int = PIXELS.foliage_variant_at(tree.global_position.x, tree.global_position.z, 64012)
+			var tree_colour: Color = Color("e68bb6") if variety <= 3 else Color("d1dc54") if variety <= 5 else Color("ab86d9") if variety == 6 else Color("59b2aa") if variety == 7 else Color("78b75a")
+			draw_circle(center + offset, 3.3, DARK_WOOD)
+			draw_circle(center + offset, 2.1, tree_colour)
 		# Fixed centre; arrow heading is relative to camera and world map.
 		var yaw: float = _sample_angle
 		var avatar: Node3D = player.get("visual") as Node3D
@@ -183,3 +216,89 @@ func _draw() -> void:
 	var north: Vector2 = _world_to_map(Vector2(0.0, -1.0))
 	draw_string(ThemeDB.fallback_font, center + north * (radius - 13.0) + Vector2(-5.0, 5.0),
 		"N", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("fff3cc"))
+
+func _draw_relief() -> void:
+	var center: Vector2 = size * 0.5
+	var radius: float = minf(size.x, size.y) * 0.5 - 7
+	if radius <= 6: return
+	draw_circle(center, radius + 4, DARK_WOOD)
+	draw_circle(center, radius + 1, RIM)
+	var camera: Camera3D = game.world_map.mini_camera
+	var hero: Node3D = game.hero
+	var hero_pixel: Vector2 = camera.unproject_position(hero.global_position)
+	var points := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	for i in range(64):
+		var direction := Vector2.from_angle(float(i) * TAU / 64)
+		points.append(center + direction * (radius - 3))
+		uvs.append(hero_pixel / 192.0 + direction * 0.5)
+	draw_polygon(points, PackedColorArray([Color.WHITE]), uvs, game.world_map.mini_viewport.get_texture())
+	var scale_by: float = (radius - 3) * 2 / 192.0
+	var occupied: Dictionary = {}
+	for record in game.map_service.markers(true):
+		if record.get("category", "") in ["zones", "resources"]: continue
+		var point: Vector2 = center + (camera.unproject_position(record.position) - hero_pixel) * scale_by
+		if point.distance_to(center) > radius - 12 or point.distance_to(center) < 18: continue
+		var cell := Vector2i(point / 16)
+		if occupied.has(cell): continue
+		occupied[cell] = true
+		if record.has("disposition"):
+			MARKERS.glyph(self, point, record.disposition)
+		else:
+			var tint: Color = game.map_service.RARITY.color(int(record.get("quality", 0))) if record.category == "portals" else Color("e5bb71")
+			draw_rect(Rect2(point - Vector2(3,3), Vector2(6,6)), tint)
+		if occupied.size() >= 32: break
+	var heading: Vector2 = camera.unproject_position(hero.global_position - hero.visual.global_basis.z) - camera.unproject_position(hero.global_position)
+	MARKERS.glyph(self, center, "", true, heading.angle() + PI * 0.5)
+	var north: Vector2 = (camera.unproject_position(hero.global_position + Vector3.FORWARD) - camera.unproject_position(hero.global_position)).normalized()
+	draw_string(ThemeDB.fallback_font, center + north * (radius - 12) + Vector2(-4,4), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("fff3cc"))
+
+## Same circular HUD slot, border and camera-relative orientation as the
+## overworld map; not a second draggable, screen-blocking dungeon overlay.
+## Entire topology fits inside the ring, with exact player position as a dot.
+func _draw_dungeon_rooms(dungeon: Node3D, center: Vector2, interior: float, radius: float) -> void:
+	var rooms: Array = dungeon.layout.get("rooms", [])
+	if rooms.is_empty():
+		return
+	var smallest := Vector2(INF, INF)
+	var largest := Vector2(-INF, -INF)
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		var pos := Vector2(float(grid.x), float(grid.y))
+		smallest = smallest.min(pos)
+		largest = largest.max(pos)
+	var middle: Vector2 = (smallest + largest) * 0.5
+	var farthest: float = 0.5
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		farthest = maxf(farthest, (Vector2(float(grid.x), float(grid.y)) - middle).length())
+	var scale_by: float = minf(27.0, (interior - 15.0) / farthest)
+	var points: Dictionary = {}
+	for room in rooms:
+		var grid: Vector2i = room["grid"]
+		var relative := (Vector2(float(grid.x), float(grid.y)) - middle) * scale_by
+		points[int(room["id"])] = center + _world_to_map(relative)
+	for link in dungeon.layout.get("edges", []):
+		draw_line(points[link.x], points[link.y], Color("73969b"), 5.0, true)
+		draw_line(points[link.x], points[link.y], Color("b1c2b2"), 2.0, true)
+	for room in rooms:
+		var id: int = int(room["id"])
+		var colour: Color = Color("a9b7ae")
+		match str(room.get("role", "normal")):
+			"start": colour = Color("83bdd5")
+			"stairs": colour = Color("f6c974")
+			"boss": colour = Color("ed7d68")
+			"treasure": colour = Color("9bdcb0")
+		var at: Vector2 = points[id]
+		draw_circle(at, 7.0, DARK_WOOD)
+		draw_rect(Rect2(at - Vector2.ONE * 4.6, Vector2.ONE * 9.2), colour, true)
+	var hero: Node3D = dungeon.hero as Node3D
+	if hero != null and is_instance_valid(hero):
+		var delta: Vector3 = hero.global_position - dungeon.global_position
+		var hero_grid := Vector2(delta.x, delta.z) / DUNGEON_ROOM_STEP
+		var map_pos: Vector2 = center + _world_to_map((hero_grid - middle) * scale_by)
+		draw_circle(map_pos, 6.8, Color("241d1a"))
+		draw_circle(map_pos, 4.7, Color("fff1a5"))
+	draw_arc(center, radius - 4.0, 0.0, TAU, 72, Color("d8ad68", 0.80), 1.4, true)
+	draw_string(ThemeDB.fallback_font, center + Vector2(-22, radius - 15.0),
+		"F%d/%d" % [int(dungeon.current_floor), int(dungeon.floor_count)], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("ffe6a3"))

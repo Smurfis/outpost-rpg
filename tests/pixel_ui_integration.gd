@@ -71,7 +71,11 @@ func _run() -> void:
 	verify(interact != null, "Single large smart-interaction touch button exists")
 	if interact != null:
 		var interact_skin: StyleBox = interact.get_theme_stylebox("normal")
-		verify(interact_skin is StyleBoxFlat and (interact_skin as StyleBoxFlat).corner_radius_top_left >= 60, "Smart action keeps circular gold-ring holder")
+		# The approved medallion is a transparent circular texture, not a flat stylebox.
+		var disabled_skin: StyleBox = interact.get_theme_stylebox("disabled")
+		verify(interact_skin is StyleBoxTexture and (interact_skin as StyleBoxTexture).texture != null
+			and disabled_skin is StyleBoxTexture and (disabled_skin as StyleBoxTexture).texture != null,
+			"Smart action keeps circular gold-ring holder")
 		var icon: TextureRect = interact.get_child(0) as TextureRect
 		verify(icon != null and icon.texture != null, "Smart-interact button displays graphic icon")
 		verify(interact.size.x >= 85 and interact.size.y >= 85, "Smart interaction is finger-sized")
@@ -84,15 +88,13 @@ func _run() -> void:
 	game.show_crafting()
 	verify(game.menu.visible, "Crafting window opens")
 	var frame: PanelContainer = game.menu.shell.get_child(1) as PanelContainer
-	verify(frame != null and frame.get_theme_stylebox("panel") is StyleBoxTexture, "Craft window displays a wood-frame PNG")
+	verify(frame != null and frame.get_theme_stylebox("panel") is StyleBoxFlat, "Craft modal uses contained, unified Outpost frame")
+	verify(game.menu.title.text.contains("WOODWORK") and game.menu.station_badge.visible, "Craft title and independent station icon reflect interacted workbench")
+	verify(game.menu.station_tabs.get_child_count() == 0 and not game.menu.craft_stage_strip.visible, "No extra station tabs or four useless progress cards")
 	game.menu._recipe_change("spear")
-	game.menu._begin_prepare()
-	verify(game.menu.craft_step == "prepare", "Select Recipe transitions to Prepare Materials")
-	game.menu._toggle_ingredient("wood")
-	game.menu._toggle_ingredient("stone")
-	verify(game.menu.loaded.size() == 2, "Materials individually marked as loaded")
-	game.menu._start_craft()
-	verify(not game.crafting.is_empty(), "Prepare Materials starts existing manual crafting")
+	verify(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Albion-style recipe list and item details stay visible together")
+	game.menu._craft_selected()
+	verify(not game.crafting.is_empty(), "Single Craft tap begins the same existing manual work service")
 	verify(game.menu.progress_bar != null and game.menu.progress_bar.get_theme_stylebox("fill") is StyleBoxFlat, "Craft progress has visible styled green fill")
 	verify(int(game.inventory.get("wood", 0)) == 7, "Starting production does not prematurely consume ingredients")
 	game._update_crafting(10.0)

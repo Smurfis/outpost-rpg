@@ -9,23 +9,33 @@ const STUDIO_TWINKLES := preload("res://scripts/ui/studio_twinkles.gd")
 const UI_PREFS := "user://outpost_ui.cfg"
 var _transition_started: bool = false
 var _reduced_motion: bool = false
+var _previous_window_aspect: int = -1
 
 func _ready() -> void:
+	# The engine's default 16:9 keep-aspect setting pillarboxes the entire
+	# studio ident on 20:9 Android. Expand only during this intro scene.
+	var window: Window = get_window()
+	_previous_window_aspect = window.content_scale_aspect
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var prefs := ConfigFile.new()
 	if prefs.load(UI_PREFS) == OK:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
 	var emblem: TextureRect = get_node_or_null("StarMark") as TextureRect
 	if emblem != null:
 		emblem.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# Widescreen Android: the studio ident owns the full screen, never a
+		# narrow fixed 16:9 logo slot. Preserve the artwork aspect ratio.
+		emblem.anchor_left = 0.08
+		emblem.anchor_top = 0.04
+		emblem.anchor_right = 0.92
+		emblem.anchor_bottom = 0.62
+		emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		# Keep the SVG art as the no-download fallback. Use final art if added.
 		if ResourceLoader.exists(STUDIO_LOGO):
 			emblem.texture = load(STUDIO_LOGO) as Texture2D
-			emblem.anchor_left = 0.24
-			emblem.anchor_top = 0.11
-			emblem.anchor_right = 0.76
-			emblem.anchor_bottom = 0.86
-			emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			emblem.anchor_bottom = 0.88
 			get_node("StudioName").visible = false
 			get_node("Subtitle").visible = false
 	var twinkles: Control = STUDIO_TWINKLES.new()
@@ -42,6 +52,10 @@ func _ready() -> void:
 	if auto_advance:
 		await get_tree().create_timer(maxf(0.5, hold_seconds)).timeout
 		_go_next()
+
+func _exit_tree() -> void:
+	if _previous_window_aspect >= 0:
+		get_window().content_scale_aspect = _previous_window_aspect
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:

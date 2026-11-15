@@ -1,8 +1,26 @@
 extends CharacterBody3D
+signal combat_state_changed(active: bool)
+var in_combat: bool = false
+var combat_remaining: float = 0.0
+
+func enter_combat() -> void:
+	combat_remaining = 6.0
+	if not in_combat:
+		in_combat = true
+		combat_state_changed.emit(true)
+
+func update_combat(delta: float) -> void:
+	combat_remaining = maxf(0.0, combat_remaining - delta)
+	if in_combat and combat_remaining <= 0.0:
+		in_combat = false
+		combat_state_changed.emit(false)
 ## Outpost v0.5: modular original OBJ adventurer with animated limbs and equipment.
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
+const WHIRLWIND_TRAIL = preload("res://scripts/vfx/whirlwind_sword_trail.gd")
+const WATER_SURFACE_Y: float = -2.82
 
 var game
 var hud
@@ -20,13 +38,24 @@ var right_leg: Node3D
 var shield_mesh: MeshInstance3D
 var torch_mesh: MeshInstance3D
 var torch_light: OmniLight3D
+var torch_flame: Node3D
 var cloak_pivot: Node3D
 var sword_mesh: MeshInstance3D
 var tool_mesh: MeshInstance3D
+var held_tool_id: String = ""
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
 var gather_phase: float = 0.0
+var whirlwind_remaining: float = 0.0
+var whirlwind_elapsed: float = 0.0
+var whirlwind_start_heading: float = 0.0
+var whirlwind_grip_pose: Vector3 = Vector3.ZERO
+const WHIRLWIND_SPIN_DURATION: float = 0.90
 var walking_phase: float = 0.0
+var swimming: bool = false
+var swim_stroke_phase: float = 0.0
+var swim_splash_elapsed: float = 0.0
+var swim_preview_seconds: float = 0.0
 var walk_amount: float = 0.0
 # Collision reaches the next solid tile immediately, but the visible model
 # catches up over subsequent frames instead of popping one voxel at a time.
@@ -34,21 +63,38 @@ var visual_step_offset: Vector3 = Vector3.ZERO
 var step_hop_remaining: float = 0.0
 const STEP_HOP_DURATION: float = 0.28
 var last_gather: String = ""
+var gm_speed_multiplier: float = 1.0 # Temporary Alpha GM console; runtime only.
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
+@export_range(0.1, 2.0, 0.05) var max_resource_hop_height: float = 1.9
 const STEP_LANDING_TOLERANCE: float = 0.06
 const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front edge.
 # Dungeon portal interaction state: manually operated by default.
 var interaction_target: Vector3 = Vector3.ZERO
 var interaction_moving: bool = false
 var interaction_locked: bool = false
+var station_waypoints: PackedVector3Array = PackedVector3Array()
+var path_navigation: bool = false
 
 func move_to_interaction(target: Vector3) -> void:
+	path_navigation = false
+	station_waypoints.clear()
 	interaction_target = target
+	interaction_moving = true
+
+func move_along_station_path(path: PackedVector3Array) -> void:
+	path_navigation = true
+	station_waypoints = path.duplicate()
+	if station_waypoints.is_empty():
+		stop_interaction_move()
+		return
+	interaction_target = station_waypoints[0]
 	interaction_moving = true
 
 func stop_interaction_move() -> void:
 	interaction_moving = false
+	path_navigation = false
+	station_waypoints.clear()
 
 func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	game = game_ref
@@ -75,7 +121,7 @@ func setup(game_ref: Node, hud_ref: CanvasLayer, camera_ref: Camera3D) -> void:
 	_model("adventurer_torso", visual, Vector3.ZERO)
 	var head: MeshInstance3D = _model("adventurer_head", visual, Vector3(0, 1.89, -0.035))
 	if bool(game.get("voxel_art_enabled")):
-		head.scale = Vector3.ONE * 1.19
+		head.scale = Vector3.ONE * 1.34 # Slightly oversized Cube World-like face; collision stays unchanged.
 	left_arm = _pivot("LeftArm", Vector3(-0.54, 1.51, 0.02))
 	right_arm = _pivot("RightArm", Vector3(0.54, 1.51, 0.02))
 	left_leg = _pivot("LeftLeg", Vector3(-0.205, 0.78, 0.0))
@@ -154,24 +200,51 @@ func set_weapon(id: String) -> void:
 		sword_mesh.scale = Vector3(0.76, 0.76, 0.76)
 		sword_mesh.material_override = _material(Color("b2b6a9"))
 
-## Swaps the visible grip item, leaving the actual weapon slot and combat
-## statistics unchanged. A selected pickaxe or axe is visibly held.
+## The quick-tool selection controls the *visible* wrist-held mesh.
+## The weapon slot, damage, and harvesting stats still belong to game.gd.
+## Reuse the current mesh when refreshing equipment to avoid GPU churn.
 func set_held_tool(tool_id: String) -> void:
 	if sword_mesh == null or weapon_grip == null:
+		return
+	var is_gather_tool: bool = tool_id == "axe" or tool_id == "pickaxe"
+	if is_gather_tool:
+		# Point the head down/forward from the right wrist, clear of the torso.
+		weapon_grip.rotation = Vector3(PI + 0.52, -0.08, 0.19)
+	else:
+		weapon_grip.rotation = Vector3(PI + (0.85 if tool_id == "spear" else 0.64), 0.05, 0.29)
+	if is_gather_tool and held_tool_id == tool_id and is_instance_valid(tool_mesh):
+		sword_mesh.visible = false
 		return
 	if tool_mesh != null and is_instance_valid(tool_mesh):
 		weapon_grip.remove_child(tool_mesh)
 		tool_mesh.queue_free()
-		tool_mesh = null
-	sword_mesh.visible = tool_id not in ["axe", "pickaxe"]
-	if tool_id in ["axe", "pickaxe"] and game != null and bool(game.get("voxel_art_enabled")):
-		tool_mesh = VOXEL_CHARACTER.create_part("hand_axe" if tool_id == "axe" else "hand_pickaxe")
-		if tool_mesh != null:
-			tool_mesh.name = "Held" + tool_id.capitalize()
-			tool_mesh.scale = Vector3.ONE * 0.82
-			weapon_grip.add_child(tool_mesh)
+	tool_mesh = null
+	held_tool_id = ""
+	sword_mesh.visible = true
+	if not is_gather_tool:
+		return
+	var pixel_mode: bool = game != null and bool(game.get("voxel_art_enabled"))
+	var replacement: MeshInstance3D = null
+	if pixel_mode:
+		replacement = VOXEL_CHARACTER.create_part("hand_" + tool_id)
 	else:
-		sword_mesh.visible = true
+		# Real original OBJ models also work in the non-voxel fallback mode.
+		var model_path: String = MODEL_ROOT + "hand_" + tool_id + ".obj"
+		if ResourceLoader.exists(model_path):
+			var mesh: Mesh = load(model_path) as Mesh
+			if mesh != null:
+				replacement = MeshInstance3D.new()
+				replacement.mesh = mesh
+	if replacement == null:
+		# Missing imported art must never leave the player weaponless.
+		return
+	tool_mesh = replacement
+	tool_mesh.name = "Held" + tool_id.capitalize()
+	tool_mesh.position = Vector3(0.0, -0.02, -0.05)
+	tool_mesh.scale = Vector3.ONE * (0.88 if tool_id == "axe" else 0.84)
+	weapon_grip.add_child(tool_mesh)
+	held_tool_id = tool_id
+	sword_mesh.visible = false
 
 func set_spear(equipped: bool) -> void:
 	set_weapon("spear" if equipped else "training_blade")
@@ -214,19 +287,36 @@ func _build_torch() -> void:
 	torch_light.omni_attenuation = 1.2
 	torch_light.shadow_enabled = false
 	torch_mesh.add_child(torch_light)
+	# Use the packaged PyroLux flame on the existing wrist-attached torch.
+	# Keep the old emissive cube + light as a fallback for source checkouts.
+	var preset_path: String = "res://addons/pyrolux_fx/presets/3d/fire_torch.tscn"
+	if ResourceLoader.exists(preset_path):
+		var flame_scene: PackedScene = load(preset_path) as PackedScene
+		if flame_scene != null:
+			torch_flame = flame_scene.instantiate() as Node3D
+			if torch_flame != null:
+				torch_flame.name = "PyroLuxTorchFlame"
+				torch_flame.position = Vector3(0, 0.79, 0)
+				torch_flame.scale = Vector3.ONE * 0.70
+				torch_mesh.add_child(torch_flame)
+				ember.visible = false
+				torch_light.visible = false
 	set_torch(false)
 
 func set_torch(equipped: bool) -> void:
 	if torch_mesh != null:
 		torch_mesh.visible = equipped
 	if torch_light != null:
-		torch_light.visible = equipped
+		torch_light.visible = equipped and torch_flame == null
+	if torch_flame != null:
+		torch_flame.visible = equipped
 
 func set_cloak(equipped: bool) -> void:
 	if cloak_pivot != null:
 		cloak_pivot.visible = equipped
 
 func swing() -> void:
+	enter_combat()
 	# Set visible forward strike immediately; Android can render a frame before
 	# the physics callback updates the arm rotation.
 	combat_phase = 0.86
@@ -234,13 +324,79 @@ func swing() -> void:
 		right_arm.rotation.x = 1.75 * sin(combat_phase * PI)
 		right_arm.rotation.z = -0.31 * sin(combat_phase * PI)
 
+func play_whirlwind() -> void:
+	enter_combat()
+	if visual == null or sword_mesh == null or weapon_grip == null:
+		return
+	whirlwind_elapsed = 0.0
+	whirlwind_remaining = WHIRLWIND_SPIN_DURATION
+	whirlwind_start_heading = visual.rotation.y
+	whirlwind_grip_pose = weapon_grip.rotation
+	combat_phase = 0.0
+	gather_phase = 0.0
+	# Raise the blade out from the hip before tracing the circle.
+	weapon_grip.rotation = Vector3(0.15, 0.0, 0.28)
+	var trail: MeshInstance3D = WHIRLWIND_TRAIL.new() as MeshInstance3D
+	add_child(trail)
+	trail.begin(sword_mesh, WHIRLWIND_SPIN_DURATION)
+
+## Weapon-hit sparks start at the actual animated blade/tool tip, not at
+## the player's feet. Reuse the existing tiny voxel burst for Android.
+func show_weapon_hit_effect(_target_position: Vector3) -> void:
+	if game == null or sword_mesh == null:
+		return
+	var held: MeshInstance3D = sword_mesh
+	if not sword_mesh.visible and is_instance_valid(tool_mesh):
+		held = tool_mesh
+	var tip_y: float = 1.70 if game.current_weapon_id() == "spear" and held == sword_mesh else 1.42
+	var tip: Vector3 = held.to_global(Vector3(0.0, tip_y, 0.0))
+	PIXEL_FEEDBACK.emit_feedback(game, tip, 0.0, Color("f04450"))
+
 func gather_swing(kind: String) -> void:
 	last_gather = kind
 	gather_phase = 1.0
 
+func preview_swimming_fx() -> void:
+	# Preview can be invoked on dry land from Controls. No teleport or saved
+	# state change: 3.5 seconds of stroke pose and real batched water particles.
+	swim_preview_seconds = 3.5
+	swim_stroke_phase = 0.0
+	swim_splash_elapsed = 0.0
+	_emit_swim_splash(true)
+
+
+func _emit_swim_splash(preview: bool = false) -> void:
+	if get_parent() == null:
+		return
+	var location: Vector3 = global_position + Vector3(0.0, 0.48 if preview else (WATER_SURFACE_Y - global_position.y + 0.06), 0.0)
+	SWIM_SPLASH.splash(get_parent() as Node3D, location)
+
+
+func _detect_surface_swimming() -> bool:
+	# Use actual coastal land sampling, not all areas with a low world Y:
+	# the private dungeon is never mistaken for a swimmable sea.
+	if game == null or not bool(game.get("chunk_streaming_enabled")):
+		return false
+	# The ocean extends well beyond the procedural island. Its real floor
+	# and far perimeter are built in game.gd; water buoyancy never shuts off
+	# at the original x/z=96 terrain-streaming boundary.
+	if absf(global_position.x) >= 384.0 or absf(global_position.z) >= 384.0:
+		return false
+	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
+	if terrain == null or not bool(terrain.get("stream_enabled")):
+		return false
+	# Never switch buoyancy off just because the player was pushed below the
+	# expected five-metre water band. That produced infinite falling if a
+	# streamed collision tile arrived late, or a knockback crossed the band.
+	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6
+
+
 func _physics_process(delta: float) -> void:
+	update_combat(delta)
 	elapsed += delta
-	var modal_open: bool = (game.menu != null and game.menu.visible) or (game.coop != null and game.coop.ui != null and game.coop.ui.visible) or interaction_locked
+	var modal_open: bool = game.controls.modal_open() if game.controls != null else (game.menu != null and game.menu.visible) or interaction_locked
+	swimming = _detect_surface_swimming()
+	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
 		control = Vector2.ZERO
@@ -256,10 +412,23 @@ func _physics_process(delta: float) -> void:
 	if interaction_moving and not modal_open:
 		if control.length() > 0.15:
 			stop_interaction_move()
+			if game.controls != null:
+				game.controls.cancel()
+			if game.has_method("cancel_station_walk"):
+				game.cancel_station_walk()
 		else:
+			# Advance through A* cells at close range; legacy dungeon portals
+			# still use their original interaction_target / 2.4m arrival rule.
+			while station_waypoints.size() > 0:
+				var node: Vector3 = station_waypoints[0]
+				if Vector2(node.x - global_position.x, node.z - global_position.z).length() > 0.25:
+					break
+				station_waypoints.remove_at(0)
+			if station_waypoints.size() > 0:
+				interaction_target = station_waypoints[0]
 			var towards: Vector3 = interaction_target - global_position
 			towards.y = 0.0
-			if towards.length() <= 2.4:
+			if station_waypoints.is_empty() and towards.length() <= (0.25 if path_navigation else 2.4):
 				stop_interaction_move()
 				direction = Vector3.ZERO
 			else:
@@ -271,18 +440,28 @@ func _physics_process(delta: float) -> void:
 		speed *= 0.48
 	if gather_phase > 0.0:
 		speed *= 0.42
+	speed *= gm_speed_multiplier
 	# Separate short hit impulse from player steering. It decays rapidly,
 	# feels like voxel-sandbox combat, and cannot keep moving the character.
 	velocity.x = direction.x * speed + knockback_velocity.x
 	velocity.z = direction.z * speed + knockback_velocity.z
 	knockback_velocity = knockback_velocity.move_toward(Vector3.ZERO, delta * 13.0)
 	var grounded_before_motion: bool = is_on_floor()
-	if grounded_before_motion and not modal_open and Input.is_action_just_pressed("outpost_jump"):
-		velocity.y = 5.1
+	if swimming:
+		# In water, stay inside the swimmable band even if the character
+		# entered fast, or an asynchronous coastal chunk had no collision yet.
+		var float_target: float = WATER_SURFACE_Y - 0.78
+		if global_position.y < WATER_SURFACE_Y - 6.0:
+			# Recovery stays at the SAME ocean coordinates rather than
+			# teleporting to camp or waiting for minutes of slow upward speed.
+			global_position.y = float_target
+			velocity.y = 0.0
+		else:
+			velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 4.5)
 	else:
 		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
 	move_and_slide()
-	if auto_step_enabled and not modal_open and grounded_before_motion and is_on_wall() and direction.length_squared() > 0.02:
+	if auto_step_enabled and not modal_open and ((grounded_before_motion and velocity.y <= 0.0) or swimming) and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
 	# Interpolate the avatar rig separately from the physics capsule. The
 	# capsule must not tunnel through a ledge and the camera stays independent.
@@ -326,6 +505,34 @@ func _physics_process(delta: float) -> void:
 	if combat_phase <= 0.0:
 		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
+	if swimming or swim_preview_seconds > 0.0:
+		# Readable alternating swim strokes and flutter kick on the same
+		# joint rig used by walking, so tools and equipment remain attached.
+		swim_stroke_phase += delta * (8.4 if direction.length() > 0.05 else 4.3)
+		var stroke: float = sin(swim_stroke_phase)
+		left_arm.rotation.x = -0.85 + 0.73 * stroke
+		right_arm.rotation.x = -0.85 - 0.73 * stroke
+		left_leg.rotation.x = -0.40 * stroke
+		right_leg.rotation.x = 0.40 * stroke
+		visual.rotation.z = 0.045 * sin(swim_stroke_phase * 0.5)
+		swim_splash_elapsed += delta
+		if swim_splash_elapsed >= (0.26 if swimming and direction.length() > 0.05 else 0.43):
+			swim_splash_elapsed = 0.0
+			_emit_swim_splash(not swimming)
+	else:
+		swim_splash_elapsed = 0.0
+	if whirlwind_remaining > 0.0:
+		# Only the visible rig rotates. The real physics capsule remains
+		# stable, so this spin cannot alter steering or clip through terrain.
+		whirlwind_elapsed = minf(WHIRLWIND_SPIN_DURATION, whirlwind_elapsed + delta)
+		whirlwind_remaining = maxf(0.0, WHIRLWIND_SPIN_DURATION - whirlwind_elapsed)
+		var spin_t: float = whirlwind_elapsed / WHIRLWIND_SPIN_DURATION
+		visual.rotation.y = whirlwind_start_heading + TAU * 2.0 * spin_t
+		right_arm.rotation.x = -0.36
+		right_arm.rotation.z = -0.94
+		left_arm.rotation.z = 0.30
+		if whirlwind_remaining <= 0.0 and weapon_grip != null:
+			weapon_grip.rotation = whirlwind_grip_pose
 	# In LAN dungeons only the host owns health; local auto-healing must
 	# never revive knocked-out characters or desync peer health snapshots.
 	if elapsed - last_hit > 6.0 and not (game.coop != null and game.coop.in_party_dungeon()):
@@ -339,7 +546,16 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 		return false
 	if horizontal_motion.length_squared() < 0.0001 or not bool(game.get("voxel_art_enabled")):
 		return false
-	var up: Vector3 = Vector3.UP * (max_auto_step_height + STEP_LANDING_TOLERANCE)
+	# Only an ore/rock/clay obstacle grants the larger automatic hop.
+	# Terrain, walls and trees retain the existing one-voxel step limit.
+	var resource_obstacle: Object = null
+	for index in range(get_slide_collision_count()):
+		var obstacle: Object = get_slide_collision(index).get_collider()
+		if obstacle is Node and obstacle.is_in_group("auto_hop_resources"):
+			resource_obstacle = obstacle
+			break
+	var step_limit: float = maxf(max_auto_step_height, max_resource_hop_height) if resource_obstacle != null else max_auto_step_height
+	var up: Vector3 = Vector3.UP * (step_limit + STEP_LANDING_TOLERANCE)
 	var original: Transform3D = global_transform
 	if test_move(original, up):
 		return false # Low ceiling or other obstacle directly above the player.
@@ -351,7 +567,7 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	if test_move(raised, probe_motion):
 		return false # The elevated path is blocked by a full-height wall.
 	var candidate: Vector3 = original.origin + probe_motion
-	var start: Vector3 = candidate + Vector3.UP * (max_auto_step_height + 0.28)
+	var start: Vector3 = candidate + Vector3.UP * (step_limit + 0.28)
 	var end: Vector3 = candidate - Vector3.UP * 0.25
 	var query := PhysicsRayQueryParameters3D.create(start, end, collision_mask, [get_rid()])
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
@@ -361,8 +577,10 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	if normal.dot(Vector3.UP) < 0.75:
 		return false
 	var rise: float = float((hit["position"] as Vector3).y - original.origin.y)
-	if rise <= 0.045 or rise > max_auto_step_height:
+	if rise <= 0.045 or rise > step_limit:
 		return false
+	if rise > max_auto_step_height and hit.get("collider") != resource_obstacle:
+		return false # A nearby tall wall cannot borrow the ore's hop allowance.
 	# Revalidate horizontally at the final elevation before moving the body.
 	var landing: Transform3D = original.translated(Vector3.UP * (rise + STEP_LANDING_TOLERANCE))
 	if test_move(landing, probe_motion):
@@ -394,6 +612,15 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection
+	if actual > 0.0:
+		enter_combat()
+	# Station crafting is interrupted when combat damages the player, rather
+	# than leaving a modal trapping them while enemies keep attacking.
+	if actual > 0.0 and game.menu != null and game.menu.visible and game.menu.current_page == "craft":
+		game.menu.close_page()
+		game.hud.toast("Crafting Station interrupted by damage!")
+	if actual > 0.0 and game.has_method("cancel_station_walk"):
+		game.cancel_station_walk()
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
 	var defeated: bool = health <= 0.0
@@ -403,5 +630,4 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		game.hud.toast("Defeated! Respawned at outpost; items kept.")
-	else:
-		game.hud.toast("Ouch! -%d HP" % int(roundf(actual)))
+

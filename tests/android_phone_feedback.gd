@@ -14,6 +14,7 @@ func check(ok: bool, label: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch")
 	var packed: PackedScene = load("res://scenes/main.tscn")
 	check(packed != null, "World scene is available")
 	if packed == null:
@@ -49,18 +50,46 @@ func _run() -> void:
 	game.hero.swing()
 	await physics_frame
 	check(game.hero.right_arm.rotation.x > 0.0, "Attack arm swings toward player's local forward, not backward")
+	# Actual projected station-tap path: it must not be confused with
+	# camera rotation or walking-joystick input.
+	game.hero.global_position = Vector3(-8.0, 0.35, 3.0)
+	game._camera(0.5)
+	var campfire_click: Vector2 = game.camera.unproject_position(game.stations["campfire"].global_position + Vector3.UP * 0.9)
+	check(game.station_at_screen(campfire_click) == "campfire", "Tapped physical campfire selects its Crafting Station identity")
+	var first_touch := InputEventScreenTouch.new()
+	first_touch.index = 22
+	first_touch.pressed = true
+	first_touch.position = campfire_click
+	game.hud._input(first_touch)
+	var release := InputEventScreenTouch.new()
+	release.index = 22
+	release.pressed = false
+	release.position = campfire_click
+	game.hud._input(release)
+	check(game.station_walk_target == "campfire" and game.hero.interaction_moving,
+		"Shared mobile tap uses the specialised safe A-star crafting-station path")
+	check(game.hero.station_waypoints.size() > 0, "Station routing uses real waypoints rather than teleporting")
+	for waypoint in game.hero.station_waypoints:
+		var separation: float = Vector2(waypoint.x - game.station_positions["campfire"].x, waypoint.z - game.station_positions["campfire"].z).length()
+		check(separation >= 1.5, "A-star route never cuts through the station's solid centre")
+	game.hero.global_position = game.station_positions["campfire"] + Vector3(2.5, 0.35, 0)
+	game._update_station_walk(0.016)
+	check(game.menu.visible and game.menu.selected_station == "campfire", "Arrival opens only the tapped station's recipes")
+	game.hero.take_hit(4.0)
+	check(not game.menu.visible and game.station_walk_target.is_empty(), "Enemy damage closes station modal and cancels navigation")
 	game.hero.global_position = game.station_positions["workbench"] + Vector3(0, 0.35, 0)
 	game.show_crafting()
 	await process_frame
-	check(game.menu.left_scroll.visible and not game.menu.right_scroll.visible, "Crafting opens with one full-width recipe page")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Crafting opens with Albion recipe list and details together")
 	check(game.menu.left_scroll.get_script() != null, "Recipe list uses touchscreen swipe control")
+	check(game.menu.title.text.contains("WOODWORK") and game.menu.station_badge.visible, "Actual interacted station determines window title and icon")
+	check(game.menu.station_tabs.get_child_count() == 0 and not game.menu.craft_stage_strip.visible, "No five-station tabs or redundant stage cards")
 	game.menu._recipe_change("spear")
 	await process_frame
-	check(not game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Tapping recipe opens a separate details page")
-	game.menu._begin_prepare()
-	check(game.menu.craft_step == "prepare", "Details moves to preparation flow")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Tapping a recipe updates tooltip without losing list")
+	check(game.menu.details.find_child("StationCraftAction", true, false) != null, "Selected recipe offers a direct Craft action")
 	game.menu._back_to_browse()
-	check(game.menu.left_scroll.visible, "Back returns to full recipe list")
+	check(game.menu.left_scroll.visible and game.menu.right_scroll.visible, "Browsing remains accessible without navigation screens")
 	game.queue_free()
 	await process_frame
 	print("PHONE UX RESULT: %d failures" % failed)

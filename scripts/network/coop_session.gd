@@ -572,6 +572,8 @@ func _apply_encounter_state(state: Dictionary) -> void:
 	var self_id: int = multiplayer.get_unique_id()
 	if health_snapshot.has(self_id):
 		var new_hp: float = clampf(float(health_snapshot[self_id]), 0.0, 100.0)
+		if new_hp < last_synced_health:
+			game.hero.enter_combat()
 		if new_hp <= 0.0 and last_synced_health > 0.0:
 			game.hud.toast("Knocked out! Another party member can revive you.")
 		elif new_hp > last_synced_health + 1.0 and last_synced_health <= 0.0:

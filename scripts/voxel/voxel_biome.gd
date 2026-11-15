@@ -3,6 +3,8 @@ extends Node3D
 ## level and traversable; seeded Perlin noise forms one-voxel terraces outside.
 const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
+const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const HARVESTABLE = preload("res://scripts/resource_node.gd")
 const WILD_BOAR = preload("res://scripts/enemy.gd")
 const WATER_SHADER = preload("res://scripts/voxel/coastal_water.gdshader")
@@ -12,6 +14,9 @@ const CHUNK_SIZE: int = 12
 const MAP_HALF: int = 23
 const FIELDS_MAP_HALF: int = 48
 const STREAM_MAP_HALF: int = 96
+const OCEAN_SWIM_HALF: float = 384.0 # Beyond island terrain, swimmer remains buoyant
+const OCEAN_VISUAL_EXTENT: float = 4096.0 # Far beyond orthographic 120m clip
+const OCEAN_HORIZON_MARGIN: float = 28.0
 const STREAM_RADIUS: int = 3 # Keep 7x7 neighbour chunks around the active player
 const CHUNK_CREATION_BUDGET: int = 2 # Avoid building all terrain in one frame.
 const MOBILE_STREAM_RADIUS: int = 2 # 5x5 around the player on weaker Android GPUs.
@@ -33,6 +38,8 @@ var fields_enabled: bool = false
 var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
+var _shared_water_material: ShaderMaterial
+var _distant_ocean: MeshInstance3D
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
 var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
@@ -105,6 +112,7 @@ func _process(_delta: float) -> void:
 	if player == null:
 		return
 	var point: Vector3 = player.global_position
+	_update_water_horizon(point)
 	# Entering a private dungeon teleports far beyond the overworld. Do not
 	# unload the entire Fields map merely because the player entered an instance.
 	if absf(point.x) > float(map_half) or absf(point.z) > float(map_half):
@@ -257,6 +265,20 @@ func coast_zone_at(x: float, z: float) -> String:
 		return "coastal_soil"
 	return "inland"
 
+func map_cell_at(x: int, z: int) -> Dictionary:
+	# Map consumers use the same cell heights and material choices as the
+	# terrain mesher. An empty result means no generated terrain exists here.
+	if x < -map_half or x >= map_half or z < -map_half or z >= map_half:
+		return {}
+	var zone: String = coast_zone_at(float(x) + 0.5, float(z) + 0.5)
+	var ground_height: float = _tile_height(x, z)
+	return {
+		"height": SEA_LEVEL if zone == "water" else ground_height,
+		"ground_height": ground_height,
+		"ground_tile": _ground_tile(x, z),
+		"zone": zone,
+	}
+
 func _tile_height(x: int, z: int) -> float:
 	var px: float = float(x) + 0.5
 	var pz: float = float(z) + 0.5
@@ -388,10 +410,22 @@ func _build_ground_chunk(chunk_x: int, chunk_z: int) -> void:
 		add_child(body)
 		members.append(body)
 	if stream_enabled:
+		# Water surfaces stream with the same 12x12 tiles as their seabed.
+		# The former giant 352x352 plane was visible through unbuilt terrain
+		# from camp and extended over unsupported ocean beyond the map.
+		var ocean: MeshInstance3D = _chunk_water_surface(chunk_x, chunk_z)
+		if ocean != null:
+			add_child(ocean)
+			members.append(ocean)
 		var decor: MeshInstance3D = _chunk_decoration(chunk_x, chunk_z)
 		if decor != null:
 			add_child(decor)
 			members.append(decor)
+		# Tree silhouettes are a separate single-surface batch, not one node per tree.
+		var foliage: MeshInstance3D = _chunk_foliage(chunk_x, chunk_z)
+		if foliage != null:
+			add_child(foliage)
+			members.append(foliage)
 		var surf: MeshInstance3D = _shore_foam(chunk_x, chunk_z)
 		if surf != null:
 			add_child(surf)
@@ -435,102 +469,133 @@ func _unregister_streamed_portal(cell: Vector2i) -> void:
 		dungeons.unregister_chunk("fields_%d_%d" % [cell.x, cell.y])
 
 func _spawn_chunk_interactables(chunk_x: int, chunk_z: int) -> Node3D:
-	# Unlike earlier purely decorative distant trees, these are harvestable and
-	# enemies participate in the existing real item, quest and combat systems.
-	# Spawn keys are deterministic: revisiting a streamed chunk gives the same
-	# placements while retaining only local nodes in memory.
-	var owner: Node = get_parent()
-	if owner == null or not owner.has_method("_nearest_resource"):
+	var game: Node = get_parent()
+	if game == null or not game.has_method("spawn_resource"):
 		return null
 	var container := Node3D.new()
 	container.name = "ChunkInteractables_%d_%d" % [chunk_x, chunk_z]
 	add_child(container)
+	var kinds: Array[String] = ["wood", "wood", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds"]
+	# Global six-metre cells have enough separation even across chunk borders.
+	# Coordinate-derived seeds mean stream/load order never changes candidates.
+	for x in range(chunk_x + 3, chunk_x + CHUNK_SIZE, 6):
+		for z in range(chunk_z + 3, chunk_z + CHUNK_SIZE, 6):
+			if maxf(absf(x), absf(z)) < 27.0 or _coast_margin(x, z) < SAND_GRASS_BAND:
+				continue
+			var rng := RandomNumberGenerator.new()
+			rng.seed = absi(world_seed * 43 + x * 2257 + z * 4861)
+			var site := Vector3(x + rng.randf_range(-0.25, 0.25), 0, z + rng.randf_range(-0.25, 0.25))
+			var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+			var count: int = rng.randi_range(2, 3) if rng.randf() < 0.20 else 1
+			# Reserve the possible portal footprint regardless of load order.
+			var center := Vector2(chunk_x + CHUNK_SIZE * 0.5, chunk_z + CHUNK_SIZE * 0.5)
+			var has_gate: bool = posmod((chunk_x + 101) * 37 + (chunk_z + 101) * 43 + world_seed, 13) == 0
+			if has_gate and Vector2(site.x, site.z).distance_to(center) < 3.5 + game.PLACEMENT.radius_for(kind, count):
+				continue
+			game.spawn_resource(container, kind, site, count)
+	# One shallow, shore-reachable pool per coastal chunk. Shrimp are the
+	# first fish; deep ocean never spawns an unreachable fishing target.
+	var pool_placed: bool = false
+	if stream_enabled:
+		for x in range(chunk_x + 1, chunk_x + CHUNK_SIZE - 1):
+			for z in range(chunk_z + 1, chunk_z + CHUNK_SIZE - 1):
+				var margin: float = _coast_margin(x + 0.5, z + 0.5)
+				if margin < -1.2 or margin > -0.1 or pool_placed:
+					continue
+				var node = game.spawn_resource(container, "shrimp", Vector3(x + 0.5, SEA_LEVEL, z + 0.5))
+				pool_placed = node != null
 	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, posmod(int(world_seed) * 43 + (chunk_x + 707) * 2257 + (chunk_z + 707) * 4861, 2147483647))
-	var kinds: Array[String] = ["wood", "wood", "wood", "stone", "stone", "fiber", "berries", "iron", "coal", "clay", "herbs", "mushrooms", "reeds"]
-	for i in range(2):
-		var x: float = float(chunk_x) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		var z: float = float(chunk_z) + rng.randf_range(1.6, float(CHUNK_SIZE) - 1.6)
-		if maxf(absf(x), absf(z)) < 27.0 or _coast_margin(x, z) < SAND_GRASS_BAND:
-			continue # Preserve the original safe starter resource layout and sea.
-		var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
-		var harvestable = HARVESTABLE.new()
-		container.add_child(harvestable)
-		harvestable.position = Vector3(x, surface_y_at(x, z) + 0.055, z)
-		harvestable.setup(kind)
-	# Guard against spawning a boar before the game has created its hero
-	# (the direct-scene smoke tests still create the camp synchronously).
-	var hero = owner.get("hero")
-	if hero != null and rng.randf() < 0.19:
-		var ex: float = float(chunk_x) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		var ez: float = float(chunk_z) + rng.randf_range(2.5, float(CHUNK_SIZE) - 2.5)
-		if maxf(absf(ex), absf(ez)) > 32.0 and _coast_margin(ex, ez) >= SAND_GRASS_BAND:
-			var boar = WILD_BOAR.new()
-			container.add_child(boar)
-			boar.setup(owner, hero, Vector3(ex, surface_y_at(ex, ez) + 0.08, ez))
+	rng.seed = absi(world_seed + chunk_x * 731 + chunk_z * 193)
+	var hero = game.get("hero")
+	var center := Vector3(chunk_x + 6, 0, chunk_z + 6)
+	if hero != null and rng.randf() < 0.19 and maxf(absf(center.x), absf(center.z)) > 32 and _coast_margin(center.x, center.z) >= SAND_GRASS_BAND and game.prop_placement.available(center, 0.7):
+		var boar = WILD_BOAR.new()
+		container.add_child(boar)
+		center.y = _tile_height(floori(center.x), floori(center.z)) + 0.08
+		boar.setup(game, hero, center)
 	if container.get_child_count() == 0:
 		container.queue_free()
 		return null
 	return container
 
-func _chunk_decoration(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# All grass, low shrubs and occasional trees generated deterministically
-	# per chunk, sharing the atlas, so unloading a cell also removes its props.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = maxi(1, posmod(int(world_seed) + (chunk_x + 500) * 1789 + (chunk_z + 500) * 4931, 2147483647))
-	var placed: int = 0
-	for i in range(13):
-		var x: float = rng.randf_range(float(chunk_x) + 0.5, float(chunk_x + CHUNK_SIZE) - 0.5)
-		var z: float = rng.randf_range(float(chunk_z) + 0.5, float(chunk_z + CHUNK_SIZE) - 0.5)
-		if (absf(x) < 24.0 and absf(z) < 24.0) or _coast_margin(x, z) < SAND_GRASS_BAND:
-			continue
-		placed += 1
-		var y: float = surface_y_at(x, z)
-		if i == 0 and maxf(absf(x), absf(z)) > 28.0:
-			PIXELS.box(st, Vector3(x, y + 0.73, z), Vector3(0.42, 1.42, 0.46), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.68, z), Vector3(1.4, 0.96, 1.44), 9, 10)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(0.92, 0.66, 0.95), 1, 9)
-		elif i % 3 == 0:
-			PIXELS.box(st, Vector3(x, y + 0.17, z), Vector3(0.5, 0.31, 0.48), 9, 10)
-		else:
-			PIXELS.box(st, Vector3(x, y + 0.08, z), Vector3(0.1, 0.16, 0.12), 1, 9)
-	if placed == 0:
-		return null
-	return PIXELS.as_instance(st, "ChunkDecor_%d_%d" % [chunk_x, chunk_z])
+func _chunk_decoration(_chunk_x: int, _chunk_z: int) -> MeshInstance3D:
+	# Resource-shaped scenery now belongs to the harvestable population.
+	return null
+
+func _chunk_foliage(_chunk_x: int, _chunk_z: int) -> MeshInstance3D:
+	# Avoid a second, unharvestable copy of visible trees.
+	return null
+
+func _shore_foam_vertex(st: SurfaceTool, point: Vector2, opacity: float) -> void:
+	# Cool-blue, low-alpha surf. Keeping the strip faint prevents a solid
+	# white border along every square of the voxel coastline.
+	st.set_color(Color(0.55, 0.79, 0.94, opacity))
+	st.add_vertex(Vector3(point.x, SEA_LEVEL + 0.035, point.y))
+
+
+func _append_shore_foam_edge(st: SurfaceTool, edge_start: Vector2, edge_end: Vector2,
+		water_direction: Vector2, x: int, z: int, side: int,
+		taper_start: bool, taper_end: bool) -> void:
+	# Fade the strip at perpendicular shoreline joins. Otherwise two
+	# translucent foam faces overlap at an inside corner and make bright
+	# triangular wedges, even when the underlying water mesh is complete.
+	const SEGMENTS: int = 3
+	for segment in range(SEGMENTS):
+		var t0: float = float(segment) / float(SEGMENTS)
+		var t1: float = float(segment + 1) / float(SEGMENTS)
+		var shore_a: Vector2 = edge_start.lerp(edge_end, t0) + water_direction * 0.008
+		var shore_b: Vector2 = edge_start.lerp(edge_end, t1) + water_direction * 0.008
+		var seed_a: int = posmod(x * 17 + z * 29 + side * 13 + segment * 7, 6)
+		var seed_b: int = posmod(x * 17 + z * 29 + side * 13 + (segment + 1) * 7, 6)
+		var width_a: float = 0.10 + 0.017 * float(seed_a)
+		var width_b: float = 0.10 + 0.017 * float(seed_b)
+		var alpha_a: float = 0.16 + 0.023 * float(seed_a)
+		var alpha_b: float = 0.16 + 0.023 * float(seed_b)
+		if taper_start and segment == 0:
+			alpha_a = 0.0
+		if taper_end and segment == SEGMENTS - 1:
+			alpha_b = 0.0
+		var water_a: Vector2 = shore_a + water_direction * width_a
+		var water_b: Vector2 = shore_b + water_direction * width_b
+		_shore_foam_vertex(st, shore_a, alpha_a)
+		_shore_foam_vertex(st, shore_b, alpha_b)
+		_shore_foam_vertex(st, water_b, 0.0)
+		_shore_foam_vertex(st, shore_a, alpha_a)
+		_shore_foam_vertex(st, water_b, 0.0)
+		_shore_foam_vertex(st, water_a, 0.0)
+
 
 func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
-	# One batched, semi-transparent strip mesh per coastal chunk. It marks
-	# *water* cells bordering solid land, not the old square world boundary.
+	# Keep a subtle, feathered surf strip on genuine land/water edges only.
+	# Neighbour checks use the same discrete cells as terrain and ocean meshes.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var count: int = 0
+	var edge_count: int = 0
 	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
 		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
 			if _land_cell(x, z):
 				continue
-			var land_east: bool = _land_cell(x + 1, z)
-			var land_west: bool = _land_cell(x - 1, z)
-			var land_south: bool = _land_cell(x, z + 1)
-			var land_north: bool = _land_cell(x, z - 1)
-			if not (land_east or land_west or land_south or land_north):
-				continue
-			var cx: float = float(x) + 0.5
-			var cz: float = float(z) + 0.5
-			var half_x: float = 0.28 if land_east or land_west else 0.42
-			var half_z: float = 0.28 if land_south or land_north else 0.42
-			var offset_x: float = 0.23 if land_east else -0.23 if land_west else 0.0
-			var offset_z: float = 0.23 if land_south else -0.23 if land_north else 0.0
-			var y: float = SEA_LEVEL + 0.032
-			var a := Vector3(cx + offset_x - half_x, y, cz + offset_z - half_z)
-			var b := Vector3(cx + offset_x - half_x, y, cz + offset_z + half_z)
-			var c := Vector3(cx + offset_x + half_x, y, cz + offset_z + half_z)
-			var d := Vector3(cx + offset_x + half_x, y, cz + offset_z - half_z)
-			for vertex in [a, b, c, a, c, d]:
-				st.add_vertex(vertex)
-			count += 1
-	if count == 0:
+			var east_land: bool = _land_cell(x + 1, z)
+			var west_land: bool = _land_cell(x - 1, z)
+			var south_land: bool = _land_cell(x, z + 1)
+			var north_land: bool = _land_cell(x, z - 1)
+			if east_land:
+				_append_shore_foam_edge(st, Vector2(x + 1, z), Vector2(x + 1, z + 1),
+					Vector2(-1, 0), x, z, 0, north_land, south_land)
+				edge_count += 1
+			if west_land:
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x, z + 1),
+					Vector2(1, 0), x, z, 1, north_land, south_land)
+				edge_count += 1
+			if south_land:
+				_append_shore_foam_edge(st, Vector2(x, z + 1), Vector2(x + 1, z + 1),
+					Vector2(0, -1), x, z, 2, west_land, east_land)
+				edge_count += 1
+			if north_land:
+				_append_shore_foam_edge(st, Vector2(x, z), Vector2(x + 1, z),
+					Vector2(0, 1), x, z, 3, west_land, east_land)
+				edge_count += 1
+	if edge_count == 0:
 		return null
 	var foam := MeshInstance3D.new()
 	foam.name = "ShoreFoam_%d_%d" % [chunk_x, chunk_z]
@@ -540,10 +605,12 @@ func _shore_foam(chunk_x: int, chunk_z: int) -> MeshInstance3D:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.albedo_color = Color(0.77, 0.88, 0.77, 0.53)
+	material.vertex_color_use_as_albedo = true
+	material.albedo_color = Color.WHITE
 	foam.material_override = material
 	foam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return foam
+
 
 func _ground_tile(x: int, z: int) -> int:
 	if stream_enabled:
@@ -587,20 +654,99 @@ func _distance_segment(pos: Vector2, a: Vector2, b: Vector2) -> float:
 	var factor: float = clampf((pos - a).dot(segment) / segment.length_squared(), 0.0, 1.0)
 	return pos.distance_to(a + segment * factor)
 
+func _water_material() -> ShaderMaterial:
+	if _shared_water_material == null:
+		_shared_water_material = ShaderMaterial.new()
+		_shared_water_material.shader = WATER_SHADER
+	return _shared_water_material
+
+
+func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3, shallow_amount: float) -> void:
+	# All six vertices of a flooded cell share one shore tint. Per-corner
+	# interpolation caused diagonal turquoise wedges along coastline tiles.
+	st.set_color(Color(shallow_amount, 0.0, 0.0, 1.0))
+	st.add_vertex(at)
+
+
+func _chunk_water_surface(chunk_x: int, chunk_z: int) -> MeshInstance3D:
+	# Use the EXACT tile mask as the visible ground, seabed and collision.
+	# The previous continuous is_land_at() tests rejected individual water
+	# triangles within a flooded tile, exposing dark seabed in triangular
+	# notches along straight shores, inside corners and streamed chunk edges.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count: int = 0
+	for x in range(chunk_x, mini(chunk_x + CHUNK_SIZE, map_half)):
+		for z in range(chunk_z, mini(chunk_z + CHUNK_SIZE, map_half)):
+			if _land_cell(x, z):
+				continue
+			var a := Vector3(float(x), 0.0, float(z))
+			var b := Vector3(float(x), 0.0, float(z + 1))
+			var c := Vector3(float(x + 1), 0.0, float(z + 1))
+			var d := Vector3(float(x + 1), 0.0, float(z))
+			var offshore_distance: float = maxf(0.0,
+				-_coast_margin(float(x) + 0.5, float(z) + 0.5))
+			var shallow_amount: float = 1.0 - smoothstep(0.0, 5.2, offshore_distance)
+			for vertex in [a, b, c, a, c, d]:
+				_append_pixel_water_vertex(st, vertex, shallow_amount)
+			count += 2
+	if count == 0:
+		return null
+	var surface := MeshInstance3D.new()
+	surface.name = "OceanSurface_%d_%d" % [chunk_x, chunk_z]
+	surface.mesh = st.commit()
+	surface.position.y = SEA_LEVEL
+	surface.material_override = _water_material()
+	surface.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return surface
+
+
+func _add_deep_ocean_quad(st: SurfaceTool, x0: float, x1: float, z0: float, z1: float) -> void:
+	# Exactly the same upward-facing winding and shader as the nearby water.
+	# All four large strips lie OUTSIDE the streamed island square, never
+	# across unloaded inland terrain. The central hole is kept completely dry.
+	var a := Vector3(x0, 0.0, z0)
+	var b := Vector3(x0, 0.0, z1)
+	var c := Vector3(x1, 0.0, z1)
+	var d := Vector3(x1, 0.0, z0)
+	for vertex in [a, b, c, a, c, d]:
+		# Far offshore is deep-blue only; shallow tint comes from true
+		# streamed coastline cells so the seam stays clean.
+		st.set_color(Color(0.0, 0.0, 0.0, 1.0))
+		st.add_vertex(vertex)
+
+
 func _make_water_horizon() -> void:
-	# Animated colour bands and small glints are driven by the GPU shader;
-	# no expensive reflections, ocean physics or mobile postprocessing.
+	# Endless-looking ocean must NEVER reuse the previous solid 352x352
+	# overlay across the camp. Four wide surrounding strips instead of a
+	# gigantic plane with land underneath = zero inland sea bleed.
 	var sea := MeshInstance3D.new()
 	sea.name = "DistantWaterHorizon"
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(float(map_half) * 2.0 + 160.0, float(map_half) * 2.0 + 160.0)
-	sea.mesh = plane
-	sea.position = Vector3(0.0, SEA_LEVEL, 0.0)
-	var surface := ShaderMaterial.new()
-	surface.shader = WATER_SHADER
-	sea.material_override = surface
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var edge: float = float(map_half)
+	var far: float = OCEAN_VISUAL_EXTENT
+	_add_deep_ocean_quad(st, -far, -edge, -far, far)  # west
+	_add_deep_ocean_quad(st, edge, far, -far, far)    # east
+	_add_deep_ocean_quad(st, -edge, edge, -far, -edge) # north
+	_add_deep_ocean_quad(st, -edge, edge, edge, far)  # south
+	sea.mesh = st.commit()
+	sea.position.y = SEA_LEVEL
+	sea.material_override = _water_material()
 	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sea.visible = false
 	add_child(sea)
+	_distant_ocean = sea
+
+
+func _update_water_horizon(point: Vector3) -> void:
+	if _distant_ocean == null:
+		return
+	# Only switch on near the true procedural coastline or out at sea.
+	# Camp begins around 90m inland; its distant invisible chunks stay dry.
+	# Private dungeons are outside the swimmable extent and remain isolated.
+	var in_ocean_world: bool = absf(point.x) < OCEAN_SWIM_HALF and absf(point.z) < OCEAN_SWIM_HALF
+	_distant_ocean.visible = in_ocean_world and _coast_margin(point.x, point.z) < OCEAN_HORIZON_MARGIN
 
 func _make_cliff_rim() -> void:
 	var st := SurfaceTool.new()
@@ -636,26 +782,7 @@ func _make_grass_detail() -> void:
 	add_child(PIXELS.as_instance(st, "VoxelWildflowers"))
 
 func _make_fields_scenery() -> void:
-	# Far-field vegetation is decorative and batched into ONE mesh draw call.
-	# Individual harvestables/collisions belong to the future chunk streamer.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = world_seed + 1903
-	for i in range(85):
-		var x: float = rng.randf_range(-44.0, 44.0)
-		var z: float = rng.randf_range(-44.0, 44.0)
-		if maxf(absf(x), absf(z)) < 29.0:
-			continue
-		var y: float = surface_y_at(x, z)
-		if i % 4 == 0:
-			PIXELS.box(st, Vector3(x, y + 0.75, z), Vector3(0.45, 1.45, 0.48), 8, 8)
-			PIXELS.box(st, Vector3(x, y + 1.7, z), Vector3(1.75, 1.0, 1.68), 9, 10)
-			PIXELS.box(st, Vector3(x, y + 2.3, z), Vector3(1.2, 0.72, 1.35), 1, 9)
-		elif i % 4 == 1:
-			PIXELS.box(st, Vector3(x, y + 0.34, z), Vector3(1.0, 0.7, 0.92), 4, 3)
-			PIXELS.box(st, Vector3(x + 0.27, y + 0.42, z - 0.16), Vector3(0.60, 0.80, 0.64), 7, 4)
-		else:
-			PIXELS.box(st, Vector3(x, y + 0.28, z), Vector3(0.88, 0.58, 0.82), 9, 10)
-			PIXELS.box(st, Vector3(x + 0.28, y + 0.43, z), Vector3(0.75, 0.69, 0.85), 1, 9)
-	add_child(PIXELS.as_instance(st, "FieldsBatchedScenery"))
+	for x in range(-48, 48, CHUNK_SIZE):
+		for z in range(-48, 48, CHUNK_SIZE):
+			_spawn_chunk_interactables(x, z)
+

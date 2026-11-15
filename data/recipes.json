@@ -218,7 +218,7 @@
     "seconds": 2.4,
     "strokes": 4,
     "category": "Backpacks",
-    "desc": "Tier 1 • +26 carry weight. Recraft to raise quality, up to three stars.",
+    "desc": "Tier 1 \u00e2\u20ac\u00a2 +26 carry weight. Recraft to raise quality, up to three stars.",
     "ingredients": {
       "fiber": 7,
       "hide": 3
@@ -233,7 +233,7 @@
     "seconds": 3.1,
     "strokes": 5,
     "category": "Backpacks",
-    "desc": "Tier 2 • +52 carry weight. Recraft to improve star quality.",
+    "desc": "Tier 2 \u00e2\u20ac\u00a2 +52 carry weight. Recraft to improve star quality.",
     "ingredients": {
       "linen": 4,
       "hide": 4,
@@ -249,7 +249,7 @@
     "seconds": 2.4,
     "strokes": 4,
     "category": "Backpacks",
-    "desc": "Tier 1 • +15 carry weight and 38% reduced wood weight. Improve quality by recrafting.",
+    "desc": "Tier 1 \u00e2\u20ac\u00a2 +15 carry weight and 38% reduced wood weight. Improve quality by recrafting.",
     "ingredients": {
       "wood": 5,
       "hide": 3,
@@ -265,7 +265,7 @@
     "seconds": 3.2,
     "strokes": 5,
     "category": "Backpacks",
-    "desc": "Tier 2 • +27 carry weight and 50% reduced wood weight.",
+    "desc": "Tier 2 \u00e2\u20ac\u00a2 +27 carry weight and 50% reduced wood weight.",
     "ingredients": {
       "wood": 8,
       "linen": 3,
@@ -282,7 +282,7 @@
     "seconds": 2.5,
     "strokes": 4,
     "category": "Backpacks",
-    "desc": "Tier 1 • +15 carry weight and 38% reduced ore, coal and stone weight.",
+    "desc": "Tier 1 \u00e2\u20ac\u00a2 +15 carry weight and 38% reduced ore, coal and stone weight.",
     "ingredients": {
       "stone": 5,
       "hide": 3,
@@ -298,7 +298,7 @@
     "seconds": 3.3,
     "strokes": 5,
     "category": "Backpacks",
-    "desc": "Tier 2 • +27 carry weight and 50% reduced ore, coal and stone weight.",
+    "desc": "Tier 2 \u00e2\u20ac\u00a2 +27 carry weight and 50% reduced ore, coal and stone weight.",
     "ingredients": {
       "iron_ingot": 3,
       "hide": 3,
@@ -320,6 +320,34 @@
       "coal": 3,
       "iron_ingot": 2,
       "herbs": 2
+    }
+  },
+  {
+    "id": "shrimp_net",
+    "name": "Shrimp Net",
+    "result": "shrimp_net",
+    "amount": 1,
+    "station": "workbench",
+    "seconds": 2.0,
+    "strokes": 3,
+    "category": "Tools",
+    "desc": "Your first fishing net. Equip it to catch shrimp in coastal pools.",
+    "ingredients": {
+      "fiber": 6
+    }
+  },
+  {
+    "id": "cooked_shrimp",
+    "name": "Cook Shrimp",
+    "result": "cooked_shrimp",
+    "amount": 1,
+    "station": "campfire",
+    "seconds": 1.8,
+    "strokes": 3,
+    "category": "Food",
+    "desc": "Cook your first fish. Restores 30 HP; assign to the Food slot.",
+    "ingredients": {
+      "shrimp": 2
     }
   }
 ]

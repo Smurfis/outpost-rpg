@@ -39,14 +39,18 @@ func _run() -> void:
 	check(not field.has_chunk_at(0, 0), "Travelling unloads distant starting cells")
 	check(field.get_node_or_null("GroundCollision_72_72") != null, "New destination collision loads with mesh")
 	check(field.loaded_chunk_count() <= 49, "Loaded mesh/collider budget stays bounded")
-	# A fixed diagonal corner chunk may now be open water. Decoration must
-	# stream with populated land chunks, never decorate the ocean floor.
-	var land_decor: bool = false
+	# Resource-shaped scenery is now represented by actual harvestable
+	# resource nodes; separate ChunkDecor meshes were intentionally removed
+	# to avoid drawing a second non-interactable copy of the same props.
+	var duplicate_decor: int = 0
+	var streamed_interactables: int = 0
 	for child in field.get_children():
 		if str(child.name).begins_with("ChunkDecor_"):
-			land_decor = true
-			break
-	check(land_decor, "Chunk decoration streams on nearby island land as a unit")
+			duplicate_decor += 1
+		elif str(child.name).begins_with("ChunkInteractables_"):
+			streamed_interactables += 1
+	check(duplicate_decor == 0, "Chunk streaming does not duplicate unharvestable decorations")
+	check(streamed_interactables > 0, "Nearby populated land streams actual interactable resource containers")
 	# Private dungeons teleport the hero to coordinates far beyond Fields.
 	# The streaming subsystem must ignore that without tearing down the map.
 	var count_before: int = field.loaded_chunk_count()

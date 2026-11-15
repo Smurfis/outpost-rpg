@@ -15,6 +15,7 @@ func _ready() -> void:
 	layer = 35
 	var root_ui := Control.new()
 	root_ui.name = "JoinRequestSurface"
+	root_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root_ui)
 	_backdrop = ColorRect.new()

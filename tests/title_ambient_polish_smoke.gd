@@ -40,11 +40,28 @@ func _run() -> void:
 		if button == null:
 			continue
 		_check(button.has_method("is_title_highlighted"), name + " implements gold selection")
-		var focus_style: StyleBoxFlat = button.get_theme_stylebox("focus") as StyleBoxFlat
-		_check(focus_style != null and focus_style.border_color.a < 0.01, name + " has no rectangular focus box")
-		_check(button.material is ShaderMaterial, name + " swaps selected artwork through pixel shader")
+		var focus_style: StyleBox = button.get_theme_stylebox("focus")
+		_check(focus_style is StyleBoxEmpty, name + " has no opaque/rectangular focus image")
+		_check(button.material == null, name + " has no custom canvas shader that could draw a white quad")
+		# A focused title button uses the highlight as its normal style.
+		# Compare against the original cached RGBA texture, not that active style.
+		var normal: StyleBoxTexture = button.get("_base_style") as StyleBoxTexture
+		var hover: StyleBoxTexture = button.get_theme_stylebox("hover") as StyleBoxTexture
+		_check(normal != null and hover != null and normal.texture != hover.texture, name + " uses independent alpha-masked highlight art")
 		button.call("_on_pointer_entered")
 		_check(bool(button.call("is_title_highlighted")) == not button.disabled, name + " highlights only while enabled")
+		if name == "QuitButton" and normal != null and hover != null:
+			var idle: Image = normal.texture.get_image()
+			var lit: Image = hover.texture.get_image()
+			var whited: int = 0
+			for y in range(18, mini(61, idle.get_height())):
+				for x in range(46, mini(235, idle.get_width())):
+					var original: Color = idle.get_pixel(x, y)
+					var selected: Color = lit.get_pixel(x, y)
+					var brightness: float = original.r * 0.299 + original.g * 0.587 + original.b * 0.114
+					if original.a > 0.8 and brightness < 0.78 and selected.r > 0.98 and selected.g > 0.98 and selected.b > 0.98:
+						whited += 1
+			_check(whited > 50, "Quit power icon and text gain genuinely white pixels on hover/press")
 		button.call("_on_pointer_exited")
 	var embers: Control = title.get_node_or_null("Artboard/CampfireEmbers") as Control
 	_check(embers != null, "Two small campfire ember emitters are wired into title")
@@ -53,7 +70,7 @@ func _run() -> void:
 		embers.set("reduced_motion", true)
 		_check(bool(embers.get("reduced_motion")), "Reduced-motion option suppresses ember movement")
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
-	var wide: Control = title.get_node_or_null("Artboard/WideBackdrop") as Control
+	var wide: Control = title.get_node_or_null("WideBackdrop") as Control
 	title.call("_process", 0.4)
 	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Approved background no longer receives mismatched opacity tint")
 	_check(wide != null and wide.modulate == Color.WHITE, "Ultrawide landscape also preserves original tones")
@@ -67,6 +84,10 @@ func _run() -> void:
 		intro.set("auto_advance", false)
 		root.add_child(intro)
 		await process_frame
+		_check(not bool(ProjectSettings.get_setting("application/boot_splash/show_image", true)), "Godot boot logo is suppressed before Five Star ident")
+		_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Five Star splash fills 20:9 Android instead of being pillarboxed")
+		var emblem: TextureRect = intro.get_node_or_null("StarMark") as TextureRect
+		_check(emblem != null and emblem.anchor_left <= 0.1 and emblem.anchor_right >= 0.9, "Five Star branding spans widescreen Android")
 		var twinkles: Control = intro.get_node_or_null("StarTwinkles") as Control
 		_check(twinkles != null, "Five Star pixel glints are added")
 		_check(twinkles != null and twinkles.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Intro stars cannot block tap-to-skip")

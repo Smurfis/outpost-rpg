@@ -5,8 +5,15 @@ const VOXEL_CREATURES = preload("res://scripts/voxel/voxel_creatures.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 var hero
 var game
+var max_hp: float = 32.0
 var hp := 32.0
 var alive := true
+var map_disposition: String = "hostile"
+
+func map_record() -> Dictionary:
+	return {"id": "mob:%d" % get_instance_id(), "position": global_position,
+		"category": "creature", "label": "Wild boar", "dimension": "overworld",
+		"disposition": map_disposition, "alive": alive, "visible_on_radar": visible}
 var cooldown := 1.5
 var respawn := 0.0
 var spawn_pos := Vector3.ZERO
@@ -19,6 +26,7 @@ var hit_lift: float = 0.0
 var visual_step_offset: Vector3 = Vector3.ZERO
 var burn_left: float = 0.0
 var burn_tick: float = 0.0
+var burn_flame: Node3D
 
 func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 	game = game_ref
@@ -54,6 +62,8 @@ func setup(game_ref: Node, hero_ref: CharacterBody3D, at: Vector3) -> void:
 			_box(Vector3(0.22, 0.52, 0.30), Vector3(x, 0.22, -0.55), Color("51382f"))
 			_sphere(Vector3(x * 0.75, 1.17, -0.50), Vector3(0.42, 0.52, 0.23), Color("684536"))
 	add_to_group("enemies")
+	add_to_group("wild_boars")
+	add_to_group("map_creatures")
 
 func _sphere(pos: Vector3, scale_by: Vector3, c: Color) -> void:
 	var n := MeshInstance3D.new()
@@ -86,17 +96,22 @@ func _physics_process(delta: float) -> void:
 		respawn -= delta
 		if respawn <= 0.0:
 			alive = true
-			hp = 32.0
+			hp = max_hp
 			global_position = spawn_pos
 			visible = true
 			knockback_velocity = Vector3.ZERO
 			hit_lift = 0.0
 			burn_left = 0.0
 			burn_tick = 0.0
+			if burn_flame != null:
+				burn_flame.visible = false
 			visual_step_offset = Vector3.ZERO
 			collision_layer = 2
 			collision_mask = 1
 		return
+	# Flames mirror the existing fiery-weapon status; the damage model is unchanged.
+	if burn_flame != null:
+		burn_flame.visible = burn_left > 0.0
 	# Fire continues to damage the creature without extending combat cooldown.
 	if burn_left > 0.0:
 		burn_left = maxf(0.0, burn_left - delta)
@@ -134,8 +149,12 @@ func _physics_process(delta: float) -> void:
 			visual_step_offset = visual_step_offset.limit_length(1.0)
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-10.0 * delta))
 	visual.position = visual_step_offset
-	if pursuit.length() > 0.1:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-pursuit.x, -pursuit.z), minf(delta * 10.0, 1.0))
+	# Existing boars also keep facing the hero after stopping to attack.
+	var facing: Vector3 = pursuit
+	if dist <= 1.45 and dist > 0.02:
+		facing = direction.normalized()
+	if facing.length_squared() > 0.02:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(delta * 10.0, 1.0))
 	cooldown -= delta
 	if dist < 1.8 and cooldown <= 0.0:
 		cooldown = 1.7
@@ -153,6 +172,19 @@ func ignite(seconds: float = 4.0) -> void:
 	if alive:
 		burn_left = maxf(burn_left, clampf(seconds, 0.0, 12.0))
 		burn_tick = 0.0
+		if burn_flame == null:
+			var preset_path: String = "res://addons/pyrolux_fx/presets/3d/fire_torch.tscn"
+			if ResourceLoader.exists(preset_path):
+				var flame_scene: PackedScene = load(preset_path) as PackedScene
+				if flame_scene != null:
+					burn_flame = flame_scene.instantiate() as Node3D
+					if burn_flame != null:
+						burn_flame.name = "PyroLuxBurnEffect"
+						burn_flame.position = Vector3(0, 0.35, 0)
+						burn_flame.scale = Vector3.ONE * 0.55
+						add_child(burn_flame)
+		if burn_flame != null:
+			burn_flame.visible = true
 
 func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 	if not alive:

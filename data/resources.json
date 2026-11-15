@@ -59,5 +59,12 @@
     "display": "River reeds",
     "rarity": "Common",
     "harvest": "Hands"
+  },
+  {
+    "id": "shrimp",
+    "display": "Raw shrimp",
+    "rarity": "Common",
+    "harvest": "Shrimp net",
+    "station": "campfire"
   }
 ]

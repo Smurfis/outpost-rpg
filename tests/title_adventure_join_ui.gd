@@ -37,7 +37,7 @@ func _run() -> void:
 	var backdrop: TextureRect = title.get_node_or_null("Artboard/Backdrop") as TextureRect
 	_check(backdrop != null and backdrop.modulate == Color.WHITE, "Backdrop no longer uses mismatched dusk opacity")
 	var version: Label = title.get_node_or_null("Artboard/Version") as Label
-	_check(version != null and version.visible and version.text.contains("0.5.0-dev"), "One live version label avoids doubled painted lettering")
+	_check(version != null and version.visible and version.text.contains("0.5.0") and version.text.contains("BUILD"), "One live channel/build label avoids doubled painted lettering")
 	title.call("_on_play")
 	var adventure: PanelContainer = title.get_node_or_null("Artboard/AdventurePanel") as PanelContainer
 	var shade: ColorRect = title.get_node_or_null("Artboard/AdventureShade") as ColorRect
@@ -52,7 +52,21 @@ func _run() -> void:
 	_check(slider != null, "Volume adjustment uses a genuine Godot HSlider")
 	var update: Button = panel.find_child("CheckForUpdates", true, false) as Button if panel != null else null
 	var download: Button = panel.find_child("DownloadUpdate", true, false) as Button if panel != null else null
-	_check(update != null and download != null and download.disabled, "Update check and download are separate real controls")
+	_check(update != null and download != null and download.disabled, "Update check and copy-link are separate real controls")
+	var settings_scroll: ScrollContainer = panel.find_child("TitleSettingsScroll", true, false) as ScrollContainer if panel != null else null
+	var return_home: Button = panel.find_child("ReturnToTitleHome", true, false) as Button if panel != null else null
+	_check(settings_scroll != null and settings_scroll.get_v_scroll_bar().max_value > settings_scroll.size.y,
+		"Settings update/accessibility content has a genuine scrollable region")
+	_check(return_home != null and return_home.visible and return_home.text.contains("CANCEL") and return_home.text.contains("TITLE"),
+		"Cancel / Return to Title is separate from the Settings scroll region")
+	if return_home != null:
+		_check(return_home.get_parent() != settings_scroll and return_home.get_global_rect().end.y <= panel.get_global_rect().end.y + 1.0,
+			"Home footer is pinned INSIDE the Settings modal, not clipped under update controls")
+		_check(return_home.get_theme_stylebox("normal") is StyleBoxEmpty,
+			"Settings footer matches the clean frameless Cancel on world loading")
+		return_home.pressed.emit()
+		_check(not panel.visible, "Home footer closes Settings and reveals original Outpost title buttons")
+		title.call("_toggle_settings")
 	_check(title.has_method("_join_friend"), "LAN address input is wired to a real host connection")
 	var session_script: Script = load("res://scripts/network/coop_session.gd") as Script
 	_check(session_script != null, "Existing LAN co-op session remains available")

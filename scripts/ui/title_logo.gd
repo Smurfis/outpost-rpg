@@ -4,7 +4,7 @@ extends Control
 ## Drop the approved PNG at res://assets/ui/title/outpost_logo.png to replace
 ## the lightweight painted fallback automatically. No game-scene dependency.
 
-const LOGO_PATH := "res://assets/ui/title/outpost_logo.png"
+const LOGO_PATH := "res://assets/ui/title/outpost_loading_logo.png"
 const VECTOR_PATH := "res://assets/ui/title/outpost_logo_vector.svg"
 const DESIGN_SIZE := Vector2(800.0, 440.0)
 

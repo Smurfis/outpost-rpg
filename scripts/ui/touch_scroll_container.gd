@@ -10,7 +10,10 @@ var _dragged: bool = false
 
 func _ready() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	# Keep an explicit visible scrollbar requested by Character/Resources
+	# or chest storage. Legacy touch-scroll lists still default to hidden.
+	if vertical_scroll_mode == ScrollContainer.SCROLL_MODE_AUTO:
+		vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll_deadzone = 4
 
 func _input(event: InputEvent) -> void:

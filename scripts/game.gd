@@ -3,18 +3,42 @@ extends Node3D
 const PLAYER = preload("res://scripts/player.gd")
 const NODE = preload("res://scripts/resource_node.gd")
 const ENEMY = preload("res://scripts/enemy.gd")
+const DUNGEON_RARITY = preload("res://scripts/dungeons/dungeon_rarity.gd")
+const WILDLIFE = preload("res://scripts/creatures/overworld_wildlife.gd")
 const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
+const STATION_PATH = preload("res://scripts/navigation/crafting_station_path.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
+const VOXEL_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const NIGHTFALL = preload("res://scripts/world/day_night_cycle.gd")
 const COOP = preload("res://scripts/network/coop_session.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const LEVELS = preload("res://scripts/progression/character_levels.gd")
+const CONTROLS = preload("res://scripts/interaction/player_controls.gd")
+const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
+const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+const MAP_SERVICE = preload("res://scripts/map/map_service.gd")
+const WORLD_MAP = preload("res://scripts/ui/world_map.gd")
+const PC_CHAT = preload("res://scripts/ui/outpost_pc_chat.gd")
+var map_service: Node
+var world_map: CanvasLayer
+var chat: CanvasLayer
+var controls
+var prop_placement = PLACEMENT.new()
+var focus_target: Node3D
+# Last successfully attacked enemy stays in the central target HUD briefly.
+var recent_attack_target: Node3D
+var recent_target_seconds: float = 0.0
+const TARGET_HUD_NEARBY_RADIUS: float = 12.0
+var opened_world_objects: Dictionary = {}
+const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var voxel_art_enabled: bool = true
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
+@export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
 const SAVE = "user://outpost_progress_v02.json"
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
@@ -24,6 +48,7 @@ var camera: Camera3D
 var camera_angle: float = atan2(17.0, 20.0)
 var camera_angle_target: float = atan2(17.0, 20.0)
 var camera_occlusion_rise: float = 0.0
+var _camera_clearance_query: PhysicsShapeQueryParameters3D
 var camera_focus_smooth: Vector3 = Vector3.ZERO
 const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
@@ -31,19 +56,38 @@ var bag_quality: Dictionary = {} # One maintained 0-3 star quality per owned bag
 var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
-var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
+var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "copper": 0, "silver": 0, "gold": 0, "gems": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
 var menu
 var coop
 var recipes: Array = []
 var crafting: Dictionary = {}
 var craft_work_cooldown: float = 0.0
 var stations: Dictionary = {}
+var station_walk_target: String = ""
+var station_walk_timeout: float = 0.0
+var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
+var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
+# Three real damage checks across the 0.9s weapon animation. Per-tick
+# damage is 40% of the old single hit (120% total if all three land).
+const WHIRLWIND_TICK_TIMES: Array[float] = [0.0, 0.30, 0.60]
+var whirlwind_tick_clock: float = -1.0
+var whirlwind_ticks_done: int = 0
+var whirlwind_tick_damage: float = 0.0
+var whirlwind_tick_weapon: String = ""
+var whirlwind_unique_hits: Dictionary = {}
+const MAX_MANA: float = 35.0
+const MANA_REGEN_PER_SECOND: float = 2.5
+var mana: float = MAX_MANA
 var weapon_enchants: Dictionary = {} # Owned weapon-id -> fire.
 var quick_slots: Dictionary = {"potion":"", "consumable":""}
+# Runtime-only recovery time: drawn as a genuine radial on the matching HUD slot.
+const QUICK_USE_COOLDOWN: float = 4.0
+var quick_use_cooldowns: Dictionary = {"potion": 0.0, "consumable": 0.0}
 var kills: int = 0
 var spear_crafted: bool = false
 var attack_delay: float = 0.0
@@ -56,7 +100,17 @@ var last_hit_node: Node3D
 var workshop: Vector3 = Vector3(3.5, 0.0, 0.6)
 
 func _ready() -> void:
+	# Preserve fullscreen content scale on phones with extra-wide displays.
+	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	_register_keys()
+	inventory.merge({"shrimp": 0, "cooked_shrimp": 0, "shrimp_net": 0})
+	equipment["tool_fishing"] = ""
+	gathering_skill_xp["fishing"] = 0
+	for point in station_positions.values():
+		prop_placement.reserve(point, 1.7)
+	prop_placement.reserve(Vector3(-6.1, 0, 2.8), 2.2)
+	for point in [Vector3(-18, 0, -18), Vector3(18, 0, -18), Vector3(-18, 0, 18), Vector3(18, 0, 18), Vector3(0, 0, -19)]:
+		prop_placement.reserve(point, 3.2)
 	_load_recipes()
 	_lighting()
 	_world()
@@ -76,12 +130,17 @@ func _ready() -> void:
 	hero.setup(self, hud, camera)
 	_resources()
 	_enemies()
+	map_service = MAP_SERVICE.new()
+	add_child(map_service)
+	map_service.setup(self)
 	# Title Play starts a fresh run; Continue reads the previous save.
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
 		get_tree().root.remove_meta("outpost_new_adventure")
 	if not fresh_start:
 		_load()
+	var previous_skill_xp: int = int(gathering_skill_xp.get(last_trained_skill, 0)) if gathering_skill_xp.has(last_trained_skill) else int(weapon_mastery_xp.get(last_trained_skill, 0))
+	hud.set_trained_skill(last_trained_skill, previous_skill_xp)
 	menu = MENU.new()
 	menu.setup(self)
 	add_child(menu)
@@ -102,61 +161,76 @@ func _ready() -> void:
 	elif requested_lan == "join":
 		coop.join_lan(lan_ip, lan_name)
 	_camera(1.0)
+	controls = CONTROLS.new()
+	add_child(controls)
+	controls.setup(self)
+	world_map = WORLD_MAP.new()
+	add_child(world_map)
+	world_map.setup(self, map_service)
+	chat = PC_CHAT.new()
+	chat.setup(self)
+	add_child(chat)
 	hud.toast("Welcome to OUTPOST! Find resources and visit a crafting station.")
 
+func toggle_world_map() -> void:
+	if world_map == null:
+		return
+	if world_map.is_open():
+		world_map.close_map()
+	elif controls == null or not controls.modal_open():
+		world_map.open_map()
+
 func _register_keys() -> void:
-	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "gather": [KEY_G], "interact": [KEY_E], "attack": [KEY_F, KEY_SPACE], "jump": [KEY_J], "craft": [KEY_C], "bag": [KEY_B, KEY_I], "heal": [KEY_H], "camera_left": [KEY_Q], "camera_right": [KEY_R]}
+	var binds := {"left": [KEY_A, KEY_LEFT], "right": [KEY_D, KEY_RIGHT], "up": [KEY_W, KEY_UP], "down": [KEY_S, KEY_DOWN], "ability_1": [KEY_1], "ability_2": [KEY_2], "ability_3": [KEY_3], "potion": [KEY_Q], "food": [KEY_E], "tool_cycle": [KEY_T], "bag": [KEY_I], "character": [KEY_C], "skills": [KEY_K], "cancel": [KEY_ESCAPE], "focus": [KEY_TAB], "gather": [], "interact": [KEY_SPACE], "attack": [], "craft": [], "heal": [], "camera_left": [], "camera_right": []}
+	if InputMap.has_action("outpost_jump"):
+		InputMap.erase_action("outpost_jump")
+	binds["map"] = [KEY_M]
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
+		InputMap.action_erase_events(key_name)
 		for code in binds[action]:
 			var event := InputEventKey.new()
 			event.physical_keycode = int(code)
 			InputMap.action_add_event(key_name, event)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("outpost_interact"):
-		smart_interact()
-	elif event.is_action_pressed("outpost_gather"):
-		gather()
-	elif event.is_action_pressed("outpost_attack"):
-		attack()
-	elif event.is_action_pressed("outpost_craft"):
-		craft()
-	elif event.is_action_pressed("outpost_bag"):
-		show_inventory()
-	elif event.is_action_pressed("outpost_heal"):
-		use_meal()
-	elif event.is_action_pressed("outpost_camera_left"):
-		rotate_camera(-1)
-	elif event.is_action_pressed("outpost_camera_right"):
-		rotate_camera(1)
+	pass # Shared controller routes InputMap actions after GUI consumption.
 
 func _process(delta: float) -> void:
+	_update_station_walk(delta)
 	_update_crafting(delta)
 	attack_delay = maxf(0.0, attack_delay - delta)
 	gather_delay = maxf(0.0, gather_delay - delta)
+	recent_target_seconds = maxf(0.0, recent_target_seconds - delta)
+	_advance_whirlwind_ticks(delta)
 	for id in skill_cooldowns:
 		skill_cooldowns[id] = maxf(0.0, float(skill_cooldowns[id]) - delta)
+	for slot in quick_use_cooldowns:
+		quick_use_cooldowns[slot] = maxf(0.0, float(quick_use_cooldowns[slot]) - delta)
+	mana = minf(MAX_MANA, mana + MANA_REGEN_PER_SECOND * delta)
 	world_time += delta
 	_camera(delta)
 	if day_night != null and hud != null:
 		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
 		return
-	# The new coast has real drops into deep water. Until a boat/swimming
-	# controller is built, recover the player instead of trapping them below
-	# an opaque ocean surface. Never affect isolated dungeon coordinates.
-	if voxel_art_enabled and chunk_streaming_enabled and hero.global_position.y < -3.60 and absf(hero.global_position.x) < 96.0 and absf(hero.global_position.z) < 96.0:
+	# Swimming now handles the shore and surface. Only recover if the hero
+	# somehow falls below the seabed; don't teleport normal swimmers home.
+	# Dungeon instances remain isolated from overworld depth checks.
+	# Failsafe for players that were already outside the submerged map
+	# before upgrading an Alpha build. Private dungeons are far away and
+	# must never be affected by this overworld-only recovery.
+	if voxel_art_enabled and chunk_streaming_enabled and not hero.swimming and hero.global_position.y < -9.0 and absf(hero.global_position.x) < 110.0 and absf(hero.global_position.z) < 110.0:
 		hero.global_position = Vector3(0, 0.35, 0)
 		hero.velocity = Vector3.ZERO
 		hero.knockback_velocity = Vector3.ZERO
-		hud.toast("Deep water! A boat is needed to leave the island.")
+		hud.toast("Recovered from beneath the seabed.")
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
-	var resource = _nearest_resource()
+	var resource = _nearest_resource() if controls == null or not controls.desktop else null
 	if resource != last_hit_node:
 		if is_instance_valid(last_hit_node):
 			last_hit_node.set_targeted(false)
@@ -167,10 +241,8 @@ func _process(delta: float) -> void:
 	var hint: String = "Explore: iron, coal, clay, herbs, reeds, mushrooms and more."
 	if resource != null:
 		hint = "Nearby: %s • gather (%d hits remaining)" % [resource.kind.capitalize(), resource.hits_left]
-	elif enemy != null:
-		hint = "Dungeon guardian nearby • use ATTACK" if coop != null and coop.in_party_dungeon() else "Wild boar nearby • use ATTACK"
 	elif closest_station() != "":
-		hint = "%s nearby • open CRAFT to make items" % closest_station().capitalize()
+		hint = "%s Crafting Station • tap or CRAFT" % closest_station().capitalize()
 	hud.render_status(hero.health, inventory, experience, kills, str(equipment.get("weapon", "training_blade")), goal, hint)
 	hud.update_context(resource != null, enemy != null, closest_station() != "")
 
@@ -182,7 +254,9 @@ func rotate_camera(direction: int) -> void:
 func drag_camera(screen_pixels: float) -> void:
 	# Continuous world-space orbit from Android one-finger drag or desktop
 	# right mouse drag. It never changes movement/chunk ownership directly.
-	camera_angle_target -= clampf(screen_pixels, -140.0, 140.0) * CAMERA_DRAG_RADIANS_PER_PIXEL
+	# Cap pathological Android event deltas: one dropped touch frame must not
+	# spin the world by a whole quarter turn.
+	camera_angle_target -= clampf(screen_pixels, -90.0, 90.0) * CAMERA_DRAG_RADIANS_PER_PIXEL
 
 func _camera(delta: float) -> void:
 	if hero == null or camera == null:
@@ -201,16 +275,36 @@ func _camera(delta: float) -> void:
 	var focus: Vector3 = camera_focus_smooth
 	var orbit := Vector3(sin(camera_angle) * 26.25, 20.0, cos(camera_angle) * 26.25)
 	var destination: Vector3 = focus + orbit
-	var query := PhysicsRayQueryParameters3D.create(destination, desired_focus, 1, [hero.get_rid()])
-	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	var occluded: bool = not hit.is_empty() and (hit["position"] as Vector3).distance_to(desired_focus) > 1.8
-	camera_occlusion_rise = lerpf(camera_occlusion_rise, 7.0 if occluded else 0.0, 1.0 - exp(-5.0 * t))
-	destination.y += camera_occlusion_rise
-	if camera.global_position == Vector3.ZERO:
-		camera.global_position = destination
-	else:
-		camera.global_position = camera.global_position.lerp(destination, 1.0 - exp(-7.0 * t))
-	camera.look_at(focus, Vector3.UP)
+	# A doorway/tree between the hero and camera is visual occlusion, not
+	# camera collision. Raising the framing for that ray hit displaced the
+	# hero on screen without clearing the obstruction. Only protect the
+	# actual camera position, keeping player and world collisions unchanged.
+	camera_occlusion_rise = lerpf(camera_occlusion_rise, _camera_clearance_rise(destination), 1.0 - exp(-5.0 * t))
+	# Old position interpolation lagged behind smoothed yaw, so look_at()
+	# changed pitch unpredictably when users swiped sideways very quickly.
+	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
+	# each frame to guarantee a constant pitch and zero roll.
+	var raised_focus: Vector3 = focus + Vector3.UP * camera_occlusion_rise
+	camera.global_position = raised_focus + orbit
+	camera.look_at(raised_focus, Vector3.UP)
+
+func _camera_clearance_rise(destination: Vector3) -> float:
+	if _camera_clearance_query == null:
+		_camera_clearance_query = PhysicsShapeQueryParameters3D.new()
+		var probe := SphereShape3D.new()
+		probe.radius = 0.35
+		_camera_clearance_query.shape = probe
+		_camera_clearance_query.collision_mask = 1
+		_camera_clearance_query.collide_with_areas = false
+		_camera_clearance_query.exclude = [hero.get_rid()]
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	# Usually one query. Extra probes are bounded and only run when solid
+	# geometry overlaps the camera itself, never for a blocked sightline.
+	for rise in range(8):
+		_camera_clearance_query.transform = Transform3D(Basis.IDENTITY, destination + Vector3.UP * float(rise))
+		if space.intersect_shape(_camera_clearance_query, 1).is_empty():
+			return float(rise)
+	return 7.0
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -281,6 +375,7 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var landscape = VOXEL_BIOME.new()
 		add_child(landscape)
+		terrain_surface = landscape
 		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
 		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
 		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
@@ -299,7 +394,12 @@ func _world() -> void:
 	if voxel_art_enabled:
 		var shelter: MeshInstance3D = VOXEL_PROPS.tent()
 		shelter.position = Vector3(-6.1, 0.0, 2.8)
-		add_child(shelter)
+		var shelter_object = WORLD_OBJECT.new()
+		add_child(shelter_object)
+		shelter_object.position = shelter.position
+		shelter.position = Vector3.ZERO
+		shelter_object.setup(self, "camp_shelter", "Camp shelter", "inspect", shelter)
+		shelter_object.message = "Outpost shelter. Nearby stations craft equipment and cook food."
 	else:
 		var tent := CylinderMesh.new()
 		tent.top_radius = 0.0
@@ -307,82 +407,117 @@ func _world() -> void:
 		tent.height = 2.9
 		part(tent, Vector3(-6.1, 1.38, 2.8), Color("d5b77b"))
 		block(Vector3(1.9, 0.13, 2.0), Vector3(-6.1, 0.05, 2.8), Color("4d412e"))
-	# Decorative shrubs and wildflowers (deterministic for stable map)
+	# Every visible bush is now a harvestable, spaced against all other props.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 512309
-	for i in range(68):
-		var x := rng.randf_range(-21.0, 21.0)
-		var z := rng.randf_range(-21.0, 21.0)
-		if absf(x) < 5.3 and absf(z) < 5.3:
-			continue
-		if voxel_art_enabled:
-			if i % 2 == 0:
-				var shrub: MeshInstance3D = VOXEL_PROPS.bush(i % 13 == 0)
-				shrub.position = Vector3(x, 0, z)
-				shrub.scale = Vector3.ONE * rng.randf_range(0.18, 0.40)
-				add_child(shrub)
-		else:
-			var mesh := SphereMesh.new()
-			mesh.radial_segments = 7
-			mesh.rings = 3
-			mesh.radius = rng.randf_range(0.15, 0.38)
-			mesh.height = 0.40
-			var tuft := part(mesh, Vector3(x, 0.12, z), Color("456f41") if i % 3 == 0 else Color("89a566"))
-			tuft.scale = Vector3(1.4, 0.53, 1.0)
-	# Details: timber palisade sections, supply crates, stumps and path stones
-	for i in range(12):
-		var px: float = -10.0 + float(i) * 1.75
-		if i < 5 or i > 8:
-			block(Vector3(0.25, 1.1, 0.25), Vector3(px, 0.55, 6.9), Color("735239"))
-			block(Vector3(1.65, 0.16, 0.18), Vector3(px, 0.82, 6.9), Color("b1844c"))
-	for x in [-4.2, -3.5, 2.4]:
-		block(Vector3(0.85, 0.78, 0.85), Vector3(x, 0.39, 4.3), Color("946d45"))
-		block(Vector3(0.90, 0.08, 0.9), Vector3(x, 0.82, 4.3), Color("be9867"))
-	for i in range(17):
-		var stones := CylinderMesh.new()
-		stones.top_radius = 0.18
-		stones.bottom_radius = 0.22
-		stones.height = 0.045
-		stones.radial_segments = 6
-		part(stones, Vector3(-2.2 + float(i % 5) * 0.98, 0.02, -9.0 + float(i / 5.0) * 1.6), Color("a99a7b"))
+	for i in range(20):
+		var site := Vector3(rng.randf_range(-21.0, 21.0), 0, rng.randf_range(-21.0, 21.0))
+		if absf(site.x) > 6.0 or absf(site.z) > 6.0:
+			spawn_resource(self, "herbs" if i % 4 == 0 else "fiber", site)
+	# Deliberate counted timber/stone bundles replace untracked overlapping props.
+	spawn_resource(self, "wood", Vector3(-10, 0, 7), 3, true)
+	spawn_resource(self, "stone", Vector3(3, 0, 11), 2, true)
+	# The camp guide is a stationary NPC, NOT a second player. A unique
+	# outfit, hat, and permanent nameplate prevent confusing it with a ghost
+	# avatar when returning via Leave Game > Continue.
+	var guide = WORLD_OBJECT.new()
+	guide.name = "CampGuideNPC"
+	add_child(guide)
+	guide.position = Vector3(0, 0, 4.5)
+	var guide_art := Node3D.new()
+	guide_art.name = "GuideOutfit"
+	for part_id in ["adventurer_torso", "adventurer_head"]:
+		var piece: MeshInstance3D = preload("res://scripts/voxel/voxel_character.gd").create_part(part_id)
+		if piece != null:
+			if part_id == "adventurer_head":
+				piece.position.y = 1.89
+			var dye := StandardMaterial3D.new()
+			dye.albedo_color = Color("#e7be87") if part_id == "adventurer_head" else Color("#447c55")
+			dye.roughness = 1.0
+			piece.material_override = dye
+			guide_art.add_child(piece)
+	var guide_hat := MeshInstance3D.new()
+	guide_hat.name = "GuideWideBrimHat"
+	var hat_mesh := CylinderMesh.new()
+	hat_mesh.top_radius = 0.49
+	hat_mesh.bottom_radius = 0.49
+	hat_mesh.height = 0.16
+	guide_hat.mesh = hat_mesh
+	guide_hat.position = Vector3(0.0, 2.28, 0.0)
+	var hat_material := StandardMaterial3D.new()
+	hat_material.albedo_color = Color("#775a36")
+	hat_material.roughness = 1.0
+	guide_hat.material_override = hat_material
+	guide_art.add_child(guide_hat)
+	var guide_name := Label3D.new()
+	guide_name.name = "NPCNameplate"
+	guide_name.text = "OUTPOST GUIDE"
+	guide_name.position = Vector3(0.0, 2.65, 0.0)
+	guide_name.font_size = 36
+	guide_name.pixel_size = 0.006
+	guide_name.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	guide_art.add_child(guide_name)
+	guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
+	guide.message = "Gather fibre, craft a Shrimp net at the Workbench, then fish coastal pools. Cook shrimp at the Campfire."
+	prop_placement.reserve(guide.position, 0.6, guide)
 	# Make the Fields truly walkable. Keep the original small camp collision
 	# underneath its centre; outside it the chunk trimeshes own collision.
-	var half_extent: float = 96.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
+	var half_extent: float = 384.0 if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled else 48.0 if voxel_art_enabled and fields_biome_enabled else 23.0
 	var span: float = half_extent * 2.0
-	_wall(Vector3(-half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
-	_wall(Vector3(half_extent, 2.0, 0), Vector3(0.5, 6.0, span))
-	_wall(Vector3(0, 2.0, -half_extent), Vector3(span, 6.0, 0.5))
-	_wall(Vector3(0, 2.0, half_extent), Vector3(span, 6.0, 0.5))
+	if voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled:
+		# Four inexpensive offshore seabed colliders support the genuinely
+		# swimmable ocean outside the streamed terrain (+/-96). The ocean
+		# remains afloat even if a knockback or delayed tile would otherwise
+		# drop the player into the empty space below open water.
+		var inner: float = 96.0
+		var water_width: float = half_extent - inner
+		var water_center: float = (half_extent + inner) * 0.5
+		_wall(Vector3(-water_center, -7.0, 0.0), Vector3(water_width, 2.0, span))
+		_wall(Vector3(water_center, -7.0, 0.0), Vector3(water_width, 2.0, span))
+		_wall(Vector3(0.0, -7.0, -water_center), Vector3(inner * 2.0, 2.0, water_width))
+		_wall(Vector3(0.0, -7.0, water_center), Vector3(inner * 2.0, 2.0, water_width))
+	# Originally the border collider ended at Y=-1, above the sea level
+	# (-2.82). The swimmer could pass beneath the wall into an unmeshed
+	# infinite ocean, where swimming deactivated and gravity never stopped.
+	# Extend only the streamed-island barriers below the actual seabed.
+	var sea_border: bool = voxel_art_enabled and fields_biome_enabled and chunk_streaming_enabled
+	var boundary_y: float = -7.0 if sea_border else 2.0
+	var boundary_height: float = 24.0 if sea_border else 6.0
+	_wall(Vector3(-half_extent, boundary_y, 0), Vector3(0.5, boundary_height, span))
+	_wall(Vector3(half_extent, boundary_y, 0), Vector3(0.5, boundary_height, span))
+	_wall(Vector3(0, boundary_y, -half_extent), Vector3(span, boundary_height, 0.5))
+	_wall(Vector3(0, boundary_y, half_extent), Vector3(span, boundary_height, 0.5))
 
 func _mesh_asset(id: String, where: Vector3, size_factor: float = 1.0, angle: float = 0.0) -> void:
-	if voxel_art_enabled:
-		var prop: MeshInstance3D
-		match id:
-			"oak_tree":
-				prop = VOXEL_PROPS.tree()
-			"rock_deposit":
-				prop = VOXEL_PROPS.rock()
-			"supply_crate":
-				prop = VOXEL_PROPS.crate()
-		if prop != null:
-			# Stable unique names avoid Godot's auto-generated sibling names.
-			prop.name = "%s_%d_%d" % [str(prop.name), roundi(where.x * 10.0), roundi(where.z * 10.0)]
-			prop.position = where
-			prop.scale = Vector3.ONE * size_factor
-			prop.rotation.y = angle
-			add_child(prop)
-			return
-	var mesh: Mesh = load("res://assets/models/" + id + ".obj") as Mesh
-	if mesh == null:
-		push_warning("Unable to import 3D model: " + id)
+	if id in ["oak_tree", "rock_deposit"]:
+		spawn_resource(self, "wood" if id == "oak_tree" else "stone", where, 1, true)
 		return
-	var instance := MeshInstance3D.new()
-	instance.mesh = mesh
-	instance.name = id
-	instance.position = where
-	instance.scale = Vector3.ONE * size_factor
-	instance.rotation.y = angle
-	add_child(instance)
+	# Nearby crafting benches reserve their work areas. Move supply crates
+	# to valid nearby ground rather than silently removing every blocked chest.
+	var site: Vector3 = where
+	if not prop_placement.available(site, 0.8):
+		var found: bool = false
+		for i in range(1, 49):
+			var search_angle: float = float(i) * 2.39996
+			var radius: float = 1.6 + float(i / 8)
+			var candidate: Vector3 = where + Vector3(cos(search_angle) * radius, 0, sin(search_angle) * radius)
+			if absf(candidate.x) <= 21.0 and absf(candidate.z) <= 21.0 and prop_placement.available(candidate, 0.8):
+				site = candidate
+				found = true
+				break
+		if not found:
+			push_warning("Unable to place camp supply chest near " + str(where))
+			return
+	if terrain_surface != null:
+		site.y = terrain_surface._tile_height(floori(site.x), floori(site.z)) + 0.055
+	var chest = WORLD_OBJECT.new()
+	add_child(chest)
+	chest.position = site
+	var art: MeshInstance3D = VOXEL_PROPS.crate()
+	art.scale = Vector3.ONE * size_factor
+	art.rotation.y = angle
+	chest.setup(self, "camp_crate_%s_%s" % [where.x, where.z], "Supply chest", "chest", art, {"wood": 2, "fiber": 2})
+	prop_placement.reserve(site, 0.8, chest)
 
 func _terrain_path(from: Vector3, to: Vector3, radius: float, shade: Color) -> void:
 	var creator := SurfaceTool.new()
@@ -449,27 +584,78 @@ func closest_station() -> String:
 func near_station(station_id: String) -> bool:
 	return closest_station() == station_id
 
+func station_at_screen(screen_pos: Vector2) -> String:
+	# The station is a mesh, not a clickable full-screen GUI overlay. Using
+	# camera projection keeps touch selection consistent during camera orbit.
+	if camera == null or hero == null or (menu != null and menu.visible):
+		return ""
+	var closest: String = ""
+	var threshold: float = clampf(get_viewport().get_visible_rect().size.y * 0.085, 43.0, 78.0)
+	for station_id in stations:
+		var node: Node3D = stations[station_id] as Node3D
+		if node == null or camera.is_position_behind(node.global_position + Vector3.UP):
+			continue
+		var projected: Vector2 = camera.unproject_position(node.global_position + Vector3.UP * 0.9)
+		var distance: float = screen_pos.distance_to(projected)
+		if distance < threshold:
+			threshold = distance
+			closest = str(station_id)
+	return closest
+
+func visit_crafting_station(station_id: String) -> bool:
+	if hero == null or menu == null or menu.visible or not station_positions.has(station_id):
+		return false
+	# If standing beside the clicked station, open immediately. Otherwise
+	# navigate to the closest usable perimeter, never into the station mesh.
+	var target: Vector3 = station_positions[station_id]
+	var horizontal: float = Vector2(hero.global_position.x - target.x, hero.global_position.z - target.z).length()
+	if horizontal <= 3.0 and closest_station() == station_id:
+		hero.stop_interaction_move()
+		station_walk_target = ""
+		show_crafting()
+		return true
+	var path: PackedVector3Array = STATION_PATH.plan(hero.global_position, station_id, station_positions, terrain_surface)
+	if path.is_empty():
+		hud.toast("No safe route to this Crafting Station.")
+		return false
+	station_walk_target = station_id
+	station_walk_timeout = 22.0
+	hero.move_along_station_path(path)
+	hud.toast("Walking to %s Crafting Station" % station_id.capitalize())
+	return true
+
+func cancel_station_walk() -> void:
+	station_walk_target = ""
+	station_walk_timeout = 0.0
+
+func _update_station_walk(delta: float) -> void:
+	if station_walk_target.is_empty() or hero == null:
+		return
+	station_walk_timeout -= delta
+	if not hero.interaction_moving or station_walk_timeout <= 0.0:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		return
+	if menu != null and menu.visible:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		return
+	var point: Vector3 = station_positions[station_walk_target]
+	var distance: float = Vector2(hero.global_position.x - point.x, hero.global_position.z - point.z).length()
+	if distance <= 3.25 and closest_station() == station_walk_target:
+		hero.stop_interaction_move()
+		cancel_station_walk()
+		show_crafting()
+
 func _resources() -> void:
 	for pos in [Vector3(-6, 0, -1), Vector3(-8, 0, -6), Vector3(6, 0, -7), Vector3(11, 0, 2), Vector3(-12, 0, 9), Vector3(7, 0, 12), Vector3(14, 0, -10)]:
-		var tree = NODE.new()
-		add_child(tree)
-		tree.position = pos
-		tree.setup("wood")
+		spawn_resource(self, "wood", pos, 1, true)
 	for pos in [Vector3(-6, 0, 7), Vector3(6, 0, 7), Vector3(11, 0, -7), Vector3(-13, 0, -9), Vector3(15, 0, 14)]:
-		var rock = NODE.new()
-		add_child(rock)
-		rock.position = pos
-		rock.setup("stone")
+		spawn_resource(self, "stone", pos, 1, true)
 	for pos in [Vector3(-4, 0, -9), Vector3(3, 0, -12), Vector3(12, 0, 9), Vector3(-15, 0, 4)]:
-		var bush = NODE.new()
-		add_child(bush)
-		bush.position = pos
-		bush.setup("fiber")
+		spawn_resource(self, "fiber", pos, 1, true)
 	for pos in [Vector3(-10, 0, 3), Vector3(8, 0, -3), Vector3(-17, 0, 16)]:
-		var berry = NODE.new()
-		add_child(berry)
-		berry.position = pos
-		berry.setup("berries")
+		spawn_resource(self, "berries", pos, 1, true)
 	# Uncommon resource clusters on the edges of the forest.
 	var points: Dictionary = {
 		"iron": [Vector3(-19, 0, -12), Vector3(18, 0, 15), Vector3(15, 0, -15), Vector3(-17, 0, 18)],
@@ -481,34 +667,24 @@ func _resources() -> void:
 	}
 	for item_id in points:
 		for pos in points[item_id]:
-			var node = NODE.new()
-			add_child(node)
-			node.position = pos
-			node.setup(str(item_id))
+			spawn_resource(self, str(item_id), pos, 1, true)
 
-	# The wider Fields has a few harvestable nodes beyond the original camp.
-	# Do not move the starting resources or alter recipe/save data.
-	if voxel_art_enabled and fields_biome_enabled:
-		var landscape = get_node_or_null("VoxelAtmosphere")
-		if landscape != null:
-			var field_sites: Dictionary = {
-				"wood": [Vector2(-34, -32), Vector2(32, -37), Vector2(-35, 29), Vector2(39, 24)],
-				"stone": [Vector2(35, 34), Vector2(-38, 34), Vector2(-34, -38)],
-				"berries": [Vector2(35, -31), Vector2(-37, 27)],
-				"fiber": [Vector2(32, 27), Vector2(-32, -31)]
-			}
-			for kind in field_sites:
-				for site in field_sites[kind]:
-					var field_node = NODE.new()
-					add_child(field_node)
-					field_node.position = Vector3(site.x, landscape.surface_y_at(site.x, site.y) + 0.055, site.y)
-					field_node.setup(str(kind))
 
 func _enemies() -> void:
+	# Original voxel boar spawns are untouched. Quaternius pigs and wolves
+	# are separate animated creatures; a pig is not a boar replacement.
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
 		var boar = ENEMY.new()
 		add_child(boar)
 		boar.setup(self, hero, pos)
+	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
+		var pig = WILDLIFE.new()
+		add_child(pig)
+		pig.setup(self, hero, pos, "pig")
+	for pos in [Vector3(15, 0.2, 7), Vector3(-17, 0.2, -5)]:
+		var wolf = WILDLIFE.new()
+		add_child(wolf)
+		wolf.setup(self, hero, pos, "wolf")
 
 func _nearest_resource():
 	var best = null
@@ -521,6 +697,114 @@ func _nearest_resource():
 			radius = dist
 			best = node
 	return best
+
+func enemy_display_name(enemy: Node) -> String:
+	if enemy == null:
+		return "Enemy"
+	if enemy.is_in_group("dungeon_guardians"):
+		return str(enemy.get("display_name"))
+	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
+		return "Wild boar"
+	if enemy.is_in_group("wild_wolves"):
+		return "Wolf"
+	if enemy.is_in_group("wild_pigs"):
+		return "Pig"
+	return enemy.name.replace("_", " ").capitalize()
+
+## Fixed screen-space target frame: recent attack takes priority, then an
+## explicit focus, then the closest living creature within radar distance.
+## Never display another dungeon floor or an already dead/unloaded target.
+func remember_attacked_enemy(target: Node3D) -> void:
+	if target_available(target) and target.is_in_group("enemies"):
+		recent_attack_target = target
+		recent_target_seconds = 6.0
+
+func target_for_hud() -> Node3D:
+	if hero == null:
+		return null
+	if recent_target_seconds > 0.0 and is_instance_valid(recent_attack_target) and target_available(recent_attack_target):
+		if hero.global_position.distance_to(recent_attack_target.global_position) <= 24.0:
+			return recent_attack_target
+	if valid_focus() and hero.global_position.distance_to(focus_target.global_position) <= 24.0:
+		return focus_target
+	var nearest: Node3D
+	var closest: float = TARGET_HUD_NEARBY_RADIUS
+	for candidate in get_tree().get_nodes_in_group("enemies"):
+		var creature: Node3D = candidate as Node3D
+		if not target_available(creature):
+			continue
+		var offset: Vector3 = creature.global_position - hero.global_position
+		if absf(offset.y) > 3.3:
+			continue
+		var distance: float = offset.length()
+		if distance < closest:
+			closest = distance
+			nearest = creature
+	return nearest
+
+func target_frame_data(target: Node3D) -> Dictionary:
+	if not target_available(target) or not target.is_in_group("enemies"):
+		return {}
+	# Test dummies and non-health actors may still carry the enemies group.
+	# Only actual numeric combat health may enter the HUD: float(null) errors
+	# at runtime on GDScript's Variant constructor path.
+	var raw_hp: Variant = target.get("hp")
+	if not (raw_hp is float or raw_hp is int):
+		return {}
+	var hp: float = maxf(0.0, float(raw_hp))
+	var raw_max: Variant = target.get("max_hp")
+	var maximum: float = maxf(1.0, hp)
+	if raw_max is float or raw_max is int:
+		maximum = maxf(1.0, float(raw_max))
+	var rank: String = ""
+	var accent: Color = Color("#907e71")
+	var name_color: Color = Color("#f8ecdb")
+	var coloured_affixes: Array[Dictionary] = []
+	if target.is_in_group("dungeon_guardians"):
+		var rarity: int = DUNGEON_RARITY.bounded(int(target.get("quality")))
+		# Official dungeon rarity sets the creature portion of the name.
+		# Keep the existing gold/silver boss and elite frame accents separate.
+		name_color = DUNGEON_RARITY.color(rarity)
+		if rarity in [DUNGEON_RARITY.RARE, DUNGEON_RARITY.EPIC]:
+			name_color = name_color.lightened(0.22) # Readable against dark backing.
+		if target.name == "DungeonBoss":
+			rank = "BOSS"
+			accent = Color("#e3ae63")
+		elif rarity >= 3:
+			rank = "ELITE"
+			accent = Color("#d9ad57")
+		elif rarity >= 2:
+			rank = "RARE"
+			accent = Color("#b5c5d4")
+		elif rarity == 1:
+			rank = "UNCOMMON"
+			accent = Color("#9bba9e")
+		var original_affixes: Variant = target.get("affix_entries")
+		if original_affixes is Array:
+			for raw in original_affixes:
+				if not (raw is Dictionary):
+					continue
+				var label: String = str(raw.get("name", "")).strip_edges()
+				var tint: Variant = raw.get("colour", name_color)
+				if not label.is_empty() and tint is Color:
+					coloured_affixes.append({"text": label, "color": tint})
+	return {"id": target.get_instance_id(), "name": enemy_display_name(target),
+		"hp": hp, "max_hp": maximum, "rank": rank, "accent": accent,
+		"name_color": name_color, "affixes": coloured_affixes}
+
+func _nearest_breakable():
+	if hero == null:
+		return null
+	var nearest: Node3D
+	var radius: float = 3.1
+	for prop in get_tree().get_nodes_in_group("dungeon_breakables"):
+		if not is_instance_valid(prop) or not prop.active:
+			continue
+		var distance: float = hero.global_position.distance_to(prop.global_position)
+		if distance < radius:
+			radius = distance
+			nearest = prop
+	return nearest
 
 func _nearest_enemy():
 	var best = null
@@ -537,13 +821,132 @@ func _nearest_enemy():
 func near_workshop() -> bool:
 	return near_station("workbench")
 
-func gather() -> void:
-	if gather_delay > 0.0:
+func valid_focus() -> bool:
+	if not is_instance_valid(focus_target) or not target_available(focus_target) or hero.global_position.distance_to(focus_target.global_position) > 32.0:
+		focus_target = null
+		return false
+	return true
+
+func focus_nearest_enemy() -> void:
+	var nearest: Node3D
+	var distance: float = 24.0
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not target_available(enemy):
+			continue
+		var delta: float = hero.global_position.distance_to(enemy.global_position)
+		if delta < distance:
+			distance = delta
+			nearest = enemy
+	focus_target = nearest
+	recent_target_seconds = 0.0
+	if nearest == null:
+		hud.toast("No enemy nearby to focus.")
+
+func perform_action(action: String) -> void:
+	match action:
+		"ability_1", "ability_2", "ability_3": use_weapon_skill(int(action.right(1)) - 1)
+		"potion": use_quick_consumable("potion")
+		"food": use_quick_consumable("consumable")
+		"tool_cycle": hud._cycle_quick_tool()
+		"bag": show_inventory()
+		"character": show_equipment()
+		"skills": hud._show_skill_details()
+		"focus": focus_nearest_enemy()
+		"interact": smart_interact()
+
+func target_available(target: Node3D) -> bool:
+	if not is_instance_valid(target) or not target.is_inside_tree() or not target.is_visible_in_tree():
+		return false
+	if target.is_in_group("resources"):
+		return target.active
+	if target.is_in_group("enemies"):
+		return target.alive
+	return target.has_meta("world_kind") or target.is_in_group("stations")
+
+func target_range(target: Node3D) -> float:
+	if target.is_in_group("enemies"):
+		return 3.4
+	if target.is_in_group("resources"):
+		return 3.3
+	if target.is_in_group("stations"):
+		return 3.0
+	return 2.8
+
+func target_in_range(target: Node3D) -> bool:
+	if not target_available(target) or hero == null:
+		return false
+	return hero.global_position.distance_to(target.global_position) < target_range(target)
+
+func target_on_cooldown(target: Node3D) -> bool:
+	return (target.is_in_group("enemies") and attack_delay > 0.0) or (target.is_in_group("resources") and gather_delay > 0.0)
+
+func interact_target(target: Node3D) -> void:
+	if not target_in_range(target) or (menu != null and menu.visible):
 		return
-	var resource = _nearest_resource()
-	if resource == null:
+	if target.is_in_group("enemies"):
+		focus_target = target
+		attack(target)
+	elif target.is_in_group("resources"):
+		gather(target)
+	elif target.is_in_group("stations"):
+		if near_station(target.station_id):
+			show_crafting()
+	elif target.has_method("interact"):
+		target.interact(hero)
+	elif target.has_meta("dungeon_bonus"):
+		var dungeon = get_node_or_null("Dungeons")
+		if dungeon != null:
+			dungeon._claim_bonus(int(target.get_meta("dungeon_bonus")))
+	elif target.has_meta("dungeon_exit"):
+		var dungeon = get_node_or_null("Dungeons")
+		if dungeon != null:
+			dungeon._on_chest_selected(target.get_meta("dungeon_exit"))
+	elif target.has_signal("selected"):
+		target.selected.emit(target)
+
+static func healing_for(item: String) -> float:
+	return 65.0 if item == "tonic" else 75.0 if item == "stew" else 30.0 if item == "cooked_shrimp" else 40.0
+
+func spawn_resource(parent: Node3D, kind: String, point: Vector3, count: int = 1, relocate: bool = false):
+	var radius: float = PLACEMENT.radius_for(kind, count)
+	var site: Vector3 = point
+	if not prop_placement.available(site, radius):
+		if not relocate:
+			return null
+		var found: bool = false
+		for i in range(1, 49):
+			var angle: float = float(i) * 2.39996
+			var offset := Vector3(cos(angle), 0, sin(angle)) * (2.0 + float(i / 8))
+			site = point + offset
+			if prop_placement.available(site, radius):
+				found = true
+				break
+		if not found:
+			return null
+	if terrain_surface != null:
+		site.y = -2.78 if kind == "shrimp" else terrain_surface._tile_height(floori(site.x), floori(site.z)) + 0.055
+	var resource = NODE.new()
+	parent.add_child(resource)
+	resource.global_position = site
+	resource.setup(kind, count)
+	prop_placement.reserve(site, radius, resource)
+	return resource
+
+func gather(selected: Node3D = null) -> void:
+	if gather_delay > 0.0 or (menu != null and menu.visible):
+		return
+	var resource = selected if selected != null else _nearest_resource()
+	if not target_available(resource) or not target_in_range(resource):
 		return
 	var expected_item: String = str(resource.kind)
+	var tool: String = "axe" if expected_item == "wood" else "pickaxe" if expected_item in ["stone", "iron", "coal"] else "shrimp_net" if expected_item == "shrimp" else "satchel"
+	if selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
+		equip_item(tool)
+	if expected_item == "shrimp" and (str(equipment.get("tool_fishing", "")) != "shrimp_net" or int(inventory.get("shrimp_net", 0)) < 1):
+		hud.toast("Craft a Shrimp net from 6 fibre at the Workbench first.")
+		return
+	if tool in ["axe", "pickaxe", "shrimp_net"] and is_equipped(tool):
+		hero.set_held_tool(tool)
 	var desired: int = 1
 	if expected_item == "wood" and str(equipment.get("tool_wood", "")) == "axe":
 		desired = 2
@@ -555,34 +958,41 @@ func gather() -> void:
 	if CARRY.max_fit(inventory, expected_item, desired, equipped_bag_id(), equipped_bag_stars()) <= 0:
 		hud.toast("Bag full! Equip a larger bag or unload materials.")
 		return
-	gather_delay = 0.33
+	gather_delay = 1.0 if expected_item == "shrimp" else 0.33
 	var item: String = resource.harvest()
 	if item == "":
 		return
 	hero.gather_swing(item)
 	var amount: int = grant_item(item, desired)
+	if amount > 0 and hud != null:
+		hud.record_gather(item, amount)
 	if amount <= 0:
 		hud.toast("Bag full — gathering stopped.")
 		return
-	_show_gather_pickup(resource.global_position, item)
+	_show_gather_pickup(hero.global_position, item, amount)
 	gain_experience(2 * amount)
-	hud.toast("+%d %s  •  +%d XP" % [amount, item.capitalize(), 2 * amount])
+	gain_gathering_skill(item, 2 * amount)
 	_save()
 	_refresh_menu()
 
-func _show_gather_pickup(at: Vector3, resource_id: String) -> void:
-	# Floating +resource above a struck gatherable. No persistent heavy particles.
+func _show_gather_pickup(at: Vector3, resource_id: String, amount: int = 1) -> void:
+	# A single faint world-space "+1 Wood" over the player replaces the
+	# screen-corner Last Gathered card AND large resource toast.
 	var pop := Label3D.new()
-	pop.text = "+" + resource_id.replace("_", " ").capitalize()
-	pop.font_size = 38
-	pop.pixel_size = 0.006
+	pop.name = "FloatingGatherReceipt"
+	pop.text = "+%d %s" % [maxi(1, amount), resource_id.replace("_", " ").capitalize()]
+	pop.font_size = 37
+	pop.pixel_size = 0.005
 	pop.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pop.position = at + Vector3(0.0, 2.1, 0.0)
-	pop.modulate = Color("f4dba2")
+	pop.no_depth_test = true
+	pop.position = at + Vector3(0.0, 2.45, 0.0)
+	pop.modulate = Color(0.91, 0.83, 0.63, 0.80)
+	pop.outline_modulate = Color(0.12, 0.09, 0.10, 0.65)
+	pop.outline_size = 7
 	add_child(pop)
 	var tween := create_tween()
-	tween.tween_property(pop, "position:y", pop.position.y + 0.9, 0.70)
-	tween.parallel().tween_property(pop, "modulate:a", 0.0, 0.70)
+	tween.tween_property(pop, "position:y", pop.position.y + 0.75, 0.95)
+	tween.parallel().tween_property(pop, "modulate:a", 0.0, 0.95)
 	tween.finished.connect(pop.queue_free)
 
 func _load_recipes() -> void:
@@ -621,6 +1031,8 @@ func _recipe_by_id(id: String) -> Dictionary:
 	return {}
 
 func equipment_slot(item_id: String) -> String:
+	if item_id == "shrimp_net":
+		return "tool_fishing"
 	if item_id in ["spear", "iron_blade"]:
 		return "weapon"
 	if item_id in ["shield", "torch"]:
@@ -642,10 +1054,12 @@ func available_quick_tools() -> Array[String]:
 	for item in QUICK_TOOL_IDS:
 		if item != "training_blade" and int(inventory.get(item, 0)) > 0:
 			candidates.append(item)
+	if int(inventory.get("shrimp_net", 0)) > 0:
+		candidates.append("shrimp_net")
 	return candidates
 
 func select_quick_tool(item_id: String) -> bool:
-	if item_id not in QUICK_TOOL_IDS:
+	if item_id not in QUICK_TOOL_IDS and item_id != "shrimp_net":
 		return false
 	if item_id != "training_blade" and int(inventory.get(item_id, 0)) <= 0:
 		return false
@@ -664,25 +1078,38 @@ func select_quick_tool(item_id: String) -> bool:
 	return true
 
 func smart_context() -> Dictionary:
-	# Context is derived only from live proximity and active equipment.
+	if valid_focus():
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
+	# One smart action, showing its REAL current intent; never a redundant
+	# permanent hand beneath the sword/axe/pickaxe. The art is not a tooltip.
+	var workshop: String = closest_station()
+	if workshop != "":
+		return {"kind": "craft", "label": "CRAFT", "icon": "hand"}
 	var resource = _nearest_resource()
 	var enemy = _nearest_enemy()
 	var combat_tool: bool = active_quick_tool in ["training_blade", "spear", "iron_blade", "shield"]
 	if enemy != null and (resource == null or combat_tool):
-		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	if resource != null:
-		var resource_tool: String = "axe" if str(resource.kind) == "wood" else "pickaxe" if str(resource.kind) in ["stone", "iron", "coal"] else "satchel"
-		return {"kind":"gather", "label":"GATHER", "icon":resource_tool if active_quick_tool == resource_tool else "gather"}
+		var kind: String = str(resource.kind)
+		var tool_icon: String = "axe" if kind == "wood" else "pickaxe" if kind in ["stone", "iron", "coal"] else "hand"
+		return {"kind": "gather", "label": "GATHER", "icon": tool_icon}
 	if enemy != null:
-		return {"kind":"attack", "label":"ATTACK", "icon":"attack"}
-	if closest_station() != "":
-		return {"kind":"craft", "label":"CRAFT", "icon":"craft"}
+		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
+	if _nearest_breakable() != null:
+		return {"kind": "break", "label": "SMASH", "icon": "sword"}
 	if active_quick_tool == "torch" and int(inventory.get("torch", 0)) > 0:
-		return {"kind":"torch", "label":"TORCH", "icon":"torch"}
-	return {"kind":"none", "label":"INTERACT", "icon":active_quick_tool if active_quick_tool != "training_blade" else "gather"}
+		return {"kind": "torch", "label": "TORCH", "icon": "hand"}
+	return {"kind": "none", "label": "INTERACT", "icon": "hand"}
 
 func smart_interact() -> void:
 	if menu != null and menu.visible:
+		return
+	if valid_focus():
+		if target_in_range(focus_target):
+			attack(focus_target)
+		elif controls != null:
+			controls.approach(focus_target)
 		return
 	var action: String = str(smart_context().get("kind", "none"))
 	match action:
@@ -690,8 +1117,15 @@ func smart_interact() -> void:
 			attack()
 		"gather":
 			gather()
+		"break":
+			var prop = _nearest_breakable()
+			if prop != null:
+				prop.interact(hero)
 		"craft":
-			craft()
+			# Resolve station again at the instant of the tap. A stale CRAFT
+			# label must never open a different station or a generic recipe.
+			if closest_station() != "":
+				show_crafting()
 		"torch":
 			toggle_torch()
 		_:
@@ -715,6 +1149,8 @@ func grant_item(item_id: String, amount: int, store_excess: bool = false) -> int
 	var fitting: int = CARRY.max_fit(inventory, item_id, amount, equipped_bag_id(), equipped_bag_stars())
 	if fitting > 0:
 		inventory[item_id] = int(inventory.get(item_id, 0)) + fitting
+		if hud != null:
+			hud.record_loot("copper" if item_id == "coins" else item_id, fitting)
 	var excess: int = amount - fitting
 	if excess > 0 and store_excess:
 		overflow_loot[item_id] = int(overflow_loot.get(item_id, 0)) + excess
@@ -794,10 +1230,18 @@ func equip_item(item_id: String) -> bool:
 	var slot: String = equipment_slot(item_id)
 	if slot == "":
 		return false
-	if is_equipped(item_id):
+	var removing: bool = is_equipped(item_id)
+	if removing:
 		equipment[slot] = "training_blade" if slot == "weapon" else ""
 	else:
 		equipment[slot] = item_id
+	# Equipping an axe/pickaxe from Gear should actually put it in the hand.
+	# Removing it should put away the model, without deleting inventory.
+	if item_id in ["axe", "pickaxe"]:
+		if removing and active_quick_tool == item_id:
+			active_quick_tool = str(equipment.get("weapon", "training_blade"))
+		elif not removing:
+			active_quick_tool = item_id
 	_apply_equipment()
 	_save()
 	_refresh_menu()
@@ -926,6 +1370,8 @@ func _try_finish_craft() -> void:
 		bag_quality[result] = mini(3, int(bag_quality.get(result, 0)) + 1)
 	else:
 		inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
+	if hud != null and not result.is_empty():
+		hud.record_loot(result, 1 if is_bag else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
 	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
@@ -963,8 +1409,20 @@ func gain_experience(amount: int) -> void:
 	if character_level() > before and hud != null:
 		hud.toast("LEVEL UP! Level %d — enchanting and skills grow stronger." % character_level())
 
+func gain_gathering_skill(resource_id: String, amount: int) -> void:
+	if amount <= 0:
+		return
+	var skill: String = "fishing" if resource_id == "shrimp" else "woodcutting" if resource_id == "wood" else "mining" if resource_id in ["stone", "iron", "coal", "clay"] else "foraging"
+	gathering_skill_xp[skill] = maxi(0, int(gathering_skill_xp.get(skill, 0)) + amount)
+	last_trained_skill = skill
+	if hud != null:
+		hud.set_trained_skill(skill, int(gathering_skill_xp[skill]))
+
 func current_weapon_id() -> String:
 	return str(equipment.get("weapon", "training_blade"))
+
+func mana_limit() -> float:
+	return MAX_MANA
 
 func mastery_rank(weapon_id: String = "") -> int:
 	var id: String = current_weapon_id() if weapon_id == "" else weapon_id
@@ -978,35 +1436,127 @@ func gain_weapon_mastery(weapon_id: String, amount: int) -> void:
 		return
 	var previous: int = LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0)))
 	weapon_mastery_xp[weapon_id] = int(weapon_mastery_xp.get(weapon_id, 0)) + amount
+	last_trained_skill = weapon_id
+	if hud != null:
+		hud.set_trained_skill(weapon_id, int(weapon_mastery_xp[weapon_id]))
 	if LEVELS.available_skill_slots(int(weapon_mastery_xp.get(weapon_id, 0))) > previous and hud != null:
 		hud.toast("Weapon mastery! New ability slot available.")
+
+## Armour Break is a real timed vulnerability status, not just a renamed hit.
+## Keep it per-enemy in metadata so it works for boars and dungeon guardians,
+## disappears after six seconds and does not migrate or affect co-op authority.
+func _armor_break_damage_multiplier(target: Node3D) -> float:
+	if not is_instance_valid(target):
+		return 1.0
+	return 1.0 + LEVELS.ARMOR_BREAK_BONUS if float(target.get_meta("outpost_armor_break_until", -1.0)) > world_time else 1.0
+
+func _whirlwind_targets() -> Array[Node3D]:
+	var hits: Array[Node3D] = []
+	if hero == null:
+		return hits
+	for candidate in get_tree().get_nodes_in_group("enemies"):
+		var target: Node3D = candidate as Node3D
+		if not target_available(target):
+			continue
+		var difference: Vector3 = target.global_position - hero.global_position
+		if absf(difference.y) > 2.3:
+			continue
+		if Vector2(difference.x, difference.z).length() > LEVELS.WHIRLWIND_RADIUS:
+			continue
+		hits.append(target)
+		# One physical hit per enemy per cast; cap the fan-out for mobile.
+		if hits.size() >= 12:
+			break
+	return hits
+
+## Hit anything currently inside the AoE on EACH swing, not a cached list
+## from the first frame. New entrants can be hit on subsequent passes.
+func _apply_whirlwind_tick() -> void:
+	if whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size() or hero == null:
+		return
+	for enemy in _whirlwind_targets():
+		if not is_instance_valid(enemy):
+			continue
+		var hit_point: Vector3 = enemy.global_position
+		remember_attacked_enemy(enemy)
+		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
+		hero.show_weapon_hit_effect(hit_point)
+		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
+			enemy.ignite(4.0)
+		whirlwind_unique_hits[enemy.get_instance_id()] = true
+	whirlwind_ticks_done += 1
+	if whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size():
+		if not whirlwind_unique_hits.is_empty():
+			var victims: int = whirlwind_unique_hits.size()
+			gain_weapon_mastery(whirlwind_tick_weapon, 12 + 5 * mini(victims, 5))
+			gain_experience(3 + mini(victims, 4))
+		whirlwind_tick_clock = -1.0
+		whirlwind_tick_weapon = ""
+		whirlwind_unique_hits.clear()
+
+func _advance_whirlwind_ticks(delta: float) -> void:
+	if whirlwind_tick_clock < 0.0 or whirlwind_ticks_done >= WHIRLWIND_TICK_TIMES.size():
+		return
+	if hero == null or not is_instance_valid(hero) or hero.health <= 0.0:
+		whirlwind_tick_clock = -1.0
+		whirlwind_ticks_done = WHIRLWIND_TICK_TIMES.size()
+		whirlwind_unique_hits.clear()
+		return
+	whirlwind_tick_clock += maxf(0.0, delta)
+	while whirlwind_ticks_done < WHIRLWIND_TICK_TIMES.size() and whirlwind_tick_clock >= WHIRLWIND_TICK_TIMES[whirlwind_ticks_done]:
+		_apply_whirlwind_tick()
 
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
 	# LAN dungeon combat remains host-authoritative; never apply local
-	# skill damage that could desynchronise an encounter.
+	# ability damage that could desynchronise an encounter.
 	if coop != null and coop.in_party_dungeon():
 		if hud != null:
 			hud.toast("Skills in co-op dungeons require host combat support.")
 		return false
 	var skill: String = LEVELS.skill_for_slot(slot)
-	if float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
+	if skill == "" or float(skill_cooldowns.get(skill, 0.0)) > 0.0 or attack_delay > 0.0:
 		return false
-	var target = _nearest_enemy()
-	if target == null:
+	var target: Node3D = focus_target if valid_focus() else _nearest_enemy()
+	if skill != "whirlwind" and (target == null or not target_in_range(target)):
+		return false
+	var mana_cost: float = 6.0 + 3.0 * float(slot)
+	if mana < mana_cost:
+		if hud != null:
+			hud.toast("Need %d MP for this ability." % int(mana_cost))
 		return false
 	var weapon: String = current_weapon_id()
 	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
 	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = 0.55
-	hero.swing()
-	target.receive_damage(dealt)
-	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
-		target.ignite(4.0)
-	gain_weapon_mastery(weapon, 18)
-	gain_experience(3)
+	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else 0.55
+	if skill == "whirlwind":
+		# A first hit on cast, then the second and third hits at 0.30s and
+		# 0.60s. Every tick checks live positions and creates sword-tip sparks.
+		if active_quick_tool != weapon:
+			select_quick_tool(weapon)
+		hero.play_whirlwind()
+		whirlwind_tick_clock = 0.0
+		whirlwind_ticks_done = 0
+		whirlwind_tick_weapon = weapon
+		whirlwind_tick_damage = dealt * 0.40
+		whirlwind_unique_hits.clear()
+		_apply_whirlwind_tick()
+	else:
+		hero.swing()
+		remember_attacked_enemy(target)
+		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		hero.show_weapon_hit_effect(target.global_position)
+		if skill == "armor_break" and target_available(target):
+			# A real follow-up damage increase for six seconds. Applying it
+			# AFTER this impact prevents double-dipping on the opening hit.
+			target.set_meta("outpost_armor_break_until", world_time + LEVELS.ARMOR_BREAK_SECONDS)
+		if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
+			target.ignite(4.0)
+		gain_weapon_mastery(weapon, 18)
+		gain_experience(3)
 	_save()
 	return true
 
@@ -1015,8 +1565,7 @@ func available_quick_consumables(slot: String) -> Array[String]:
 	if slot == "potion":
 		pool.append("tonic")
 	elif slot == "consumable":
-		pool.append("meal")
-		pool.append("stew")
+		pool.append_array(FOOD_IDS)
 	var available: Array[String] = []
 	for item in pool:
 		if int(inventory.get(item, 0)) > 0:
@@ -1035,13 +1584,21 @@ func set_quick_consumable(slot: String, item_id: String) -> bool:
 func use_quick_consumable(slot: String) -> bool:
 	if slot not in ["potion", "consumable"]:
 		return false
+	if float(quick_use_cooldowns.get(slot, 0.0)) > 0.0:
+		return false
 	var item: String = str(quick_slots.get(slot, ""))
+	if item == "" and slot == "potion" and int(inventory.get("tonic", 0)) > 0:
+		item = "tonic"
+		quick_slots[slot] = item
 	if item == "" or int(inventory.get(item, 0)) <= 0:
+		hud.toast("No healing potion available." if slot == "potion" else "No food equipped. Assign food from Inventory.")
 		return false
 	if hero == null or hero.health >= 99.9:
 		return false
-	var amount: float = 65.0 if item == "tonic" else 75.0 if item == "stew" else 40.0
+	var amount: float = healing_for(item)
 	consume(item, amount)
+	# Recovery starts only after an item actually heals, not on an empty tap.
+	quick_use_cooldowns[slot] = QUICK_USE_COOLDOWN
 	if int(inventory.get(item, 0)) <= 0:
 		quick_slots[slot] = ""
 		_save()
@@ -1059,37 +1616,47 @@ func consume(item_id: String, heal: float) -> void:
 func use_meal() -> void:
 	consume("meal", 40.0)
 
-func attack() -> void:
+func attack(selected: Node3D = null) -> void:
 	if attack_delay > 0.0 or menu != null and menu.visible:
 		return
+	var target = selected if selected != null else focus_target if valid_focus() else _nearest_enemy()
+	if not target_available(target) or not target_in_range(target):
+		return
+	remember_attacked_enemy(target)
 	if coop != null and coop.in_party_dungeon():
-		var guardian = _nearest_enemy()
+		var guardian = target
 		if guardian == null or not guardian.has_meta("encounter_slot"):
 			return
 		attack_delay = 0.55
 		hero.swing()
 		coop.request_strike(int(guardian.get_meta("encounter_slot")))
 		return
-	var target = _nearest_enemy()
 	if target == null:
 		return # No popup spam when outside combat range.
 	attack_delay = 0.55
 	hero.swing()
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
 	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	target.receive_damage(damage)
+	target.receive_damage(damage * _armor_break_damage_multiplier(target))
+	hero.show_weapon_hit_effect(target.global_position)
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
 	gain_weapon_mastery(weapon, 12)
-	if target.alive:
-		hud.toast("%d damage  •  boar %d HP" % [int(damage), int(ceilf(target.hp))])
+	# World-space damage numbers already come from each mob's hit feedback.
+	# No giant per-swing notification is needed, and no boar assumptions.
 
-func on_enemy_killed() -> void:
+func on_enemy_killed(kind: String = "boar") -> void:
 	kills += 1
-	grant_item("hide", 1, true)
-	grant_item("coins", 3, true)
-	gain_experience(12)
-	hud.toast("Boar defeated! Loot sent to bag or stored if full.")
+	var is_wolf: bool = kind == "wolf"
+	var hide: int = 2 if is_wolf else 1
+	var coins: int = 5 if is_wolf else 2 if kind == "pig" else 3
+	var xp: int = 16 if is_wolf else 8 if kind == "pig" else 12
+	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Boar"
+	grant_item("hide", hide, true)
+	grant_item("coins", coins, true)
+	gain_experience(xp)
+	hud.record_combat_event(label + " defeated")
+	hud.toast(label + " defeated! Loot sent to bag or stored if full.")
 	_save()
 	_refresh_menu()
 
@@ -1114,7 +1681,7 @@ func receive_coop_reward(receipt: String, reward: Dictionary) -> bool:
 	_save()
 	_refresh_menu()
 	if hud != null:
-		hud.toast("Party dungeon cleared! +%d coins • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
+		hud.toast("Party dungeon cleared! +%d copper • +%d XP" % [int(reward.get("coins", 0)), int(reward.get("xp", 0))])
 	return true
 
 func toggle_torch() -> void:
@@ -1141,11 +1708,15 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if map_service != null:
+		data["map_state"] = map_service.export_state()
 	if f != null:
 		f.store_string(JSON.stringify(data))
 		f.close()
+		if map_service != null:
+			map_service.dirty = false
 
 func _load() -> void:
 	if not FileAccess.file_exists(save_path):
@@ -1156,10 +1727,21 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	if map_service != null:
+		map_service.import_state(data.get("map_state", {}))
+	if data.get("opened_world_objects", {}) is Dictionary:
+		opened_world_objects = data["opened_world_objects"].duplicate(true)
+	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)
 	night_quote_seen = bool(data.get("night_quote_seen", false))
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
 		for key in data.get("weapon_mastery_xp", {}):
 			weapon_mastery_xp[str(key)] = maxi(0, int(data["weapon_mastery_xp"][key]))
+	if data.get("gathering_skill_xp", {}) is Dictionary:
+		for key in gathering_skill_xp:
+			gathering_skill_xp[key] = maxi(0, int(data["gathering_skill_xp"].get(key, 0)))
+	var stored_training: String = str(data.get("last_trained_skill", "training_blade"))
+	if gathering_skill_xp.has(stored_training) or stored_training in ["training_blade", "spear", "iron_blade"]:
+		last_trained_skill = stored_training
 	if data.get("weapon_enchants", {}) is Dictionary:
 		for key in data.get("weapon_enchants", {}):
 			if str(key) in ["spear", "iron_blade"] and str(data["weapon_enchants"][key]) == "fire":
@@ -1167,7 +1749,7 @@ func _load() -> void:
 	if data.get("quick_slots", {}) is Dictionary:
 		for slot in ["potion", "consumable"]:
 			var chosen: String = str(data["quick_slots"].get(slot, ""))
-			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else ["meal", "stew"]) else ""
+			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else FOOD_IDS) else ""
 	if data.get("bag_quality", {}) is Dictionary:
 		for bag_id in data.get("bag_quality", {}):
 			var key: String = str(bag_id)
@@ -1191,7 +1773,7 @@ func _load() -> void:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
 	active_quick_tool = str(data.get("active_quick_tool", "training_blade"))
-	if active_quick_tool not in QUICK_TOOL_IDS or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
+	if (active_quick_tool not in QUICK_TOOL_IDS and active_quick_tool != "shrimp_net") or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
 		active_quick_tool = "training_blade"
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))

@@ -7,7 +7,6 @@ const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
 const PIXEL_SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
-const MINIMAP = preload("res://scripts/dungeons/dungeon_minimap.gd")
 @export var save_path: String = "user://outpost_dungeon_clear_v1.json"
 const INTERACTION_RADIUS: float = 3.25
 
@@ -20,8 +19,8 @@ var chunks: Dictionary = {}
 var entrances: Dictionary = {}
 var completed_ids: Dictionary = {}
 var floor_checkpoints: Dictionary = {}
+var broken_props: Dictionary = {}
 var active_bonus_id: int = -1
-var minimap: Control
 var active_instance
 var active_info: Dictionary = {}
 var return_position: Vector3 = Vector3.ZERO
@@ -36,9 +35,12 @@ var action_button: Button
 var leave_button: Button
 var progress_label: Label
 var dimmer: ColorRect
+var dialog_badge: Label
 var dialog_title: Label
+var dialog_stats: Label
 var dialog_message: Label
 var confirm_button: Button
+var decline_button: Button
 
 func _ready() -> void:
 	_load_clears()
@@ -169,7 +171,7 @@ func _update_overworld_action() -> void:
 			nearest_portal = portal
 	action_button.visible = nearest_portal != null
 	if nearest_portal != null:
-		action_button.text = "ENTER %s" % RARITY.quality_name(int(nearest_portal.get("quality"))).to_upper()
+		action_button.text = "✦ ENTER %s DUNGEON ✦" % RARITY.quality_name(int(nearest_portal.get("quality"))).to_upper()
 		action_button.add_theme_stylebox_override("normal", THEME.style(THEME.SURFACE, RARITY.color(int(nearest_portal.get("quality")))))
 
 func _update_dungeon_action() -> void:
@@ -181,10 +183,6 @@ func _update_dungeon_action() -> void:
 	var total: int = int(active_instance.floor_count)
 	progress_label.text = "%s  •  FLOOR %d/%d  •  %s  •  %d GUARD(S)" % [title, current, total, str(active_instance.layout.get("pattern", "")).to_upper(), remaining]
 	progress_label.add_theme_color_override("font_color", RARITY.color(int(active_info.get("quality", 0))))
-	if minimap != null and minimap.instance != active_instance:
-		minimap.setup(active_instance)
-	if minimap != null:
-		minimap.visible = true
 	var distance: float = _flat_distance(hero.global_position, active_instance.chest_world_position())
 	if approaching_chest:
 		if distance <= INTERACTION_RADIUS:
@@ -254,16 +252,23 @@ func _prompt_to_enter(portal: Area3D) -> void:
 	chosen_portal = portal
 	var tier: int = int(portal.get("quality"))
 	var accent: Color = RARITY.color(tier)
-	dialog_title.text = "%s  •  %s" % [RARITY.quality_name(tier).to_upper(), str(portal.get("dungeon_title"))]
-	dialog_title.add_theme_color_override("font_color", accent)
+	dialog_badge.text = "✦  %s PORTAL  ✦" % RARITY.quality_name(tier).to_upper()
+	dialog_badge.add_theme_color_override("font_color", accent)
+	dialog_title.text = str(portal.get("dungeon_title")).to_upper()
+	dialog_title.add_theme_color_override("font_color", PIXEL_SKIN.CREAM)
 	var profile: Dictionary = LAYOUT.profile(str(portal.get("entrance_id")), tier)
 	var floors: int = int(profile.get("floors", 1))
 	var info: Dictionary = LAYOUT.settings()
 	var room_ranges: Array = info.get("room_ranges", [])
 	var room_range: Array = room_ranges[tier]
 	var multiplier: float = pow(float(profile.get("reward_multiplier", 1.3)), floors - 1)
-	dialog_message.text = "%d floor(s) • %d–%d rooms/floor\nFinal treasure multiplier: x%.2f\nDefeat guardians, advance through stairs, claim final reward.\nCompleted portals vanish; abandoned ones remain." % [floors, int(room_range[0]), int(room_range[1]), multiplier]
-	confirm_button.add_theme_stylebox_override("normal", THEME.style(THEME.SURFACE, accent))
+	dialog_stats.text = "%d FLOORS     •     %d–%d ROOMS / FLOOR\nTREASURE BONUS   ×%.2f" % [floors, int(room_range[0]), int(room_range[1]), multiplier]
+	dialog_message.text = "Defeat the guardians, climb the floors and claim the final treasure.\nLeaving early keeps this portal available."
+	# Match the rarity of the selected entrance in the bronze button outline.
+	for state in ["normal", "hover", "pressed"]:
+		var style: StyleBoxFlat = confirm_button.get_theme_stylebox(state) as StyleBoxFlat
+		if style != null:
+			style.border_color = accent
 	dimmer.visible = true
 	action_button.visible = false
 	hero.stop_interaction_move()
@@ -303,15 +308,14 @@ func _enter_confirmed() -> void:
 	# A new isolated cell, out of reach of the current overworld geometry.
 	dungeon.position = Vector3(1800.0 + float(run_number % 30) * 65.0, 0.0, 1800.0)
 	var checkpoint: int = int(floor_checkpoints.get(str(active_info["id"]), 1))
-	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint)
+	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint, broken_props.get(str(active_info["id"]), []))
 	dungeon.chest_selected.connect(_on_chest_selected)
 	dungeon.stairs_selected.connect(_on_stairs_selected)
 	dungeon.bonus_selected.connect(_on_bonus_selected)
+	dungeon.prop_broken.connect(_on_prop_broken)
 	dungeon.floor_changed.connect(_on_floor_changed)
 	dungeon.completed.connect(_on_dungeon_completed)
 	active_instance = dungeon
-	if minimap != null:
-		minimap.setup(dungeon)
 	hero.global_position = dungeon.hero_spawn_point()
 	hero.velocity = Vector3.ZERO
 	action_button.visible = false
@@ -359,10 +363,24 @@ func _on_floor_changed(instance: Node3D, floor_number: int, floor_count: int) ->
 		return
 	floor_checkpoints[str(active_info.get("id", ""))] = floor_number
 	_save_clears()
-	if minimap != null:
-		minimap.setup(instance)
 	if game.hud != null:
 		game.hud.toast("Floor %d/%d — enemies grow stronger, rewards improve." % [floor_number, floor_count])
+
+## Saved immediately so exiting and re-entering a checkpoint cannot
+## regenerate the same gold-bearing barrel indefinitely.
+func _on_prop_broken(instance: Node3D, prop_id: String, reward: Dictionary) -> void:
+	if instance != active_instance or active_instance == null:
+		return
+	var dungeon_id: String = str(active_info.get("id", ""))
+	var broken: Array = broken_props.get(dungeon_id, [])
+	if prop_id in broken:
+		return
+	broken.append(prop_id)
+	broken_props[dungeon_id] = broken
+	_apply_reward(reward)
+	_save_clears()
+	if game != null and game.hud != null:
+		game.hud.record_loot("coins", int(reward.get("coins", 0)))
 
 func _on_bonus_selected(instance: Node3D, id: int) -> void:
 	if instance != active_instance or hero == null:
@@ -391,24 +409,37 @@ func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 func _apply_reward(reward: Dictionary) -> void:
 	if game == null:
 		return
+	# Money belongs to the wallet, not the weighted backpack.
 	var pocket: Dictionary = game.inventory
 	pocket["coins"] = int(pocket.get("coins", 0)) + maxi(0, int(reward.get("coins", 0)))
+	var currency_drops: Dictionary = reward.get("currencies", {})
+	for currency_id in ["copper", "silver", "gold", "gems"]:
+		if currency_drops.has(currency_id):
+			pocket[currency_id] = int(pocket.get(currency_id, 0)) + maxi(0, int(currency_drops[currency_id]))
 	game.experience += maxi(0, int(reward.get("xp", 0)))
+	# Dungeon rewards used to bypass grant_item and could permanently exceed
+	# carry capacity. Preserve what does not fit in the existing overflow stash.
+	var overflow_before: int = 0
+	for pending in game.overflow_loot.values():
+		overflow_before += maxi(0, int(pending))
 	var materials: Dictionary = reward.get("materials", {})
 	for item_id in materials:
-		var key: String = str(item_id)
-		pocket[key] = int(pocket.get(key, 0)) + maxi(0, int(materials[item_id]))
+		game.grant_item(str(item_id), maxi(0, int(materials[item_id])), true)
 	for book in reward.get("books", []):
 		var id: String = str(book)
 		if id != "":
-			pocket[id] = int(pocket.get(id, 0)) + 1
+			game.grant_item(id, 1, true)
 	# Retain compatibility if an older reward object is supplied by an extension.
 	var legacy: String = str(reward.get("item", ""))
 	if legacy != "":
-		pocket[legacy] = int(pocket.get(legacy, 0)) + maxi(0, int(reward.get("amount", 0)))
+		game.grant_item(legacy, maxi(0, int(reward.get("amount", 0))), true)
+	var overflow_after: int = 0
+	for pending in game.overflow_loot.values():
+		overflow_after += maxi(0, int(pending))
+	if overflow_after > overflow_before and game.hud != null:
+		game.hud.toast("%d dungeon loot items stored safely; free bag space to claim them." % (overflow_after - overflow_before))
 	game._save()
 	game._refresh_menu()
-
 
 func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if active_instance == null:
@@ -417,6 +448,7 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	if succeeded:
 		completed_ids[cleared_id] = true
 		floor_checkpoints.erase(cleared_id)
+		broken_props.erase(cleared_id)
 		_save_clears()
 		_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
@@ -433,8 +465,6 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 	approaching_chest = false
 	leave_button.visible = false
 	progress_label.visible = false
-	if minimap != null:
-		minimap.setup(null)
 	action_button.visible = false
 	action_button.disabled = false
 	active_bonus_id = -1
@@ -473,6 +503,9 @@ func _load_clears() -> void:
 	var saved_progress: Variant = parsed.get("checkpoints", {})
 	if saved_progress is Dictionary:
 		floor_checkpoints = saved_progress.duplicate()
+	var saved_breakables: Variant = parsed.get("broken_props", {})
+	if saved_breakables is Dictionary:
+		broken_props = saved_breakables.duplicate(true)
 	var saved: Variant = parsed.get("completed", [])
 	if saved is Array:
 		for entry in saved:
@@ -481,7 +514,7 @@ func _load_clears() -> void:
 func _save_clears() -> void:
 	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"version": 2, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints}))
+		file.store_string(JSON.stringify({"version": 3, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints, "broken_props": broken_props}))
 		file.close()
 
 func _build_interface() -> void:
@@ -498,7 +531,11 @@ func _build_interface() -> void:
 	action_button = THEME.button("ENTER DUNGEON", "door_front", RARITY.color(RARITY.RARE))
 	PIXEL_SKIN.apply_button(action_button, "wood")
 	screen.add_child(action_button)
-	_layout(action_button, 0.655, 0.155, 0.960, 0.260)
+	# Was far right (65.5–96% of screen). Centre horizontally and keep
+	# the prompt above XP, below the top-centre quest/combat notices.
+	_layout(action_button, 0.375, 0.600, 0.625, 0.702)
+	action_button.add_theme_font_size_override("font_size", 20)
+	action_button.tooltip_text = "Inspect and enter this dungeon"
 	action_button.visible = false
 	action_button.pressed.connect(_on_action_pressed)
 	leave_button = THEME.button("LEAVE", "arrow_back", Color("b07b70"))
@@ -512,12 +549,6 @@ func _build_interface() -> void:
 	screen.add_child(progress_label)
 	_layout(progress_label, 0.240, 0.195, 0.625, 0.26)
 	progress_label.visible = false
-	minimap = MINIMAP.new()
-	minimap.tooltip_text = "Dungeon map: pale rooms, green bonus caches, gold stairs, orange boss"
-	screen.add_child(minimap)
-	_layout(minimap, 0.812, 0.415, 0.966, 0.704)
-	minimap.visible = false
-
 	dimmer = ColorRect.new()
 	dimmer.color = Color(0.01, 0.02, 0.04, 0.77)
 	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -525,30 +556,70 @@ func _build_interface() -> void:
 	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dimmer.visible = false
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", PIXEL_SKIN.box("frame"))
+	panel.name = "DungeonConfirmPanel"
+	panel.add_theme_stylebox_override("panel", PIXEL_SKIN.modal_panel())
 	dimmer.add_child(panel)
-	_layout(panel, 0.235, 0.23, 0.765, 0.79)
+	_layout(panel, 0.24, 0.19, 0.76, 0.81)
+	var margins := MarginContainer.new()
+	margins.name = "DungeonConfirmMargins"
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 17)
+	panel.add_child(margins)
 	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 12)
-	panel.add_child(stack)
-	dialog_title = THEME.label("DUNGEON", 27)
+	stack.name = "DungeonConfirmContent"
+	stack.add_theme_constant_override("separation", 11)
+	margins.add_child(stack)
+	dialog_badge = THEME.label("✦  DUNGEON PORTAL  ✦", 18, PIXEL_SKIN.GOLD)
+	dialog_badge.name = "DungeonRarity"
+	dialog_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(dialog_badge)
+	dialog_title = THEME.label("DUNGEON", 29, PIXEL_SKIN.CREAM)
+	dialog_title.name = "DungeonName"
 	dialog_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stack.add_child(dialog_title)
-	dialog_message = THEME.label("Enter dungeon?", 20)
+	var divider := ColorRect.new()
+	divider.name = "GoldDivider"
+	divider.color = Color(0.87, 0.67, 0.37, 0.62)
+	divider.custom_minimum_size.y = 2
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_child(divider)
+	var summary := PanelContainer.new()
+	summary.name = "DungeonSummary"
+	summary.add_theme_stylebox_override("panel", PIXEL_SKIN.modal_section())
+	stack.add_child(summary)
+	dialog_stats = THEME.label("1 FLOOR  •  REWARD BONUS ×1.00", 20, PIXEL_SKIN.CREAM)
+	dialog_stats.name = "DungeonStats"
+	dialog_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog_stats.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dialog_stats.custom_minimum_size.y = 74
+	summary.add_child(dialog_stats)
+	dialog_message = THEME.label("Defeat guardians to earn the final reward.", 17, PIXEL_SKIN.CREAM)
+	dialog_message.name = "DungeonInstructions"
 	dialog_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dialog_message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dialog_message.custom_minimum_size.y = 65
 	stack.add_child(dialog_message)
 	var actions := HBoxContainer.new()
+	actions.name = "DungeonDecisionButtons"
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 24)
+	actions.add_theme_constant_override("separation", 15)
 	stack.add_child(actions)
-	confirm_button = THEME.button("YES • ENTER", "check_circle", RARITY.color(RARITY.RARE))
-	PIXEL_SKIN.apply_button(confirm_button, "green")
+	confirm_button = THEME.button("YES  •  ENTER", "check_circle", RARITY.color(RARITY.RARE))
+	confirm_button.name = "DungeonConfirmEnter"
+	PIXEL_SKIN.apply_translucent_button(confirm_button, "green")
+	confirm_button.custom_minimum_size = Vector2(178, 59)
+	confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm_button.focus_mode = Control.FOCUS_ALL
 	actions.add_child(confirm_button)
 	confirm_button.pressed.connect(_enter_confirmed)
-	var decline := THEME.button("CANCEL", "cancel", Color("b9a29b"))
-	PIXEL_SKIN.apply_button(decline, "wood")
-	actions.add_child(decline)
-	decline.pressed.connect(_cancel_dialog)
+	decline_button = THEME.button("NO  •  STAY", "cancel", Color("b9a29b"))
+	decline_button.name = "DungeonConfirmStay"
+	PIXEL_SKIN.apply_translucent_button(decline_button, "red")
+	decline_button.custom_minimum_size = Vector2(178, 59)
+	decline_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	decline_button.focus_mode = Control.FOCUS_ALL
+	actions.add_child(decline_button)
+	decline_button.pressed.connect(_cancel_dialog)
 
 func _layout(control: Control, left: float, top: float, right: float, bottom: float) -> void:
 	control.anchor_left = left

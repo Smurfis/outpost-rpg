@@ -18,6 +18,43 @@ jobs:
           chmod +x Godot_v4.7.2-stable_linux.x86_64
       - name: Import resources and parse scripts
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+      - name: Verify Blockbench plugin loads a .bbmodel scene
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/blockbench_import_pipeline.gd 2>&1 | tee blockbench-import.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BLOCKBENCH:' blockbench-import.log; then exit 1; fi
+          grep -q "BLOCKBENCH IMPORT RESULT: 0 failures" blockbench-import.log
+      - name: Verify imported Quaternius animated animal and dungeon glTF scenes
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/quaternius_cube_world_import.gd 2>&1 | tee quaternius-cube-import.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CUBE WORLD:' quaternius-cube-import.log; then exit 1; fi
+          grep -q "CUBE WORLD KIT RESULT: 0 failures" quaternius-cube-import.log
+      - name: Check real Pig/Wolf overworld AI, Skeleton/Goblin dungeon tiers and animations
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/cube_world_creature_gameplay.gd 2>&1 | tee cube-creature-gameplay.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CUBE CREATURE:' cube-creature-gameplay.log; then exit 1; fi
+          grep -q "CUBE CREATURES RESULT: 0 failures" cube-creature-gameplay.log
+      - name: Verify dungeon overhaul systems before long Android smoke suite
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_overhaul.gd 2>&1 | tee dungeon-overhaul.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON OVERHAUL:' dungeon-overhaul.log; then exit 1; fi
+          grep -q "DUNGEON OVERHAUL RESULT: 0 failures" dungeon-overhaul.log
+          for suite in dungeon_archetypes dungeon_seams visual_world_minimap; do
+            ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s "res://tests/${suite}.gd" 2>&1 | tee "${suite}-preflight.log"
+            if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ROOMS:|FAIL SEAMS:|VISUAL FAIL:' "${suite}-preflight.log"; then exit 1; fi
+          done
+          grep -q "ROOM ARCHETYPES RESULT: 0 failures" dungeon_archetypes-preflight.log
+          grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon_seams-preflight.log
+          grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual_world_minimap-preflight.log
+      - name: Verify dungeon rewards cannot permanently slow the player
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_loot_slowdown.gd 2>&1 | tee dungeon-slowdown.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON SLOWDOWN:' dungeon-slowdown.log; then exit 1; fi
+          grep -q "DUNGEON SLOWDOWN RESULT: 0 failures" dungeon-slowdown.log
       - name: Launch scene for 120 frames
         run: |
           set -o pipefail
@@ -26,12 +63,30 @@ jobs:
             echo "Runtime script errors detected"
             exit 1
           fi
+      - name: Verify transparent loading artwork and preserved live controls
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/world_loading_transparent.gd 2>&1 | tee transparent-loading.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TRANSPARENT LOADING:' transparent-loading.log; then exit 1; fi
+          grep -q "TRANSPARENT LOADING RESULT: 0 failures" transparent-loading.log
       - name: Exercise Play button through incremental world generation
         run: |
           set -o pipefail
           timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_play_startup.gd 2>&1 | tee android-play.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ANDROID START:' android-play.log; then exit 1; fi
           grep -q "ANDROID STARTUP RESULT: 0 failures" android-play.log
+      - name: Verify PC keyboard/mouse UI and reversible Android radial controls
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/pc_cross_platform_controls.gd 2>&1 | tee pc-mobile-layout.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PC CONTROLS:' pc-mobile-layout.log; then exit 1; fi
+          grep -q "PC CONTROLS RESULT: 0 failures" pc-mobile-layout.log
+      - name: Verify touch layout and single player after saving and continuing
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_mobile_continue_rejoin.gd 2>&1 | tee mobile-continue.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MOBILE REJOIN:' mobile-continue.log; then exit 1; fi
+          grep -q "MOBILE REJOIN RESULT: 0 failures" mobile-continue.log
       - name: Verify phone report fixes for terrain, labels, combat and crafting
         run: |
           set -euo pipefail
@@ -50,6 +105,48 @@ jobs:
           timeout --signal=TERM --kill-after=5s 50s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_updater.gd 2>&1 | tee android-updater.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ANDROID UPDATER:' android-updater.log; then exit 1; fi
           grep -q "ANDROID UPDATER RESULT: 0 failures" android-updater.log
+      - name: Validate dedicated tool swap, smart-action hold and transparent Quest dropdown
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 70s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_tool_swap_quest_touch.gd 2>&1 | tee tool-quest.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD TOOLS:' tool-quest.log; then exit 1; fi
+          grep -q "HUD TOOLS RESULT: 0 failures" tool-quest.log
+
+      - name: Preflight Android title transparency and dungeon portal confirmation
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_ambient_polish_smoke.gd 2>&1 | tee title-white-preflight.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE AMBIENT:' title-white-preflight.log; then exit 1; fi
+          grep -q "TITLE AMBIENT RESULT: 0 failures" title-white-preflight.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_portal_ui.gd 2>&1 | tee portal-ui-preflight.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON PORTAL UI:' portal-ui-preflight.log; then exit 1; fi
+          grep -q "DUNGEON PORTAL UI RESULT: 0 failures" portal-ui-preflight.log
+      - name: Verify Heroic, Armor Break vulnerability and Whirlwind sword-trail AoE
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/weapon_abilities_whirlwind.gd 2>&1 | tee weapon-abilities.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WEAPON ABILITIES:' weapon-abilities.log; then exit 1; fi
+          grep -q "WEAPON ABILITIES RESULT: 0 failures" weapon-abilities.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_menu_skill_art.gd 2>&1 | tee skill-art.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MENU SKILL ART:' skill-art.log; then exit 1; fi
+          grep -q "MENU SKILL ART RESULT: 0 failures" skill-art.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_menu_skills_adaptive.gd 2>&1 | tee skills-adaptive.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD POLISH:' skills-adaptive.log; then exit 1; fi
+          grep -q "HUD POLISH RESULT: 0 failures" skills-adaptive.log
+      - name: Verify dodgeable cone/line heavy attacks
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_combat_telegraphs.gd 2>&1 | tee alpha-telegraphs.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ALPHA TELEGRAPHS:' alpha-telegraphs.log; then exit 1; fi
+          grep -q "ALPHA TELEGRAPHS RESULT: 0 failures" alpha-telegraphs.log
+
+      - name: Verify Diablo-style enemy target frame and real health scaling
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_enemy_target_frame.gd 2>&1 | tee enemy-target-frame.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ENEMY TARGET FRAME:' enemy-target-frame.log; then exit 1; fi
+          grep -q "ENEMY TARGET FRAME RESULT: 0 failures" enemy-target-frame.log
+
       - name: Run actual gameplay regression checks
         run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/smoke.gd
 
@@ -105,12 +202,25 @@ jobs:
             echo "Voxel visual smoke errors detected"
             exit 1
           fi
+      - name: Verify checked-in seasonal foliage atlas and streamed renderer
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/foliage_renderer.gd 2>&1 | tee foliage.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FOLIAGE:' foliage.log; then exit 1; fi
+          grep -q "FOLIAGE RESULT: 0 failures" foliage.log
+
       - name: Verify atlas-safe greedy top and cliff face merges
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/greedy_meshing.gd 2>&1 | tee greedy.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL GREEDY:' greedy.log; then exit 1; fi
           grep -q "GREEDY RESULT: 0 failures" greedy.log
+      - name: Verify illustrated cliffs and actual harvestable voxel mushrooms
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/illustrated_terrain_mushrooms.gd 2>&1 | tee illustrated-mushrooms.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL:' illustrated-mushrooms.log; then exit 1; fi
+          grep -q "Illustrated terrain tests: 0 failure(s)" illustrated-mushrooms.log
       - name: Verify lazy chunk load, unload and deterministic reconstruction
         run: |
           set -o pipefail
@@ -147,12 +257,31 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_seams.gd 2>&1 | tee dungeon-seams.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SEAMS:' dungeon-seams.log; then exit 1; fi
           grep -q "DUNGEON SEAMS RESULT: 0 failures" dungeon-seams.log
+      - name: Validate centered portal entry and redesigned Yes/No dungeon dialog
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/dungeon_portal_ui.gd 2>&1 | tee dungeon-portal-ui.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL DUNGEON PORTAL UI:' dungeon-portal-ui.log; then exit 1; fi
+          grep -q "DUNGEON PORTAL UI RESULT: 0 failures" dungeon-portal-ui.log
       - name: Verify voxel-world dungeon portals and movement-lock release
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/portals_pixel_integration.gd 2>&1 | tee portals-pixel.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTAL:' portals-pixel.log; then exit 1; fi
           grep -q "PORTAL INTEGRATION RESULT: 0 failure(s)." portals-pixel.log
+      - name: Verify combined Alpha fullscreen HUD, mana, character/resources, chest and bag close
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/combined_alpha_hud_inventory_integration.gd 2>&1 | tee combined-alpha-inventory.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL COMBINED ALPHA:' combined-alpha-inventory.log; then exit 1; fi
+          grep -q "COMBINED ALPHA RESULT: 0 failures" combined-alpha-inventory.log
+
+      - name: Verify Albion-style inventory and equipment interaction
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/albion_inventory_window.gd 2>&1 | tee albion-inventory.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL INVENTORY:' albion-inventory.log; then exit 1; fi
+          grep -q "INVENTORY RESULT: 0 failures" albion-inventory.log
       - name: Verify carry limits, specialist bags, star crafting and touch camera smoothing
         run: |
           set -o pipefail
@@ -177,24 +306,109 @@ jobs:
           timeout --signal=TERM --kill-after=5s 95s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coastal_beach_biome.gd 2>&1 | tee coastal-beach.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL BEACH:' coastal-beach.log; then exit 1; fi
           grep -q "COASTAL BEACH RESULT: 0 failures" coastal-beach.log
+      - name: Prevent infinite swimming falls and ocean rendering through distant unloaded terrain
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 105s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/coastal_ocean_swim_safety.gd 2>&1 | tee ocean-swim-safety.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL OCEAN SAFETY:' ocean-swim-safety.log; then exit 1; fi
+          grep -q "OCEAN SAFETY RESULT: 0 failures" ocean-swim-safety.log
+
       - name: Guard against Android water drawing over invisible island terrain
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/android_opaque_terrain_water.gd 2>&1 | tee opaque-terrain.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL OPAQUE TERRAIN:' opaque-terrain.log; then exit 1; fi
           grep -q "OPAQUE TERRAIN RESULT: 0 failure(s)" opaque-terrain.log
-      - name: Verify compact wallet, menu hold, three skills and floating movement joystick
+      - name: Verify single-tap top chrome, stable fast-orbit pitch and stable zone map
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_topbar_camera_zone_v2.gd 2>&1 | tee topbar-camera-zone.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TOPBAR CAMERA:' topbar-camera-zone.log; then exit 1; fi
+          grep -q "TOPBAR CAMERA RESULT: 0 failures" topbar-camera-zone.log
+
+      - name: Verify first-touch Menu release, new framed Skills and adaptive joystick setting
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_menu_skills_adaptive.gd 2>&1 | tee hud-skills-adaptive.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL HUD POLISH:' hud-skills-adaptive.log; then exit 1; fi
+          grep -q "HUD POLISH RESULT: 0 failures" hud-skills-adaptive.log
+
+      - name: Verify compact wallet, single-tap menu, three skills and floating movement joystick
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/mobile_hud_wallet_floating_joystick.gd 2>&1 | tee wallet-float-hud.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MOBILE HUD:' wallet-float-hud.log; then exit 1; fi
           grep -q "MOBILE HUD RESULT: 0 failures" wallet-float-hud.log
+      - name: Verify flat translucent UI surfaces across quest, inventory and crafting
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/ui_translucent_panels_v2.gd 2>&1 | tee ui-translucent-v2.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TRANSLUCENT UI:' ui-translucent-v2.log; then exit 1; fi
+          grep -q "TRANSLUCENT UI RESULT: 0 failures" ui-translucent-v2.log
+
+      - name: Verify transparent player portrait, golden player name and low-clutter Quest panel
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_portrait_gold_quest_glass.gd 2>&1 | tee hud-portrait-gold.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL PORTRAIT GOLD:' hud-portrait-gold.log; then exit 1; fi
+          grep -q "PORTRAIT GOLD RESULT: 0 failures" hud-portrait-gold.log
+
       - name: Verify approved portrait HUD, working hotbar and compact inventory/crafting
         run: |
           set -o pipefail
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/approved_ui_visual_layout.gd 2>&1 | tee approved-ui.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED UI:' approved-ui.log; then exit 1; fi
           grep -q "APPROVED UI RESULT: 0 failures" approved-ui.log
+      - name: Exercise HUD V2 harvested-items panel and effect-icon models
+        run: |
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_v2_utility_cards.gd 2>&1 | tee hud-v2.log
+
+      - name: Verify live MMORPG loot feed, rarity icon badges and tappable item tooltips
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_loot_feed_tooltip_v2.gd 2>&1 | tee loot-feed-v2.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL LOOT FEED:' loot-feed-v2.log; then exit 1; fi
+          grep -q "LOOT FEED RESULT: 0 failures" loot-feed-v2.log
+
+      - name: Verify WoW-style full-width, bottom-edge character XP at 16:9 and 20:9
+        run: |
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_fullwidth_xp_v2.gd 2>&1 | tee hud-edge-xp.log
+
+      - name: Verify compact recent loot cards, readable event bars and torch hitboxes
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_compact_receipts_layout.gd 2>&1 | tee hud-compact-receipts.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL COMPACT RECEIPTS:' hud-compact-receipts.log; then exit 1; fi
+          grep -q "COMPACT RECEIPTS RESULT: 0 failures" hud-compact-receipts.log
+
+      - name: Verify world-space pickups, genuine skill XP radial, enemy names and no Ouch toast
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_world_skill_progress_v2.gd 2>&1 | tee hud-world-skill.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL WORLD SKILL HUD:' hud-world-skill.log; then exit 1; fi
+          grep -q "WORLD SKILL HUD RESULT: 0 failures" hud-world-skill.log
+
+      - name: Verify new ability and backpack/menu icons preserve existing HUD actions
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 75s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_menu_skill_art.gd 2>&1 | tee alpha-menu-skill-art.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL MENU SKILL ART:' alpha-menu-skill-art.log; then exit 1; fi
+          grep -q "MENU SKILL ART RESULT: 0 failures" alpha-menu-skill-art.log
+
+      - name: Validate wooden action medallions and context-sensitive cooldowns
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 75s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_action_medallions.gd 2>&1 | tee action-medallions.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ACTION MEDALLIONS:' action-medallions.log; then exit 1; fi
+          grep -q "ACTION MEDALLIONS RESULT: 0 failures" action-medallions.log
+
+      - name: Validate circular portrait, Android Controls touch, status modes, swimming FX and title updater
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 75s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_controls_portrait_swim.gd 2>&1 | tee alpha-controls-swim.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ALPHA UI SWIM:' alpha-controls-swim.log; then exit 1; fi
+          grep -q "ALPHA UI SWIM RESULT: 0 failures" alpha-controls-swim.log
+
       - name: Verify real Android HUD hitboxes, map and responsive menu spacing
         run: |
           set -o pipefail
@@ -255,12 +469,15 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE LOAD:' title-loading.log; then exit 1; fi
           grep -q "TITLE LOAD RESULT: 0 failures" title-loading.log
 
-      - name: Verify six-slot HUD door and safe save/exit menu
+      - name: Verify touchscreen Game Menu, Leave modal and both save/return routes
         run: |
           set -o pipefail
           timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_exit_door_smoke.gd 2>&1 | tee hud-exit.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL EXIT HUD:' hud-exit.log; then exit 1; fi
           grep -q "EXIT HUD RESULT: 0 failures" hud-exit.log
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/hud_leave_routes_v2.gd 2>&1 | tee hud-leave-routes.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL EXIT ROUTES:' hud-leave-routes.log; then exit 1; fi
+          grep -q "EXIT ROUTES RESULT: 0 failures" hud-leave-routes.log
 
       - name: Validate live forest minimap, voxel stations, character scale and held tools
         run: |
@@ -269,9 +486,9 @@ jobs:
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|VISUAL FAIL:' visual-world.log; then exit 1; fi
           grep -q "OUTPOST VISUAL TEST: 0 failure(s)" visual-world.log
 
-      - name: Regression test flat minimap, Android camera drag and bag close
+      - name: Verify Cube World-inspired terrain palette, avatar and radial map
         run: |
           set -o pipefail
-          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/minimap_bag_camera_regression.gd 2>&1 | tee map-bag-camera.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|MAP BAG CAMERA FAIL:' map-bag-camera.log; then exit 1; fi
-          grep -q "MAP BAG CAMERA RESULT: 0 failure(s)" map-bag-camera.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/cubeworld_visual_direction.gd 2>&1 | tee cube-style.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL CUBE STYLE:' cube-style.log; then exit 1; fi
+          grep -q "CUBE STYLE RESULT: 0 failures" cube-style.log

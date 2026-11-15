@@ -1,0 +1,38 @@
+name: Title artboard layout (16:9 and widescreen)
+
+on:
+  pull_request:
+    paths:
+      - "scripts/ui/title_screen.gd"
+      - "tests/title_approved_raster_smoke.gd"
+      - "tests/title_ambient_polish_smoke.gd"
+      - "assets/ui/title/**"
+      - ".github/workflows/title-layout-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  title-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot 4.7.2
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Import title resources
+        run: ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+      - name: Verify approved title art, layout, and widescreen dimensions
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_approved_raster_smoke.gd 2>&1 | tee title-layout.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL APPROVED TITLE:' title-layout.log; then exit 1; fi
+          grep -q "APPROVED TITLE RESULT: 0 failures" title-layout.log
+      - name: Verify ambience and retained click targets
+        run: |
+          set -euo pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/title_ambient_polish_smoke.gd 2>&1 | tee title-ambient.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL TITLE AMBIENT:' title-ambient.log; then exit 1; fi
+          grep -q "TITLE AMBIENT RESULT: 0 failures" title-ambient.log

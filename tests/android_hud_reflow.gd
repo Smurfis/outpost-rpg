@@ -1,6 +1,6 @@
 extends SceneTree
 ## Real touch-layout collision checks for Outpost's landscape HUD.
-## Complements existing tool-slider / orbit / multiplayer gameplay tests.
+## Complements dedicated tool-swap / orbit / multiplayer gameplay tests.
 var failures: int = 0
 
 func _initialize() -> void:
@@ -19,6 +19,7 @@ func _does_not_overlap(left: Control, right: Control, detail: String) -> void:
 
 func _run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "touch") # Exercise the actual Android layout on desktop CI.
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	verify(scene != null, "Game scene imports")
 	if scene == null:
@@ -43,7 +44,7 @@ func _run() -> void:
 	if smart != null:
 		verify(absf(smart.size.x - smart.size.y) <= 2.0 and smart.size.x >= 110.0, "Main tool selector is a real square, finger-sized target")
 		verify(smart.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Input remains handled by main smart-tool swipe handler")
-		verify(smart.get_node_or_null("ToolSwipeChevron") != null, "Main tool still shows drag affordance")
+		verify(smart.get_node_or_null("ToolSwipeChevron") == null and hud.tool_swap_button != null, "Interact has no drag affordance; TOOLS is its own visible button")
 
 	var keys: Array[String] = ["skill_1", "skill_2", "skill_3", "consumable", "potion"]
 	var right_buttons: Array[Control] = []
@@ -64,8 +65,20 @@ func _run() -> void:
 
 	if mini != null and toggle != null:
 		_does_not_overlap(mini, toggle, "Minimap is clear of its menu toggle")
+		verify(toggle.get_global_rect().end.x < mini.get_global_rect().position.x, "MENU sits immediately left of the upper-right minimap")
+		verify(toggle.get_global_rect().position.y < mini.get_global_rect().position.y, "MENU aligns above the map with the new zone pill")
+	var specials: Array[Button] = [hud.quick_buttons["skill_1"], hud.quick_buttons["skill_2"], hud.quick_buttons["skill_3"]]
+	if smart != null:
+		verify(specials[0].get_global_rect().get_center().x > specials[1].get_global_rect().get_center().x, "POWER is now centered above and closer to CRAFT")
+		verify(specials[0].get_global_rect().get_center().y < smart.get_global_rect().position.y, "POWER remains above rather than intercepting CRAFT touch")
+		verify(specials[1].get_global_rect().get_center().x > smart.get_global_rect().position.x - 170.0, "Middle and lower specials form a compact group near CRAFT")
+	var context_panel: Panel = controls.get_node_or_null("ContextPrompt") as Panel
+	var toast_panel: Panel = controls.get_node_or_null("LootQuestToast") as Panel
+	if context_panel != null and toast_panel != null:
+		verify(context_panel.get_global_rect().end.y < controls.size.y * 0.42, "Crafting Station context prompt does not cover the lower abilities or XP")
+		verify(toast_panel.get_global_rect().end.y < context_panel.get_global_rect().position.y, "Toast and actionable context are vertically aligned without overlapping")
 	hud._set_top_menu(true)
-	verify(hud.top_menu_actions.size() == 6 and menu.visible, "Six-option drop-down opens")
+	verify(hud.top_menu_actions.size() == 6 and menu.visible and hud.top_menu_shade.visible, "Six-option centered game MENU opens with a shade")
 	for option in hud.top_menu_actions:
 		verify(option.visible and menu.get_global_rect().encloses(option.get_global_rect()), "Menu option fits panel: " + option.name)
 		if mini != null:
@@ -76,17 +89,130 @@ func _run() -> void:
 			_does_not_overlap(option, button, "Menu option does not cover playable ability: " + option.name)
 	hud._set_top_menu(false)
 
+	# An actual Android tap path rather than direct Button.pressed.emit() only.
+	if toggle != null:
+		var menu_tap := InputEventScreenTouch.new()
+		menu_tap.index = 1
+		menu_tap.pressed = true
+		menu_tap.position = toggle.get_global_rect().get_center()
+		hud._input(menu_tap)
+		verify(hud.top_menu_open, "Single MENU tap activates on the first finger-down even when Godot consumes release")
+		var menu_release := InputEventScreenTouch.new()
+		menu_release.index = menu_tap.index
+		menu_release.pressed = false
+		menu_release.position = menu_tap.position
+		hud._input(menu_release)
+		verify(hud.top_menu_open, "Finger release does not close the centered six-item modal")
+		var bag_action: Button = controls.get_node_or_null("BagMenuButton") as Button
+		if bag_action != null:
+			var bag_tap := InputEventScreenTouch.new()
+			bag_tap.index = 1
+			bag_tap.pressed = true
+			bag_tap.position = bag_action.get_global_rect().get_center()
+			hud._input(bag_tap)
+			var bag_release := InputEventScreenTouch.new()
+			bag_release.index = 1
+			bag_release.pressed = false
+			bag_release.position = bag_tap.position
+			hud._input(bag_release)
+			verify(game.menu.visible and game.menu.current_page == "bag" and game.menu.inventory_window.visible, "Press+release BAG in modal opens Albion inventory, not an inert overlay")
+			verify(not game.menu.emergency_close.visible, "Old far-left inventory close is hidden")
+			var window_x: Button = game.menu.inventory_window.find_child("InventoryCloseButton", true, false) as Button
+			verify(window_x != null and window_x.get_global_rect().get_center().x > game.menu.inventory_window.window.get_global_rect().get_center().x, "Red inventory close stays on its own header at right")
+			if window_x != null:
+				window_x.pressed.emit()
+				verify(not game.menu.visible, "Pressing inventory's own X actually leaves the bag")
+		game.show_crafting()
+		verify(game.menu.visible and game.menu.current_page == "craft", "Crafting reopens after bag touch")
+		game.menu.close_page()
+
+	# Dynamic stick and independent second-finger camera while moving.
+	hud._set_floating_mode(true)
+	hud._set_sticky_movement(true)
+	var screen_size: Vector2 = hud.get_viewport().get_visible_rect().size
+	var first := InputEventScreenTouch.new()
+	first.index = 0
+	first.pressed = true
+	first.position = Vector2(screen_size.x * 0.11, screen_size.y * 0.75)
+	hud._input(first)
+	verify(hud.finger == 0, "Dynamic thumbstick captures an imprecise lower-left touch")
+	var walk := InputEventScreenDrag.new()
+	walk.index = 0
+	walk.position = first.position + Vector2(34, -9)
+	hud._input(walk)
+	verify(hud.move_vector.length_squared() > 0.001, "Dynamic thumbstick starts movement on drag")
+	var second := InputEventScreenTouch.new()
+	second.index = 1
+	second.pressed = true
+	second.position = Vector2(screen_size.x * 0.53, screen_size.y * 0.56)
+	hud._input(second)
+	verify(hud.finger == 0 and hud.camera_drag_finger == 1, "Second finger can orbit while first holds movement")
+	var release_cam := InputEventScreenTouch.new()
+	release_cam.index = 1
+	release_cam.pressed = false
+	release_cam.position = second.position
+	hud._input(release_cam)
+	var release_stick := InputEventScreenTouch.new()
+	release_stick.index = 0
+	release_stick.pressed = false
+	release_stick.position = walk.position
+	hud._input(release_stick)
+	verify(hud.finger == -1 and hud.move_vector.length_squared() > 0.001, "Sticky mode intentionally preserves movement after finger lift")
+	verify(hud.stop_sticky_button.visible, "Sticky movement exposes the STOP safety button")
+	hud._stop_sticky_movement()
+	verify(hud.move_vector == Vector2.ZERO and not hud.stop_sticky_button.visible, "STOP action reliably cancels sticky movement")
+	hud._set_sticky_movement(false)
+	hud._set_floating_mode(false)
+
 	hud.render_status(81.0, {"wood": 8, "stone": 3, "coins": 12}, 80, 0,
 			"training_blade", "Gather wood and stone, then craft a spear", "Explore the fields")
 	verify(hud.quest.text == "Gather wood and stone", "Quest ticker shows a concise actionable clause")
 	verify(hud.quest_detail.text.contains("then craft a spear"), "Full untruncated objective remains available in journal")
 	verify(not hud.hint.visible, "Generic exploration text stays hidden")
-	verify(not hud.mana_bar.visible and not hud.mana_numbers.visible, "Nonfunctional MP placeholder does not consume HUD space")
+	verify(hud.mana_bar.visible and hud.mana_numbers.visible and hud.mana_numbers.text.contains("35 / 35"), "Real weapon-skill MP pool appears beneath health")
 	var status: Panel = controls.get_node_or_null("HeroStatusFrame") as Panel
+	var portrait: TextureRect = controls.get_node_or_null("HeroPortrait") as TextureRect
+	var wallet: Panel = controls.get_node_or_null("ResourceQuickChips") as Panel
+	verify(status != null and portrait != null and wallet != null, "Portrait and compact player resource chrome remain separate editable controls")
 	if status != null:
 		verify(status.get_global_rect().encloses(hud.hero_detail.get_global_rect()), "Mastery line stays inside status frame")
+		var player_style: StyleBoxFlat = status.get_theme_stylebox("panel") as StyleBoxFlat
+		verify(player_style != null and player_style.bg_color.a < 0.80 and player_style.border_width_left <= 2, "HP/name backing is translucent with a slim border, not opaque wood")
+		verify(absf(status.size.x - 326.0) < 3.0, "Portrait and health frame remains compact on standard Android landscape")
+	if wallet != null:
+		verify(not wallet.visible and not hud.wallet_collapse.visible, "Wallet has no floating background or toggle control")
+		verify(hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Real currencies display as a horizontal row")
+		verify(hud.wallet_coin.get_global_rect().position.x > status.get_global_rect().end.x,
+			"Horizontal wallet starts after hero portrait/HP")
+	if portrait != null and status != null:
+		verify(status.get_global_rect().encloses(portrait.get_global_rect()), "Independent hero portrait stays inside slim status frame")
+	# Simulate ultra-wide coordinates without changing gameplay or the viewport.
+	# Check the px-layout parameters, not a single fixed percentage at 16:9.
+	hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
+	if status != null and wallet != null:
+		verify(absf((status.anchor_right - status.anchor_left) * 2400.0 - 391.2) < 2.0, "At 20:9 portrait+HP remain fixed-pixel width (no long opaque banner)")
+		var previous_end: float = (hud.wallet_coin.anchor_right) * 2400.0
+		for key in ["copper", "silver", "gold", "gems"]:
+			var currency: Label = hud.wallet_currency_rows[key] as Label
+			verify(absf(currency.anchor_top - hud.wallet_coin.anchor_top) < 0.001,
+				"At 20:9 " + key + " remains in one horizontal currency row")
+			verify(currency.anchor_left * 2400.0 >= previous_end - 1.5,
+				"At 20:9 " + key + " does not overlap previous currency")
+			previous_end = currency.anchor_right * 2400.0
+		hud._toggle_wallet()
+		verify(not hud.wallet_frame.visible and hud.wallet_coin.visible,
+			"Obsolete wallet tap cannot create an opaque flyout")
+		hud._layout_player_chrome_for_size(Vector2(2400, 1080), 1.2)
+		verify((hud.wallet_currency_rows["gems"] as Label).anchor_right * 2400.0 <= 2400.0,
+			"At 20:9 the passive currency display remains within the viewport")
+	hud._layout_touch_hud()
+
 	verify(hud.xp_bar.size.y <= 22.0, "Level XP is a slim screen-edge progress meter")
-	verify(hud.xp_bar.get_global_rect().position.y > game.hud.get_viewport().get_visible_rect().size.y * 0.94, "XP meter remains below action cluster")
+	var xp_rect: Rect2 = hud.xp_bar.get_global_rect()
+	var viewport_size: Vector2 = hud.get_viewport().get_visible_rect().size
+	verify(absf(xp_rect.position.x) < 1.1 and absf(xp_rect.end.x - viewport_size.x) < 1.1, "XP stretches to both full viewport edges")
+	verify(absf(xp_rect.end.y - viewport_size.y) < 1.1, "XP hugs the exact bottom viewport edge")
+	verify(hud.xp_bar_divisions != null and hud.xp_bar_divisions.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Segmented strip is visual-only, not an invisible touch overlay")
 
 	hud.bag_weight_label.visible = true
 	_does_not_overlap(hud.bag_weight_label, hud.quest_frame, "Bag weight alert does not obscure quest")
@@ -96,7 +222,7 @@ func _run() -> void:
 	# Gameplay API remains untouched.
 	game.inventory["pickaxe"] = 1
 	verify(game.select_quick_tool("pickaxe"), "Original held-tool selection still equips owned pickaxe")
-	verify(game.hud.smart_button != null and game.hud.smart_tray != null, "Swipe tray remains available")
+	verify(game.hud.smart_button != null and game.hud.tool_swap_button != null and not game.hud.smart_tray.visible, "Independent TOOLS action replaces obsolete swipe tray")
 	game.queue_free()
 	await process_frame
 	print("HUD REFLOW RESULT: %d failures" % failures)

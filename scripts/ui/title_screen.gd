@@ -9,7 +9,7 @@ const MAIN_GAME := "res://scenes/main.tscn"
 const WORLD_LOADING := "res://scenes/ui/world_loading.tscn"
 const SAVE_PATH := "user://outpost_progress_v02.json"
 const UI_PREFS := "user://outpost_ui.cfg"
-const APPROVED_RASTER := "res://assets/ui/title/title_background.png"
+const APPROVED_RASTER := "res://assets/ui/title/title_background_clean.png"
 const APPROVED_LOGO := "res://assets/ui/title/outpost_logo.png"
 const BAKED_VERSION_ART := "res://assets/ui/title/version_badge_original.png"
 const BUTTON_SCENE := preload("res://scenes/ui/title_menu_button.tscn")
@@ -17,7 +17,6 @@ const LOGO_SCENE := preload("res://scenes/ui/title_logo.tscn")
 const SPLASH_SCENE := preload("res://scenes/ui/title_splash.tscn")
 const EMBER_SCRIPT := preload("res://scripts/ui/title_embers.gd")
 const ANDROID_UPDATER := preload("res://scripts/ui/android_updater.gd")
-const EXTERNAL_BROWSER := preload("res://scripts/ui/android_external_browser.gd")
 const SKIN := preload("res://scripts/ui/outpost_skin.gd")
 const CREST_BLEND := preload("res://assets/ui/title/crest_edge_blend.gdshader")
 const TIPS := [
@@ -64,6 +63,7 @@ var _ambient_elapsed: float = 0.0
 var _approved_art: bool = false
 var _continue_button: Button
 var _settings_panel: PanelContainer
+var _settings_home_button: Button
 var _adventure_panel: PanelContainer
 var _adventure_dim: ColorRect
 var _adventure_name: LineEdit
@@ -73,6 +73,9 @@ var _adventure_heading: Label
 var _new_adventure_pending: bool = true
 var _volume: float = 0.85
 var _download_button: Button
+var _cancel_download_button: Button
+var _download_progress_bar: ProgressBar
+var _update_version_code: int = 0
 var _updater: Node
 var _update_button: Button
 var _update_status: Label
@@ -82,6 +85,9 @@ var _selected_channel: String = ""
 var _channel_stable_button: Button
 var _channel_alpha_button: Button
 var _channel_note: Label
+var _changelog_button: Button
+var _changelog_panel: PanelContainer
+var _changelog_dim: ColorRect
 var _show_tips := true
 var _reduced_motion := false
 var _tip_index := 0
@@ -108,6 +114,12 @@ func _ready() -> void:
 	_tip_index = randi_range(0, TIPS.size() - 1)
 	_make_screen()
 	_layout()
+	# The in-game exit panel can return straight here after saving.
+	if bool(get_tree().root.get_meta("outpost_open_settings", false)):
+		get_tree().root.remove_meta("outpost_open_settings")
+		if _settings_panel != null:
+			_settings_panel.visible = true
+			_settings_panel.move_to_front()
 	get_viewport().size_changed.connect(_layout)
 	if OS.has_feature("Android") and _updater != null:
 		# Passive, single startup check; only display a banner if there's
@@ -141,26 +153,38 @@ func _layout_for_size(available: Vector2) -> void:
 	# On 16:9 displays half_extra == 0, so the approved position is kept.
 	var version_plaque: TextureRect = _canvas.get_node_or_null("VersionPlaque") as TextureRect
 	var version_label: Label = _canvas.get_node_or_null("Version") as Label
+	# Badge retains its ORIGINAL 177x57 silhouette and stays inset from
+	# the extended right edge. The label is positioned RELATIVE to the plaque.
+	var badge_left: float = DESIGN.x + half_extra - 192.0
 	if version_plaque != null:
-		version_plaque.position = Vector2(1058.0 + half_extra, 642.0)
+		version_plaque.position = Vector2(badge_left, 645.0)
 	if version_label != null:
-		version_label.position = Vector2(1068.0 + half_extra, 652.0)
+		version_label.position = Vector2(badge_left + 7.0, 650.0)
+	if _changelog_button != null:
+		_changelog_button.position.x = 1164.0 + half_extra
+	if _changelog_panel != null:
+		# Nearly full viewport in either 16:9 or 20:9 Android landscape.
+		_changelog_panel.position = Vector2(54.0 - half_extra, 47.0)
+		_changelog_panel.size = Vector2(DESIGN.x + 2.0 * half_extra - 108.0, 626.0)
+	if _changelog_dim != null:
+		_changelog_dim.position = Vector2(-half_extra, 0.0)
+		_changelog_dim.size = Vector2(DESIGN.x + 2.0 * half_extra, DESIGN.y)
 	_approved_backdrop.visible = not is_wide
 	_wide_backdrop.visible = is_wide
 	if not is_wide:
 		return
-	# Keep central x=320..1120 pixels exactly as approved so the tent logo,
-	# all four button cutouts and their painted surroundings remain aligned.
-	# Only side scenery expands into the additional phone-screen width.
-	var left: TextureRect = _wide_backdrop.get_node("WideLeft") as TextureRect
-	var center: TextureRect = _wide_backdrop.get_node("WideCenter") as TextureRect
-	var right: TextureRect = _wide_backdrop.get_node("WideRight") as TextureRect
-	left.position = Vector2(-half_extra, 0.0)
-	left.size = Vector2(WIDE_LEFT_CUT + half_extra, DESIGN.y)
-	center.position = Vector2(WIDE_LEFT_CUT, 0.0)
-	center.size = Vector2(WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y)
-	right.position = Vector2(WIDE_RIGHT_CUT, 0.0)
-	right.size = Vector2(DESIGN.x - WIDE_RIGHT_CUT + half_extra, DESIGN.y)
+	# Draw the wide panorama directly in viewport coordinates, BEHIND the
+	# centred 1280x720 artboard. A negative-x TextureRect inside that artboard
+	# left a curtain-coloured strip on its left edge at desktop 16:10/19:10
+	# sizes (for example, 1919x1010), while the right edge kept extending.
+	# The shader still remaps only the outer scenery to preserve the centre.
+	_wide_backdrop.position = Vector2.ZERO
+	_wide_backdrop.size = available
+	var panorama: TextureRect = _wide_backdrop.get_node("WidePanorama") as TextureRect
+	panorama.position = Vector2.ZERO
+	panorama.size = available
+	if panorama.material is ShaderMaterial:
+		(panorama.material as ShaderMaterial).set_shader_parameter("side_extension_px", half_extra)
 
 func _make_screen() -> void:
 	var curtain := ColorRect.new()
@@ -173,7 +197,7 @@ func _make_screen() -> void:
 	_canvas.name = "Artboard"
 	_canvas.size = DESIGN
 	add_child(_canvas)
-	_add_image("Backdrop", "title_background.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
+	_add_image("Backdrop", "title_background_clean.png", "title_backdrop.svg", Vector2.ZERO, DESIGN)
 	_approved_backdrop = _canvas.get_node_or_null("Backdrop") as TextureRect
 	if _approved_art and _approved_backdrop != null:
 		_make_wide_background()
@@ -196,13 +220,14 @@ func _make_screen() -> void:
 	# Clear the .tscn's old 650×358 minimum BEFORE assigning approved dimensions;
 	# otherwise Godot silently clamps the new size and wrecks pixel alignment.
 	logo.custom_minimum_size = Vector2.ZERO
+	if _approved_art:
+		# Feather residual screenshot sky around the crest without a hard rectangular border.
+		var crest_material := ShaderMaterial.new()
+		crest_material.shader = CREST_BLEND
+		logo.material = crest_material
 	_canvas.add_child(logo)
 	logo.position = Vector2(416, 0) if _approved_art else Vector2(392, 8)
 	logo.size = Vector2(438, 350) if _approved_art else Vector2(496, 330)
-	if _approved_art:
-		var edge_material := ShaderMaterial.new()
-		edge_material.shader = CREST_BLEND
-		logo.material = edge_material
 	if _approved_art:
 		# Cheap 2D ember glints over the real campsite and crest campfires.
 		# Particles ignore mouse/touch and leave the button art untouched.
@@ -226,6 +251,9 @@ func _make_screen() -> void:
 	if _reduced_motion:
 		_splash.animate_bounce = false
 
+	# No independent glow sprite: its large SVG rectangle was rendered as
+	# an opaque WHITE block on some Android devices. Selected light now lives
+	# inside each PNG's genuine transparent pixel alpha.
 	# Cutout positions use the source image's 1280x720 pixel coordinates.
 	# These are REAL Button nodes: touch/focus, signals and disabled state survive.
 	var approved_rects: Dictionary = {
@@ -264,15 +292,22 @@ func _make_screen() -> void:
 	# A single live version label over a matching textless PNG plaque.
 	# _layout_for_size moves both to the actual ultrawide right edge.
 	var live_version: String = "v" + str(ProjectSettings.get_setting("application/config/version", "0.5.0-dev")).trim_prefix("v")
-	_add_image("VersionPlaque", "version_badge_textless.png", "version_badge.svg", Vector2(1058, 642), Vector2(203, 61))
+	_add_image("VersionPlaque", "version_clear_not_baked.png", "version_plaque_clear.svg", Vector2(1088, 645), Vector2(177, 57))
 	var version := Label.new()
 	version.name = "Version"
-	version.text = "%s  •  %d" % [live_version, int(ProjectSettings.get_setting("application/config/android_build_code", 11))]
-	version.position = Vector2(1068, 652)
-	version.size = Vector2(183, 40)
+	var channel: String = "ALPHA" if str(ProjectSettings.get_setting("application/config/build_channel", "stable")) == "alpha" else "STABLE"
+	var build_code: int = int(ProjectSettings.get_setting("application/config/android_build_code", 11))
+	var clean_version: String = live_version.trim_prefix("v").replace("-dev", "").replace("-alpha", "")
+	# Separate semantic test revision (.1, .2, ...) from numeric Android build
+	# code. Each published Alpha workflow increases its versionCode by one.
+	var revision: int = maxi(1, build_code - 1006)
+	version.text = ("V.A.%s.%d" % [clean_version, revision]) if channel == "ALPHA" else ("V.S.%s" % clean_version)
+	version.text += "\nBUILD %d" % build_code
+	version.position = Vector2(1095, 650)
+	version.size = Vector2(163, 47)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	version.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_label_style(version, 18, Color("fff1d5"), Color("2b1e25"))
+	_label_style(version, 15, Color("fff1d5"), Color("2b1e25"))
 	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(version)
 
@@ -296,6 +331,7 @@ func _make_screen() -> void:
 
 	_build_settings()
 	_build_adventure_panel()
+	_build_changelog_scroll()
 	_update_notice = Button.new()
 	_update_notice.name = "UpdateAvailable"
 	_update_notice.text = "OUTPOST UPDATE AVAILABLE"
@@ -304,41 +340,35 @@ func _make_screen() -> void:
 	_update_notice.visible = false
 	_update_notice.add_theme_font_size_override("font_size", 18)
 	_update_notice.add_theme_color_override("font_color", Color("ffefbd"))
-	var update_frame := StyleBoxFlat.new()
-	update_frame.bg_color = Color("392833")
-	update_frame.border_color = Color("f1bd69")
-	update_frame.set_border_width_all(4)
-	update_frame.set_corner_radius_all(7)
-	_update_notice.add_theme_stylebox_override("normal", update_frame)
+	SKIN.apply_button(_update_notice, "wood_selected")
 	_update_notice.pressed.connect(_check_or_download_update)
 	_canvas.add_child(_update_notice)
 
 func _make_wide_background() -> void:
-	# Atlas slices use the SAME PNG as the approved screen, rather than a
-	# duplicate image/blur that would break the source-matched art cutouts.
+	# One panorama covers the ENTIRE viewport independently of the fitted
+	# artboard. Drawing it inside the artboard could expose the navy curtain
+	# in the spare horizontal area and leave a one-sided decorative frame.
+	# Insert behind the artboard so buttons and the crest remain above it.
 	_wide_backdrop = Control.new()
 	_wide_backdrop.name = "WideBackdrop"
 	_wide_backdrop.size = DESIGN
 	_wide_backdrop.visible = false
 	_wide_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_canvas.add_child(_wide_backdrop)
-	var regions: Dictionary = {
-		"WideLeft": Rect2(0.0, 0.0, WIDE_LEFT_CUT, DESIGN.y),
-		"WideCenter": Rect2(WIDE_LEFT_CUT, 0.0, WIDE_RIGHT_CUT - WIDE_LEFT_CUT, DESIGN.y),
-		"WideRight": Rect2(WIDE_RIGHT_CUT, 0.0, DESIGN.x - WIDE_RIGHT_CUT, DESIGN.y)
-	}
-	for part_name in ["WideLeft", "WideCenter", "WideRight"]:
-		var atlas: AtlasTexture = AtlasTexture.new()
-		atlas.atlas = _approved_backdrop.texture
-		atlas.region = regions[part_name]
-		var part: TextureRect = TextureRect.new()
-		part.name = part_name
-		part.texture = atlas
-		part.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		part.stretch_mode = TextureRect.STRETCH_SCALE
-		part.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		part.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_wide_backdrop.add_child(part)
+	add_child(_wide_backdrop)
+	move_child(_wide_backdrop, _canvas.get_index())
+	var panorama := TextureRect.new()
+	panorama.name = "WidePanorama"
+	panorama.texture = _approved_backdrop.texture
+	panorama.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	panorama.stretch_mode = TextureRect.STRETCH_SCALE
+	panorama.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var wide_material := ShaderMaterial.new()
+	wide_material.shader = load("res://assets/ui/title/wide_backdrop.gdshader") as Shader
+	panorama.material = wide_material
+	panorama.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panorama.position = Vector2.ZERO
+	panorama.size = DESIGN
+	_wide_backdrop.add_child(panorama)
 
 func _add_image(node_name: String, png: String, svg: String, where: Vector2, how_big: Vector2) -> void:
 	# The screenshot/mock-up is not one flattened UI. Every asset stays a
@@ -445,7 +475,7 @@ func _menu_button(caption: String, action: Callable, kind: String = "wood") -> B
 	output.custom_minimum_size = Vector2(0, 50)
 	SKIN.apply_button(output, kind)
 	output.focus_mode = Control.FOCUS_ALL
-	output.add_theme_stylebox_override("focus", SKIN.box("wood_selected"))
+	output.add_theme_stylebox_override("focus", SKIN.translucent_surface(false, true))
 	output.pressed.connect(action)
 	return output
 
@@ -454,8 +484,8 @@ func _menu_field(placeholder: String, starting: String = "") -> LineEdit:
 	output.placeholder_text = placeholder
 	output.text = starting
 	output.custom_minimum_size = Vector2(0, 47)
-	output.add_theme_stylebox_override("normal", SKIN.box("parchment"))
-	output.add_theme_stylebox_override("focus", SKIN.box("parchment_light"))
+	output.add_theme_stylebox_override("normal", SKIN.translucent_surface(true))
+	output.add_theme_stylebox_override("focus", SKIN.translucent_surface(true, true))
 	output.add_theme_color_override("font_color", Color("3e281d"))
 	output.add_theme_color_override("font_placeholder_color", Color("836c54"))
 	output.add_theme_font_size_override("font_size", 19)
@@ -466,7 +496,7 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 	frame.position = (DESIGN - Vector2(width_px, height_px)) * 0.5
 	frame.size = Vector2(width_px, height_px)
 	frame.custom_minimum_size = Vector2(width_px, height_px)
-	frame.add_theme_stylebox_override("panel", SKIN.box("frame"))
+	frame.add_theme_stylebox_override("panel", SKIN.modal_panel())
 	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.add_child(frame)
 	var margins := MarginContainer.new()
@@ -480,10 +510,29 @@ func _menu_frame(title_value: String, width_px: float, height_px: float) -> Dict
 	return {"frame": frame, "stack": stack}
 
 func _build_settings() -> void:
-	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 590.0)
+	var parts: Dictionary = _menu_frame("SETTINGS  •  OUTPOST", 660.0, 650.0)
+	(parts["stack"] as VBoxContainer).add_theme_constant_override("separation", 5)
 	_settings_panel = parts["frame"] as PanelContainer
 	_settings_panel.name = "SettingsPanel"
-	var stack: VBoxContainer = parts["stack"] as VBoxContainer
+	# Keep the footer action fixed and clearly clickable on 16:9/20:9
+	# Android screens; older builds placed BACK TO OUTPOST after oversized
+	# update fields and it could end up below the panel or render as a
+	# mismatched parchment placeholder.
+	var frame_stack: VBoxContainer = parts["stack"] as VBoxContainer
+	var scroll := ScrollContainer.new()
+	scroll.name = "TitleSettingsScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.follow_focus = true
+	scroll.clip_contents = true
+	frame_stack.add_child(scroll)
+	var stack := VBoxContainer.new()
+	stack.name = "TitleSettingsFields"
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_theme_constant_override("separation", 8)
+	scroll.add_child(stack)
 	stack.add_child(_menu_label("Sound and accessibility", 18))
 	var volume_row := HBoxContainer.new()
 	volume_row.add_theme_constant_override("separation", 12)
@@ -544,51 +593,192 @@ func _build_settings() -> void:
 		_write_prefs()
 	)
 	stack.add_child(tips)
-	stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 22))
+	var updates_frame := PanelContainer.new()
+	updates_frame.name = "AndroidUpdateSectionFrame"
+	updates_frame.add_theme_stylebox_override("panel", SKIN.translucent_surface(false, true))
+	stack.add_child(updates_frame)
+	var updates_stack := VBoxContainer.new()
+	updates_stack.add_theme_constant_override("separation", 8)
+	updates_frame.add_child(updates_stack)
+	updates_stack.add_child(_menu_label("ANDROID BUILDS  •  SELECT CHANNEL", 19))
 	var channels := HBoxContainer.new()
 	channels.name = "BuildChannelSelector"
 	channels.add_theme_constant_override("separation", 9)
-	stack.add_child(channels)
+	updates_stack.add_child(channels)
 	_channel_stable_button = _menu_button("STABLE", _select_update_channel.bind("stable"))
 	_channel_stable_button.name = "StableChannel"
+	SKIN.apply_translucent_button(_channel_stable_button, "wood")
+	_channel_stable_button.custom_minimum_size.y = 47
 	_channel_stable_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	channels.add_child(_channel_stable_button)
 	_channel_alpha_button = _menu_button("ALPHA TEST", _select_update_channel.bind("alpha"))
 	_channel_alpha_button.name = "AlphaChannel"
+	SKIN.apply_translucent_button(_channel_alpha_button, "wood")
+	_channel_alpha_button.custom_minimum_size.y = 47
 	_channel_alpha_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	channels.add_child(_channel_alpha_button)
 	_channel_note = _menu_label("", 16)
 	_channel_note.name = "BuildChannelDescription"
 	_channel_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_channel_note.custom_minimum_size = Vector2(0, 28)
-	stack.add_child(_channel_note)
+	updates_stack.add_child(_channel_note)
 	_updater = ANDROID_UPDATER.new()
 	_updater.name = "AndroidUpdater"
 	add_child(_updater)
 	_updater.status_changed.connect(_on_update_status)
 	_updater.update_found.connect(_on_update_found)
+	_updater.download_progress.connect(_on_download_progress)
+	_updater.download_ready.connect(_on_apk_ready)
 	if _selected_channel not in ["stable", "alpha"]:
 		_selected_channel = _updater.installed_channel()
 	_updater.set_target_channel(_selected_channel)
 	_refresh_channel_buttons()
 	var update_row := HBoxContainer.new()
 	update_row.add_theme_constant_override("separation", 10)
-	stack.add_child(update_row)
+	updates_stack.add_child(update_row)
 	_update_button = _menu_button("CHECK FOR UPDATES", _check_updates_only)
 	_update_button.name = "CheckForUpdates"
+	SKIN.apply_translucent_button(_update_button, "wood")
+	_update_button.custom_minimum_size.y = 55
 	_update_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	update_row.add_child(_update_button)
-	_download_button = _menu_button("DOWNLOAD APK", _check_or_download_update, "wood_selected")
+	_download_button = _menu_button("COPY APK LINK", _check_or_download_update, "wood_selected")
 	_download_button.name = "DownloadUpdate"
+	SKIN.apply_translucent_button(_download_button, "wood_selected")
+	_download_button.custom_minimum_size.y = 55
 	_download_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_download_button.disabled = true
 	update_row.add_child(_download_button)
-	_update_status = _menu_label("Android build %d • APK opens in Chrome (browser fallback)." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
+	_update_status = _menu_label("Installed build %d • Check releases and copy the verified APK link." % int(ProjectSettings.get_setting("application/config/android_build_code", 11)), 16)
 	_update_status.name = "UpdateStatus"
-	_update_status.custom_minimum_size = Vector2(0, 42)
-	stack.add_child(_update_status)
-	stack.add_child(_menu_button("BACK TO OUTPOST", _toggle_settings, "parchment"))
+	_update_status.custom_minimum_size = Vector2(0, 34)
+	_update_status.add_theme_font_size_override("font_size", 14)
+	updates_stack.add_child(_update_status)
+	_download_progress_bar = ProgressBar.new()
+	_download_progress_bar.name = "AndroidDownloadProgress"
+	_download_progress_bar.max_value = 100.0
+	_download_progress_bar.show_percentage = false
+	_download_progress_bar.custom_minimum_size = Vector2(0, 20)
+	_download_progress_bar.add_theme_stylebox_override("background", SKIN.translucent_surface(false))
+	_download_progress_bar.add_theme_stylebox_override("fill", SKIN.flat("wood_selected"))
+	_download_progress_bar.visible = false
+	updates_stack.add_child(_download_progress_bar)
+	_cancel_download_button = _menu_button("CANCEL DOWNLOAD", _cancel_update_download, "red")
+	_cancel_download_button.name = "CancelAPKDownload"
+	SKIN.apply_translucent_button(_cancel_download_button, "red")
+	_cancel_download_button.custom_minimum_size = Vector2(0, 36)
+	_cancel_download_button.visible = false
+	updates_stack.add_child(_cancel_download_button)
+	# Match the clean Cancel control on the world loading screen: no stretched
+	# parchment image, no full-width opaque rectangle.
+	_settings_home_button = _menu_button("✕  CANCEL  •  RETURN TO TITLE", _toggle_settings)
+	_settings_home_button.name = "ReturnToTitleHome"
+	_settings_home_button.flat = true
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		_settings_home_button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	_settings_home_button.custom_minimum_size = Vector2(0, 51)
+	_settings_home_button.add_theme_font_size_override("font_size", 19)
+	_settings_home_button.add_theme_color_override("font_color", Color("ffe7bf"))
+	_settings_home_button.add_theme_color_override("font_hover_color", Color.WHITE)
+	_settings_home_button.add_theme_color_override("font_pressed_color", Color.WHITE)
+	_settings_home_button.tooltip_text = "Cancel Settings and return to the title menu"
+	frame_stack.add_child(_settings_home_button)
+	_sync_download_ui()
 	_settings_panel.visible = false
+
+func _build_changelog_scroll() -> void:
+	# The parchment scroll stays in the same place; the reader itself becomes
+	# a large, truly centred modal with a dimmer, not a skinny right sidebar.
+	_changelog_button = Button.new()
+	_changelog_button.name = "ChangelogScrollButton"
+	_changelog_button.position = Vector2(1164, 180)
+	_changelog_button.size = Vector2(62, 70)
+	_changelog_button.tooltip_text = "Read the latest Outpost changes"
+	_changelog_button.icon = load("res://assets/ui/title/changelog_scroll.svg") as Texture2D
+	_changelog_button.expand_icon = true
+	_changelog_button.focus_mode = Control.FOCUS_ALL
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		_changelog_button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	_changelog_button.pressed.connect(_toggle_changelog)
+	_canvas.add_child(_changelog_button)
+	_changelog_dim = ColorRect.new()
+	_changelog_dim.name = "ChangelogDim"
+	_changelog_dim.position = Vector2.ZERO
+	_changelog_dim.size = DESIGN
+	_changelog_dim.color = Color(0.035, 0.025, 0.045, 0.68)
+	_changelog_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_changelog_dim.visible = false
+	_canvas.add_child(_changelog_dim)
+	_changelog_panel = PanelContainer.new()
+	_changelog_panel.name = "ChangelogPanel"
+	_changelog_panel.position = Vector2(54, 47)
+	_changelog_panel.size = Vector2(1172, 626)
+	_changelog_panel.custom_minimum_size = Vector2.ZERO
+	var reading_panel := SKIN.modal_panel()
+	reading_panel.bg_color = Color(0.15, 0.09, 0.09, 0.97)
+	reading_panel.border_color = Color("d9a85e")
+	reading_panel.set_border_width_all(3)
+	_changelog_panel.add_theme_stylebox_override("panel", reading_panel)
+	_changelog_panel.clip_contents = true
+	_changelog_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_canvas.add_child(_changelog_panel)
+	var margins := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margins.add_theme_constant_override("margin_" + side, 25)
+	_changelog_panel.add_child(margins)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 18)
+	margins.add_child(stack)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 14)
+	stack.add_child(header)
+	var heading := _menu_label("OUTPOST  ◆  WHAT'S NEW", 30)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.add_child(heading)
+	var close := Button.new()
+	close.name = "ChangelogCloseButton"
+	SKIN.apply_close_button(close, 54)
+	close.tooltip_text = "Close changelog"
+	close.pressed.connect(_toggle_changelog)
+	header.add_child(close)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ChangelogScrollList"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.clip_contents = true
+	scroll.follow_focus = true
+	stack.add_child(scroll)
+	var details := _menu_label("ALPHA TEST NOTES\\n\\nCRAFTING  •  Interact beside a campfire, forge, loom, woodwork bench or enchanting table. Only that station's items appear, with its icon. Tap a recipe and craft directly when materials are ready.\\n\\nITEMS  •  Tap weapon, armour and inventory icons to inspect details. Hover with a mouse for a quick tooltip.\\n\\nCONTROLS  •  Try fixed or dynamic thumbstick, sticky movement STOP, and second-finger camera rotation.\\n\\nWORLD  •  Cube World-inspired voxel scenery, circular minimap and Albion-style equipment.\\n\\nTESTING  •  Please report stuck menus, overlapping text, incorrect hitboxes or missing crafting options.\\n\\nANDROID BUILDS  •  Check GitHub releases and copy a verified Alpha APK link into your browser. Android controls installation. Never disable Play Protect.", 22)
+	details.name = "ChangelogBody"
+	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	details.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	details.add_theme_constant_override("line_spacing", 6)
+	details.text = details.text.replace("\\n", "\n")
+	details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(details)
+	_changelog_panel.visible = false
+
+func _toggle_changelog() -> void:
+	if _changelog_panel == null:
+		return
+	if _changelog_panel.visible:
+		_changelog_panel.visible = false
+		if _changelog_dim != null:
+			_changelog_dim.visible = false
+		return
+	if _settings_panel != null:
+		_settings_panel.visible = false
+	if _adventure_panel != null and _adventure_panel.visible:
+		_close_adventure_panel()
+	if _changelog_dim != null:
+		_changelog_dim.visible = true
+		_changelog_dim.move_to_front()
+	_changelog_panel.visible = true
+	_changelog_panel.move_to_front()
 
 func _apply_volume() -> void:
 	var master: int = AudioServer.get_bus_index("Master")
@@ -604,18 +794,21 @@ func _select_update_channel(channel: String) -> void:
 	_update_download_url = ""
 	if _download_button != null:
 		_download_button.disabled = true
-		_download_button.text = "DOWNLOAD APK"
+		_download_button.text = "COPY APK LINK"
 	if _update_notice != null:
 		_update_notice.visible = false
 	_refresh_channel_buttons()
+	_sync_download_ui()
 	_on_update_status("Selected %s. Tap CHECK FOR UPDATES to find its APK." % channel.capitalize())
 	_write_prefs()
 
 func _refresh_channel_buttons() -> void:
 	if _channel_stable_button != null:
-		SKIN.apply_button(_channel_stable_button, "wood_selected" if _selected_channel == "stable" else "wood")
+		SKIN.apply_translucent_button(_channel_stable_button, "wood_selected" if _selected_channel == "stable" else "wood")
+		_channel_stable_button.text = ("✓  " if _selected_channel == "stable" else "○  ") + "STABLE"
 	if _channel_alpha_button != null:
-		SKIN.apply_button(_channel_alpha_button, "wood_selected" if _selected_channel == "alpha" else "wood")
+		SKIN.apply_translucent_button(_channel_alpha_button, "wood_selected" if _selected_channel == "alpha" else "wood")
+		_channel_alpha_button.text = ("✓  " if _selected_channel == "alpha" else "○  ") + "ALPHA TEST"
 	if _channel_note != null:
 		var current: String = _updater.installed_channel() if _updater != null else "stable"
 		_channel_note.text = "INSTALLED: %s  •  INSTALLS SIDE BY SIDE, SAVES STAY SEPARATE." % current.to_upper()
@@ -681,33 +874,64 @@ func _join_friend() -> void:
 	_launch_game(_new_adventure_pending, "join", address, _adventure_name.text)
 
 func _check_or_download_update() -> void:
-	if not _update_download_url.is_empty():
-		# Prefer a full Chrome browser activity, not a Custom Tab or an app extension.
-		# If Chrome is unavailable, open via Android's default browser instead.
-		var error: Error = EXTERNAL_BROWSER.open_apk_in_browser(_update_download_url)
-		if error != OK:
-			_on_update_status("Couldn't open Chrome or your browser. Use the GitHub Releases page.")
-		else:
-			_on_update_status("Opening the APK in Chrome (or your default browser)...")
+	if _updater == null:
 		return
-	if _updater != null:
+	if _update_download_url.is_empty():
 		_updater.check_for_updates()
+		return
+	if not ANDROID_UPDATER.valid_asset_url(_update_download_url, _selected_channel):
+		_on_update_status("Unrecognised APK URL blocked. Check releases again.")
+		return
+	# The native Android share sheet was disruptive and in-app package installs
+	# were paused following a Play Protect warning. Copy only the allowlisted
+	# GitHub release asset; the user decides whether to open it in a browser.
+	DisplayServer.clipboard_set(_update_download_url)
+	_on_update_status("Copied %s build %d link. Paste into your browser; never bypass a Play Protect warning." % [_selected_channel.capitalize(), _update_version_code])
+
+func _on_download_progress(_downloaded: int, _total: int) -> void:
+	# Legacy download callbacks remain connected for older restored sessions;
+	# this screen intentionally never starts a package download.
+	_sync_download_ui()
+
+func _on_apk_ready(_channel: String, _code: int) -> void:
+	_sync_download_ui()
+
+func _cancel_update_download() -> void:
+	if _updater != null:
+		_updater.cancel_apk_download()
+	_sync_download_ui()
+
+func _sync_download_ui() -> void:
+	if _download_button == null:
+		return
+	_download_button.disabled = _update_download_url.is_empty()
+	_download_button.text = ("COPY BUILD %d LINK" % _update_version_code) if not _update_download_url.is_empty() else "COPY APK LINK"
+	if _cancel_download_button != null:
+		_cancel_download_button.visible = false
+	if _download_progress_bar != null:
+		_download_progress_bar.visible = false
 
 func _on_update_status(message: String) -> void:
 	if _update_status != null:
 		_update_status.text = message
 
 func _on_update_found(download_url: String, version_code: int, _release_url: String) -> void:
+	if not ANDROID_UPDATER.valid_asset_url(download_url, _selected_channel):
+		_on_update_status("Update blocked: invalid GitHub release asset.")
+		return
 	_update_download_url = download_url
-	if _download_button != null:
-		_download_button.disabled = false
-		_download_button.text = "DOWNLOAD BUILD %d" % version_code
+	_update_version_code = version_code
 	if _update_notice != null:
 		_update_notice.text = "%s APK  •  BUILD %d" % [_selected_channel.to_upper(), version_code]
 		_update_notice.visible = true
-	_on_update_status("%s build %d available. Tap Download, then approve Android install. Different channels have separate saves." % [_selected_channel.capitalize(), version_code])
+	_on_update_status("%s build %d available. Tap COPY LINK, then paste into your browser. Android controls installation." % [_selected_channel.capitalize(), version_code])
+	_sync_download_ui()
 
 func _toggle_settings() -> void:
+	if _changelog_panel != null:
+		_changelog_panel.visible = false
+	if _changelog_dim != null:
+		_changelog_dim.visible = false
 	if _adventure_panel != null and _adventure_panel.visible:
 		_close_adventure_panel()
 	_settings_panel.visible = not _settings_panel.visible
@@ -716,7 +940,10 @@ func _toggle_settings() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if _adventure_panel != null and _adventure_panel.visible:
+		if _changelog_panel != null and _changelog_panel.visible:
+			_toggle_changelog()
+			get_viewport().set_input_as_handled()
+		elif _adventure_panel != null and _adventure_panel.visible:
 			_close_adventure_panel()
 			get_viewport().set_input_as_handled()
 		elif _settings_panel != null and _settings_panel.visible:

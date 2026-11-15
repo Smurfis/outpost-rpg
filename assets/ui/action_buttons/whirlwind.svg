@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Original Outpost pixel-fantasy Whirlwind icon: twin golden blade arcs. -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13 69C13 34 42 14 73 18C98 21 111 35 116 52L104 44L94 51C84 31 57 25 37 39C24 48 23 66 27 74Z" fill="#f8922d" stroke="#412433" stroke-width="6"/>
+    <path d="M112 64C113 96 84 114 54 110C29 107 16 94 12 77L24 86L34 78C46 99 74 102 91 85C100 76 102 67 98 61Z" fill="#ffbd49" stroke="#412433" stroke-width="6"/>
+    <path d="M20 64C20 35 46 22 68 24M105 70C105 95 80 104 61 102" fill="none" stroke="#fff1a1" stroke-width="6"/>
+    <path d="M44 87L67 36L86 15L95 19L90 49L59 97Z" fill="#d5e7f2" stroke="#30243a" stroke-width="6"/>
+    <path d="M60 77L79 32L86 27L79 48Z" fill="#ffffff" stroke="none"/>
+    <path d="M35 89L62 100" stroke="#d88b35" stroke-width="12"/>
+    <path d="M38 89L30 106" stroke="#a13d2e" stroke-width="9"/>
+    <circle cx="26" cy="110" r="7" fill="#ffe17e" stroke="#412433" stroke-width="4"/>
+    <path d="M27 31L32 21L36 32L47 36L36 41L32 52L27 41L17 36Z" fill="#fff2a9"/>
+    <path d="M91 92L95 83L99 92L108 96L99 100L95 108L91 100L83 96Z" fill="#ffdf73"/>
+  </g>
+</svg>

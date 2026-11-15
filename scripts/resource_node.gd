@@ -1,7 +1,21 @@
 extends Node3D
 ## Ten harvestables; optional voxel art changes visuals, never harvesting rules.
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
+const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const PICKER = preload("res://scripts/interaction/world_picker.gd")
+const SOLID = preload("res://scripts/interaction/resource_collision.gd")
+# Zero uses the model bounds (including bundles); positive values override
+# the local-space height or X/Z footprint for gameplay tuning.
+@export_range(0.0, 20.0, 0.05) var collision_height: float = 0.0
+@export_range(0.0, 20.0, 0.05) var collision_width: float = 0.0
+@export_range(0.1, 2.0, 0.05) var tree_trunk_width: float = 0.65
+@export_range(1.8, 4.0, 0.05) var tree_canopy_clearance: float = 2.05
+var resource_body: StaticBody3D
+var _harvest_tween: Tween
+var _mesh_scales: Dictionary = {}
+var bundle_count: int = 1
+var max_hits: int = 3
 var kind: String = "wood"
 var active: bool = true
 var hits_left: int = 3
@@ -11,8 +25,9 @@ var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
-func setup(resource_type: String) -> void:
+func setup(resource_type: String, count: int = 1) -> void:
 	kind = resource_type
+	bundle_count = clampi(count, 1, 3)
 	name = kind.capitalize() + "Node"
 	match kind:
 		"wood":
@@ -35,9 +50,29 @@ func setup(resource_type: String) -> void:
 			_mushrooms()
 		"reeds":
 			_reeds()
-	hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+		"shrimp":
+			_shrimp_pool()
+	if bundle_count > 1:
+		var originals: Array[Node] = get_children()
+		for i in range(1, bundle_count):
+			for original in originals:
+				if original is MeshInstance3D:
+					var bundled: Node3D = original.duplicate()
+					bundled.position += Vector3(-0.8 if i == 1 else 0.8, 0, 0.65)
+					bundled.scale *= 0.72
+					add_child(bundled)
+	max_hits = (3 if kind in ["wood", "stone", "iron", "coal", "clay", "shrimp"] else 2) * bundle_count
+	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
+	if kind in ["wood", "stone", "iron", "coal", "clay"]:
+		resource_body = SOLID.new()
+		add_child(resource_body)
+		resource_body.configure(self, collision_height, collision_width)
+	for child in get_children():
+		if child is MeshInstance3D:
+			_mesh_scales[child] = child.scale
+	PICKER.attach(self, "resource")
 	_setup_target_marker()
 	add_to_group("resources")
 
@@ -54,7 +89,10 @@ func _model(id: String, size_factor: Vector3) -> void:
 	var model: MeshInstance3D
 	if _is_voxel_skin():
 		if id == "oak_tree":
-			model = VOXEL_PROPS.tree()
+			# Deterministic species based on world position. Harvesting remains
+			# handled by this resource node; only the mesh/material changes.
+			model = FOLIAGE.tree(FOLIAGE.species_at(global_position.x, global_position.z),
+				posmod(roundi(global_position.x * 7.0 + global_position.z * 11.0), 3))
 		elif id == "rock_deposit":
 			model = VOXEL_PROPS.rock()
 	if model == null:
@@ -93,7 +131,7 @@ func _setup_target_marker() -> void:
 func set_targeted(selected: bool) -> void:
 	if target_label != null:
 		target_label.visible = selected and active
-		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
+		target_label.text = "%s%s · %d actions" % ["Shrimp pool" if kind == "shrimp" else kind.capitalize(), " ×%d" % bundle_count if bundle_count > 1 else "", hits_left]
 	if target_ring != null:
 		target_ring.visible = selected and active
 
@@ -181,6 +219,9 @@ func _herbs() -> void:
 		_orb(Vector3(x, 1.11, 0), Vector3(0.26, 0.28, 0.26), Color("d5c5a0"))
 
 func _mushrooms() -> void:
+	if _is_voxel_skin():
+		add_child(VOXEL_PROPS.mushrooms())
+		return
 	for p in [Vector3(-0.55, 0, 0.0), Vector3(0.15, 0, 0.2), Vector3(0.65, 0, -0.3)]:
 		var scale_by: float = 1.1 if p.x < 0.0 else 0.80
 		_spike(0.12, 0.10, 0.65 * scale_by, p + Vector3(0, 0.33 * scale_by, 0), Color("dfd3b3"), 6)
@@ -201,7 +242,9 @@ func _process(delta: float) -> void:
 		cooldown -= delta
 		if cooldown <= 0.0:
 			active = true
-			hits_left = 3 if kind in ["wood", "stone", "iron", "coal", "clay"] else 2
+			if resource_body != null:
+				resource_body.set_deferred("collision_layer", 1)
+			hits_left = max_hits
 			visible = true
 			scale = initial_scale
 
@@ -216,11 +259,34 @@ func harvest() -> String:
 		PIXEL_FEEDBACK.emit_feedback(game_node, global_position + Vector3.UP * 0.55, 0, Color("d9ba87"), hits_left <= 0)
 	if target_label != null:
 		target_label.text = kind.capitalize() + " • " + str(hits_left) + " hits"
-	var bump := create_tween()
-	bump.tween_property(self, "scale", initial_scale * 1.07, 0.07)
-	bump.tween_property(self, "scale", initial_scale, 0.10)
+	# Animate art only: a player standing on a resource must not be pushed
+	# around by its harvest feedback or an overlapping scale tween.
+	if _harvest_tween != null:
+		_harvest_tween.kill()
+	_harvest_tween = create_tween().set_parallel(true)
+	for mesh in _mesh_scales:
+		_harvest_tween.tween_property(mesh, "scale", _mesh_scales[mesh] * 1.07, 0.07)
+	_harvest_tween.chain()
+	for mesh in _mesh_scales:
+		_harvest_tween.tween_property(mesh, "scale", _mesh_scales[mesh], 0.10)
 	if hits_left <= 0:
 		active = false
+		if resource_body != null:
+			resource_body.set_deferred("collision_layer", 0)
 		visible = false
 		cooldown = recovery
 	return kind
+
+func _shrimp_pool() -> void:
+	# Open ripples and small voxel shrimp at the water surface, no water disk.
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.78
+	ring.outer_radius = 0.82
+	ring.rings = 4
+	ring.ring_segments = 20
+	_part(ring, Vector3(0, 0.02, 0), Vector3.ONE, Color("9bccbd"))
+	for i in range(5):
+		var angle: float = TAU * float(i) / 5.0
+		var at := Vector3(cos(angle) * 0.45, 0.04, sin(angle) * 0.45)
+		_block(Vector3(0.22, 0.06, 0.12), at, Color("d8947c"))
+		_block(Vector3(0.08, 0.06, 0.16), at + Vector3(0.11, 0, 0.06), Color("b77465"))

@@ -1,0 +1,26 @@
+name: PyroLux Lite installer check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/install_pyrolux_lite.py"
+      - ".github/workflows/pyrolux-installer-check.yml"
+      - ".gitignore"
+
+jobs:
+  verify-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Outpost
+        uses: actions/checkout@v4
+      - name: Install official PyroLux Lite version 1.0.3
+        run: python3 tools/install_pyrolux_lite.py
+      - name: Verify addon and demo were installed
+        run: |
+          test -f addons/pyrolux_fx/core/pyrolux.gd
+          test -f addons/pyrolux_fx/presets/3d/fire_campfire.tscn
+          test -f addons/pyrolux_fx/presets/3d/fire_torch.tscn
+          test -f addons/pyrolux_fx/presets/3d/explosion_grenade.tscn
+          test -f pyrolux_lite_demo/lite_demo.tscn
+          test -z "$(git status --short -- addons/pyrolux_fx pyrolux_lite_demo)"

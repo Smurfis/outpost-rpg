@@ -54,7 +54,11 @@ func _run() -> void:
 				quantized = false
 	check(quantized, "Perlin elevations land on whole-voxel heights")
 	check(elevations.size() >= 2, "Fields contains multiple walkable elevations")
-	check(terrain.get_node_or_null("ChunkDecor_36_0") != null, "Streaming Fields adds one batched grass/tree/rock mesh per outer chunk")
+	var streamed_resources: int = 0
+	for child in terrain.get_children():
+		if str(child.name).begins_with("ChunkInteractables_"):
+			streamed_resources += 1
+	check(streamed_resources > 0, "Streaming Fields contains real, harvestable resource containers rather than duplicate scenery")
 	check(game.get_node_or_null("Terrain") != null, "Starter collision floor remains intact")
 	var manager = game.get_node("Dungeons")
 	check(manager.entrances.size() == 5, "Existing rarity dungeons remain available")

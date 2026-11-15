@@ -1,0 +1,36 @@
+name: Alpha enemy target HUD checks
+on:
+  pull_request:
+    paths:
+      - 'scripts/hud.gd'
+      - 'scripts/game.gd'
+      - 'scripts/ui/enemy_target_frame.gd'
+      - 'scripts/dungeons/dungeon_guardian.gd'
+      - 'scripts/dungeons/dungeon_instance.gd'
+      - 'scripts/enemy.gd'
+      - 'scripts/creatures/overworld_wildlife.gd'
+      - 'tests/alpha_enemy_target_frame.gd'
+      - '.github/workflows/alpha-enemy-target-hud.yml'
+  workflow_dispatch:
+
+jobs:
+  enemy-hud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get Godot 4.7.2 for Android-compatible desktop smoke
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Import resources
+        run: |
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit > import.log 2>&1
+      - name: Real world target HUD and combat compatibility
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/alpha_enemy_target_frame.gd 2>&1 | tee target-hud.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL ENEMY TARGET FRAME:' target-hud.log; then exit 1; fi
+          grep -q "ENEMY TARGET FRAME RESULT: 0 failures" target-hud.log
