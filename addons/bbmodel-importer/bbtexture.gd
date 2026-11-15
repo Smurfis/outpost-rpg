@@ -36,6 +36,10 @@ func _init(dict: Dictionary):
 	uuid = dict.get("uuid", "")
 	source = dict.get("source", "")
 	_cached_image = load_mime_image(source)
+	if _cached_image == null:
+		push_warning("Blockbench texture '%s' is missing or corrupt; using a magenta placeholder" % name)
+		_cached_image = Image.create(1, 1, false, Image.FORMAT_RGBA8)
+		_cached_image.fill(Color.MAGENTA)
 	_cached_image.resource_name = name
 	if _cached_image.resource_name.is_empty():
 		_cached_image.resource_name = "texture_%s" % id
