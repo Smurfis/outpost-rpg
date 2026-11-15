@@ -136,6 +136,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
 			return
+		if event.keycode == KEY_B and game.experimental_building_enabled and game.building != null:
+			game.building.set_enabled(not game.building.enabled)
+			game.hud.toast("Building enabled" if game.building.enabled else "Building closed")
+			get_viewport().set_input_as_handled()
+			return
 		if event.is_action_pressed("outpost_map"):
 			game.toggle_world_map()
 			get_viewport().set_input_as_handled()
@@ -153,6 +158,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
+				if game.building != null and game.building.enabled:
+					game.building.update_preview(event.position)
+					game.building.place_preview()
+					get_viewport().set_input_as_handled()
+					return
 				if not rotating:
 					primary_at(event.position)
 			MOUSE_BUTTON_RIGHT:
@@ -420,7 +430,11 @@ func _process(delta: float) -> void:
 		hide_inspection()
 	elif desktop and hover_elapsed >= 0.10:
 		hover_elapsed = 0.0
-		inspect_at(get_viewport().get_mouse_position())
+		if game.building != null and game.building.enabled:
+			hide_inspection()
+			game.building.update_preview(get_viewport().get_mouse_position())
+		else:
+			inspect_at(get_viewport().get_mouse_position())
 	elif not desktop and is_instance_valid(inspected) and not inspected.is_visible_in_tree():
 		hide_inspection()
 
