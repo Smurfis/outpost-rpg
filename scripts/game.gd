@@ -363,7 +363,7 @@ func _lighting() -> void:
 	if voxel_art_enabled:
 		sun.light_color = Color("ffe0a9")
 		sun.light_energy = 1.45
-	sun.shadow_enabled = false # Preserve Android budget on first visual pass.
+	sun.shadow_enabled = not OS.has_feature("mobile") # Android retains the lower-cost shadow mode.
 	add_child(sun)
 	day_night = NIGHTFALL.new()
 	day_night.name = "DayNightCycle"
@@ -684,11 +684,11 @@ func _enemies() -> void:
 		var boar = ENEMY.new()
 		add_child(boar)
 		boar.setup(self, hero, pos)
-	# New neutral raccoons roam independently of the boar encounters.
+	# Use the existing animated pig in the former raccoon locations.
 	for pos in [Vector3(-11, 0.2, 15), Vector3(13, 0.2, -5)]:
-		var raccoon = WILDLIFE.new()
-		add_child(raccoon)
-		raccoon.setup(self, hero, pos, "raccoon")
+		var pig = WILDLIFE.new()
+		add_child(pig)
+		pig.setup(self, hero, pos, "pig")
 	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
 		var pig = WILDLIFE.new()
 		add_child(pig)
@@ -1636,6 +1636,8 @@ func use_weapon_skill(slot: int) -> bool:
 		whirlwind_unique_hits.clear()
 		_apply_whirlwind_tick()
 	else:
+		hero.combat_facing_target = target
+		hero.combat_facing_time = 0.65
 		hero.swing()
 		remember_attacked_enemy(target)
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
@@ -1715,6 +1717,8 @@ func attack(selected: Node3D = null) -> void:
 	if not target_available(target) or not target_in_range(target):
 		return
 	remember_attacked_enemy(target)
+	hero.combat_facing_target = target
+	hero.combat_facing_time = 0.65
 	if coop != null and coop.in_party_dungeon():
 		var guardian = target
 		if guardian == null or not guardian.has_meta("encounter_slot"):

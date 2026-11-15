@@ -23,6 +23,11 @@ var inspected: Node3D
 var tooltip: PanelContainer
 var tooltip_label: Label
 var highlight: MeshInstance3D
+var aim_position := Vector3.ZERO
+var aim_valid := false
+const BLOCK_HOLD_SECONDS := 0.25
+var block_pending := false
+var block_hold_time := 0.0
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -103,7 +108,7 @@ func _input(event: InputEvent) -> void:
 	# Desktop RMB orbits even above a decorative HUD panel. Some panels
 	# consume GUI mouse presses before _unhandled_input, which previously
 	# prevented the drag from starting in otherwise empty world-space.
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and desktop and not OS.has_feature("mobile") and not modal_open():
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE and desktop and not OS.has_feature("mobile") and not modal_open():
 		if event.pressed:
 			rotating = true
 			hold_ground = false
@@ -115,8 +120,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			hold_ground = false
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
+		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			rotating = false
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			block_pending = false
+			game.hero.blocking = false
 	if event is InputEventMouseMotion and rotating:
 		if not modal_open():
 			game.drag_camera(event.relative.x)
@@ -148,8 +156,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				if not rotating:
 					primary_at(event.position)
 			MOUSE_BUTTON_RIGHT:
-				rotating = true
-				hold_ground = false
+				var hit: Dictionary = PICKER.resolve(game, event.position)
+				var clicked: Node3D = hit.get("target")
+				if is_instance_valid(clicked):
+					approach(clicked)
+				elif str(game.equipment.get("offhand", "")) == "shield":
+					block_pending = true
+					block_hold_time = 0.0
 			MOUSE_BUTTON_WHEEL_UP:
 				game.camera.size = clampf(game.camera.size - 1.5, 10.0, 32.0)
 			MOUSE_BUTTON_WHEEL_DOWN:
@@ -344,14 +357,33 @@ func _build_inspection() -> void:
 
 func inspect_at(screen: Vector2) -> void:
 	if point_over_ui(screen):
+		aim_valid = false
 		hide_inspection()
 		return
 	var hit: Dictionary = PICKER.resolve(game, screen)
+	aim_valid = not hit.is_empty()
+	if aim_valid:
+		aim_position = hit.position
 	inspected = hit.get("target")
 	if not is_instance_valid(inspected):
 		hide_inspection()
 		return
-	show_tip(INSPECT.world(game, inspected), screen)
+	var verb := "Interact"
+	if inspected.is_in_group("stations"):
+		verb = "Smelt" if str(inspected.station_id) == "forge" else "Craft"
+	elif inspected.is_in_group("resources"):
+		verb = "Chop" if inspected.kind == "wood" else "Mine" if inspected.kind in ["stone", "iron", "coal", "iron_ore"] else "Gather"
+	elif inspected.is_in_group("enemies"):
+		verb = "Attack"
+	elif str(inspected.get_meta("world_kind", "")) == "chest":
+		verb = "Open"
+	elif str(inspected.get_meta("world_kind", "")) == "merchant":
+		verb = "Trade"
+	elif str(inspected.get_meta("world_kind", "")) == "npc":
+		verb = "Talk"
+	else:
+		verb = str(inspected.get_meta("world_action", "Interact"))
+	show_tip(("RMB " if desktop else "Tap ") + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
 	highlight.global_position = inspected.global_position + Vector3.UP * 0.07
 	highlight.show()
 	if desktop:
@@ -374,8 +406,17 @@ func hide_inspection() -> void:
 func _process(delta: float) -> void:
 	if game == null:
 		return
+	if block_pending:
+		if modal_open() or str(game.equipment.get("offhand", "")) != "shield":
+			block_pending = false
+			game.hero.blocking = false
+		else:
+			block_hold_time += delta
+			if block_hold_time >= BLOCK_HOLD_SECONDS:
+				game.hero.blocking = true
 	hover_elapsed += delta
 	if modal_open():
+		aim_valid = false
 		hide_inspection()
 	elif desktop and hover_elapsed >= 0.10:
 		hover_elapsed = 0.0

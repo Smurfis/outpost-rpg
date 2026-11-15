@@ -12,6 +12,9 @@ const CHUNK: int = 12
 const BUILD_BUDGET: int = 2
 const CAVE_OVERHEAD_BLOCK_RADIUS: int = 1 # Exactly 3x3 roof blocks, centred on the avatar.
 const CAVE_HEAD_CLEARANCE: float = 1.25
+const REVEAL_RADIUS: int = 16
+const REVEAL_PATH_LIMIT: int = 18
+const REVEAL_SIZE: int = REVEAL_RADIUS * 2 + 1
 var terrain
 var _loaded: Dictionary = {} # chunk origin -> meshes/collision/chest nodes
 var _pending: Array[Vector2i] = []
@@ -25,6 +28,11 @@ var _cutaway_radius: float = 1.5
 var _outline_material: ShaderMaterial
 var _outline_meshes: Array[MeshInstance3D] = []
 var _outline_active: bool = false
+var _reveal_origin := Vector2i.ZERO
+var _reveal_cell := Vector2i(99999, 99999)
+var _reveal_cells: Dictionary = {}
+var _reveal_texture: ImageTexture
+var _reveal_strength: float = 0.0
 
 func setup(world_seed: int) -> void:
 	terrain = DATA.new(world_seed)
@@ -36,7 +44,7 @@ func setup(world_seed: int) -> void:
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if terrain == null:
 		return
 	var game: Node = get_parent().get_parent()
@@ -55,7 +63,7 @@ func _process(_delta: float) -> void:
 		return
 	_queue_near(position)
 	_build_pending()
-	_update_cutaway(game, position)
+	_update_cutaway(game, position, delta)
 	_update_hero_visibility(game, hero)
 
 func _is_below_terrain(position: Vector3) -> bool:
@@ -73,7 +81,7 @@ func _is_below_terrain(position: Vector3) -> bool:
 			elevated += 1
 	return elevated >= 3
 
-func _update_cutaway(game: Node, position: Vector3) -> void:
+func _update_cutaway(game: Node, position: Vector3, delta: float = 1.0) -> void:
 	if _cutaway_material == null:
 		return
 	var view: Camera3D = game.get("camera") as Camera3D
@@ -86,17 +94,62 @@ func _update_cutaway(game: Node, position: Vector3) -> void:
 	var cave_floor: int = terrain.caves.floor_at(xi, zi)
 	# Outdoor crevices use the highlighted avatar, not missing mountains.
 	var inside_roofed_cave: bool = cave_floor != CAVES.INVALID_FLOOR and _cave_mode
+	if inside_roofed_cave:
+		_update_reveal_mask(Vector2i(xi, zi))
+	_reveal_strength = move_toward(_reveal_strength, 1.0 if inside_roofed_cave else 0.0, maxf(delta, 0.0) * 4.0)
 	_cutaway_focus = position + Vector3.UP * 0.95
 	_cutaway_eye = view.global_position
 	_cutaway_radius = 1.5 # Limit the hole to the 3x3 overhead voxel footprint.
-	_cutaway_material.set_shader_parameter("island_cutaway_enabled", inside_roofed_cave)
-	_cutaway_material.set_shader_parameter("island_cave_mode", _cave_mode)
+	_cutaway_material.set_shader_parameter("island_cutaway_enabled", _reveal_strength > 0.0)
+	_cutaway_material.set_shader_parameter("island_cave_mode", _reveal_strength > 0.0)
+	_cutaway_material.set_shader_parameter("cave_reveal", _reveal_strength)
 	_cutaway_material.set_shader_parameter("island_cutaway_focus", _cutaway_focus)
 	_cutaway_material.set_shader_parameter("island_cutaway_eye", _cutaway_eye)
 	_cutaway_material.set_shader_parameter("island_cutaway_radius", _cutaway_radius)
 	for roof in _roof_nodes:
 		if is_instance_valid(roof):
 			roof.visible = true
+
+func _update_reveal_mask(center: Vector2i) -> void:
+	if center == _reveal_cell:
+		return
+	_reveal_cell = center
+	_reveal_origin = center - Vector2i(REVEAL_RADIUS, REVEAL_RADIUS)
+	_reveal_cells.clear()
+	var pending: Array[Vector2i] = [center]
+	var distances := {center: 0}
+	var cursor := 0
+	while cursor < pending.size():
+		var cell: Vector2i = pending[cursor]
+		cursor += 1
+		var floor_y: int = terrain.caves.floor_at(cell.x, cell.y)
+		if floor_y == CAVES.INVALID_FLOOR:
+			continue
+		_reveal_cells[cell] = true
+		var distance: int = distances[cell]
+		if distance >= REVEAL_PATH_LIMIT:
+			continue
+		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = cell + offset
+			if distances.has(next) or absi(next.x - center.x) > REVEAL_RADIUS or absi(next.y - center.y) > REVEAL_RADIUS:
+				continue
+			var next_floor: int = terrain.caves.floor_at(next.x, next.y)
+			if next_floor == CAVES.INVALID_FLOOR or absi(next_floor - floor_y) > 1:
+				continue
+			distances[next] = distance + 1
+			pending.append(next)
+	var mask := Image.create(REVEAL_SIZE, REVEAL_SIZE, false, Image.FORMAT_R8)
+	mask.fill(Color.BLACK)
+	for cell in _reveal_cells:
+		var pixel: Vector2i = cell - _reveal_origin
+		mask.set_pixel(pixel.x, pixel.y, Color.WHITE)
+	if _reveal_texture == null:
+		_reveal_texture = ImageTexture.create_from_image(mask)
+	else:
+		_reveal_texture.update(mask)
+	_cutaway_material.set_shader_parameter("cave_visibility_mask", _reveal_texture)
+	_cutaway_material.set_shader_parameter("cave_mask_origin", Vector2(_reveal_origin))
+	_cutaway_material.set_shader_parameter("cave_mask_size", float(REVEAL_SIZE))
 
 func _is_cut_overhead_block(at: Vector3, normal: Vector3) -> bool:
 	# Keep the pick-through rule identical to the voxel-snapped roof shader:
@@ -105,9 +158,7 @@ func _is_cut_overhead_block(at: Vector3, normal: Vector3) -> bool:
 	if absf(normal.y) <= 0.88 or at.y <= _cutaway_focus.y + CAVE_HEAD_CLEARANCE:
 		return false
 	var block := Vector2i(floori(at.x - 0.001), floori(at.z - 0.001))
-	var player_block := Vector2i(floori(_cutaway_focus.x), floori(_cutaway_focus.z))
-	return absi(block.x - player_block.x) <= CAVE_OVERHEAD_BLOCK_RADIUS and \
-		absi(block.y - player_block.y) <= CAVE_OVERHEAD_BLOCK_RADIUS
+	return _reveal_cells.has(block)
 
 
 func cutaway_hides_hit(hit: Dictionary) -> bool:
@@ -118,10 +169,16 @@ func cutaway_hides_hit(hit: Dictionary) -> bool:
 	var collider: Variant = hit.get("collider")
 	if not collider is CollisionObject3D or not collider.has_meta("island_roof_shape_index"):
 		return false
-	if int(hit.get("shape", -1)) != int(collider.get_meta("island_roof_shape_index")):
+	var at: Vector3 = hit.get("position", Vector3.ZERO)
+	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
+	if int(hit.get("shape", -1)) == int(collider.get_meta("island_roof_shape_index")):
+		return _is_cut_overhead_block(at, normal)
+	if absf(normal.y) > 0.88 or at.y <= _cutaway_focus.y + 0.25:
 		return false
-	return _is_cut_overhead_block(hit.get("position", Vector3.ZERO),
-		hit.get("normal", Vector3.ZERO))
+	var wall_normal := Vector2(normal.x, normal.z).normalized()
+	var camera_dir := Vector2(_cutaway_eye.x - _cutaway_focus.x, _cutaway_eye.z - _cutaway_focus.z).normalized()
+	var inner := Vector2i(floori(at.x + wall_normal.x * 0.12), floori(at.z + wall_normal.y * 0.12))
+	return wall_normal.dot(camera_dir) > 0.25 and _reveal_cells.has(inner)
 
 func _set_hero_outline(hero: Node3D, enabled: bool) -> void:
 	if not hero is CollisionObject3D or _outline_material == null:
@@ -304,11 +361,18 @@ func _build_chunk(key: Vector2i) -> void:
 		var ground := MeshInstance3D.new()
 		ground.name = "IslandRock_%d_%d" % [key.x, key.y]
 		ground.mesh = PALETTE.create_mesh(surface)
-		# Exterior cliffs and walking surfaces never become transparent.
-		ground.material_override = GREEDY.material()
+		ground.material_override = _cutaway_material
 		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
+		if not OS.has_feature("mobile"):
+			var shadow_ground := MeshInstance3D.new()
+			shadow_ground.name = "IslandShadow_%d_%d" % [key.x, key.y]
+			shadow_ground.mesh = ground.mesh
+			shadow_ground.material_override = GREEDY.material()
+			shadow_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			add_child(shadow_ground)
+			members.append(shadow_ground)
 	if roof_faces > 0:
 		var lid := MeshInstance3D.new()
 		lid.name = "CaveCutaway_%d_%d" % [key.x, key.y]
@@ -318,6 +382,15 @@ func _build_chunk(key: Vector2i) -> void:
 		members.append(lid)
 		meshed.append(lid)
 		_roof_nodes.append(lid)
+		# The visible material clips the roof; an unchanged shadow-only copy
+		# keeps the cavern from being flooded by sunlight through that hole.
+		var shadow_roof := MeshInstance3D.new()
+		shadow_roof.name = "CaveShadow_%d_%d" % [key.x, key.y]
+		shadow_roof.mesh = lid.mesh
+		shadow_roof.material_override = GREEDY.material()
+		shadow_roof.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		add_child(shadow_roof)
+		members.append(shadow_roof)
 	if not meshed.is_empty():
 		var body := StaticBody3D.new()
 		body.name = "IslandCollision_%d_%d" % [key.x, key.y]

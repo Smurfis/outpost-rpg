@@ -27,7 +27,7 @@ func _run() -> void:
 		var boars: Array = get_nodes_in_group("wild_boars")
 		var raccoons: Array = get_nodes_in_group("wild_raccoons")
 		check(boars.size() == 3, "Three boars spawn in voxel mode %s" % str(voxel))
-		check(raccoons.size() == 2, "Raccoons do not replace the boar population")
+		check(raccoons.is_empty() and get_nodes_in_group("wild_pigs").size() == 4, "Existing pigs replace raccoons without replacing boars")
 		if not boars.is_empty():
 			var target = boars[0]
 			check(target.name == "WildBoar" and target.alive, "Boar remains a hostile creature")
@@ -40,11 +40,6 @@ func _run() -> void:
 			target.receive_damage(5.0)
 			check(target.hp == previous - 5.0, "Boar still takes original combat damage")
 			check(game.enemy_display_name(target) == "Wild boar", "Target HUD identifies boar")
-		if not raccoons.is_empty():
-			var raccoon = raccoons[0]
-			check(raccoon.species == "raccoon" and raccoon.avatar.model != null,
-				"Raccoon has an independent animated mesh")
-			check(raccoon.map_record()["disposition"] == "neutral", "Neutral map marker is retained")
 		game.queue_free()
 		await process_frame
 	print("VOXEL BOAR RESULT: %d failed assertion(s)." % failures)

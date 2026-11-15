@@ -245,6 +245,8 @@ var focus_button: Button
 var focus_label: Label
 var world_touch_dragged: bool = false
 var world_touch_inspected: bool = false
+var shield_block_button: Button
+var shield_block_finger: int = -1
 const INSPECTION = preload("res://scripts/interaction/inspection.gd")
 
 func set_desktop_mode(value: bool) -> void:
@@ -325,6 +327,13 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shield_block_button = Button.new()
+	shield_block_button.name = "ShieldBlockButton"
+	shield_block_button.text = "HOLD BLOCK"
+	shield_block_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(shield_block_button)
+	_anchors(shield_block_button, 0.58, 0.71, 0.70, 0.79)
+	shield_block_button.hide()
 	# A single fixed nameplate, shown only for a valid target/nearby creature.
 	enemy_target_frame = TARGET_FRAME.new()
 	root.add_child(enemy_target_frame)
@@ -3286,6 +3295,8 @@ func _update_enemy_target_frame() -> void:
 			width - 14.0 * scale, 30.0 * scale))
 
 func _process(delta: float) -> void:
+	if shield_block_button != null and game != null:
+		shield_block_button.visible = not desktop_mode and game.controls != null and str(game.equipment.get("offhand", "")) == "shield" and not game.controls.modal_open()
 	_advance_loot_feed(delta)
 	_update_enemy_target_frame()
 	# MENU is now tap-to-open; holding is not required to interact.
@@ -3531,6 +3542,18 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 func _input(event: InputEvent) -> void:
 	if game != null and game.world_map != null and game.world_map.is_open():
 		return
+	if event is InputEventScreenTouch and game != null and not desktop_mode and shield_block_button != null:
+		var touch: InputEventScreenTouch = event
+		if not touch.pressed and touch.index == shield_block_finger:
+			shield_block_finger = -1
+			game.hero.blocking = false
+			get_viewport().set_input_as_handled()
+			return
+		if touch.pressed and shield_block_button.visible and shield_block_button.get_global_rect().has_point(touch.position) and not game.controls.modal_open():
+			shield_block_finger = touch.index
+			game.hero.blocking = true
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventScreenTouch and desktop_mode and game.controls != null:
 		game.controls.set_desktop(false)
 	if skill_detail_panel != null and skill_detail_panel.visible:
@@ -3707,6 +3730,9 @@ func _stop_sticky_movement() -> void:
 	_position_stick()
 
 func _reset_touch() -> void:
+	shield_block_finger = -1
+	if game != null and game.hero != null:
+		game.hero.blocking = false
 	_cancel_smart_hold()
 	_cancel_quick_hold()
 	tool_swap_finger = -1

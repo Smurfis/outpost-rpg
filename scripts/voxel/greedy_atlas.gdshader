@@ -16,6 +16,10 @@ uniform vec3 island_cutaway_focus = vec3(0.0);
 uniform vec3 island_cutaway_eye = vec3(0.0);
 // Maximum horizontal span is clamped to the 3 x 3 voxel grid around hero.
 uniform float island_cutaway_radius = 1.5;
+uniform sampler2D cave_visibility_mask : filter_nearest, repeat_disable;
+uniform vec2 cave_mask_origin = vec2(0.0);
+uniform float cave_mask_size = 33.0;
+uniform float cave_reveal = 0.0;
 varying vec3 island_world_position;
 varying vec3 island_world_normal;
 
@@ -26,6 +30,12 @@ void vertex() {
 
 float pixel_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float revealed_cell(vec2 cell) {
+	vec2 uv = (cell - cave_mask_origin + vec2(0.5)) / cave_mask_size;
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return 0.0;
+	return texture(cave_visibility_mask, uv).r;
 }
 
 void fragment() {
@@ -41,11 +51,21 @@ void fragment() {
 		// Snap the clipping footprint to the one-metre voxel grid to
 		// avoid shimmering or cutting into partial cliffside triangles.
 		vec2 roof_cell = floor(island_world_position.xz - vec2(0.001));
-		vec2 player_cell = floor(island_cutaway_focus.xz);
-		vec2 cell_distance = abs(roof_cell - player_cell);
-		float max_cells = min(floor(island_cutaway_radius), 1.0);
-		bool directly_above = all(lessThanEqual(cell_distance, vec2(max_cells)));
-		if (roof_face && overhead && directly_above) {
+		vec2 mask_uv = (roof_cell - cave_mask_origin + vec2(0.5)) / cave_mask_size;
+		bool in_mask = all(greaterThanEqual(mask_uv, vec2(0.0))) && all(lessThan(mask_uv, vec2(1.0)));
+		bool revealed = in_mask && texture(cave_visibility_mask, mask_uv).r > 0.5;
+		if (roof_face && overhead && revealed && pixel_hash(floor(island_world_position.xz * 8.0)) < cave_reveal) {
+			discard;
+		}
+		// Only the camera-facing upper part of a wall directly bordering
+		// the revealed room can occlude the player. Keep its lower sill,
+		// floor and every wall on the far side of the room intact.
+		vec2 normal_xz = normalize(island_world_normal.xz + vec2(0.00001));
+		vec2 camera_xz = normalize(island_cutaway_eye.xz - island_cutaway_focus.xz + vec2(0.00001));
+		vec2 inner_cell = floor(island_world_position.xz + normal_xz * 0.12);
+		bool foreground = !roof_face && dot(normal_xz, camera_xz) > 0.25;
+		bool borders_room = revealed_cell(inner_cell) > 0.5;
+		if (foreground && borders_room && island_world_position.y > island_cutaway_focus.y + 0.25 && pixel_hash(floor(island_world_position.xz * 8.0)) < cave_reveal) {
 			discard;
 		}
 	}

@@ -46,6 +46,12 @@ var tool_mesh: MeshInstance3D
 var held_tool_id: String = ""
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
+@export_range(0.0, 180.0) var shield_arc_degrees: float = 120.0
+@export_range(0.0, 1.0) var shield_block_multiplier: float = 0.6
+var blocking: bool = false
+var block_impact: float = 0.0
+var combat_facing_target: Node3D
+var combat_facing_time: float = 0.0
 var gather_phase: float = 0.0
 var whirlwind_remaining: float = 0.0
 var whirlwind_elapsed: float = 0.0
@@ -252,6 +258,8 @@ func set_spear(equipped: bool) -> void:
 	set_weapon("spear" if equipped else "training_blade")
 
 func set_shield(equipped: bool) -> void:
+	if not equipped:
+		blocking = false
 	if shield_mesh != null:
 		shield_mesh.visible = equipped
 
@@ -287,7 +295,7 @@ func _build_torch() -> void:
 	torch_light.light_energy = 1.8
 	torch_light.omni_range = 8.0
 	torch_light.omni_attenuation = 1.2
-	torch_light.shadow_enabled = false
+	torch_light.shadow_enabled = not OS.has_feature("mobile")
 	torch_mesh.add_child(torch_light)
 	# Use the packaged PyroLux flame on the existing wrist-attached torch.
 	# Keep the old emissive cube + light as a fallback for source checkouts.
@@ -483,8 +491,14 @@ func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, pr
 
 func _physics_process(delta: float) -> void:
 	update_combat(delta)
+	combat_facing_time = maxf(0.0, combat_facing_time - delta)
+	block_impact = maxf(0.0, block_impact - delta)
 	elapsed += delta
+	if torch_light != null and torch_light.visible:
+		torch_light.light_energy = 1.8 + 0.12 * sin(elapsed * 7.0) + 0.06 * sin(elapsed * 13.3)
 	var modal_open: bool = game.controls.modal_open() if game.controls != null else (game.menu != null and game.menu.visible) or interaction_locked
+	if modal_open or str(game.equipment.get("offhand", "")) != "shield":
+		blocking = false
 	swimming = _detect_surface_swimming()
 	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
@@ -567,8 +581,20 @@ func _physics_process(delta: float) -> void:
 	if step_hop_remaining > 0.0:
 		hop = sin((1.0 - step_hop_remaining / STEP_HOP_DURATION) * PI) * 0.20
 	walk_amount = move_toward(walk_amount, direction.length(), delta * 8.0)
+	var facing: Vector3 = direction
+	if combat_facing_time > 0.0 and is_instance_valid(combat_facing_target):
+		var target_dir: Vector3 = combat_facing_target.global_position - global_position
+		target_dir.y = 0.0
+		if target_dir.length_squared() > 0.04:
+			facing = target_dir.normalized()
+	elif not modal_open and game.controls != null and game.controls.desktop and game.controls.aim_valid and not interaction_moving:
+		var aim: Vector3 = game.controls.aim_position - global_position
+		aim.y = 0.0
+		if aim.length_squared() > 0.04:
+			facing = aim.normalized()
+	if facing.length_squared() > 0.0025:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(delta * 12.0, 1.0))
 	if direction.length() > 0.05:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
 		walking_phase += delta * 10.6
 	visual.position = visual_step_offset + Vector3.UP * (absf(sin(walking_phase)) * 0.06 * walk_amount + hop)
 	var step: float = sin(walking_phase) * 0.58 * walk_amount
@@ -576,6 +602,8 @@ func _physics_process(delta: float) -> void:
 	right_leg.rotation.x = -step
 	left_arm.rotation.x = -step * 0.55
 	right_arm.rotation.x = step * 0.55
+	if blocking and str(game.equipment.get("offhand", "")) == "shield":
+		left_arm.rotation.x = -1.1 + block_impact * 1.2
 	# Small tuck in midair; attack/gather takes precedence below.
 	if not is_on_floor():
 		left_leg.rotation.x = 0.28
@@ -704,7 +732,16 @@ func apply_knockback(source: Vector3, force: float = 6.0) -> void:
 func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	if source != Vector3.ZERO:
 		apply_knockback(source, 6.3)
-	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
+	var protection: float = 1.0
+	var incoming: Vector3 = source - global_position
+	incoming.y = 0.0
+	var forward: Vector3 = -visual.global_basis.z
+	forward.y = 0.0
+	var shielded: bool = blocking and str(game.equipment.get("offhand", "")) == "shield" and source != Vector3.ZERO and incoming.length_squared() > 0.001 and forward.normalized().dot(incoming.normalized()) >= cos(deg_to_rad(shield_arc_degrees * 0.5))
+	if shielded:
+		protection = shield_block_multiplier
+		block_impact = 0.20
+		PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP, 0.0, Color("ffe8a0"), false, false)
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection

@@ -46,22 +46,18 @@ func _run() -> void:
 	await process_frame
 	var pigs: Array[Node] = get_nodes_in_group("wild_pigs")
 	var wolves: Array[Node] = get_nodes_in_group("wild_wolves")
-	check(pigs.size() == 2, "Two animated pigs in the live overworld")
+	check(pigs.size() == 4, "Existing animated pigs replace the two raccoons")
 	check(wolves.size() == 2, "Two animated wolves in the live overworld")
 	var boars: Array[Node] = get_nodes_in_group("wild_boars")
 	var raccoons: Array[Node] = get_nodes_in_group("wild_raccoons")
 	check(boars.size() == 3, "Three upgraded animated boars remain in the overworld")
-	check(raccoons.size() == 2, "Two additional animated raccoons roam separately")
+	check(raccoons.is_empty(), "Raccoons no longer spawn in the overworld")
 	check(get_nodes_in_group("gm_pitlords").is_empty(), "The GM boss does not auto-spawn")
 	if not boars.is_empty():
 		var boar = boars[0]
 		check(boar.avatar != null and boar.avatar.animator != null, "Boar uses the animated kit rig")
 		check(boar.avatar.model.get_node_or_null("BoarAccents") != null, "Boar adds tusks and bristles")
 		check(boar.map_record().get("label") == "Wild boar", "Diorama map retains boar label")
-	if not raccoons.is_empty():
-		var raccoon = raccoons[0]
-		check(raccoon.species == "raccoon" and raccoon.avatar.animator != null, "Raccoon is an independent wildlife species")
-		check(raccoon.map_record().get("disposition") == "neutral", "Raccoon is a yellow neutral map creature")
 	if not pigs.is_empty():
 		var pig = pigs[0]
 		check(pig.species == "pig" and pig.alive and pig.hp > 0, "Pig has real health / is targetable")
