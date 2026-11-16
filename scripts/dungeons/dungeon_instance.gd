@@ -49,6 +49,11 @@ var claimed_props: Dictionary = {}
 var mesh_cache: Dictionary = {}
 var material_cache: Dictionary = {}
 var boss_alive: bool = false
+var room_visuals: Dictionary = {}
+var room_walls: Dictionary = {}
+var room_creatures: Array = []
+var active_room_id: int = -1
+var _room_visibility_clock: float = 0.0
 
 func setup(id: String, tier: int, player: CharacterBody3D, first_floor: int = 1, already_broken: Array = []) -> void:
 	entrance_id = id
@@ -138,13 +143,22 @@ func _build_floor() -> void:
 	floor_root.name = "Floor_%d" % current_floor
 	add_child(floor_root)
 	layout = LAYOUT.generate(entrance_id, quality, current_floor - 1)
+	room_visuals.clear()
+	room_walls.clear()
+	room_creatures.clear()
+	active_room_id = -1
 	claimed_bonuses.clear()
 	bonus_chests.clear()
 	var rooms: Array = layout["rooms"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(layout["seed"])
 	for room in rooms:
+		var first_child: int = floor_root.get_child_count()
 		_build_room(room, rooms, rng)
+		var visuals: Array = []
+		for index in range(first_child, floor_root.get_child_count()):
+			_collect_room_visuals(floor_root.get_child(index), visuals)
+		room_visuals[int(room["id"])] = visuals
 	for edge in layout["edges"]:
 		var first: Vector2i = rooms[edge.x]["grid"]
 		var second: Vector2i = rooms[edge.y]["grid"]
@@ -152,9 +166,17 @@ func _build_floor() -> void:
 	spawn_local = _room_center(rooms[int(layout["start"])]) + Vector3(0, 0.35, 0)
 	exit_local = _room_center(rooms[int(layout["exit"])])
 	_make_chest()
+	_tag_room_node(chest_area, int(layout["exit"]))
 	for room_id in layout["bonuses"]:
 		_make_bonus(int(room_id), _room_center(rooms[int(room_id)]))
+		_tag_room_node(floor_root.get_node_or_null("Bonus_%d" % int(room_id)), int(room_id))
 	_spawn_guards(rooms, rng)
+	# Start concealed even before the first visibility tick; otherwise the
+	# entire layout can flash for a frame during entrance or floor changes.
+	for id in room_visuals:
+		for entry in room_visuals[id]:
+			if is_instance_valid(entry.node):
+				entry.node.layers = 0
 	var heading := Label3D.new()
 	heading.text = "%s  |  %s  |  FLOOR %d/%d" % [RARITY.quality_name(quality).to_upper(), str(layout["pattern"]).to_upper(), current_floor, floor_count]
 	heading.modulate = RARITY.color(quality)
@@ -168,6 +190,94 @@ func _build_floor() -> void:
 func _room_center(room: Dictionary) -> Vector3:
 	var g: Vector2i = room["grid"]
 	return Vector3(float(g.x) * STEP, 0.0, float(g.y) * STEP)
+
+func _collect_room_visuals(node: Node, result: Array) -> void:
+	if node is VisualInstance3D and not node is Light3D:
+		if not (node is GeometryInstance3D and node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY):
+			result.append({"node": node, "layers": node.layers})
+	for child in node.get_children():
+		_collect_room_visuals(child, result)
+
+func _tag_room_node(node: Node, room_id: int) -> void:
+	if node == null or not room_visuals.has(room_id):
+		return
+	node.set_meta("dungeon_room_id", room_id)
+	node.set_meta("dungeon_room_owner", self)
+	_collect_room_visuals(node, room_visuals[room_id])
+
+func _nearest_room_id(local_point: Vector3) -> int:
+	var nearest := -1
+	var distance := INF
+	for room in layout.get("rooms", []):
+		var center: Vector3 = _room_center(room)
+		var d: float = Vector2(local_point.x - center.x, local_point.z - center.z).length_squared()
+		if d < distance:
+			distance = d
+			nearest = int(room["id"])
+	return nearest
+
+func _process(delta: float) -> void:
+	if hero == null or not is_instance_valid(hero) or layout.is_empty():
+		return
+	_room_visibility_clock += delta
+	if _room_visibility_clock < 0.1:
+		return
+	_room_visibility_clock = 0.0
+	_update_room_visibility()
+
+func _update_room_visibility() -> void:
+	var local_hero: Vector3 = to_local(hero.global_position)
+	var nearest: int = -1
+	var distance: float = INF
+	var current_distance: float = INF
+	for room in layout.get("rooms", []):
+		var center: Vector3 = _room_center(room)
+		var d: float = Vector2(local_hero.x - center.x, local_hero.z - center.z).length_squared()
+		if int(room["id"]) == active_room_id:
+			current_distance = d
+		if d < distance:
+			distance = d
+			nearest = int(room["id"])
+	if nearest < 0:
+		return
+	# A narrow hysteresis band at doorway midpoints prevents rapid room
+	# toggling when the player stands on the seam or physics jitters.
+	if active_room_id >= 0 and sqrt(current_distance) <= sqrt(distance) + 0.45:
+		nearest = active_room_id
+	active_room_id = nearest
+	for id in room_visuals:
+		for entry in room_visuals[id]:
+			var node: VisualInstance3D = entry.node
+			if is_instance_valid(node):
+				node.layers = int(entry.layers) if int(id) == nearest else 0
+	for tracked in room_creatures:
+		var creature: Node3D = tracked.node
+		if not is_instance_valid(creature):
+			continue
+		var creature_room: int = _nearest_room_id(to_local(creature.global_position))
+		creature.set_meta("dungeon_room_id", creature_room)
+		for entry in tracked.visuals:
+			var visual: VisualInstance3D = entry.node
+			if is_instance_valid(visual):
+				visual.layers = int(entry.layers) if creature_room == nearest else 0
+	var camera: Camera3D = hero.game.camera if hero.get("game") != null else null
+	if camera == null:
+		return
+	var camera_direction: Vector3 = camera.global_position - hero.global_position
+	camera_direction.y = 0.0
+	camera_direction = camera_direction.normalized()
+	for id in room_walls:
+		for wall in room_walls[id]:
+			var mesh: MeshInstance3D = wall.mesh
+			if not is_instance_valid(mesh):
+				continue
+			var outward: Vector3 = global_basis * wall.outward
+			outward.y = 0.0
+			var hidden: bool = int(id) == nearest and outward.normalized().dot(camera_direction) > 0.45
+			mesh.layers = 0 if hidden or int(id) != nearest else 1
+			var collider: StaticBody3D = wall.collider
+			if is_instance_valid(collider):
+				collider.set_meta("dungeon_cutaway_hidden", hidden)
 
 func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> void:
 	var center: Vector3 = _room_center(room)
@@ -190,7 +300,7 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 			var offset: float = parts[slot]
 			var location: Vector3 = side_pos + Vector3(0, 0, offset) if delta.x != 0 else side_pos + Vector3(offset, 0, 0)
 			var entrance: bool = is_open and slot == 1
-			_model("wall_doorway" if entrance else "wall", location, Color("858e9b"), wall_yaw)
+			var wall_mesh := _model("wall_doorway" if entrance else "wall", location, Color("858e9b"), wall_yaw)
 			if entrance:
 				# Only side posts + overhead lintel. Width 2.0 safely exceeds player diameter.
 				var along: Vector3 = Vector3(0, 0, 1) if delta.x != 0 else Vector3(1, 0, 0)
@@ -198,7 +308,17 @@ func _build_room(room: Dictionary, rooms: Array, rng: RandomNumberGenerator) -> 
 					_solid(Vector3(0.55, 3.2, 1.0) if delta.x != 0 else Vector3(1.0, 3.2, 0.55), location + along * side_sign * 1.50 + Vector3(0, 1.6, 0))
 				_solid(Vector3(0.55, 0.5, 4) if delta.x != 0 else Vector3(4, 0.5, 0.55), location + Vector3(0, 2.96, 0))
 			else:
-				_solid(Vector3(0.65, 3.2, 4.0) if delta.x != 0 else Vector3(4.0, 3.2, 0.65), location + Vector3(0, 1.6, 0))
+				var wall_body := _solid(Vector3(0.65, 3.2, 4.0) if delta.x != 0 else Vector3(4.0, 3.2, 0.65), location + Vector3(0, 1.6, 0))
+				var id: int = int(room["id"])
+				if not room_walls.has(id):
+					room_walls[id] = []
+				room_walls[id].append({"mesh": wall_mesh, "collider": wall_body, "outward": Vector3(delta.x, 0, delta.y)})
+				var shadow := MeshInstance3D.new()
+				shadow.mesh = wall_mesh.mesh
+				shadow.transform = wall_mesh.transform
+				shadow.material_override = wall_mesh.material_override
+				shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+				floor_root.add_child(shadow)
 	if int(room["id"]) != 0:
 		# Every interactive prop has a persistent per-floor ID. Pure rubble
 		# and wall fragments remain batched decoration, not fake loot.
@@ -259,7 +379,7 @@ func _build_connector(a: Vector2i, b: Vector2i) -> void:
 		stone_wall.material_override = stone
 		floor_root.add_child(stone_wall)
 
-func _solid(size: Vector3, at: Vector3) -> void:
+func _solid(size: Vector3, at: Vector3) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.position = at
 	body.collision_layer = 1
@@ -270,6 +390,7 @@ func _solid(size: Vector3, at: Vector3) -> void:
 	box.size = size
 	shape.shape = box
 	body.add_child(shape)
+	return body
 
 func _model(id: String, pos: Vector3, tint: Color, yaw: float = 0.0) -> MeshInstance3D:
 	var mesh: Mesh
@@ -347,6 +468,13 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 			guard.scale *= 1.35
 			guard.display_name = "Skeleton Champion" if creature_kind == "skeleton" else "Goblin Chieftain" if creature_kind == "goblin" else "Ancient Warden"
 		guard.apply_affixes(AFFIXES.roll(entrance_id, current_floor, i, quality, boss))
+		var creature_visuals: Array = []
+		_collect_room_visuals(guard, creature_visuals)
+		guard.set_meta("dungeon_room_owner", self)
+		guard.set_meta("dungeon_room_id", room_id)
+		for entry in creature_visuals:
+			entry.node.layers = 0
+		room_creatures.append({"node": guard, "visuals": creature_visuals})
 	boss_alive = current_floor == floor_count
 
 func _make_chest() -> void:

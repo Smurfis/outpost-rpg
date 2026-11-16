@@ -115,6 +115,12 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
 		if hit.is_empty():
 			return cave_fallback
+		# A hidden foreground dungeon wall remains solid for movement; only
+		# the viewing ray may continue through that specific wall body.
+		var hit_body: Variant = hit.get("collider")
+		if hit_body is CollisionObject3D and hit_body.get_meta("dungeon_cutaway_hidden", false):
+			excluded.append(hit_body.get_rid())
+			continue
 		if archipelago != null and archipelago.has_method("cutaway_hides_hit") and archipelago.cutaway_hides_hit(hit):
 			origin = (hit.position as Vector3) + direction * 0.13
 			if origin.distance_to(end) < 0.2:
@@ -122,6 +128,11 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 			continue
 		var collider: Node3D = hit.collider
 		var target: Node3D = collider.get_meta("world_target", collider)
+		if target.has_meta("dungeon_room_owner"):
+			var dungeon: Variant = target.get_meta("dungeon_room_owner")
+			if is_instance_valid(dungeon) and int(target.get_meta("dungeon_room_id", -1)) != int(dungeon.active_room_id):
+				excluded.append(collider.get_rid())
+				continue
 		if not target.is_visible_in_tree() or (target.is_in_group("resources") and not target.active):
 			excluded.append(collider.get_rid())
 			continue
