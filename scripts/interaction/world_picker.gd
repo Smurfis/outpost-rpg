@@ -118,7 +118,7 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 		# A hidden foreground dungeon wall remains solid for movement; only
 		# the viewing ray may continue through that specific wall body.
 		var hit_body: Variant = hit.get("collider")
-		if hit_body is CollisionObject3D and hit_body.get_meta("dungeon_cutaway_hidden", false):
+		if hit_body is CollisionObject3D and (hit_body.get_meta("dungeon_cutaway_hidden", false) or hit_body.get_meta("building_cutaway_hidden", false)):
 			excluded.append(hit_body.get_rid())
 			continue
 		if archipelago != null and archipelago.has_method("cutaway_hides_hit") and archipelago.cutaway_hides_hit(hit):

@@ -12,6 +12,11 @@ var blocks: Dictionary = {}
 var valid_material: StandardMaterial3D
 var invalid_material: StandardMaterial3D
 var preview_support: WeakRef
+const ROOM_SCAN_RADIUS := 8
+var _room_clock := 0.0
+var _room_cell := Vector3i(99999, 99999, 99999)
+var _room_block_count := -1
+var _room_cells: Dictionary = {}
 
 func setup(owner_game: Node3D, saved: Array) -> void:
 	game = owner_game
@@ -47,6 +52,62 @@ func _preview_material(colour: Color) -> StandardMaterial3D:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = colour
 	return material
+
+func _process(delta: float) -> void:
+	if game == null or game.hero == null or game.camera == null or blocks.is_empty():
+		return
+	_room_clock += delta
+	if _room_clock < 0.15:
+		return
+	_room_clock = 0.0
+	_update_interior_cutaway()
+
+func _update_interior_cutaway() -> void:
+	var position: Vector3 = game.hero.global_position
+	var head := Vector3i(floori(position.x), floori(position.y + 1.0), floori(position.z))
+	if head != _room_cell or blocks.size() != _room_block_count:
+		_room_cell = head
+		_room_block_count = blocks.size()
+		_room_cells = _enclosed_room(head)
+	var view := Vector2(game.camera.global_position.x - position.x, game.camera.global_position.z - position.z).normalized()
+	for cell in blocks:
+		var body: StaticBody3D = blocks[cell]
+		if not is_instance_valid(body):
+			continue
+		var column := Vector2i(cell.x, cell.z)
+		var roof: bool = cell.y > head.y and _room_cells.has(column)
+		var foreground := false
+		if cell.y >= head.y and not _room_cells.is_empty():
+			for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+				var inside: Vector2i = column + offset
+				if _room_cells.has(inside) and Vector2(-offset.x, -offset.y).dot(view) > 0.45:
+					foreground = true
+					break
+		var hide: bool = roof or foreground
+		var visual: MeshInstance3D = body.get_node_or_null("VisibleBlock")
+		if visual != null:
+			visual.visible = not hide
+		body.set_meta("building_cutaway_hidden", hide)
+
+func _enclosed_room(head: Vector3i) -> Dictionary:
+	if blocks.has(head):
+		return {}
+	var start := Vector2i(head.x, head.z)
+	var found := {start: true}
+	var pending: Array[Vector2i] = [start]
+	var index := 0
+	while index < pending.size():
+		var cell: Vector2i = pending[index]
+		index += 1
+		if absi(cell.x - start.x) >= ROOM_SCAN_RADIUS or absi(cell.y - start.y) >= ROOM_SCAN_RADIUS:
+			return {} # Open terrain or a room too large to safely classify.
+		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = cell + offset
+			if found.has(next) or blocks.has(Vector3i(next.x, head.y, next.y)):
+				continue
+			found[next] = true
+			pending.append(next)
+	return found
 
 func update_preview(screen: Vector2) -> void:
 	preview_valid = false
@@ -124,6 +185,7 @@ func _spawn(cell: Vector3i) -> void:
 	shape.shape = cube
 	body.add_child(shape)
 	var mesh := MeshInstance3D.new()
+	mesh.name = "VisibleBlock"
 	var box := BoxMesh.new()
 	box.size = Vector3.ONE
 	mesh.mesh = box
@@ -131,4 +193,10 @@ func _spawn(cell: Vector3i) -> void:
 	material.albedo_color = Color("9a6a3b")
 	mesh.material_override = material
 	body.add_child(mesh)
+	var shadow := MeshInstance3D.new()
+	shadow.name = "BlockShadow"
+	shadow.mesh = box
+	shadow.material_override = material
+	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	body.add_child(shadow)
 	blocks[cell] = body
