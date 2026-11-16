@@ -1583,34 +1583,6 @@ func _build_control_settings() -> void:
 	explanation.add_theme_color_override("font_color", SKIN.GOLD)
 	explanation.add_theme_font_size_override("font_size", 17)
 	stack.add_child(explanation)
-	shadow_budget_button = Button.new()
-	shadow_budget_button.name = "ShadowBudgetButton"
-	shadow_budget_button.custom_minimum_size.y = 40
-	shadow_budget_button.pressed.connect(_cycle_shadow_budget)
-	stack.add_child(shadow_budget_button)
-	settings_touch_buttons.append(shadow_budget_button)
-	_refresh_shadow_budget_label()
-	mouse_binding_button = Button.new()
-	mouse_binding_button.name = "MouseBindingButton"
-	mouse_binding_button.custom_minimum_size.y = 40
-	mouse_binding_button.pressed.connect(_swap_mouse_bindings)
-	stack.add_child(mouse_binding_button)
-	settings_touch_buttons.append(mouse_binding_button)
-	_refresh_mouse_binding_label()
-	var keys_heading := Label.new()
-	keys_heading.text = "KEYBOARD BINDINGS"
-	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
-	stack.add_child(keys_heading)
-	for binding in ["left", "right", "up", "down", "interact", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
-		var key_button := Button.new()
-		key_button.name = "Rebind_" + binding
-		key_button.custom_minimum_size.y = 38
-		key_button.pressed.connect(_start_rebind.bind(binding))
-		stack.add_child(key_button)
-		settings_touch_buttons.append(key_button)
-		key_rebind_buttons[binding] = key_button
-	_refresh_key_labels()
-
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
 	floating_mode_toggle.text = "Dynamic movement stick (appears at touch)"
@@ -1719,6 +1691,33 @@ func _build_control_settings() -> void:
 	name_edit.text_submitted.connect(func(_value: String) -> void: _save_character_name())
 	name_edit.focus_exited.connect(_save_character_name)
 	stack.add_child(name_edit)
+	shadow_budget_button = Button.new()
+	shadow_budget_button.name = "ShadowBudgetButton"
+	shadow_budget_button.custom_minimum_size.y = 40
+	shadow_budget_button.pressed.connect(_cycle_shadow_budget)
+	stack.add_child(shadow_budget_button)
+	settings_touch_buttons.append(shadow_budget_button)
+	_refresh_shadow_budget_label()
+	mouse_binding_button = Button.new()
+	mouse_binding_button.name = "MouseBindingButton"
+	mouse_binding_button.custom_minimum_size.y = 40
+	mouse_binding_button.pressed.connect(_swap_mouse_bindings)
+	stack.add_child(mouse_binding_button)
+	settings_touch_buttons.append(mouse_binding_button)
+	_refresh_mouse_binding_label()
+	var keys_heading := Label.new()
+	keys_heading.text = "KEYBOARD BINDINGS"
+	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
+	stack.add_child(keys_heading)
+	for binding in ["left", "right", "up", "down", "interact", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
+		var key_button := Button.new()
+		key_button.name = "Rebind_" + binding
+		key_button.custom_minimum_size.y = 38
+		key_button.pressed.connect(_start_rebind.bind(binding))
+		stack.add_child(key_button)
+		settings_touch_buttons.append(key_button)
+		key_rebind_buttons[binding] = key_button
+	_refresh_key_labels()
 
 	var swim_preview := Button.new()
 	swim_preview.name = "PreviewSwimmingParticles"
