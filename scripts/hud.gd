@@ -250,6 +250,7 @@ var shield_block_finger: int = -1
 var shadow_budget_button: Button
 var key_rebind_buttons: Dictionary = {}
 var key_rebind_waiting: String = ""
+var mouse_binding_button: Button
 const INSPECTION = preload("res://scripts/interaction/inspection.gd")
 
 func set_desktop_mode(value: bool) -> void:
@@ -321,7 +322,7 @@ func _layout_shared_actions() -> void:
 	if tool_gesture_hint != null:
 		tool_gesture_hint.hide()
 	if camera_gesture_hint != null:
-		camera_gesture_hint.text = "RMB drag · Wheel zoom" if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
+		camera_gesture_hint.text = ("RMB drag · Wheel zoom" if game != null and game.swap_context_and_orbit else "MMB drag · Wheel zoom") if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
 
 func _ready() -> void:
 	root = Control.new()
@@ -1589,6 +1590,13 @@ func _build_control_settings() -> void:
 	stack.add_child(shadow_budget_button)
 	settings_touch_buttons.append(shadow_budget_button)
 	_refresh_shadow_budget_label()
+	mouse_binding_button = Button.new()
+	mouse_binding_button.name = "MouseBindingButton"
+	mouse_binding_button.custom_minimum_size.y = 40
+	mouse_binding_button.pressed.connect(_swap_mouse_bindings)
+	stack.add_child(mouse_binding_button)
+	settings_touch_buttons.append(mouse_binding_button)
+	_refresh_mouse_binding_label()
 	var keys_heading := Label.new()
 	keys_heading.text = "KEYBOARD BINDINGS"
 	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
@@ -2192,6 +2200,7 @@ func _load_control_prefs() -> void:
 	if config.load(CONTROL_PREFS) == OK:
 		if game != null:
 			game.shadow_light_budget = clampi(int(config.get_value("graphics", "shadow_light_budget", game.shadow_light_budget)), 0, 2)
+			game.swap_context_and_orbit = bool(config.get_value("controls", "swap_context_and_orbit", false))
 		for stat in ["health", "mana", "xp"]:
 			var saved: String = str(config.get_value("status_text", stat, "text"))
 			status_text_modes[stat] = saved if saved in ["text", "percent", "off"] else "text"
@@ -2220,12 +2229,14 @@ func _load_control_prefs() -> void:
 	name_edit.text = player_display_name
 	_refresh_status_mode_buttons()
 	_refresh_shadow_budget_label()
+	_refresh_mouse_binding_label()
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
 	config.load(CONTROL_PREFS)
 	if game != null:
 		config.set_value("graphics", "shadow_light_budget", game.shadow_light_budget)
+		config.set_value("controls", "swap_context_and_orbit", game.swap_context_and_orbit)
 	config.set_value("controls", "stick_default_enlarged_v2", true)
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
 	config.set_value("controls", "movement_stick_scale", movement_stick_scale)
@@ -2246,6 +2257,21 @@ func _cycle_shadow_budget() -> void:
 	game.shadow_light_budget = (int(game.shadow_light_budget) + 1) % 3
 	game._update_shadow_budget()
 	_refresh_shadow_budget_label()
+	_save_control_prefs()
+
+func _refresh_mouse_binding_label() -> void:
+	if mouse_binding_button != null and game != null:
+		mouse_binding_button.text = "Interact: MMB · Orbit: RMB" if game.swap_context_and_orbit else "Interact: RMB · Orbit: MMB"
+
+func _swap_mouse_bindings() -> void:
+	if game == null:
+		return
+	game.swap_context_and_orbit = not game.swap_context_and_orbit
+	if game.controls != null:
+		game.controls.rotating = false
+		game.controls.block_pending = false
+		game.hero.blocking = false
+	_refresh_mouse_binding_label()
 	_save_control_prefs()
 
 func _refresh_key_labels() -> void:

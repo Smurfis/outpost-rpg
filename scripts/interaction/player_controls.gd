@@ -29,6 +29,12 @@ const BLOCK_HOLD_SECONDS := 0.25
 var block_pending := false
 var block_hold_time := 0.0
 
+func orbit_button() -> MouseButton:
+	return MOUSE_BUTTON_RIGHT if game.swap_context_and_orbit else MOUSE_BUTTON_MIDDLE
+
+func context_button() -> MouseButton:
+	return MOUSE_BUTTON_MIDDLE if game.swap_context_and_orbit else MOUSE_BUTTON_RIGHT
+
 func setup(ref: Node) -> void:
 	game = ref
 	var preferred: String = str(get_tree().root.get_meta("outpost_input_mode", OS.get_environment("OUTPOST_INPUT_MODE")))
@@ -108,7 +114,7 @@ func _input(event: InputEvent) -> void:
 	# Desktop RMB orbits even above a decorative HUD panel. Some panels
 	# consume GUI mouse presses before _unhandled_input, which previously
 	# prevented the drag from starting in otherwise empty world-space.
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE and desktop and not OS.has_feature("mobile") and not modal_open():
+	if event is InputEventMouseButton and event.button_index == orbit_button() and desktop and not OS.has_feature("mobile") and not modal_open():
 		if event.pressed:
 			rotating = true
 			hold_ground = false
@@ -120,9 +126,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			hold_ground = false
-		elif event.button_index == MOUSE_BUTTON_MIDDLE:
+		elif event.button_index == orbit_button():
 			rotating = false
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
+		elif event.button_index == context_button():
 			block_pending = false
 			game.hero.blocking = false
 	if event is InputEventMouseMotion and rotating:
@@ -156,6 +162,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if point_over_ui(event.position):
 			return
+		if event.button_index == context_button():
+			var hit: Dictionary = PICKER.resolve(game, event.position)
+			var clicked: Node3D = hit.get("target")
+			if is_instance_valid(clicked):
+				approach(clicked)
+			elif str(game.equipment.get("offhand", "")) == "shield":
+				block_pending = true
+				block_hold_time = 0.0
+			get_viewport().set_input_as_handled()
+			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
 				if game.building != null and game.building.enabled:
@@ -165,14 +181,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					return
 				if not rotating:
 					primary_at(event.position)
-			MOUSE_BUTTON_RIGHT:
-				var hit: Dictionary = PICKER.resolve(game, event.position)
-				var clicked: Node3D = hit.get("target")
-				if is_instance_valid(clicked):
-					approach(clicked)
-				elif str(game.equipment.get("offhand", "")) == "shield":
-					block_pending = true
-					block_hold_time = 0.0
 			MOUSE_BUTTON_WHEEL_UP:
 				game.camera.size = clampf(game.camera.size - 1.5, 10.0, 32.0)
 			MOUSE_BUTTON_WHEEL_DOWN:
@@ -393,7 +401,7 @@ func inspect_at(screen: Vector2) -> void:
 		verb = "Talk"
 	else:
 		verb = str(inspected.get_meta("world_action", "Interact"))
-	show_tip(("RMB " if desktop else "Tap ") + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
+	show_tip(("MMB " if game.swap_context_and_orbit else "RMB ") + verb if desktop else "Tap " + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
 	highlight.global_position = inspected.global_position + Vector3.UP * 0.07
 	highlight.show()
 	if desktop:

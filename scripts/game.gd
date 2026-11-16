@@ -48,6 +48,7 @@ const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_bu
 var building: Node3D
 var saved_blocks: Array = []
 var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
+var swap_context_and_orbit: bool = false
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
 var hero
