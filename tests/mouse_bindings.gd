@@ -13,6 +13,7 @@ func check(ok: bool, message: String) -> void:
 
 func run() -> void:
 	root.set_meta("outpost_new_adventure", true)
+	root.set_meta("outpost_input_mode", "desktop")
 	var game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	await process_frame
