@@ -24,6 +24,25 @@ func run() -> void:
 	game.swap_context_and_orbit = false
 	game.hud._load_control_prefs()
 	check(game.swap_context_and_orbit, "Reload restores swapped buttons")
+	game.equipment["offhand"] = "shield"
+	var world_point: Vector2 = game.camera.unproject_position(Vector3(0, -0.05, -8))
+	var click := InputEventMouseButton.new()
+	click.position = world_point
+	click.button_index = MOUSE_BUTTON_MIDDLE
+	click.pressed = true
+	game.controls._unhandled_input(click)
+	game.controls._process(0.30)
+	check(game.hero.blocking, "Holding swapped context button blocks on empty ground")
+	click.pressed = false
+	game.controls._input(click)
+	check(not game.hero.blocking, "Releasing swapped context button ends block")
+	click.button_index = MOUSE_BUTTON_RIGHT
+	click.pressed = true
+	game.controls._input(click)
+	check(game.controls.rotating, "Swapped orbit button starts camera rotation")
+	click.pressed = false
+	game.controls._input(click)
+	check(not game.controls.rotating, "Releasing orbit ends rotation")
 	game.queue_free()
 	await process_frame
 	print("MOUSE BINDING RESULT: %d failures" % failures)
