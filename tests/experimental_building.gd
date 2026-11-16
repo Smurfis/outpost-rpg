@@ -37,6 +37,11 @@ func run() -> void:
 	check(next_cell == cell + Vector3i.RIGHT, "Side preview snaps to the adjacent voxel")
 	check(game.building.place_preview(), "A second block extends from the first")
 	check(game.inventory.wood == 1 and game.building.blocks.has(next_cell), "Bridge consumes wood and creates solid block")
+	game.building.preview_support = weakref(first_body)
+	game.building.preview_cell = next_cell + Vector3i.RIGHT
+	game.building.preview_valid = true
+	first_body.queue_free()
+	check(not game.building.place_preview() and game.inventory.wood == 1, "A removed support cannot be used for placement")
 	check(not game.building.can_place(cell), "Existing blocks cannot be overwritten")
 	check(not game.building.can_place(Vector3i(100, 0, 100)), "Out-of-range placement is rejected")
 	var records: Array = game.building.serialize()
