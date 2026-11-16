@@ -247,6 +247,7 @@ var world_touch_dragged: bool = false
 var world_touch_inspected: bool = false
 var shield_block_button: Button
 var shield_block_finger: int = -1
+var shadow_budget_button: Button
 const INSPECTION = preload("res://scripts/interaction/inspection.gd")
 
 func set_desktop_mode(value: bool) -> void:
@@ -1579,6 +1580,13 @@ func _build_control_settings() -> void:
 	explanation.add_theme_color_override("font_color", SKIN.GOLD)
 	explanation.add_theme_font_size_override("font_size", 17)
 	stack.add_child(explanation)
+	shadow_budget_button = Button.new()
+	shadow_budget_button.name = "ShadowBudgetButton"
+	shadow_budget_button.custom_minimum_size.y = 40
+	shadow_budget_button.pressed.connect(_cycle_shadow_budget)
+	stack.add_child(shadow_budget_button)
+	settings_touch_buttons.append(shadow_budget_button)
+	_refresh_shadow_budget_label()
 
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
@@ -2165,6 +2173,8 @@ func _save_character_name() -> void:
 func _load_control_prefs() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONTROL_PREFS) == OK:
+		if game != null:
+			game.shadow_light_budget = clampi(int(config.get_value("graphics", "shadow_light_budget", game.shadow_light_budget)), 0, 2)
 		for stat in ["health", "mana", "xp"]:
 			var saved: String = str(config.get_value("status_text", stat, "text"))
 			status_text_modes[stat] = saved if saved in ["text", "percent", "off"] else "text"
@@ -2192,9 +2202,13 @@ func _load_control_prefs() -> void:
 	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
 	_refresh_status_mode_buttons()
+	_refresh_shadow_budget_label()
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
+	config.load(CONTROL_PREFS)
+	if game != null:
+		config.set_value("graphics", "shadow_light_budget", game.shadow_light_budget)
 	config.set_value("controls", "stick_default_enlarged_v2", true)
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
 	config.set_value("controls", "movement_stick_scale", movement_stick_scale)
@@ -2204,6 +2218,18 @@ func _save_control_prefs() -> void:
 	for stat in ["health", "mana", "xp"]:
 		config.set_value("status_text", stat, status_text_modes.get(stat, "text"))
 	config.save(CONTROL_PREFS)
+
+func _refresh_shadow_budget_label() -> void:
+	if shadow_budget_button != null and game != null:
+		shadow_budget_button.text = "Shadow lights: %d" % int(game.shadow_light_budget)
+
+func _cycle_shadow_budget() -> void:
+	if game == null:
+		return
+	game.shadow_light_budget = (int(game.shadow_light_budget) + 1) % 3
+	game._update_shadow_budget()
+	_refresh_shadow_budget_label()
+	_save_control_prefs()
 
 func _place_px(control: Control, screen: Vector2, region: Rect2) -> void:
 	# Keep touch targets square in pixels instead of stretching circles into

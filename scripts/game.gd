@@ -46,6 +46,7 @@ const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_bu
 @export var experimental_building_enabled: bool = false
 var building: Node3D
 var saved_blocks: Array = []
+var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
 var hero
@@ -227,6 +228,7 @@ func _process(delta: float) -> void:
 	mana = minf(MAX_MANA, mana + MANA_REGEN_PER_SECOND * delta)
 	world_time += delta
 	_camera(delta)
+	_update_shadow_budget()
 	if day_night != null and hud != null:
 		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
@@ -378,6 +380,16 @@ func _lighting() -> void:
 	day_night.name = "DayNightCycle"
 	add_child(day_night)
 	day_night.configure(env, sun, dawn)
+
+func _update_shadow_budget() -> void:
+	if day_night == null or day_night.sunlight == null or hero == null or hero.torch_light == null:
+		return
+	var budget: int = clampi(shadow_light_budget, 0, 2)
+	var torch_equipped: bool = str(equipment.get("offhand", "")) == "torch"
+	# With one shadow light, favour the torch indoors and the sun outdoors.
+	var torch_priority: bool = torch_equipped and day_night.interior_blend > 0.5
+	day_night.sunlight.shadow_enabled = budget > 0 and (budget > 1 or not torch_priority)
+	hero.torch_light.shadow_enabled = budget > 1 or (budget == 1 and torch_priority)
 
 func _world() -> void:
 	var floor_body := StaticBody3D.new()

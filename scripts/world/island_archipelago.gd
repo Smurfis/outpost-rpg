@@ -371,14 +371,15 @@ func _build_chunk(key: Vector2i) -> void:
 		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
-		if not OS.has_feature("mobile"):
-			var shadow_ground := MeshInstance3D.new()
-			shadow_ground.name = "IslandShadow_%d_%d" % [key.x, key.y]
-			shadow_ground.mesh = ground.mesh
-			shadow_ground.material_override = GREEDY.material()
-			shadow_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-			add_child(shadow_ground)
-			members.append(shadow_ground)
+		# The shadow-only mesh is shared, not duplicated geometry. Keep it on
+		# Android as well so enabling the shadow budget works for loaded chunks.
+		var shadow_ground := MeshInstance3D.new()
+		shadow_ground.name = "IslandShadow_%d_%d" % [key.x, key.y]
+		shadow_ground.mesh = ground.mesh
+		shadow_ground.material_override = GREEDY.material()
+		shadow_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		add_child(shadow_ground)
+		members.append(shadow_ground)
 	if roof_faces > 0:
 		var lid := MeshInstance3D.new()
 		lid.name = "CaveCutaway_%d_%d" % [key.x, key.y]
