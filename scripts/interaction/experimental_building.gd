@@ -92,8 +92,9 @@ func _update_interior_cutaway() -> void:
 func _enclosed_room(head: Vector3i) -> Dictionary:
 	if blocks.has(head):
 		return {}
-	if blocks.has(head + Vector3i.UP):
-		return _roofed_room(head)
+	var roof_y := _roof_height(head.x, head.z, head.y)
+	if roof_y > head.y:
+		return _roofed_room(head, roof_y)
 	var start := Vector2i(head.x, head.z)
 	var found := {start: true}
 	var pending: Array[Vector2i] = [start]
@@ -111,7 +112,15 @@ func _enclosed_room(head: Vector3i) -> Dictionary:
 			pending.append(next)
 	return found
 
-func _roofed_room(head: Vector3i) -> Dictionary:
+func _roof_height(x: int, z: int, head_y: int) -> int:
+	# Allow useful headroom while keeping the scan bounded; a distant bridge
+	# overhead must not classify the surrounding terrain as a building.
+	for y in range(head_y + 1, head_y + 5):
+		if blocks.has(Vector3i(x, y, z)):
+			return y
+	return head_y
+
+func _roofed_room(head: Vector3i, roof_y: int) -> Dictionary:
 	# Follow only supported roof columns, so an open doorway onto uncovered
 	# ground does not make the whole building appear to be outdoor space.
 	var start := Vector2i(head.x, head.z)
@@ -125,7 +134,7 @@ func _roofed_room(head: Vector3i) -> Dictionary:
 			var next: Vector2i = cell + offset
 			if found.has(next) or absi(next.x - start.x) > ROOM_SCAN_RADIUS or absi(next.y - start.y) > ROOM_SCAN_RADIUS:
 				continue
-			if blocks.has(Vector3i(next.x, head.y, next.y)) or not blocks.has(Vector3i(next.x, head.y + 1, next.y)):
+			if blocks.has(Vector3i(next.x, head.y, next.y)) or not blocks.has(Vector3i(next.x, roof_y, next.y)):
 				continue
 			# A narrow doorway is a boundary, not permission to reveal all
 			# rooms beyond it. The player's own doorway cell is still usable.
@@ -230,3 +239,4 @@ func _spawn(cell: Vector3i) -> void:
 	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	body.add_child(shadow)
 	blocks[cell] = body
+	_room_block_count = -1

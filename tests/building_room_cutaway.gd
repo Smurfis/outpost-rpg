@@ -40,6 +40,12 @@ func run() -> void:
 	building.blocks.erase(doorway)
 	building._update_interior_cutaway()
 	check(not roof.get_node("VisibleBlock").visible, "Roofed room remains open with an exterior doorway")
+	building.blocks.erase(base + Vector3i.UP)
+	roof.queue_free()
+	building._spawn(base + Vector3i.UP * 3)
+	roof = building.blocks[base + Vector3i.UP * 3]
+	building._update_interior_cutaway()
+	check(not roof.get_node("VisibleBlock").visible, "A taller roof remains open with an exterior doorway")
 	game.camera.global_position = game.hero.global_position + Vector3(-20, 20, 0)
 	building._update_interior_cutaway()
 	check(foreground.get_node("VisibleBlock").visible and not background.get_node("VisibleBlock").visible, "Camera rotation switches the foreground wall")
