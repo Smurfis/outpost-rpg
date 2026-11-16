@@ -136,7 +136,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
 			return
-		if event.keycode == KEY_B and game.experimental_building_enabled and game.building != null:
+		if event.is_action_pressed("outpost_build") and game.experimental_building_enabled and game.building != null:
 			game.building.set_enabled(not game.building.enabled)
 			game.hud.toast("Building enabled" if game.building.enabled else "Building closed")
 			get_viewport().set_input_as_handled()

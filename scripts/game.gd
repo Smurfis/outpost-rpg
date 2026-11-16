@@ -42,6 +42,7 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
 @export var experimental_archipelago_enabled: bool = true # Feature branch: remote fractal islands and caves.
 const SAVE = "user://outpost_progress_v02.json"
+const KEY_BINDINGS = "user://outpost_keybindings.cfg"
 const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_building.gd")
 @export var experimental_building_enabled: bool = false
 var building: Node3D
@@ -201,15 +202,36 @@ func _register_keys() -> void:
 	if InputMap.has_action("outpost_jump"):
 		InputMap.erase_action("outpost_jump")
 	binds["map"] = [KEY_M]
+	binds["build"] = [KEY_B]
+	var preferences := ConfigFile.new()
+	preferences.load(KEY_BINDINGS)
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
 		InputMap.action_erase_events(key_name)
-		for code in binds[action]:
+		var codes: Variant = preferences.get_value("keys", str(action), binds[action])
+		if not codes is Array:
+			codes = binds[action]
+		for code in codes:
+			if not (code is int) or int(code) <= 0:
+				continue
 			var event := InputEventKey.new()
 			event.physical_keycode = int(code)
 			InputMap.action_add_event(key_name, event)
+
+func rebind_key(action: String, physical_key: int) -> bool:
+	var name: String = "outpost_" + action
+	if physical_key <= 0 or not InputMap.has_action(name) or action == "cancel":
+		return false
+	var event := InputEventKey.new()
+	event.physical_keycode = physical_key
+	InputMap.action_erase_events(name)
+	InputMap.action_add_event(name, event)
+	var preferences := ConfigFile.new()
+	preferences.load(KEY_BINDINGS)
+	preferences.set_value("keys", action, [physical_key])
+	return preferences.save(KEY_BINDINGS) == OK
 
 func _unhandled_input(event: InputEvent) -> void:
 	pass # Shared controller routes InputMap actions after GUI consumption.

@@ -248,6 +248,8 @@ var world_touch_inspected: bool = false
 var shield_block_button: Button
 var shield_block_finger: int = -1
 var shadow_budget_button: Button
+var key_rebind_buttons: Dictionary = {}
+var key_rebind_waiting: String = ""
 const INSPECTION = preload("res://scripts/interaction/inspection.gd")
 
 func set_desktop_mode(value: bool) -> void:
@@ -1587,6 +1589,19 @@ func _build_control_settings() -> void:
 	stack.add_child(shadow_budget_button)
 	settings_touch_buttons.append(shadow_budget_button)
 	_refresh_shadow_budget_label()
+	var keys_heading := Label.new()
+	keys_heading.text = "KEYBOARD BINDINGS"
+	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
+	stack.add_child(keys_heading)
+	for binding in ["left", "right", "up", "down", "interact", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
+		var key_button := Button.new()
+		key_button.name = "Rebind_" + binding
+		key_button.custom_minimum_size.y = 38
+		key_button.pressed.connect(_start_rebind.bind(binding))
+		stack.add_child(key_button)
+		settings_touch_buttons.append(key_button)
+		key_rebind_buttons[binding] = key_button
+	_refresh_key_labels()
 
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
@@ -1948,6 +1963,8 @@ func _show_control_settings() -> void:
 func _close_control_settings() -> void:
 	if control_settings_panel == null:
 		return
+	key_rebind_waiting = ""
+	_refresh_key_labels()
 	_save_character_name()
 	control_settings_panel.visible = false
 	settings_touch_finger = -1
@@ -2230,6 +2247,19 @@ func _cycle_shadow_budget() -> void:
 	game._update_shadow_budget()
 	_refresh_shadow_budget_label()
 	_save_control_prefs()
+
+func _refresh_key_labels() -> void:
+	for action in key_rebind_buttons:
+		var button: Button = key_rebind_buttons[action]
+		var events: Array[InputEvent] = InputMap.action_get_events("outpost_" + str(action))
+		var current: String = events[0].as_text() if not events.is_empty() else "Unbound"
+		button.text = "%s: %s" % [str(action).replace("_", " ").capitalize(), current]
+
+func _start_rebind(action: String) -> void:
+	key_rebind_waiting = action
+	var button: Button = key_rebind_buttons.get(action)
+	if button != null:
+		button.text = "Press a key (Esc to cancel)"
 
 func _place_px(control: Control, screen: Vector2, region: Rect2) -> void:
 	# Keep touch targets square in pixels instead of stretching circles into
@@ -3566,6 +3596,14 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if not key_rebind_waiting.is_empty() and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode != KEY_ESCAPE:
+			var code: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
+			game.rebind_key(key_rebind_waiting, code)
+		key_rebind_waiting = ""
+		_refresh_key_labels()
+		get_viewport().set_input_as_handled()
+		return
 	if game != null and game.world_map != null and game.world_map.is_open():
 		return
 	if event is InputEventScreenTouch and game != null and not desktop_mode and shield_block_button != null:
