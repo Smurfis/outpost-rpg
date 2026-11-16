@@ -92,6 +92,8 @@ func _update_interior_cutaway() -> void:
 func _enclosed_room(head: Vector3i) -> Dictionary:
 	if blocks.has(head):
 		return {}
+	if blocks.has(head + Vector3i.UP):
+		return _roofed_room(head)
 	var start := Vector2i(head.x, head.z)
 	var found := {start: true}
 	var pending: Array[Vector2i] = [start]
@@ -104,6 +106,34 @@ func _enclosed_room(head: Vector3i) -> Dictionary:
 		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			var next: Vector2i = cell + offset
 			if found.has(next) or blocks.has(Vector3i(next.x, head.y, next.y)):
+				continue
+			found[next] = true
+			pending.append(next)
+	return found
+
+func _roofed_room(head: Vector3i) -> Dictionary:
+	# Follow only supported roof columns, so an open doorway onto uncovered
+	# ground does not make the whole building appear to be outdoor space.
+	var start := Vector2i(head.x, head.z)
+	var found := {start: true}
+	var pending: Array[Vector2i] = [start]
+	var index := 0
+	while index < pending.size():
+		var cell: Vector2i = pending[index]
+		index += 1
+		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = cell + offset
+			if found.has(next) or absi(next.x - start.x) > ROOM_SCAN_RADIUS or absi(next.y - start.y) > ROOM_SCAN_RADIUS:
+				continue
+			if blocks.has(Vector3i(next.x, head.y, next.y)) or not blocks.has(Vector3i(next.x, head.y + 1, next.y)):
+				continue
+			# A narrow doorway is a boundary, not permission to reveal all
+			# rooms beyond it. The player's own doorway cell is still usable.
+			var side_a := Vector3i(next.x - 1, head.y, next.y)
+			var side_b := Vector3i(next.x + 1, head.y, next.y)
+			var side_c := Vector3i(next.x, head.y, next.y - 1)
+			var side_d := Vector3i(next.x, head.y, next.y + 1)
+			if (blocks.has(side_a) and blocks.has(side_b)) or (blocks.has(side_c) and blocks.has(side_d)):
 				continue
 			found[next] = true
 			pending.append(next)

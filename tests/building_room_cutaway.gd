@@ -23,6 +23,7 @@ func run() -> void:
 			if absi(x) == 1 or absi(z) == 1:
 				building._spawn(base + Vector3i(x, 0, z))
 	building._spawn(base + Vector3i.UP)
+	building._spawn(base + Vector3i(4, 1, 0))
 	game.hero.global_position = Vector3(10.5, 0.1, 10.5)
 	game.camera.global_position = game.hero.global_position + Vector3(20, 20, 0)
 	building._update_interior_cutaway()
@@ -30,9 +31,15 @@ func run() -> void:
 	var foreground: StaticBody3D = building.blocks[base + Vector3i.RIGHT]
 	var background: StaticBody3D = building.blocks[base + Vector3i.LEFT]
 	check(not roof.get_node("VisibleBlock").visible, "Occupied enclosed room opens its roof")
+	check(building.blocks[base + Vector3i(4, 1, 0)].get_node("VisibleBlock").visible, "Disconnected roof remains concealed")
 	check(not foreground.get_node("VisibleBlock").visible and background.get_node("VisibleBlock").visible, "Only camera-facing room wall opens")
 	check(foreground.collision_layer == 1 and roof.collision_layer == 1, "Hidden blocks retain physical collision")
 	check(roof.get_node("BlockShadow").cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY, "Hidden roof retains its shadow proxy")
+	var doorway: Vector3i = base + Vector3i(0, 0, -1)
+	building.blocks[doorway].queue_free()
+	building.blocks.erase(doorway)
+	building._update_interior_cutaway()
+	check(not roof.get_node("VisibleBlock").visible, "Roofed room remains open with an exterior doorway")
 	game.camera.global_position = game.hero.global_position + Vector3(-20, 20, 0)
 	building._update_interior_cutaway()
 	check(foreground.get_node("VisibleBlock").visible and not background.get_node("VisibleBlock").visible, "Camera rotation switches the foreground wall")
