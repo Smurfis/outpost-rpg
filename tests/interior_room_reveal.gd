@@ -38,11 +38,15 @@ func _run() -> void:
 	var body := StaticBody3D.new()
 	body.set_meta("island_roof_shape_index", 1)
 	island._cutaway_material.set_shader_parameter("island_cutaway_enabled", true)
+	island._reveal_strength = 1.0
 	island._cutaway_eye = island._cutaway_focus + Vector3(10, 10, 0)
 	var wall := {"collider": body, "shape": 0, "position": Vector3(3.9, 5, 2.5), "normal": Vector3.RIGHT}
 	check(island.cutaway_hides_hit(wall), "Camera-facing wall at the revealed room is pick-through")
 	island._cutaway_eye = island._cutaway_focus + Vector3(-10, 10, 0)
 	check(not island.cutaway_hides_hit(wall), "Rotating the camera restores the far-side wall")
+	island._cutaway_eye = island._cutaway_focus + Vector3(10, 10, 0)
+	island._reveal_strength = 0.5
+	check(not island.cutaway_hides_hit(wall), "Partially visible transition geometry still blocks picking")
 	body.free()
 	island.queue_free()
 	await process_frame

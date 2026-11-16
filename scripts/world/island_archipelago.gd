@@ -166,6 +166,10 @@ func cutaway_hides_hit(hit: Dictionary) -> bool:
 	# shader. No body-wide exclusions; sidewalls and terrain floors remain.
 	if _cutaway_material == null or _cutaway_material.get_shader_parameter("island_cutaway_enabled") != true:
 		return false
+	# During the dither transition some pixels are still opaque. Treat the
+	# whole surface as solid for picking until the visual cut is complete.
+	if _reveal_strength < 0.999:
+		return false
 	var collider: Variant = hit.get("collider")
 	if not collider is CollisionObject3D or not collider.has_meta("island_roof_shape_index"):
 		return false
@@ -173,6 +177,8 @@ func cutaway_hides_hit(hit: Dictionary) -> bool:
 	var normal: Vector3 = hit.get("normal", Vector3.ZERO)
 	if int(hit.get("shape", -1)) == int(collider.get_meta("island_roof_shape_index")):
 		return _is_cut_overhead_block(at, normal)
+	if int(hit.get("shape", -1)) != 0:
+		return false
 	if absf(normal.y) > 0.88 or at.y <= _cutaway_focus.y + 0.25:
 		return false
 	var wall_normal := Vector2(normal.x, normal.z).normalized()

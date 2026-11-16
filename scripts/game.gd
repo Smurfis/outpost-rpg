@@ -294,7 +294,9 @@ func _camera(delta: float) -> void:
 	# camera collision. Raising the framing for that ray hit displaced the
 	# hero on screen without clearing the obstruction. Only protect the
 	# actual camera position, keeping player and world collisions unchanged.
-	camera_occlusion_rise = lerpf(camera_occlusion_rise, _camera_clearance_rise(destination), 1.0 - exp(-5.0 * t))
+	var required_rise: float = _camera_clearance_rise(destination)
+	# Never ease into solid terrain; only smooth the descent after clearance.
+	camera_occlusion_rise = maxf(required_rise, lerpf(camera_occlusion_rise, required_rise, 1.0 - exp(-5.0 * t)))
 	# Old position interpolation lagged behind smoothed yaw, so look_at()
 	# changed pitch unpredictably when users swiped sideways very quickly.
 	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
@@ -315,11 +317,11 @@ func _camera_clearance_rise(destination: Vector3) -> float:
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	# Usually one query. Extra probes are bounded and only run when solid
 	# geometry overlaps the camera itself, never for a blocked sightline.
-	for rise in range(8):
+	for rise in range(41):
 		_camera_clearance_query.transform = Transform3D(Basis.IDENTITY, destination + Vector3.UP * float(rise))
 		if space.intersect_shape(_camera_clearance_query, 1).is_empty():
 			return float(rise)
-	return 7.0
+	return 40.0
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
