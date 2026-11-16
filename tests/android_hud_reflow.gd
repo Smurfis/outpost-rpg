@@ -76,7 +76,9 @@ func _run() -> void:
 	var toast_panel: Panel = controls.get_node_or_null("LootQuestToast") as Panel
 	if context_panel != null and toast_panel != null:
 		verify(context_panel.get_global_rect().end.y < controls.size.y * 0.42, "Crafting Station context prompt does not cover the lower abilities or XP")
-		verify(toast_panel.get_global_rect().end.y < context_panel.get_global_rect().position.y, "Toast and actionable context are vertically aligned without overlapping")
+		# The target frame moves the toast below the context prompt so the
+		# three panels do not overlap; without a target it sits above it.
+		verify(not toast_panel.get_global_rect().intersects(context_panel.get_global_rect()), "Toast and actionable context do not overlap")
 	hud._set_top_menu(true)
 	verify(hud.top_menu_actions.size() == 6 and menu.visible and hud.top_menu_shade.visible, "Six-option centered game MENU opens with a shade")
 	for option in hud.top_menu_actions:

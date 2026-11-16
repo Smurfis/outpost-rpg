@@ -3371,7 +3371,7 @@ func _update_enemy_target_frame() -> void:
 		var width: float = minf(298.0 * scale, screen.x * 0.30)
 		var left: float = (screen.x - width) * 0.5
 		var context_y: float = maxf(129.0 * scale, screen.y * 0.175)
-		var y: float = (205.0 if enemy_target_frame.visible else context_y / scale - 43.0) * scale
+		var y: float = context_prompt_frame.get_global_rect().end.y + 8.0 * scale if enemy_target_frame.visible and context_prompt_frame != null else context_y - 43.0 * scale
 		_place_px(toast_panel, screen, Rect2(left, y, width, 33.0 * scale))
 		_place_px(toast_label, screen, Rect2(left + 7.0 * scale, y + 1.0 * scale,
 			width - 14.0 * scale, 30.0 * scale))
