@@ -11,6 +11,7 @@ var preview_valid := false
 var blocks: Dictionary = {}
 var valid_material: StandardMaterial3D
 var invalid_material: StandardMaterial3D
+var preview_support: WeakRef
 
 func setup(owner_game: Node3D, saved: Array) -> void:
 	game = owner_game
@@ -49,6 +50,7 @@ func _preview_material(colour: Color) -> StandardMaterial3D:
 
 func update_preview(screen: Vector2) -> void:
 	preview_valid = false
+	preview_support = null
 	if not enabled or game.controls.point_over_ui(screen):
 		preview.hide()
 		return
@@ -56,6 +58,11 @@ func update_preview(screen: Vector2) -> void:
 	if hit.is_empty() or hit.get("target") != null:
 		preview.hide()
 		return
+	var support: Variant = hit.get("collider")
+	if not support is StaticBody3D or not is_instance_valid(support):
+		preview.hide()
+		return
+	preview_support = weakref(support)
 	var point: Vector3 = hit.position
 	var normal: Vector3 = hit.normal
 	if normal.length_squared() < 0.5:
@@ -76,6 +83,13 @@ func update_preview(screen: Vector2) -> void:
 func can_place(cell: Vector3i) -> bool:
 	if blocks.has(cell) or blocks.size() >= MAX_BLOCKS or int(game.inventory.get("wood", 0)) < 1:
 		return false
+	var dungeon: Node = game.get_node_or_null("Dungeons")
+	if dungeon != null and dungeon.get("active_instance") != null:
+		return false
+	if game.terrain_surface != null and game.terrain_surface.archipelago != null:
+		var caves: Variant = game.terrain_surface.archipelago.terrain.caves
+		if caves.has_cave(cell.x, cell.z):
+			return false
 	var center := Vector3(cell) + Vector3.ONE * 0.5
 	if center.distance_to(game.hero.global_position + Vector3.UP * 0.8) > MAX_REACH:
 		return false
@@ -89,7 +103,8 @@ func can_place(cell: Vector3i) -> bool:
 	return game.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
 
 func place_preview() -> bool:
-	if not enabled or not preview_valid or not can_place(preview_cell):
+	var support: Object = preview_support.get_ref() if preview_support != null else null
+	if not enabled or not preview_valid or not is_instance_valid(support) or support.is_queued_for_deletion() or not can_place(preview_cell):
 		return false
 	game.inventory["wood"] = int(game.inventory.get("wood", 0)) - 1
 	_spawn(preview_cell)

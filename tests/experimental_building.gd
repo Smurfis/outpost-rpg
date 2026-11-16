@@ -28,20 +28,29 @@ func run() -> void:
 	check(game.building.place_preview(), "Placement consumes the valid preview")
 	check(game.inventory.wood == 2, "Placement costs one wood")
 	check(game.building.blocks.has(cell), "Placed block has a persistent collision body")
+	await physics_frame
+	var first_body: StaticBody3D = game.building.blocks[cell]
+	var side: Vector3 = first_body.global_position + Vector3(0.5, 0, 0)
+	game.building.update_preview(game.camera.unproject_position(side))
+	check(game.building.preview.visible and game.building.preview_valid, "Aiming at a block side previews a supported bridge extension")
+	var next_cell: Vector3i = game.building.preview_cell
+	check(next_cell == cell + Vector3i.RIGHT, "Side preview snaps to the adjacent voxel")
+	check(game.building.place_preview(), "A second block extends from the first")
+	check(game.inventory.wood == 1 and game.building.blocks.has(next_cell), "Bridge consumes wood and creates solid block")
 	check(not game.building.can_place(cell), "Existing blocks cannot be overwritten")
 	check(not game.building.can_place(Vector3i(100, 0, 100)), "Out-of-range placement is rejected")
 	var records: Array = game.building.serialize()
-	check(records.size() == 1, "Save data contains the placed block")
+	check(records.size() == 2, "Save data contains both placed blocks")
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(game.save_path)) if FileAccess.file_exists(game.save_path) else {}
 	var saved: Dictionary = parsed if parsed is Dictionary else {}
-	check(saved.get("placed_blocks", []).size() == 1, "Progress save persists the placement")
+	check(saved.get("placed_blocks", []).size() == 2, "Progress save persists both placements")
 	game.queue_free()
 	await process_frame
 	var again = load("res://scenes/main.tscn").instantiate()
 	again.save_path = "user://building_test.json"
 	root.add_child(again)
 	await physics_frame
-	check(again.building.blocks.has(cell), "Reload restores the placed collision block")
+	check(again.building.blocks.has(cell) and again.building.blocks.has(next_cell), "Reload restores both collision blocks")
 	again.queue_free()
 	await process_frame
 	print("BUILDING RESULT: %d failures" % failures)
