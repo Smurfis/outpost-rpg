@@ -54,9 +54,11 @@ var room_walls: Dictionary = {}
 var room_creatures: Array = []
 var active_room_id: int = -1
 var _room_visibility_clock: float = 0.0
+var goblin_site: bool = false
 
-func setup(id: String, tier: int, player: CharacterBody3D, first_floor: int = 1, already_broken: Array = []) -> void:
+func setup(id: String, tier: int, player: CharacterBody3D, first_floor: int = 1, already_broken: Array = [], use_goblins: bool = false) -> void:
 	entrance_id = id
+	goblin_site = use_goblins
 	quality = RARITY.bounded(tier)
 	hero = player
 	floor_count = int(LAYOUT.profile(id, quality).get("floors", 1))
@@ -458,6 +460,8 @@ func _spawn_guards(rooms: Array, rng: RandomNumberGenerator) -> void:
 		if quality <= RARITY.RARE:
 			# Deterministic skeleton/goblin variants
 			creature_kind = "skeleton" if (int(layout["seed"]) + i + current_floor) % 2 == 0 else "goblin"
+		if goblin_site:
+			creature_kind = "goblin"
 		guard.setup(hero, self, quality, center + Vector3(x, 0.16, z), creature_kind)
 		guard.set_meta("encounter_slot", i) # Stable across every peer's seeded room copy.
 		guard.hp *= pow(1.20, current_floor - 1) * (2.1 if boss else 1.0)

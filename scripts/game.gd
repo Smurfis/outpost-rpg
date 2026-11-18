@@ -2078,7 +2078,7 @@ func _load() -> void:
 	_apply_equipment()
 	next_tombstone_id = maxi(1, int(data.get("next_tombstone_id", 1)))
 	if data.get("death_tombstones", {}) is Dictionary:
-		for raw_id in data["death_tombstones"]:
+		for raw_id in data.get("death_tombstones", {}):
 			var id: String = str(raw_id)
 			var record: Variant = data["death_tombstones"][raw_id]
 			if id.length() > 64 or not record is Dictionary:

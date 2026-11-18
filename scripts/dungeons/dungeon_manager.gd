@@ -7,6 +7,7 @@ const INSTANCE = preload("res://scripts/dungeons/dungeon_instance.gd")
 const THEME = preload("res://scripts/ui/material_theme.gd")
 const PIXEL_SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const LAYOUT = preload("res://scripts/dungeons/dungeon_layout.gd")
+const WORLD_SITES = preload("res://scripts/dungeons/world_site_registry.gd")
 @export var save_path: String = "user://outpost_dungeon_clear_v1.json"
 const INTERACTION_RADIUS: float = 3.25
 
@@ -20,6 +21,9 @@ var entrances: Dictionary = {}
 var completed_ids: Dictionary = {}
 var floor_checkpoints: Dictionary = {}
 var broken_props: Dictionary = {}
+var world_sites = WORLD_SITES.new()
+var world_site_nodes: Dictionary = {}
+var world_site_save_valid: bool = true
 var active_bonus_id: int = -1
 var active_instance
 var active_info: Dictionary = {}
@@ -106,6 +110,34 @@ func unregister_chunk(chunk_key: String) -> void:
 		_remove_entrance(str(id))
 	chunks.erase(chunk_key)
 
+## Streaming owns only the visual entrance. The registry survives unloading.
+func register_world_site(site_id: String, world_seed: int, entrance: Vector3i, chunk_key: String) -> void:
+	if not world_sites.sites.has(site_id):
+		if not world_sites.register_site(site_id, world_seed, entrance, [chunk_key]):
+			return
+		_save_clears()
+	var site: Dictionary = world_sites.sites[site_id]
+	if chunk_key not in site.chunks or world_site_nodes.has(site_id):
+		return
+	var stored: Array = site.entrance
+	var portal = PORTAL.new()
+	add_child(portal)
+	portal.scale = Vector3.ONE * 0.45
+	portal.global_position = Vector3(float(stored[0]) + 0.5, float(stored[1]), float(stored[2]) + 0.5)
+	portal.configure(site_id, chunk_key, RARITY.COMMON)
+	portal.dungeon_title = "Goblin Mineshaft"
+	portal.set_meta("display_name", portal.dungeon_title)
+	portal.label.text = "GOBLIN MINESHAFT"
+	portal.selected.connect(_on_portal_selected)
+	entrances[site_id] = portal
+	world_site_nodes[site_id] = portal
+
+func unregister_world_site(site_id: String) -> void:
+	if not world_site_nodes.has(site_id):
+		return
+	_remove_entrance(site_id)
+	world_site_nodes.erase(site_id)
+
 func _register_demo_chunks() -> void:
 	# The current 46x46 starter map has no chunk streamer yet; show one
 	# deterministic example per tier. The procedural v4 branch disables this.
@@ -191,7 +223,7 @@ func _update_dungeon_action() -> void:
 			_claim_chest()
 		elif not hero.interaction_moving:
 			approaching_chest = false
-	var nearby_bonus: int = active_instance.nearest_bonus(hero.global_position, INTERACTION_RADIUS)
+	var nearby_bonus: int = -1 if world_sites.sites.has(str(active_info.get("id", ""))) else active_instance.nearest_bonus(hero.global_position, INTERACTION_RADIUS)
 	action_button.visible = distance <= INTERACTION_RADIUS or nearby_bonus >= 0
 	if nearby_bonus >= 0 and distance > INTERACTION_RADIUS:
 		active_bonus_id = nearby_bonus
@@ -247,6 +279,16 @@ func _prompt_to_enter(portal: Area3D) -> void:
 		return
 	if active_instance != null or completed_ids.has(str(portal.get("entrance_id"))):
 		return
+	var site_id := str(portal.get("entrance_id"))
+	if world_sites.sites.has(site_id):
+		var site: Dictionary = world_sites.sites[site_id]
+		if site.state == "undiscovered":
+			world_sites.transition(site_id, "discovered")
+			_save_clears()
+		if site.state not in ["discovered", "active"]:
+			if game.hud != null:
+				game.hud.toast("The mineshaft has been cleared.")
+			return
 	approaching_portal = null
 	hero.stop_interaction_move()
 	chosen_portal = portal
@@ -264,6 +306,8 @@ func _prompt_to_enter(portal: Area3D) -> void:
 	var multiplier: float = pow(float(profile.get("reward_multiplier", 1.3)), floors - 1)
 	dialog_stats.text = "%d FLOORS     •     %d–%d ROOMS / FLOOR\nTREASURE BONUS   ×%.2f" % [floors, int(room_range[0]), int(room_range[1]), multiplier]
 	dialog_message.text = "Defeat the guardians, climb the floors and claim the final treasure.\nLeaving early keeps this portal available."
+	if world_sites.sites.has(site_id):
+		dialog_message.text = "Explore the mineshaft and defeat its goblins.\nTreasure is unavailable while the site is being prepared."
 	# Match the rarity of the selected entrance in the bronze button outline.
 	for state in ["normal", "hover", "pressed"]:
 		var style: StyleBoxFlat = confirm_button.get_theme_stylebox(state) as StyleBoxFlat
@@ -302,13 +346,17 @@ func _enter_confirmed() -> void:
 		"quality": int(portal.get("quality")),
 		"origin": portal.global_position
 	}
+	var site_id := str(active_info["id"])
+	if world_sites.sites.has(site_id) and world_sites.sites[site_id].state == "discovered":
+		world_sites.transition(site_id, "active")
+		_save_clears()
 	run_number += 1
 	var dungeon = INSTANCE.new()
 	add_child(dungeon)
 	# A new isolated cell, out of reach of the current overworld geometry.
 	dungeon.position = Vector3(1800.0 + float(run_number % 30) * 65.0, 0.0, 1800.0)
 	var checkpoint: int = int(floor_checkpoints.get(str(active_info["id"]), 1))
-	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint, broken_props.get(str(active_info["id"]), []))
+	dungeon.setup(str(active_info["id"]), int(active_info["quality"]), hero, checkpoint, broken_props.get(str(active_info["id"]), []), world_sites.sites.has(site_id))
 	dungeon.chest_selected.connect(_on_chest_selected)
 	dungeon.stairs_selected.connect(_on_stairs_selected)
 	dungeon.bonus_selected.connect(_on_bonus_selected)
@@ -372,6 +420,8 @@ func _on_prop_broken(instance: Node3D, prop_id: String, reward: Dictionary) -> v
 	if instance != active_instance or active_instance == null:
 		return
 	var dungeon_id: String = str(active_info.get("id", ""))
+	if world_sites.sites.has(dungeon_id):
+		return # Site rewards await crash-safe delivery.
 	var broken: Array = broken_props.get(dungeon_id, [])
 	if prop_id in broken:
 		return
@@ -390,6 +440,8 @@ func _on_bonus_selected(instance: Node3D, id: int) -> void:
 func _claim_bonus(id: int) -> void:
 	if active_instance == null or not is_instance_valid(active_instance):
 		return
+	if world_sites.sites.has(str(active_info.get("id", ""))):
+		return
 	var reward: Dictionary = active_instance.claim_bonus(id)
 	if reward.is_empty():
 		return
@@ -401,6 +453,11 @@ func _on_dungeon_completed(instance: Node3D, reward: Dictionary) -> void:
 	if instance != active_instance or game == null:
 		return
 	var tier: int = int(active_info.get("quality", 0))
+	if world_sites.sites.has(str(active_info.get("id", ""))):
+		_exit_current(true, false)
+		if game.hud != null:
+			game.hud.toast("Goblin mineshaft cleared.")
+		return
 	_apply_reward(reward)
 	_exit_current(true, false)
 	if game.hud != null:
@@ -446,11 +503,15 @@ func _exit_current(succeeded: bool, due_to_death: bool = false) -> void:
 		return
 	var cleared_id: String = str(active_info.get("id", ""))
 	if succeeded:
-		completed_ids[cleared_id] = true
+		if world_sites.sites.has(cleared_id):
+			world_sites.transition(cleared_id, "cleared")
+		else:
+			completed_ids[cleared_id] = true
 		floor_checkpoints.erase(cleared_id)
 		broken_props.erase(cleared_id)
 		_save_clears()
-		_remove_entrance(cleared_id)
+		if not world_sites.sites.has(cleared_id):
+			_remove_entrance(cleared_id)
 	hero.stop_interaction_move()
 	hero.interaction_locked = false
 	if game != null and game.hud != null:
@@ -495,11 +556,23 @@ func _remove_entrance(id: String) -> void:
 	entrances.erase(id)
 
 func _load_clears() -> void:
-	if not FileAccess.file_exists(save_path):
+	var source := save_path
+	if not FileAccess.file_exists(source) and FileAccess.file_exists(save_path + ".bak"):
+		source = save_path + ".bak"
+	if not FileAccess.file_exists(source):
 		return
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(save_path))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(source))
 	if not (parsed is Dictionary):
+		push_error("Invalid dungeon save; refusing to overwrite it")
+		world_site_save_valid = false
 		return
+	if int(parsed.get("version", 0)) not in [0, 1, 2, 3, 4]:
+		push_error("Unsupported dungeon save version; refusing to overwrite it")
+		world_site_save_valid = false
+		return
+	if parsed.has("world_sites") and not world_sites.import_state(parsed["world_sites"]):
+		push_error("Invalid world site save; refusing to overwrite it")
+		world_site_save_valid = false
 	var saved_progress: Variant = parsed.get("checkpoints", {})
 	if saved_progress is Dictionary:
 		floor_checkpoints = saved_progress.duplicate()
@@ -512,10 +585,29 @@ func _load_clears() -> void:
 			completed_ids[str(entry)] = true
 
 func _save_clears() -> void:
-	var file: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
-	if file != null:
-		file.store_string(JSON.stringify({"version": 3, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints, "broken_props": broken_props}))
-		file.close()
+	if not world_site_save_valid:
+		return
+	var tmp := save_path + ".tmp"
+	var file: FileAccess = FileAccess.open(tmp, FileAccess.WRITE)
+	if file == null:
+		push_error("Cannot write dungeon save temporary file")
+		return
+	file.store_string(JSON.stringify({"version": 4, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints, "broken_props": broken_props, "world_sites": world_sites.export_state()}))
+	file.flush()
+	var error := file.get_error()
+	file.close()
+	if error != OK:
+		push_error("Cannot flush dungeon save")
+		return
+	var target := ProjectSettings.globalize_path(save_path)
+	if FileAccess.file_exists(save_path):
+		var backup_error := DirAccess.copy_absolute(target, ProjectSettings.globalize_path(save_path + ".bak"))
+		if backup_error != OK:
+			push_error("Cannot back up dungeon save")
+			return
+	var rename_error := DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), target)
+	if rename_error != OK:
+		push_error("Cannot replace dungeon save; previous save remains available")
 
 func _build_interface() -> void:
 	interface_layer = CanvasLayer.new()

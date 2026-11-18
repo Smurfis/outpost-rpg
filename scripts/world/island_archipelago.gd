@@ -7,6 +7,7 @@ const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const WORLD_OBJECT = preload("res://scripts/interaction/world_object.gd")
+const MINE_SITE_ID := "fractal_goblin_mine_1"
 const HERO_OUTLINE = preload("res://scripts/voxel/occluded_hero_outline.gdshader")
 const CHUNK: int = 12
 const BUILD_BUDGET: int = 2
@@ -293,6 +294,11 @@ func _clear_stream() -> void:
 	_center = Vector2i(99999, 99999)
 
 func _unload(key: Vector2i) -> void:
+	if terrain != null and not terrain.caves.entrances.is_empty() and _cell_at(terrain.caves.entrances[0]) == key:
+		var game := get_parent().get_parent()
+		var manager := game.get_node_or_null("Dungeons") if game != null else null
+		if manager != null and manager.has_method("unregister_world_site"):
+			manager.unregister_world_site(MINE_SITE_ID)
 	var members: Array = _loaded.get(key, [])
 	for node in members:
 		if node != null and is_instance_valid(node):
@@ -432,3 +438,9 @@ func _build_chunk(key: Vector2i) -> void:
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
 	_loaded[key] = members
+	if not terrain.caves.entrances.is_empty():
+		var mine: Vector3 = terrain.caves.entrances[0]
+		if _cell_at(mine) == key:
+			var manager := game.get_node_or_null("Dungeons") if game != null else null
+			if manager != null and manager.has_method("register_world_site"):
+				manager.register_world_site(MINE_SITE_ID, terrain.seed, Vector3i(floori(mine.x), floori(mine.y), floori(mine.z)), "island_%d_%d" % [key.x, key.y])
