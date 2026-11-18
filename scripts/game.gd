@@ -2007,7 +2007,7 @@ func _load() -> void:
 	if map_service != null:
 		map_service.import_state(data.get("map_state", {}))
 	if data.get("opened_world_objects", {}) is Dictionary:
-		opened_world_objects = data["opened_world_objects"].duplicate(true)
+		opened_world_objects = data.get("opened_world_objects", {}).duplicate(true)
 	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)
 	night_quote_seen = bool(data.get("night_quote_seen", false))
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
@@ -2015,7 +2015,7 @@ func _load() -> void:
 			weapon_mastery_xp[str(key)] = maxi(0, int(data["weapon_mastery_xp"][key]))
 	if data.get("gathering_skill_xp", {}) is Dictionary:
 		for key in gathering_skill_xp:
-			gathering_skill_xp[key] = maxi(0, int(data["gathering_skill_xp"].get(key, 0)))
+			gathering_skill_xp[key] = maxi(0, int(data.get("gathering_skill_xp", {}).get(key, 0)))
 	var stored_training: String = str(data.get("last_trained_skill", "training_blade"))
 	if gathering_skill_xp.has(stored_training) or stored_training in ["training_blade", "spear", "iron_blade"]:
 		last_trained_skill = stored_training
@@ -2025,7 +2025,7 @@ func _load() -> void:
 				weapon_enchants[str(key)] = "fire"
 	if data.get("quick_slots", {}) is Dictionary:
 		for slot in ["potion", "consumable"]:
-			var chosen: String = str(data["quick_slots"].get(slot, ""))
+			var chosen: String = str(data.get("quick_slots", {}).get(slot, ""))
 			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else FOOD_IDS) else ""
 	if data.get("bag_quality", {}) is Dictionary:
 		for bag_id in data.get("bag_quality", {}):
@@ -2050,7 +2050,7 @@ func _load() -> void:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
 	if data.get("best_craft_rolls", {}) is Dictionary:
-		for raw_id in data["best_craft_rolls"]:
+		for raw_id in data.get("best_craft_rolls", {}):
 			var item_id: String = str(raw_id)
 			if QUALITY.is_gear(item_id) and int(inventory.get(item_id, 0)) > 0:
 				var clean_roll: Dictionary = QUALITY.sanitise_roll(data["best_craft_rolls"][raw_id])

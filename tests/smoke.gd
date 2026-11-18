@@ -19,6 +19,11 @@ func _test_game() -> void:
 		quit(1)
 		return
 	var game = scene.instantiate()
+	# This test asserts new-character defaults and must never touch a real save.
+	var test_id := "%d_%d" % [int(Time.get_unix_time_from_system()), OS.get_process_id()]
+	game.save_path = "user://smoke_progress_%s.json" % test_id
+	game.get_node("Dungeons").save_path = "user://smoke_dungeons_%s.json" % test_id
+	root.set_meta("outpost_new_adventure", true)
 	root.add_child(game)
 	await process_frame
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
