@@ -13,6 +13,9 @@ uniform vec4 ocean_shallow : source_color = vec4(0.080, 0.670, 0.790, 1.0);
 uniform float wave_speed : hint_range(0.0, 3.0) = 0.72;
 uniform float pixel_density : hint_range(1.0, 16.0, 1.0) = 3.0;
 uniform float highlight_strength : hint_range(0.0, 1.0) = 0.72;
+uniform bool island_land_mask_enabled = false;
+uniform sampler2D island_land_mask : filter_nearest, repeat_disable;
+uniform float island_mask_half_extent = 384.0;
 varying vec2 surface_world;
 
 float cell_hash(vec2 p) {
@@ -24,6 +27,13 @@ void vertex() {
 }
 
 void fragment() {
+	// The distant ocean spans the remote islands. Never draw it inside land:
+	// terrain cutaways can otherwise expose the ocean from below a mountain.
+	if (island_land_mask_enabled) {
+		vec2 cell = floor(surface_world);
+		vec2 mask_uv = (cell + vec2(island_mask_half_extent + 0.5)) / (2.0 * island_mask_half_extent);
+		if (all(greaterThanEqual(mask_uv, vec2(0.0))) && all(lessThan(mask_uv, vec2(1.0))) && texture(island_land_mask, mask_uv).r > 0.5) discard;
+	}
 	// Large legible blocks in world space, independent of camera and mesh UVs.
 	// Quantisation prevents subpixel glitter and seams between terrain chunks.
 	vec2 cell = floor(surface_world * pixel_density);

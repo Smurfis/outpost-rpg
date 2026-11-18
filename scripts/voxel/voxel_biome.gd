@@ -42,6 +42,7 @@ var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
 var _shared_water_material: ShaderMaterial
+var _island_ocean_mask: ImageTexture
 var _distant_ocean: MeshInstance3D
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
@@ -84,6 +85,7 @@ func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: boo
 			archipelago = ARCHIPELAGO.new()
 			add_child(archipelago)
 			archipelago.setup(world_seed)
+			_configure_island_ocean_mask()
 	else:
 		_make_cliff_rim()
 	if not stream_enabled:
@@ -669,6 +671,27 @@ func _water_material() -> ShaderMaterial:
 		_shared_water_material = ShaderMaterial.new()
 		_shared_water_material.shader = WATER_SHADER
 	return _shared_water_material
+
+func _configure_island_ocean_mask() -> void:
+	if archipelago == null or archipelago.terrain == null:
+		return
+	var half: int = map_world_half
+	var mask := Image.create(half * 2, half * 2, false, Image.FORMAT_R8)
+	mask.fill(Color.BLACK)
+	# Sample the existing terrain rather than approximating island shorelines.
+	# Restrict evaluation to island bounds; all other cells remain ocean.
+	for island in archipelago.terrain.islands:
+		var center: Vector2i = island["center"]
+		var radius: int = ceili(float(island["radius"]) + 5.0)
+		for x in range(maxi(-half, center.x - radius), mini(half, center.x + radius + 1)):
+			for z in range(maxi(-half, center.y - radius), mini(half, center.y + radius + 1)):
+				if archipelago.terrain.height_at(x, z) > SEA_LEVEL:
+					mask.set_pixel(x + half, z + half, Color.WHITE)
+	_island_ocean_mask = ImageTexture.create_from_image(mask)
+	var water := _water_material()
+	water.set_shader_parameter("island_land_mask", _island_ocean_mask)
+	water.set_shader_parameter("island_mask_half_extent", float(half))
+	water.set_shader_parameter("island_land_mask_enabled", true)
 
 
 func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3, shallow_amount: float) -> void:
