@@ -25,15 +25,17 @@ var tooltip_label: Label
 var highlight: MeshInstance3D
 var aim_position := Vector3.ZERO
 var aim_valid := false
-const BLOCK_HOLD_SECONDS := 0.25
-var block_pending := false
-var block_hold_time := 0.0
+const ORBIT_DRAG_THRESHOLD := 8.0
+var gesture_button: int = 0
+var gesture_start := Vector2.ZERO
+var gesture_dragged := false
+var gesture_started_over_ui := false
 
 func orbit_button() -> MouseButton:
-	return MOUSE_BUTTON_RIGHT if game.swap_context_and_orbit else MOUSE_BUTTON_MIDDLE
+	return MOUSE_BUTTON_MIDDLE
 
 func context_button() -> MouseButton:
-	return MOUSE_BUTTON_MIDDLE if game.swap_context_and_orbit else MOUSE_BUTTON_RIGHT
+	return MOUSE_BUTTON_RIGHT
 
 func setup(ref: Node) -> void:
 	game = ref
@@ -48,6 +50,7 @@ func set_desktop(value: bool) -> void:
 	desktop = value
 	hold_ground = false
 	rotating = false
+	gesture_button = 0
 	game.hud._reset_touch()
 	game.hud.set_desktop_mode(desktop)
 	hide_inspection()
@@ -82,6 +85,14 @@ func _ui_at(node: Node, point: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if game == null:
 		return
+	if event is InputEventKey and event.is_action("outpost_block"):
+		if not event.pressed:
+			game.hero.blocking = false
+		if not modal_open():
+			if event.pressed and desktop and not event.echo and str(game.equipment.get("offhand", "")) == "shield":
+				game.hero.blocking = true
+			get_viewport().set_input_as_handled()
+			return
 	# Chat owns keyboard focus. Escape must close it rather than opening
 	# other modals; gameplay shortcuts must never fire while typing.
 	if game.chat != null and game.chat.chat_open and event is InputEventKey:
@@ -111,16 +122,26 @@ func _input(event: InputEvent) -> void:
 			close_interface()
 			get_viewport().set_input_as_handled()
 			return
-	# Desktop RMB orbits even above a decorative HUD panel. Some panels
-	# consume GUI mouse presses before _unhandled_input, which previously
-	# prevented the drag from starting in otherwise empty world-space.
-	if event is InputEventMouseButton and event.button_index == orbit_button() and desktop and not OS.has_feature("mobile") and not modal_open():
-		if event.pressed:
-			rotating = true
+	# Right click acts only on release; crossing the drag threshold makes it
+	# an orbit gesture instead. Middle drag remains an alternative orbit.
+	if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE] and desktop and not OS.has_feature("mobile"):
+		if event.pressed and not modal_open() and gesture_button == 0:
+			gesture_button = event.button_index
+			gesture_start = event.position
+			gesture_started_over_ui = point_over_ui(event.position)
+			gesture_dragged = false
 			hold_ground = false
-		else:
+			get_viewport().set_input_as_handled()
+		elif not event.pressed and gesture_button == event.button_index:
+			var click_context: bool = gesture_button == MOUSE_BUTTON_RIGHT and not gesture_dragged and not gesture_started_over_ui and not point_over_ui(event.position) and not modal_open()
+			gesture_button = 0
 			rotating = false
-		get_viewport().set_input_as_handled()
+			if click_context:
+				var hit: Dictionary = PICKER.resolve(game, event.position)
+				var clicked: Node3D = hit.get("target")
+				if is_instance_valid(clicked):
+					approach(clicked)
+			get_viewport().set_input_as_handled()
 		return
 	# Releases must always clear gestures, including over UI or outside a modal.
 	if event is InputEventMouseButton and not event.pressed:
@@ -128,11 +149,10 @@ func _input(event: InputEvent) -> void:
 			hold_ground = false
 		elif event.button_index == orbit_button():
 			rotating = false
-		elif event.button_index == context_button():
-			block_pending = false
-			game.hero.blocking = false
-	if event is InputEventMouseMotion and rotating:
-		if not modal_open():
+	if event is InputEventMouseMotion and gesture_button != 0:
+		if not modal_open() and (gesture_dragged or event.position.distance_to(gesture_start) >= ORBIT_DRAG_THRESHOLD):
+			gesture_dragged = true
+			rotating = true
 			game.drag_camera(event.relative.x)
 		get_viewport().set_input_as_handled()
 
@@ -162,16 +182,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if point_over_ui(event.position):
 			return
-		if event.button_index == context_button():
-			var hit: Dictionary = PICKER.resolve(game, event.position)
-			var clicked: Node3D = hit.get("target")
-			if is_instance_valid(clicked):
-				approach(clicked)
-			elif str(game.equipment.get("offhand", "")) == "shield":
-				block_pending = true
-				block_hold_time = 0.0
-			get_viewport().set_input_as_handled()
-			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
 				if game.building != null and game.building.enabled:
@@ -179,7 +189,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					game.building.place_preview()
 					get_viewport().set_input_as_handled()
 					return
-				if not rotating:
+				if not rotating and gesture_button == 0:
 					primary_at(event.position)
 			MOUSE_BUTTON_WHEEL_UP:
 				game.camera.size = clampf(game.camera.size - 1.5, 10.0, 32.0)
@@ -401,7 +411,7 @@ func inspect_at(screen: Vector2) -> void:
 		verb = "Talk"
 	else:
 		verb = str(inspected.get_meta("world_action", "Interact"))
-	show_tip(("MMB " if game.swap_context_and_orbit else "RMB ") + verb if desktop else "Tap " + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
+	show_tip("RMB " + verb if desktop else "Tap " + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
 	highlight.global_position = inspected.global_position + Vector3.UP * 0.07
 	highlight.show()
 	if desktop:
@@ -424,14 +434,6 @@ func hide_inspection() -> void:
 func _process(delta: float) -> void:
 	if game == null:
 		return
-	if block_pending:
-		if modal_open() or str(game.equipment.get("offhand", "")) != "shield":
-			block_pending = false
-			game.hero.blocking = false
-		else:
-			block_hold_time += delta
-			if block_hold_time >= BLOCK_HOLD_SECONDS:
-				game.hero.blocking = true
 	hover_elapsed += delta
 	if modal_open():
 		aim_valid = false
@@ -449,5 +451,8 @@ func _process(delta: float) -> void:
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
 		rotating = false
+		gesture_button = 0
+		if game != null and game.hero != null:
+			game.hero.blocking = false
 		cancel()
 		hide_inspection()

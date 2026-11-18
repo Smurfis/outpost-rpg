@@ -88,6 +88,20 @@ func _run() -> void:
 			var chest_path: PackedVector3Array = PATH.plan_world(game, cache_pos, chest.global_position, 2.65)
 			check(not chest_path.is_empty(),
 				"Island %d cave path can approach and interact with the chest" % [index + 1])
+			if index == 0:
+				game.hero.global_position = chest.global_position + Vector3(0.5, 0, 0)
+				game._camera(0.3)
+				streamer._update_cutaway(game, game.hero.global_position)
+				chest_screen = game.camera.unproject_position(chest.global_position + Vector3.UP * 0.55)
+				var mouse := InputEventMouseButton.new()
+				mouse.button_index = MOUSE_BUTTON_RIGHT
+				mouse.position = chest_screen
+				mouse.pressed = true
+				game.controls._input(mouse)
+				mouse.pressed = false
+				game.controls._input(mouse)
+				game.controls._physics_process(0.01)
+				check(game.opened_world_objects.has(chest.object_id), "RMB click opens the nearby cave chest through the cutaway")
 	game.queue_free()
 	await process_frame
 	print("ISOMETRIC PICK RESULT: %d failures" % failures)

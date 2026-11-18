@@ -322,7 +322,7 @@ func _layout_shared_actions() -> void:
 	if tool_gesture_hint != null:
 		tool_gesture_hint.hide()
 	if camera_gesture_hint != null:
-		camera_gesture_hint.text = ("RMB drag · Wheel zoom" if game != null and game.swap_context_and_orbit else "MMB drag · Wheel zoom") if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
+		camera_gesture_hint.text = "RMB / MMB drag · Wheel zoom" if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
 
 func _ready() -> void:
 	root = Control.new()
@@ -1701,7 +1701,7 @@ func _build_control_settings() -> void:
 	mouse_binding_button = Button.new()
 	mouse_binding_button.name = "MouseBindingButton"
 	mouse_binding_button.custom_minimum_size.y = 40
-	mouse_binding_button.pressed.connect(_swap_mouse_bindings)
+	mouse_binding_button.disabled = true
 	stack.add_child(mouse_binding_button)
 	settings_touch_buttons.append(mouse_binding_button)
 	_refresh_mouse_binding_label()
@@ -1709,7 +1709,7 @@ func _build_control_settings() -> void:
 	keys_heading.text = "KEYBOARD BINDINGS"
 	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
 	stack.add_child(keys_heading)
-	for binding in ["left", "right", "up", "down", "interact", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
+	for binding in ["left", "right", "up", "down", "interact", "block", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
 		var key_button := Button.new()
 		key_button.name = "Rebind_" + binding
 		key_button.custom_minimum_size.y = 38
@@ -2260,18 +2260,7 @@ func _cycle_shadow_budget() -> void:
 
 func _refresh_mouse_binding_label() -> void:
 	if mouse_binding_button != null and game != null:
-		mouse_binding_button.text = "Interact: MMB · Orbit: RMB" if game.swap_context_and_orbit else "Interact: RMB · Orbit: MMB"
-
-func _swap_mouse_bindings() -> void:
-	if game == null:
-		return
-	game.swap_context_and_orbit = not game.swap_context_and_orbit
-	if game.controls != null:
-		game.controls.rotating = false
-		game.controls.block_pending = false
-		game.hero.blocking = false
-	_refresh_mouse_binding_label()
-	_save_control_prefs()
+		mouse_binding_button.text = "Interact: RMB click · Orbit: RMB / MMB drag"
 
 func _refresh_key_labels() -> void:
 	for action in key_rebind_buttons:
@@ -3773,7 +3762,7 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.screen_relative.x)
 		get_viewport().set_input_as_handled()
 		return
-	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+	elif event is InputEventMouseMotion and game != null and game.controls == null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):
 			game.drag_camera(event.relative.x)
 		return

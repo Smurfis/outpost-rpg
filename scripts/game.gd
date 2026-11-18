@@ -204,6 +204,7 @@ func _register_keys() -> void:
 		InputMap.erase_action("outpost_jump")
 	binds["map"] = [KEY_M]
 	binds["build"] = [KEY_B]
+	binds["block"] = [KEY_SHIFT]
 	var preferences := ConfigFile.new()
 	preferences.load(KEY_BINDINGS)
 	for action in binds:
