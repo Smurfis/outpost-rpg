@@ -52,7 +52,7 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	for c: Vector2i in cells:
 		_owners[c] = index
 		# Include the immediately adjoining walkable threshold in both views.
-		if side_chamber != null:
+		if side_chamber != null or not terrain.caves.branches.is_empty():
 			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
 				if terrain.caves.floors.has(c+d):
 					reveal[c+d] = true
@@ -61,9 +61,14 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 
 func _identify_regions(center: Vector2i) -> void:
 	_add_region(CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells,center)
-	if side_chamber == null:
+	if side_chamber != null:
+		_add_region(side_chamber.room,side_chamber.center)
+	elif terrain.caves.branches.is_empty():
 		return
-	_add_region(side_chamber.room,side_chamber.center)
+	for branch in terrain.caves.branches:
+		_add_region(branch.room,branch.center)
+		var cells: Array = branch.passage.keys()
+		_add_region(branch.passage,cells[cells.size()/2])
 	var passage := {}
 	var route: Array = terrain.caves.routes[0]
 	# Walk backwards from the end chamber. Limit the length of any visible
@@ -74,7 +79,7 @@ func _identify_regions(center: Vector2i) -> void:
 			var c := Vector2i(at.x,at.z+z)
 			if not _owners.has(c):
 				passage[c] = true
-			if c == side_chamber.junction:
+			if side_chamber != null and c == side_chamber.junction:
 				passage.merge(side_chamber.branch)
 		if passage.size() >= 18 or i == 0:
 			_add_region(passage,Vector2i(at.x,at.z))
@@ -118,7 +123,7 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 			_restore_section()
 		if cell.distance_squared_to(center) < 64 * 64:
 			_prewarm(cell,sector)
-		elif side_chamber != null and not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
+		elif not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
 			invalidate_section_geometry()
 		return false
 	var changed := sector != _sector or next_region != _region
@@ -239,11 +244,7 @@ func _advance_mask(v: Dictionary, region: int, sector: int, deadline: int) -> vo
 				var n: Vector2i = col+d
 				if _regions[region].has(n):
 					low = maxi(low,terrain.caves.floor_at(n.x,n.y)+1)
-		var cut := 0
-		for y in range(low,cap):
-			var bit := 1 << (y-DATA.BEDROCK)
-			if bits & bit and terrain.is_solid(col.x,y,col.y):
-				cut |= bit
+		var cut: int = bits & terrain.solid_column(col.x,col.y) & (-1 << (low-DATA.BEDROCK))
 		if cut:
 			v.hidden[col] = cut
 			for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
@@ -800,6 +801,13 @@ func _build_chunk(key: Vector2i) -> void:
 	roof.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var surface_faces: int = 0
 	var roof_faces: int = 0
+	# Each column's occupancy serves all six neighbour queries. Include the
+	# apron so chunk boundaries use exactly the same source voxels.
+	var stride := CHUNK+2
+	var columns := PackedInt64Array()
+	for dx in range(-1,CHUNK+1):
+		for dz in range(-1,CHUNK+1):
+			columns.append(terrain.solid_column(key.x+dx,key.y+dz))
 	for x in range(key.x, key.x + CHUNK):
 		for z in range(key.y, key.y + CHUNK):
 			var top: int = terrain.height_at(x, z)
@@ -808,14 +816,24 @@ func _build_chunk(key: Vector2i) -> void:
 				top = maxi(top, terrain.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
 			if top <= DATA.BEDROCK:
 				continue
+			var index := (x-key.x+1)*stride+z-key.y+1
+			var solid := columns[index]
+			var east := solid & ~columns[index+stride]
+			var west := solid & ~columns[index-stride]
+			var south := solid & ~columns[index+1]
+			var north := solid & ~columns[index-1]
+			var up := solid & ~(solid >> 1)
+			var down := solid & ~(solid << 1)
+			var exposed := east | west | south | north | up | down
 			for y in range(DATA.BEDROCK, top):
-				if not terrain.is_solid(x, y, z):
+				var bit := 1 << (y-DATA.BEDROCK)
+				if not (exposed & bit):
 					continue
 				var xf: float = float(x)
 				var yf: float = float(y)
 				var zf: float = float(z)
 				var tile: int = terrain.top_tile(x, z) if y == top - 1 else 4
-				if not terrain.is_solid(x, y + 1, z):
+				if up & bit:
 					var cutaway: bool = cave_here and y + 1 == top and terrain.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
@@ -824,7 +842,7 @@ func _build_chunk(key: Vector2i) -> void:
 						roof_faces += 1
 					else:
 						surface_faces += 1
-				if not terrain.is_solid(x, y - 1, z):
+				if down & bit:
 					var st: SurfaceTool = roof if cave_here else surface
 					_emit_face(st, Vector3(xf, yf, zf + 1), Vector3(xf, yf, zf),
 						Vector3(xf + 1, yf, zf), Vector3(xf + 1, yf, zf + 1), 4, "top")
@@ -832,19 +850,19 @@ func _build_chunk(key: Vector2i) -> void:
 						roof_faces += 1
 					else:
 						surface_faces += 1
-				if not terrain.is_solid(x + 1, y, z):
+				if east & bit:
 					_emit_face(surface, Vector3(xf + 1, yf, zf + 1), Vector3(xf + 1, yf, zf),
 						Vector3(xf + 1, yf + 1, zf), Vector3(xf + 1, yf + 1, zf + 1), 4, "x")
 					surface_faces += 1
-				if not terrain.is_solid(x - 1, y, z):
+				if west & bit:
 					_emit_face(surface, Vector3(xf, yf, zf), Vector3(xf, yf, zf + 1),
 						Vector3(xf, yf + 1, zf + 1), Vector3(xf, yf + 1, zf), 4, "x")
 					surface_faces += 1
-				if not terrain.is_solid(x, y, z + 1):
+				if south & bit:
 					_emit_face(surface, Vector3(xf, yf, zf + 1), Vector3(xf + 1, yf, zf + 1),
 						Vector3(xf + 1, yf + 1, zf + 1), Vector3(xf, yf + 1, zf + 1), 4, "z")
 					surface_faces += 1
-				if not terrain.is_solid(x, y, z - 1):
+				if north & bit:
 					_emit_face(surface, Vector3(xf + 1, yf, zf), Vector3(xf, yf, zf),
 						Vector3(xf, yf + 1, zf), Vector3(xf + 1, yf + 1, zf), 4, "z")
 					surface_faces += 1

@@ -15,6 +15,8 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 		return {"applicable": false}
 	var from := Vector2i(floori(start.x), floori(start.z))
 	var to := Vector2i(floori(target.x), floori(target.z))
+	if not cave.branches.is_empty() and from.distance_squared_to(Vector2i(cave.entrances[0].x,cave.entrances[0].z)) < 64*64:
+		return {"applicable":true,"path":_branch_path(cave,from,to,target)}
 	var side = remote.side_chamber
 	if side != null and from.distance_squared_to(side.center) < 64*64 and to.distance_squared_to(side.center) < 64*64:
 		return {"applicable":true,"path":_branch_path(cave,from,to,target)}

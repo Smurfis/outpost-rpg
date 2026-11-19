@@ -2,6 +2,7 @@ extends SceneTree
 const PICK = preload("res://scripts/interaction/world_picker.gd")
 const PATH = preload("res://scripts/navigation/crafting_station_path.gd")
 const OUT := "res://artifacts/cave_render/streamed-section/"
+var capture_dir := OUT
 var game
 var island
 var failed := false
@@ -101,10 +102,10 @@ func capture(label: String) -> void:
 	print(label," at ",game.hero.global_position," region ",island._region," builds ",island.section_builds," bytes ",island.section_cache_bytes)
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw
-		check(root.get_texture().get_image().save_png(OUT+label+".png")==OK,"Capture failed")
+		check(root.get_texture().get_image().save_png(capture_dir+label+".png")==OK,"Capture failed")
 	captures += 1
 
-func run() -> void:
+func setup_walk() -> void:
 	if DisplayServer.get_name() != "headless":
 		RenderingServer.frame_post_draw.connect(record_draw)
 	# Only this capture drives the player. Desktop key and mouse events can
@@ -132,6 +133,9 @@ func run() -> void:
 	game.hud.hide()
 	island = game.terrain_surface.archipelago
 	island.set_process(false)
+
+func run() -> void:
+	await setup_walk()
 	check(island.side_chamber != null,"Test chamber missing")
 	if failed:
 		quit(1)

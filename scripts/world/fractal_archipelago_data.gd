@@ -117,6 +117,17 @@ func is_solid(x: int, y: int, z: int) -> bool:
 			return false
 	return y < height_at(x, z)
 
+# Column form of is_solid for the two meshers. Foundations reach the cave
+# floor even when the local surface is lower. Bits start at BEDROCK.
+func solid_column(x: int, z: int) -> int:
+	var floor_y: int = caves.floor_at(x,z)
+	var top := maxi(height_at(x,z),floor_y)
+	assert(top-BEDROCK < 63)
+	var solid := (1 << (top-BEDROCK))-1
+	if floor_y != CAVES.INVALID_FLOOR:
+		solid &= ~(((1 << CAVES.CORRIDOR_HEIGHT)-1) << (floor_y-BEDROCK))
+	return solid
+
 func top_tile(x: int, z: int) -> int:
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin < 2.0:
