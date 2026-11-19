@@ -1,7 +1,7 @@
 extends SceneTree
 const PICK = preload("res://scripts/interaction/world_picker.gd")
 const PATH = preload("res://scripts/navigation/crafting_station_path.gd")
-const OUT := "res://artifacts/cave_render/connected/"
+const OUT := "res://artifacts/cave_render/local-section/"
 var game
 var island
 var failed := false
@@ -144,6 +144,7 @@ func run() -> void:
 	await walk(connector)
 	await walk(side.center)
 	await capture("02-side")
+	await orbit_room("side")
 	await click_floor(side.center+Vector2i(1,0))
 	game.camera_angle_target += PI/2
 	game.camera_angle = game.camera_angle_target
@@ -154,6 +155,7 @@ func run() -> void:
 	await walk(turn)
 	await walk(end+Vector2i(-1,0))
 	await capture("05-end")
+	await orbit_room("end")
 	game.camera_angle_target += PI/2
 	game.camera_angle = game.camera_angle_target
 	await capture("06-end-rotated")
@@ -234,5 +236,25 @@ func click_floor(cell: Vector2i) -> void:
 			game.controls.cancel()
 			return
 	check(false,"Click failed to move capsule to "+str(goal))
+
+func orbit_room(label: String) -> void:
+	var angle: float = game.camera_angle_target
+	for degrees in [0,90,180,270]:
+		game.camera_angle_target = deg_to_rad(degrees)
+		game.camera_angle = game.camera_angle_target
+		await capture("%s-%03d" % [label,degrees])
+	for degrees in range(0,360,10):
+		game.camera_angle_target = deg_to_rad(degrees)
+		game.camera_angle = game.camera_angle_target
+		refresh()
+		await physics_frame
+		await physics_frame
+		var torso: Vector3 = game.hero.global_position + Vector3.UP*1.2
+		var ray := PhysicsRayQueryParameters3D.create(game.camera.project_ray_origin(game.camera.unproject_position(torso)),torso,island.SECTION_PICK)
+		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(ray)
+		check(hit.is_empty(),"Hidden torso at %s %d" % [label,degrees])
+	game.camera_angle_target = angle
+	game.camera_angle = angle
+	refresh()
 
 

@@ -158,40 +158,74 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 var section_cache_bytes := 0
 var _prewarm_complete := false
 
+var _section_spans := {}
+
 func _variant(region: int, sector: int) -> Dictionary:
 	var id := Vector2i(region,sector)
 	if _variants.has(id):
 		return _variants[id]
-	var floors := {}
-	var dir := Vector2.from_angle(sector*TAU/8)
-	for c: Vector2i in _regions[region]:
-		var floor_y: int = terrain.caves.floor_at(c.x,c.y)
-		for distance in range(32):
-			var col := c + Vector2i((dir*distance).round())
-			var low := floor_y + maxi(0,floori((distance-2)*0.45))
-			floors[col] = mini(floors.get(col,low),low)
+	# Project the chamber's three-block air volume towards the orthographic
+	# eye. At each elevation only rock overlapping that projection can block
+	# the interior. Rock behind and above the rear wall stays in the mountain.
 	var hidden := {}
 	var chunks := {}
-	for col: Vector2i in floors:
-		var intersects := false
-		var cut_from: int = floors[col]
-		# Leave one block of the actual boundary as a sill. A cut into
-		# solid rock must not read as an extension of the playable floor.
-		if side_chamber != null and not terrain.caves.floors.has(col):
-			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-				var inner: Vector2i = col+d
-				if _regions[region].has(inner):
-					cut_from = maxi(cut_from, terrain.caves.floor_at(inner.x,inner.y)+1)
-		for y in range(cut_from,terrain.height_at(col.x,col.y)):
-			if terrain.is_solid(col.x,y,col.y):
+	var columns := {}
+	var cells: Dictionary = _regions[region]
+	# For each horizontal offset, store the vertical interval occupied by
+	# sightlines to the three-block interior. Sample the full cached angular
+	# sector; a centreline alone clips the avatar near sector boundaries.
+	var spans: Dictionary = _sector_spans(sector)
+	var intervals := {}
+	for c: Vector2i in cells:
+		var floor_y: int = terrain.caves.floor_at(c.x,c.y)
+		for offset: Vector2i in spans:
+			var col := c + offset
+			var bits := int(spans[offset]) << (floor_y-DATA.BEDROCK)
+			intervals[col] = int(intervals.get(col,0)) | bits
+	for col: Vector2i in intervals:
+		var cap: int = terrain.height_at(col.x,col.y)
+		var bits: int = intervals[col]
+		for y in range(DATA.BEDROCK,cap):
+			if bits & (1 << (y-DATA.BEDROCK)) and terrain.is_solid(col.x,y,col.y):
+				# Retain the collision sill alongside the physical cave.
+				if not terrain.caves.has_cave(col.x,col.y):
+					var sill := false
+					for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+						var n: Vector2i = col+d
+						if cells.has(n) and y <= terrain.caves.floor_at(n.x,n.y):
+							sill = true
+							break
+					if sill:
+						continue
 				hidden[Vector3i(col.x,y,col.y)] = true
-				intersects = true
-		if intersects:
-			for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-				var n: Vector2i = col+offset
-				chunks[_cell_at(Vector3(n.x,0,n.y))] = true
+				columns[col] = true
+	for col: Vector2i in columns:
+		for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+			var n: Vector2i = col+offset
+			chunks[_cell_at(Vector3(n.x,0,n.y))] = true
 	_variants[id] = {"hidden":hidden,"chunks":chunks,"geometry":{},"jobs":{}}
 	return _variants[id]
+
+func _sector_spans(sector: int) -> Dictionary:
+	if _section_spans.has(sector):
+		return _section_spans[sector]
+	var spans := {}
+	var run_per_rise := 26.25/20.0
+	for half_step in range(64):
+		var distance := half_step * 0.5
+		var rise := floori(distance/run_per_rise)
+		var samples := maxi(1,ceili(distance*TAU/8*2))
+		for i in range(samples+1):
+			var heading := (sector - 0.5 + float(i)/samples)*TAU/8
+			var offset := Vector2i((Vector2.from_angle(heading)*distance).round())
+			# Keep the full interior at the canonical angle. Between
+			# cache directions reserve only the avatar's sight corridor,
+			# so a whole additional room is never projected at each yaw.
+			var central := absf(float(i)/samples-0.5)*distance < 1.0
+			var band := 0b1111 if central else 0b0110
+			spans[offset] = int(spans.get(offset,0)) | (band << rise)
+	_section_spans[sector] = spans
+	return spans
 
 func _prepare_chunk(variant: Dictionary,key: Vector2i,deadline: int) -> void:
 	if not variant.jobs.has(key):

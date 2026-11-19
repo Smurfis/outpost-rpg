@@ -72,6 +72,8 @@ func _column(x: int, z: int) -> void:
 				if hidden.has(voxel + DIRECTIONS[face]):
 					cut_faces += 1
 				var tile: int = terrain.top_tile(x,z) if y == top-1 and face == 2 else 4
+				if face == 2 and y+1 == terrain.caves.floor_at(x,z) and top > y+3:
+					tile = 6 # Existing gravel atlas for the natural cave bed.
 				var q: Array = QUADS[face]
 				var p := Vector3(voxel)
 				var tile_data := Vector2(tile, -9999 if face in [2,3] else y+1)
