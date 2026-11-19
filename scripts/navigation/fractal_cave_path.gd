@@ -13,6 +13,11 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 	var cave = remote.terrain.caves
 	if not cave.has_cave(floori(start.x), floori(start.z)) or not cave.has_cave(floori(target.x), floori(target.z)):
 		return {"applicable": false}
+	var from := Vector2i(floori(start.x), floori(start.z))
+	var to := Vector2i(floori(target.x), floori(target.z))
+	var side = remote.side_chamber
+	if side != null and from.distance_squared_to(side.center) < 64*64 and to.distance_squared_to(side.center) < 64*64:
+		return {"applicable":true,"path":_branch_path(cave,from,to,target)}
 	var best_score: float = INF
 	var best_route: Array = []
 	var first_index: int = -1
@@ -65,3 +70,29 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 	elif result.is_empty():
 		result.append(Vector3(float(previous.x) + 0.5, float(previous.y) + 0.10, float(previous.z) + 0.5))
 	return {"applicable": true, "path": result}
+
+# The optional branch leaves the generated route's centreline. Follow actual
+# neighbouring carved floors so an approach cannot cut through the corner.
+static func _branch_path(cave, start: Vector2i, goal: Vector2i, target: Vector3) -> PackedVector3Array:
+	var path := PackedVector3Array()
+	if absf(target.y-cave.floor_at(goal.x,goal.y)) > 1.25:
+		return path
+	var queue: Array[Vector2i] = [start]
+	var parents := {start:start}
+	var i := 0
+	while i < queue.size() and not parents.has(goal):
+		var cell := queue[i]
+		i += 1
+		for offset in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+			var n: Vector2i = cell+offset
+			if not parents.has(n) and cave.has_cave(n.x,n.y) and absi(cave.floor_at(n.x,n.y)-cave.floor_at(cell.x,cell.y)) <= 1:
+				parents[n] = cell
+				queue.append(n)
+	if parents.has(goal):
+		var cell := goal
+		while cell != start:
+			path.append(Vector3(cell.x+0.5,cave.floor_at(cell.x,cell.y)+0.1,cell.y+0.5))
+			cell = parents[cell]
+		path.reverse()
+		path.append(Vector3(target.x,cave.floor_at(goal.x,goal.y)+0.1,target.z))
+	return path

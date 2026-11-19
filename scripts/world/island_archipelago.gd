@@ -40,7 +40,46 @@ const CHAMBER = preload("res://scripts/world/chamber_visibility.gd")
 const SECTION_PICK := 1 << 18
 var section_active := false
 var section_excluded: Array[RID] = []
-var _room := {}
+var _regions: Array[Dictionary] = []
+var _owners := {}
+var _lights: Array[Vector3] = []
+var _region := 0
+var side_chamber
+
+func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
+	var index := _regions.size()
+	var reveal := cells.duplicate()
+	for c: Vector2i in cells:
+		_owners[c] = index
+		# Include the immediately adjoining walkable threshold in both views.
+		if side_chamber != null:
+			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				if terrain.caves.floors.has(c+d):
+					reveal[c+d] = true
+	_regions.append(reveal)
+	_lights.append(Vector3(anchor.x-0.8,terrain.caves.floor_at(anchor.x,anchor.y)+2.6,anchor.y+1.5))
+
+func _identify_regions(center: Vector2i) -> void:
+	_add_region(CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells,center)
+	if side_chamber == null:
+		return
+	_add_region(side_chamber.room,side_chamber.center)
+	var passage := {}
+	var route: Array = terrain.caves.routes[0]
+	# Walk backwards from the end chamber. Limit the length of any visible
+	# passage so a bend cannot open the whole mountainside.
+	for i in range(route.size()-1,-1,-1):
+		var at: Vector3i = route[i]
+		for z in range(2):
+			var c := Vector2i(at.x,at.z+z)
+			if not _owners.has(c):
+				passage[c] = true
+			if c == side_chamber.junction:
+				passage.merge(side_chamber.branch)
+		if passage.size() >= 18 or i == 0:
+			_add_region(passage,Vector2i(at.x,at.z))
+			passage = {}
+
 var _variants := {}
 var _shown := {}
 var _sector := -1
@@ -66,17 +105,21 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	var end: Vector3i = terrain.caves.routes[0].back()
 	var center := Vector2i(end.x,end.z)
 	var cell := Vector2i(floori(pos.x),floori(pos.z))
-	if _room.is_empty() and cell.distance_squared_to(center) < 64 * 64:
-		_room = CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells
-	var inside: bool = _room.has(cell) and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
+	if _regions.is_empty() and cell.distance_squared_to(center) < 64 * 64:
+		_identify_regions(center)
+	var next_region: int = _owners.get(cell,-1)
+	var inside: bool = next_region >= 0 and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
 	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
 	if not inside:
 		if section_active:
 			_restore_section()
 		if cell.distance_squared_to(center) < 64 * 64:
 			_prewarm(sector)
+		elif side_chamber != null and not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
+			invalidate_section_geometry()
 		return false
-	var changed := sector != _sector
+	var changed := sector != _sector or next_region != _region
+	_region = next_region
 	if changed:
 		_restore_section()
 		_sector = sector
@@ -88,8 +131,9 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		_chamber_light.light_energy = 2.0
 		_chamber_light.omni_range = 8.0
 		add_child(_chamber_light)
+	_chamber_light.position = _lights[_region]
 	_chamber_light.show()
-	var variant := _variant(sector)
+	var variant := _variant(_region,sector)
 	for key: Vector2i in variant.chunks:
 		if _shown.has(key) or not _loaded.has(key):
 			continue
@@ -114,12 +158,13 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 var section_cache_bytes := 0
 var _prewarm_complete := false
 
-func _variant(sector: int) -> Dictionary:
-	if _variants.has(sector):
-		return _variants[sector]
+func _variant(region: int, sector: int) -> Dictionary:
+	var id := Vector2i(region,sector)
+	if _variants.has(id):
+		return _variants[id]
 	var floors := {}
 	var dir := Vector2.from_angle(sector*TAU/8)
-	for c: Vector2i in _room:
+	for c: Vector2i in _regions[region]:
 		var floor_y: int = terrain.caves.floor_at(c.x,c.y)
 		for distance in range(32):
 			var col := c + Vector2i((dir*distance).round())
@@ -129,7 +174,15 @@ func _variant(sector: int) -> Dictionary:
 	var chunks := {}
 	for col: Vector2i in floors:
 		var intersects := false
-		for y in range(floors[col],terrain.height_at(col.x,col.y)):
+		var cut_from: int = floors[col]
+		# Leave one block of the actual boundary as a sill. A cut into
+		# solid rock must not read as an extension of the playable floor.
+		if side_chamber != null and not terrain.caves.floors.has(col):
+			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var inner: Vector2i = col+d
+				if _regions[region].has(inner):
+					cut_from = maxi(cut_from, terrain.caves.floor_at(inner.x,inner.y)+1)
+		for y in range(cut_from,terrain.height_at(col.x,col.y)):
 			if terrain.is_solid(col.x,y,col.y):
 				hidden[Vector3i(col.x,y,col.y)] = true
 				intersects = true
@@ -137,8 +190,8 @@ func _variant(sector: int) -> Dictionary:
 			for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
 				var n: Vector2i = col+offset
 				chunks[_cell_at(Vector3(n.x,0,n.y))] = true
-	_variants[sector] = {"hidden":hidden,"chunks":chunks,"geometry":{},"jobs":{}}
-	return _variants[sector]
+	_variants[id] = {"hidden":hidden,"chunks":chunks,"geometry":{},"jobs":{}}
+	return _variants[id]
 
 func _prepare_chunk(variant: Dictionary,key: Vector2i,deadline: int) -> void:
 	if not variant.jobs.has(key):
@@ -183,13 +236,14 @@ func _prewarm(sector: int) -> void:
 		return
 	var deadline := Time.get_ticks_usec() + 3750
 	for offset in [0,1,-1,2,-2,3,-3,4]:
-		var variant := _variant(posmod(sector+offset,8))
-		for key: Vector2i in variant.chunks:
-			if not variant.geometry.has(key):
-				_prepare_chunk(variant,key,deadline)
+		for step in _regions.size():
+			var variant := _variant((_region+step)%_regions.size(),posmod(sector+offset,8))
+			for key: Vector2i in variant.chunks:
+				if not variant.geometry.has(key):
+					_prepare_chunk(variant,key,deadline)
+					return
+			if Time.get_ticks_usec() >= deadline:
 				return
-		if Time.get_ticks_usec() >= deadline:
-			return
 	_prewarm_complete = true
 
 func setup(world_seed: int) -> void:
@@ -199,6 +253,13 @@ func setup(world_seed: int) -> void:
 			_chamber_light.queue_free()
 			_chamber_light = null
 	terrain = DATA.new(world_seed)
+	side_chamber = null
+	if OS.get_environment("OUTPOST_TEST_SIDE_CHAMBER") == "1":
+		var addition = preload("res://scripts/world/test_side_chamber.gd").new()
+		if addition.install(terrain):
+			side_chamber = addition
+		else:
+			push_warning("No roofed site for the test side chamber in this seed")
 	name = "FractalArchipelago"
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
@@ -467,7 +528,10 @@ func invalidate_section_geometry() -> void:
 		for result: Dictionary in variant.geometry.values():
 			result.node.queue_free()
 	_variants.clear()
-	_room.clear()
+	_regions.clear()
+	_owners.clear()
+	_lights.clear()
+	_region = 0
 
 func _clear_stream() -> void:
 	invalidate_section_geometry()

@@ -147,6 +147,13 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 				hit["target"] = target
 				return hit
 			target = target.get_parent() as Node3D
+		# A cut face or another ground collider below the cave may return
+		# an upward normal inside rock. Only an exposed physical surface
+		# can be a ground target. Entities have already resolved above.
+		if archipelago != null and archipelago.section_active and hit.normal.y > 0.7:
+			var air := Vector3i((Vector3(hit.position) + Vector3.UP*0.01).floor())
+			if archipelago.terrain.is_solid(air.x,air.y,air.z):
+				return {}
 		hit["target"] = null
 		# When the camera's ray hits a front-facing solid island wall but
 		# the click projects onto an actual carved cave floor, use that
