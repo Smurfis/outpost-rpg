@@ -57,7 +57,6 @@ func _restore_section() -> void:
 		var replacement: Node3D = _shown[key]
 		replacement.get_child(0).collision_layer = 0
 		replacement.hide()
-		replacement.queue_free()
 	_shown.clear()
 	section_excluded.clear()
 	section_active = false
@@ -67,15 +66,18 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	var end: Vector3i = terrain.caves.routes[0].back()
 	var center := Vector2i(end.x,end.z)
 	var cell := Vector2i(floori(pos.x),floori(pos.z))
-	if _room.is_empty() and cell.distance_squared_to(center) < 25:
+	if _room.is_empty() and cell.distance_squared_to(center) < 64 * 64:
 		_room = CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells
 	var inside: bool = _room.has(cell) and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
+	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
 	if not inside:
 		if section_active:
 			_restore_section()
+		if cell.distance_squared_to(center) < 64 * 64:
+			_prewarm(sector)
 		return false
-	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
-	if sector != _sector:
+	var changed := sector != _sector
+	if changed:
 		_restore_section()
 		_sector = sector
 	section_active = true
@@ -87,59 +89,115 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		_chamber_light.omni_range = 8.0
 		add_child(_chamber_light)
 	_chamber_light.show()
-	if not _variants.has(sector):
-		var hidden := {}
-		var chunks := {}
-		var dir := Vector2.from_angle(sector*TAU/8)
-		for c: Vector2i in _room:
-			var floor_y: int = terrain.caves.floor_at(c.x,c.y)
-			for distance in range(32):
-				var col := c + Vector2i((dir*distance).round())
-				# Lift the front bank along the sight line; keep the chamber floor.
-				var low := floor_y + maxi(0,floori((distance-2)*0.45))
-				for y in range(low,terrain.height_at(col.x,col.y)):
-					var voxel := Vector3i(col.x,y,col.y)
-					if not terrain.is_solid(col.x,y,col.y):
-						continue
-					hidden[voxel] = true
-					for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-						var n: Vector2i = col+offset
-						chunks[_cell_at(Vector3(n.x,0,n.y))] = true
-		_variants[sector] = {"hidden":hidden,"chunks":chunks,"geometry":{}}
-	var variant: Dictionary = _variants[sector]
+	var variant := _variant(sector)
 	for key: Vector2i in variant.chunks:
 		if _shown.has(key) or not _loaded.has(key):
 			continue
 		if not variant.geometry.has(key):
-			var result := SECTION.build(terrain,key,CHUNK,variant.hidden)
-			if result.mesh != null:
-				result["shape"] = result.mesh.create_trimesh_shape()
-				result.shape.backface_collision = true
-			variant.geometry[key] = result
-			section_builds += 1
+			_prepare_chunk(variant,key,0)
 		var data: Dictionary = variant.geometry[key]
-		var replacement := MeshInstance3D.new()
-		replacement.mesh = data.mesh
-		replacement.material_override = GREEDY.material()
-		replacement.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var pick := StaticBody3D.new()
-		pick.collision_layer = SECTION_PICK
-		pick.collision_mask = 0
-		if data.has("shape"):
-			var slot := CollisionShape3D.new()
-			slot.shape = data.shape
-			pick.add_child(slot)
-		replacement.add_child(pick)
-		add_child(replacement)
+		var replacement: MeshInstance3D = data.node
+		replacement.get_child(0).collision_layer = SECTION_PICK
+		replacement.show()
 		_shown[key] = replacement
 		for node in _loaded[key]:
 			if node.name.begins_with("IslandRock_") or node.name.begins_with("CaveCutaway_"):
 				node.hide()
 			if node is StaticBody3D:
 				section_excluded.append(node.get_rid())
+	if not changed:
+		_prewarm(sector)
 	return true
 
+# World occupancy is immutable for the lifetime of this streamed island.
+# Each stream revision owns eight sectors of the first chamber, keyed by chunk.
+var section_cache_bytes := 0
+var _prewarm_complete := false
+
+func _variant(sector: int) -> Dictionary:
+	if _variants.has(sector):
+		return _variants[sector]
+	var floors := {}
+	var dir := Vector2.from_angle(sector*TAU/8)
+	for c: Vector2i in _room:
+		var floor_y: int = terrain.caves.floor_at(c.x,c.y)
+		for distance in range(32):
+			var col := c + Vector2i((dir*distance).round())
+			var low := floor_y + maxi(0,floori((distance-2)*0.45))
+			floors[col] = mini(floors.get(col,low),low)
+	var hidden := {}
+	var chunks := {}
+	for col: Vector2i in floors:
+		var intersects := false
+		for y in range(floors[col],terrain.height_at(col.x,col.y)):
+			if terrain.is_solid(col.x,y,col.y):
+				hidden[Vector3i(col.x,y,col.y)] = true
+				intersects = true
+		if intersects:
+			for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var n: Vector2i = col+offset
+				chunks[_cell_at(Vector3(n.x,0,n.y))] = true
+	_variants[sector] = {"hidden":hidden,"chunks":chunks,"geometry":{},"jobs":{}}
+	return _variants[sector]
+
+func _prepare_chunk(variant: Dictionary,key: Vector2i,deadline: int) -> void:
+	if not variant.jobs.has(key):
+		var job := SECTION.new()
+		job.begin(terrain,key,CHUNK,variant.hidden)
+		variant.jobs[key] = job
+	var job = variant.jobs[key]
+	if not job.advance(deadline):
+		return
+	# Start the indivisible GPU upload and collision cook with a fresh budget.
+	if deadline and Time.get_ticks_usec() + 3000 >= deadline:
+		return
+	var result: Dictionary = job.finish()
+	if result.mesh != null:
+		# Position, normal, UV, UV2 plus pick triangle positions, excluding
+		# driver compression, BVH, allocation overhead and transient jobs.
+		section_cache_bytes += int(result.vertices) * 52
+	_install_cached_node(result)
+	variant.geometry[key] = result
+	variant.jobs.erase(key)
+	section_builds += 1
+
+func _install_cached_node(data: Dictionary) -> void:
+	var replacement := MeshInstance3D.new()
+	replacement.mesh = data.mesh
+	replacement.material_override = GREEDY.material()
+	replacement.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var pick := StaticBody3D.new()
+	pick.collision_layer = 0
+	pick.collision_mask = 0
+	if data.has("shape"):
+		var slot := CollisionShape3D.new()
+		slot.shape = data.shape
+		pick.add_child(slot)
+	replacement.add_child(pick)
+	replacement.hide()
+	add_child(replacement)
+	data.node = replacement
+
+func _prewarm(sector: int) -> void:
+	if _prewarm_complete:
+		return
+	var deadline := Time.get_ticks_usec() + 3750
+	for offset in [0,1,-1,2,-2,3,-3,4]:
+		var variant := _variant(posmod(sector+offset,8))
+		for key: Vector2i in variant.chunks:
+			if not variant.geometry.has(key):
+				_prepare_chunk(variant,key,deadline)
+				return
+		if Time.get_ticks_usec() >= deadline:
+			return
+	_prewarm_complete = true
+
 func setup(world_seed: int) -> void:
+	if terrain != null:
+		_clear_stream()
+		if _chamber_light != null:
+			_chamber_light.queue_free()
+			_chamber_light = null
 	terrain = DATA.new(world_seed)
 	name = "FractalArchipelago"
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
@@ -400,9 +458,19 @@ func _build_pending() -> void:
 		if not _loaded.has(key):
 			_build_chunk(key)
 
-func _clear_stream() -> void:
+func invalidate_section_geometry() -> void:
+	if section_active:
+		_restore_section()
+	_prewarm_complete = false
+	section_cache_bytes = 0
+	for variant: Dictionary in _variants.values():
+		for result: Dictionary in variant.geometry.values():
+			result.node.queue_free()
 	_variants.clear()
 	_room.clear()
+
+func _clear_stream() -> void:
+	invalidate_section_geometry()
 	_pending.clear()
 	for key in _loaded.keys():
 		_unload(key)
