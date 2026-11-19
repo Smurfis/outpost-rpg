@@ -53,13 +53,18 @@ func run() -> void:
 		var previous: int = island.section_builds
 		island._update_cutaway(game,pos,1)
 		print("section ",index," builds ",island.section_builds-previous," usec ",Time.get_ticks_usec()-start)
-		if pos == inside and not cold and island.section_builds != previous:
+		if index in [1,5,7] and not cold and island.section_builds != previous:
 			failed = true
 		island._update_hero_visibility(game,game.hero)
 		await physics_frame
 		await physics_frame
 		if pos == inside:
 			var goal := Vector3(end.x-1.5,end.y,end.z+1.5)
+			if index == 4:
+				# At 270 degrees the preserved one-block sill occludes this edge.
+				var blocked = preload("res://scripts/interaction/world_picker.gd").resolve(game,game.camera.unproject_position(goal))
+				failed = failed or not blocked.is_empty()
+				goal.x += 1.0
 			var pick = preload("res://scripts/interaction/world_picker.gd").resolve(game,game.camera.unproject_position(goal))
 			var chest = island.get_node("IslandCaveChest_0")
 			var object = preload("res://scripts/interaction/world_picker.gd").resolve(game,game.camera.unproject_position(chest.global_position+Vector3.UP*0.5))
@@ -71,7 +76,7 @@ func run() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png(folder+str(index)+".png")
 	island.invalidate_section_geometry()
-	failed = failed or island.section_cache_bytes != 0 or not island._variants.is_empty()
+	failed = failed or island.section_cache_bytes != 0 or not island._variants.is_empty() or not island._shared_chunks.is_empty() or island.packet_cache_bytes != 0
 	game.queue_free()
 	await process_frame
 	quit(1 if failed else 0)

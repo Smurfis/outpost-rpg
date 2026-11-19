@@ -11,7 +11,11 @@ const QUADS := [[5, 1, 3, 7], [0, 4, 6, 2], [2, 6, 7, 3],
 
 static func build(terrain, origin: Vector2i, size: int, hidden: Dictionary) -> Dictionary:
 	var job = new()
-	job.begin(terrain, origin, size, hidden)
+	var masks := {}
+	for voxel: Vector3i in hidden:
+		var col := Vector2i(voxel.x,voxel.z)
+		masks[col] = int(masks.get(col,0)) | (1 << (voxel.y-DATA.BEDROCK))
+	job.begin(terrain, origin, size, masks)
 	while not job.advance(0):
 		pass
 	return job.finish()
@@ -24,6 +28,7 @@ var terrain
 var origin: Vector2i
 var size: int
 var hidden: Dictionary
+var signature: PackedInt64Array # World-space hidden occupancy over this patch and its apron.
 var cursor := 0
 var face_count := 0
 var cut_faces := 0
@@ -44,16 +49,26 @@ func advance(deadline: int) -> bool:
 
 # Sample each visible column once, including the chunk's neighbour apron.
 var columns := {}
+var reusable: Dictionary
+var packet_hits := 0
+var packet_bytes_delta := 0
 func _bits(x: int, z: int) -> int:
 	var col := Vector2i(x,z)
 	if columns.has(col):
 		return columns[col]
+	if reusable.has("solid") and reusable.solid.has(col):
+		var sampled := int(reusable.solid[col]) & ~int(hidden.get(col,0))
+		columns[col] = sampled
+		return sampled
 	var top: int = maxi(terrain.height_at(x,z), terrain.caves.floor_at(x,z))
 	assert(top - DATA.BEDROCK < 63)
 	var bits := 0
 	for y in range(DATA.BEDROCK,top):
-		if not hidden.has(Vector3i(x,y,z)) and terrain.is_solid(x,y,z):
+		if terrain.is_solid(x,y,z):
 			bits |= 1 << (y-DATA.BEDROCK)
+	if reusable.has("solid"):
+		reusable.solid[col] = bits
+	bits &= ~int(hidden.get(col,0))
 	columns[col] = bits
 	return bits
 
@@ -63,13 +78,31 @@ func _column(x: int, z: int) -> void:
 		return
 	var top: int = maxi(terrain.height_at(x,z), terrain.caves.floor_at(x,z))
 	var neighbours := [_bits(x+1,z),_bits(x-1,z),solid >> 1,solid << 1,_bits(x,z+1),_bits(x,z-1)]
+	var faces := PackedInt64Array()
+	for adjacent: int in neighbours:
+		faces.append(solid & ~adjacent)
+	var col := Vector2i(x,z)
+	var packets: Array = reusable.get("packets",{}).get(col,[])
+	for packet: Dictionary in packets:
+		if faces == packet.faces:
+			positions.append_array(packet.positions)
+			normals.append_array(packet.normals)
+			uv.append_array(packet.uv)
+			atlas_tiles.append_array(packet.tiles)
+			face_count += int(packet.positions.size()) / 6
+			cut_faces += int(packet.cuts)
+			packet_hits += 1
+			return
+	var start := positions.size()
+	var previous_cuts := cut_faces
 	for face in DIRECTIONS.size():
-		var exposed: int = solid & ~int(neighbours[face])
+		var exposed := faces[face]
 		var y := DATA.BEDROCK
 		while exposed:
 			if exposed & 1:
 				var voxel := Vector3i(x,y,z)
-				if hidden.has(voxel + DIRECTIONS[face]):
+				var neighbor: Vector3i = voxel + DIRECTIONS[face]
+				if neighbor.y >= DATA.BEDROCK and int(hidden.get(Vector2i(neighbor.x,neighbor.z),0)) & (1 << (neighbor.y-DATA.BEDROCK)):
 					cut_faces += 1
 				var tile: int = terrain.top_tile(x,z) if y == top-1 and face == 2 else 4
 				if face == 2 and y+1 == terrain.caves.floor_at(x,z) and top > y+3:
@@ -86,6 +119,16 @@ func _column(x: int, z: int) -> void:
 				face_count += 1
 			exposed >>= 1
 			y += 1
+
+	# Keep two recent surface patterns per column. Matching faces have the
+	# same world coordinates, atlas coordinates and collision winding.
+	if reusable.has("packets"):
+		if packets.size() >= 2:
+			packet_bytes_delta -= packets.pop_front().positions.size()*40
+		packets.append({"faces":faces,"positions":positions.slice(start),"normals":normals.slice(start),
+			"uv":uv.slice(start),"tiles":atlas_tiles.slice(start),"cuts":cut_faces-previous_cuts})
+		packet_bytes_delta += (positions.size()-start)*40
+		reusable.packets[col] = packets
 
 func finish() -> Dictionary:
 	if face_count == 0:

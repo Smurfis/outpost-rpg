@@ -84,6 +84,9 @@ var _variants := {}
 var _shown := {}
 var _sector := -1
 var section_builds := 0
+var mask_usec := 0
+var faces_usec := 0
+var publish_usec := 0
 var _chamber_light: OmniLight3D
 
 func _restore_section() -> void:
@@ -93,9 +96,9 @@ func _restore_section() -> void:
 		for node in _loaded.get(key, []):
 			if node.name.begins_with("IslandRock_") or node.name.begins_with("CaveCutaway_"):
 				node.show()
-		var replacement: Node3D = _shown[key]
-		replacement.get_child(0).collision_layer = 0
-		replacement.hide()
+		for replacement: Node3D in _shown[key]:
+			replacement.get_child(0).collision_layer = 0
+			replacement.hide()
 	_shown.clear()
 	section_excluded.clear()
 	section_active = false
@@ -114,7 +117,7 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		if section_active:
 			_restore_section()
 		if cell.distance_squared_to(center) < 64 * 64:
-			_prewarm(sector)
+			_prewarm(cell,sector)
 		elif side_chamber != null and not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
 			invalidate_section_geometry()
 		return false
@@ -137,74 +140,170 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	for key: Vector2i in variant.chunks:
 		if _shown.has(key) or not _loaded.has(key):
 			continue
-		if not variant.geometry.has(key):
-			_prepare_chunk(variant,key,0)
-		var data: Dictionary = variant.geometry[key]
-		var replacement: MeshInstance3D = data.node
-		replacement.get_child(0).collision_layer = SECTION_PICK
-		replacement.show()
-		_shown[key] = replacement
+		var replacements: Array[Node3D] = []
+		for patch: Vector2i in variant.chunks[key]:
+			if not variant.geometry.has(patch):
+				_prepare_chunk(variant,patch,0)
+			var replacement: MeshInstance3D = variant.geometry[patch].node
+			replacement.get_child(0).collision_layer = SECTION_PICK
+			replacement.show()
+			replacements.append(replacement)
+		_shown[key] = replacements
 		for node in _loaded[key]:
 			if node.name.begins_with("IslandRock_") or node.name.begins_with("CaveCutaway_"):
 				node.hide()
 			if node is StaticBody3D:
 				section_excluded.append(node.get_rid())
 	if not changed:
-		_prewarm(sector)
+		_prewarm(cell,sector)
 	return true
 
 # World occupancy is immutable for the lifetime of this streamed island.
-# Each stream revision owns eight sectors of the first chamber, keyed by chunk.
+# Masks, geometry and picking bodies are discarded together on invalidation.
 var section_cache_bytes := 0
 var _prewarm_complete := false
 
 var _section_spans := {}
 
-func _variant(region: int, sector: int) -> Dictionary:
+# One variant is pinned for display. Spare slots retain recent views for
+# reversals and re-entry. Limits apply to partial preparations as well.
+const PATCH := CHUNK / 2 # Four independently reusable quarters per streamed chunk.
+const MAX_VARIANTS := 18
+const TARGET_GEOMETRY_BYTES := 12 * 1024 * 1024
+var _shared_chunks := {}
+# Retain a small second tier of completed visibility masks after evicting
+# their expensive geometry. Both tiers are invalidated with terrain revision.
+var _recent_masks := {}
+const MAX_RECENT_MASKS := 32
+var _face_pages := {}
+var section_packet_hits := 0
+var packet_cache_bytes := 0
+const MAX_FACE_PAGES := 64
+var section_reuses := 0
+var section_evictions := 0
+var section_peak_bytes := 0
+var _clock := 0
+var _portals := {}
+var _plan: Array[Vector2i] = []
+var _plan_cell := Vector2i.MAX
+var _plan_sector := -1
+
+func _variant(region: int, sector: int, deadline := 0) -> Dictionary:
 	var id := Vector2i(region,sector)
-	if _variants.has(id):
-		return _variants[id]
-	# Project the chamber's three-block air volume towards the orthographic
-	# eye. At each elevation only rock overlapping that projection can block
-	# the interior. Rock behind and above the rear wall stays in the mountain.
-	var hidden := {}
-	var chunks := {}
-	var columns := {}
-	var cells: Dictionary = _regions[region]
-	# For each horizontal offset, store the vertical interval occupied by
-	# sightlines to the three-block interior. Sample the full cached angular
-	# sector; a centreline alone clips the avatar near sector boundaries.
-	var spans: Dictionary = _sector_spans(sector)
-	var intervals := {}
-	for c: Vector2i in cells:
-		var floor_y: int = terrain.caves.floor_at(c.x,c.y)
-		for offset: Vector2i in spans:
-			var col := c + offset
-			var bits := int(spans[offset]) << (floor_y-DATA.BEDROCK)
-			intervals[col] = int(intervals.get(col,0)) | bits
-	for col: Vector2i in intervals:
+	if not _variants.has(id):
+		if _variants.size() >= MAX_VARIANTS:
+			_evict_one()
+		if _recent_masks.has(id):
+			_variants[id] = _recent_masks[id]
+			_recent_masks.erase(id)
+		else:
+			_variants[id] = {"hidden":{}, "chunks":{}, "geometry":{}, "jobs":{},
+				"intervals":{}, "cells":_regions[region].keys(), "cursor":0,
+				"columns":[], "projected":false, "ready":false, "used":0}
+	var variant: Dictionary = _variants[id]
+	_clock += 1
+	variant.used = _clock
+	if not variant.ready:
+		var t := Time.get_ticks_usec()
+		_advance_mask(variant,region,sector,deadline)
+		mask_usec += Time.get_ticks_usec()-t
+	return variant
+
+func _advance_mask(v: Dictionary, region: int, sector: int, deadline: int) -> void:
+	if not v.projected:
+		var spans := _sector_spans(sector)
+		while v.cursor < v.cells.size():
+			var c: Vector2i = v.cells[v.cursor]
+			var shift: int = terrain.caves.floor_at(c.x,c.y)-DATA.BEDROCK
+			for offset: Vector2i in spans:
+				var col := c+offset
+				v.intervals[col] = int(v.intervals.get(col,0)) | (int(spans[offset]) << shift)
+			v.cursor += 1
+			if deadline and Time.get_ticks_usec() >= deadline:
+				return
+		v.columns = v.intervals.keys()
+		v.cursor = 0
+		v.projected = true
+	while v.cursor < v.columns.size():
+		var col: Vector2i = v.columns[v.cursor]
+		v.cursor += 1
 		var cap: int = terrain.height_at(col.x,col.y)
-		var bits: int = intervals[col]
-		for y in range(DATA.BEDROCK,cap):
-			if bits & (1 << (y-DATA.BEDROCK)) and terrain.is_solid(col.x,y,col.y):
-				# Retain the collision sill alongside the physical cave.
-				if not terrain.caves.has_cave(col.x,col.y):
-					var sill := false
-					for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-						var n: Vector2i = col+d
-						if cells.has(n) and y <= terrain.caves.floor_at(n.x,n.y):
-							sill = true
-							break
-					if sill:
-						continue
-				hidden[Vector3i(col.x,y,col.y)] = true
-				columns[col] = true
-	for col: Vector2i in columns:
-		for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
-			var n: Vector2i = col+offset
-			chunks[_cell_at(Vector3(n.x,0,n.y))] = true
-	_variants[id] = {"hidden":hidden,"chunks":chunks,"geometry":{},"jobs":{}}
-	return _variants[id]
+		var bits: int = int(v.intervals[col]) & ((1 << (cap-DATA.BEDROCK))-1)
+		if not bits:
+			if deadline and Time.get_ticks_usec() >= deadline:
+				return
+			continue
+		var low := DATA.BEDROCK
+		if not terrain.caves.has_cave(col.x,col.y):
+			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var n: Vector2i = col+d
+				if _regions[region].has(n):
+					low = maxi(low,terrain.caves.floor_at(n.x,n.y)+1)
+		var cut := 0
+		for y in range(low,cap):
+			var bit := 1 << (y-DATA.BEDROCK)
+			if bits & bit and terrain.is_solid(col.x,y,col.y):
+				cut |= bit
+		if cut:
+			v.hidden[col] = cut
+			for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+				var n: Vector2i = col+offset
+				var key := _cell_at(Vector3(n.x,0,n.y))
+				if not v.chunks.has(key):
+					v.chunks[key] = [key,key+Vector2i(PATCH,0),key+Vector2i(0,PATCH),key+Vector2i(PATCH,PATCH)]
+		if deadline and Time.get_ticks_usec() >= deadline:
+			return
+	v.intervals.clear()
+	v.columns.clear()
+	v.cells.clear()
+	v.ready = true
+
+func _evict_one() -> bool:
+	var victim := Vector2i(-1,-1)
+	var lowest := INF
+	for id: Vector2i in _variants:
+		if (section_active and id == Vector2i(_region,_sector)) or _plan.has(id):
+			continue
+		var rank: float = _variants[id].used
+		if id.x == _region:
+			rank += 1.0e12
+		elif _portals.get(_region,{}).has(id.x):
+			rank += 1.0e9
+		if rank < lowest:
+			victim = id
+			lowest = rank
+	if victim.x < 0:
+		return false
+	_drop_variant(victim,true)
+	section_evictions += 1
+	return true
+
+func _drop_variant(id: Vector2i, keep_mask := false) -> void:
+	for key: Vector2i in _variants[id].geometry:
+		var data: Dictionary = _variants[id].geometry[key]
+		data.refs -= 1
+		if data.refs == 0:
+			_shared_chunks[key].erase(data.signature)
+			if _shared_chunks[key].is_empty():
+				_shared_chunks.erase(key)
+			section_cache_bytes -= int(data.get("vertices",0))*52
+			data.node.queue_free()
+	if keep_mask and _variants[id].ready:
+		if _recent_masks.size() >= MAX_RECENT_MASKS:
+			_recent_masks.erase(_recent_masks.keys()[0])
+		_variants[id].geometry.clear()
+		_variants[id].jobs.clear()
+		_recent_masks[id] = _variants[id]
+	_variants.erase(id)
+
+# A chunk only depends on its own removed solids and the one-column
+# neighbour apron. Compare the complete bit pattern before sharing nodes.
+func _signature(key: Vector2i, mask: Dictionary) -> PackedInt64Array:
+	var sig := PackedInt64Array()
+	for x in range(key.x-1,key.x+PATCH+1):
+		for z in range(key.y-1,key.y+PATCH+1):
+			sig.append(mask.get(Vector2i(x,z),0))
+	return sig
 
 func _sector_spans(sector: int) -> Dictionary:
 	if _section_spans.has(sector):
@@ -229,24 +328,75 @@ func _sector_spans(sector: int) -> Dictionary:
 
 func _prepare_chunk(variant: Dictionary,key: Vector2i,deadline: int) -> void:
 	if not variant.jobs.has(key):
+		var signature := _signature(key,variant.hidden)
+		var data: Dictionary = _shared_chunks.get(key,{}).get(signature,{})
+		if not data.is_empty():
+			data.refs += 1
+			variant.geometry[key] = data
+			section_reuses += 1
+			return
 		var job := SECTION.new()
-		job.begin(terrain,key,CHUNK,variant.hidden)
+		job.signature = signature
+		job.begin(terrain,key,PATCH,variant.hidden)
 		variant.jobs[key] = job
 	var job = variant.jobs[key]
-	if not job.advance(deadline):
+	var t := Time.get_ticks_usec()
+	job.reusable = _face_page(key)
+	var ready: bool = job.advance(deadline)
+	faces_usec += Time.get_ticks_usec()-t
+	section_packet_hits += int(job.packet_hits)
+	job.packet_hits = 0
+	# Pages are a separate bounded CPU cache. A paused job always looks up
+	# the current page before resuming.
+	packet_cache_bytes += int(job.packet_bytes_delta)
+	job.reusable.bytes += int(job.packet_bytes_delta)
+	job.packet_bytes_delta = 0
+	job.reusable = {}
+	if not ready:
 		return
 	# Start the indivisible GPU upload and collision cook with a fresh budget.
-	if deadline and Time.get_ticks_usec() + 3000 >= deadline:
+	if deadline and Time.get_ticks_usec() + 1100 >= deadline:
 		return
+	# Another view can finish the same patch while this job is paused.
+	var previous: Dictionary = _shared_chunks.get(key,{}).get(job.signature,{})
+	if not previous.is_empty():
+		previous.refs += 1
+		variant.geometry[key] = previous
+		variant.jobs.erase(key)
+		section_reuses += 1
+		return
+	t = Time.get_ticks_usec()
 	var result: Dictionary = job.finish()
 	if result.mesh != null:
 		# Position, normal, UV, UV2 plus pick triangle positions, excluding
 		# driver compression, BVH, allocation overhead and transient jobs.
 		section_cache_bytes += int(result.vertices) * 52
+	section_peak_bytes = maxi(section_peak_bytes,section_cache_bytes + packet_cache_bytes)
+	result.refs = 1
+	result.signature = job.signature
+	if not _shared_chunks.has(key):
+		_shared_chunks[key] = {}
+	_shared_chunks[key][result.signature] = result
 	_install_cached_node(result)
 	variant.geometry[key] = result
 	variant.jobs.erase(key)
 	section_builds += 1
+	while section_cache_bytes > TARGET_GEOMETRY_BYTES and _evict_one():
+		pass # A large current room always wins over the soft byte target.
+	publish_usec += Time.get_ticks_usec()-t
+
+func _face_page(key: Vector2i) -> Dictionary:
+	if not _face_pages.has(key):
+		if _face_pages.size() >= MAX_FACE_PAGES:
+			var victim: Vector2i = _face_pages.keys()[0]
+			for other: Vector2i in _face_pages:
+				if _face_pages[other].used < _face_pages[victim].used:
+					victim = other
+			packet_cache_bytes -= int(_face_pages[victim].bytes)
+			_face_pages.erase(victim)
+		_face_pages[key] = {"solid":{},"packets":{},"bytes":0,"used":0}
+	_face_pages[key].used = _clock
+	return _face_pages[key]
 
 func _install_cached_node(data: Dictionary) -> void:
 	var replacement := MeshInstance3D.new()
@@ -265,19 +415,64 @@ func _install_cached_node(data: Dictionary) -> void:
 	add_child(replacement)
 	data.node = replacement
 
-func _prewarm(sector: int) -> void:
+func _make_plan(cell: Vector2i, sector: int) -> void:
+	_plan.clear()
+	_plan_cell = cell
+	_plan_sector = sector
+	_prewarm_complete = false
+	var region: int = _owners.get(cell,-1)
+	if region < 0:
+		# Outside: use the nearest entrance/region anchor on approach.
+		var best := INF
+		for i in _lights.size():
+			var dist := Vector2(_lights[i].x,_lights[i].z).distance_squared_to(Vector2(cell))
+			if dist < best:
+				best = dist
+				region = i
+	if region < 0:
+		return
+	_plan.append(Vector2i(region,sector))
+	if not _portals.has(region):
+		var links := {}
+		for c: Vector2i in _regions[region]:
+			var other: int = _owners.get(c,region)
+			if other != region:
+				if not links.has(other):
+					links[other] = []
+				links[other].append(c)
+		_portals[region] = links
+	var nearby: Array[Vector2i] = []
+	for other: int in _portals[region]:
+		var distance := 65
+		for portal: Vector2i in _portals[region][other]:
+			distance = mini(distance,cell.distance_squared_to(portal))
+		if distance <= 64:
+			nearby.append(Vector2i(distance,other))
+	nearby.sort()
+	# At most two upcoming thresholds, ordered by walking proximity.
+	for link in nearby.slice(0,2):
+		_plan.append(Vector2i(link.y,sector))
+	for delta in [1,-1]:
+		_plan.append(Vector2i(region,posmod(sector+delta,8)))
+		if not nearby.is_empty():
+			_plan.append(Vector2i(nearby[0].y,posmod(sector+delta,8)))
+
+func _prewarm(cell: Vector2i, sector: int) -> void:
+	if cell != _plan_cell or sector != _plan_sector:
+		_make_plan(cell,sector)
 	if _prewarm_complete:
 		return
-	var deadline := Time.get_ticks_usec() + 3750
-	for offset in [0,1,-1,2,-2,3,-3,4]:
-		for step in _regions.size():
-			var variant := _variant((_region+step)%_regions.size(),posmod(sector+offset,8))
-			for key: Vector2i in variant.chunks:
-				if not variant.geometry.has(key):
-					_prepare_chunk(variant,key,deadline)
-					return
-			if Time.get_ticks_usec() >= deadline:
-				return
+	var deadline := Time.get_ticks_usec()+3750
+	for id in _plan:
+		var variant := _variant(id.x,id.y,deadline)
+		if not variant.ready or Time.get_ticks_usec() >= deadline:
+			return
+		for key: Vector2i in variant.chunks:
+			for patch: Vector2i in variant.chunks[key]:
+				if not variant.geometry.has(patch):
+					_prepare_chunk(variant,patch,deadline)
+					if Time.get_ticks_usec() >= deadline or not variant.geometry.has(patch):
+						return
 	_prewarm_complete = true
 
 func setup(world_seed: int) -> void:
@@ -557,11 +752,14 @@ func invalidate_section_geometry() -> void:
 	if section_active:
 		_restore_section()
 	_prewarm_complete = false
-	section_cache_bytes = 0
-	for variant: Dictionary in _variants.values():
-		for result: Dictionary in variant.geometry.values():
-			result.node.queue_free()
-	_variants.clear()
+	for id: Vector2i in _variants.keys():
+		_drop_variant(id)
+	_plan.clear()
+	_plan_cell = Vector2i.MAX
+	_portals.clear()
+	_face_pages.clear()
+	_recent_masks.clear()
+	packet_cache_bytes = 0
 	_regions.clear()
 	_owners.clear()
 	_lights.clear()

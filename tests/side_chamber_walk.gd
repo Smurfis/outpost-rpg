@@ -1,11 +1,16 @@
 extends SceneTree
 const PICK = preload("res://scripts/interaction/world_picker.gd")
 const PATH = preload("res://scripts/navigation/crafting_station_path.gd")
-const OUT := "res://artifacts/cave_render/local-section/"
+const OUT := "res://artifacts/cave_render/streamed-section/"
 var game
 var island
 var failed := false
 var worst := 0
+var walking_worst := 0
+var walking_times := PackedInt64Array()
+var measuring_walk := false
+var draw_intervals := PackedInt64Array()
+var previous_walk_draw := 0
 var captures := 0
 var manual := false
 
@@ -29,13 +34,24 @@ func refresh() -> void:
 	island._update_cutaway(game,game.hero.global_position,1)
 	var elapsed := Time.get_ticks_usec()-t
 	worst = maxi(worst,elapsed)
+	if measuring_walk:
+		walking_worst = maxi(walking_worst,elapsed)
+		walking_times.append(elapsed)
 	if island.section_active and (old != island._region or not was_active):
 		print("activate region ",island._region," us ",elapsed)
 	island._update_hero_visibility(game,game.hero)
 	game.day_night.interior_blend = 1.0 if island.section_active else 0.0
 	game.day_night._apply_light()
 
+func record_draw() -> void:
+	var now := Time.get_ticks_usec()
+	if measuring_walk and previous_walk_draw != 0:
+		draw_intervals.append(now - previous_walk_draw)
+	previous_walk_draw = now if measuring_walk else 0
+
 func walk(c: Vector2i) -> void:
+	previous_walk_draw = 0
+	measuring_walk = true
 	var goal := point(c)
 	var path: PackedVector3Array = PATH.plan_world(game,game.hero.global_position,goal)
 	check(not path.is_empty(),"No navigation path to "+str(c))
@@ -58,6 +74,7 @@ func walk(c: Vector2i) -> void:
 		if game.hero.global_position.distance_to(goal)<0.45:
 			game.controls.cancel()
 			steer(Vector3.ZERO)
+			measuring_walk = false
 			return
 	print("STALL velocity=",game.hero.velocity," moving=",game.hero.interaction_moving," waypoint=",game.hero.interaction_target," remaining=",game.hero.station_waypoints," original path=",path)
 	for j in game.hero.get_slide_collision_count():
@@ -88,8 +105,11 @@ func capture(label: String) -> void:
 	captures += 1
 
 func run() -> void:
+	if DisplayServer.get_name() != "headless":
+		RenderingServer.frame_post_draw.connect(record_draw)
 	# Only this capture drives the player. Desktop key and mouse events can
 	# otherwise replace a waypoint while the offscreen window is running.
+	root.unfocusable = true
 	root.size = Vector2i(1280,720)
 	root.set_meta("outpost_new_adventure",true)
 	root.set_meta("outpost_input_mode","desktop")
@@ -97,6 +117,8 @@ func run() -> void:
 	game.save_path = "user://connected_capture.json"
 	game.get_node("Dungeons").save_path = "user://connected_dungeon.json"
 	root.add_child(game)
+	game.set_process_unhandled_input(false)
+	game.controls.set_process_unhandled_input(false)
 	game.controls.set_process_input(false)
 	game.hud.set_process_input(false)
 	for action in [&"outpost_left", &"outpost_right", &"outpost_up", &"outpost_down"]:
@@ -175,8 +197,20 @@ func run() -> void:
 		await walk(dest)
 	print("reverse route by direct movement complete at ",game.hero.position)
 	check(not island.section_active,"Surface did not restore")
-	check(island.section_builds==warm_count,"Unexpected rebuild while walking")
-	print("walk peak section us ",worst," cache entries ",island._variants.size()," passed ",not failed)
+	check(island.section_evictions>0 and island._variants.size()<=island.MAX_VARIANTS,"Cache bounds were not exercised")
+	if not draw_intervals.is_empty():
+		draw_intervals.sort()
+		print("walking draw interval p95/max us ",draw_intervals[int(draw_intervals.size()*0.95)],"/",draw_intervals[-1])
+	walking_times.sort()
+	print("movement p95/max us ",walking_times[int(walking_times.size()*0.95)],"/",walking_worst)
+	print("column packet hits ",island.section_packet_hits," packet bytes ",island.packet_cache_bytes)
+	print("entrance builds ",warm_count," total builds ",island.section_builds," shared hits ",island.section_reuses," evictions ",island.section_evictions," peak payload ",island.section_peak_bytes)
+	print("mask/face/publish us ",island.mask_usec,"/",island.faces_usec,"/",island.publish_usec)
+	check(island._face_pages.size()<=island.MAX_FACE_PAGES and island._recent_masks.size()<=island.MAX_RECENT_MASKS,"Auxiliary caches exceeded bounds")
+	var entries: int = island._variants.size()
+	island.invalidate_section_geometry()
+	check(island.section_cache_bytes==0 and island.packet_cache_bytes==0 and island._shared_chunks.is_empty() and island._recent_masks.is_empty() and island._face_pages.is_empty(),"Section payload retained after invalidation")
+	print("walk peak section us ",worst," cache entries ",entries," passed ",not failed)
 	game.queue_free()
 	await process_frame
 	quit(1 if failed else 0)
