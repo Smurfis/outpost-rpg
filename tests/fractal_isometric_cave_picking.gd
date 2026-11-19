@@ -92,6 +92,8 @@ func _run() -> void:
 				game.hero.global_position = chest.global_position + Vector3(0.5, 0, 0)
 				game._camera(0.3)
 				streamer._update_cutaway(game, game.hero.global_position)
+				# Publish streamed pick shapes before dispatching the mouse event.
+				await physics_frame
 				chest_screen = game.camera.unproject_position(chest.global_position + Vector3.UP * 0.55)
 				var mouse := InputEventMouseButton.new()
 				mouse.button_index = MOUSE_BUTTON_RIGHT
@@ -102,6 +104,16 @@ func _run() -> void:
 				game.controls._input(mouse)
 				game.controls._physics_process(0.01)
 				check(game.opened_world_objects.has(chest.object_id), "RMB click opens the nearby cave chest through the cutaway")
+				var enemy := get_first_node_in_group("enemies") as Node3D
+				if enemy != null:
+					enemy.set_physics_process(false)
+					enemy.global_position = chest.global_position + Vector3(-1, 0, 1)
+					await physics_frame
+					await physics_frame
+					var enemy_screen: Vector2 = game.camera.unproject_position(enemy.global_position + Vector3.UP * 0.5)
+					check(PICKER.resolve(game, enemy_screen).get("target") == enemy, "Section ray selects a visible enemy")
+				else:
+					check(false, "Expected a live enemy to exercise section picking")
 	game.queue_free()
 	await process_frame
 	print("ISOMETRIC PICK RESULT: %d failures" % failures)

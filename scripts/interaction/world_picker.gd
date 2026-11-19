@@ -105,12 +105,18 @@ static func resolve(game: Node3D, screen: Vector2) -> Dictionary:
 	var archipelago: Variant = null
 	if game.terrain_surface != null:
 		archipelago = game.terrain_surface.get("archipelago")
-	var cave_fallback: Dictionary = _cave_screen_pick(game, screen, archipelago, origin, end)
+	var cave_fallback := {}
+	var mask := 1 | 2 | 8 | PICK_LAYER
+	if archipelago != null and archipelago.section_active:
+		excluded.append_array(archipelago.section_excluded)
+		mask |= archipelago.SECTION_PICK
+	else:
+		cave_fallback = _cave_screen_pick(game, screen, archipelago, origin, end)
 	# Gameplay colliders stay solid when a roof is culled visually.
 	# Continue the *same* click ray past only the clipped roof triangles;
 	# never exclude the whole island body, which also owns the cave floor.
 	for _attempt in range(48):
-		var query := PhysicsRayQueryParameters3D.create(origin, end, 1 | 2 | 8 | PICK_LAYER, excluded)
+		var query := PhysicsRayQueryParameters3D.create(origin, end, mask, excluded)
 		query.collide_with_areas = true
 		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
 		if hit.is_empty():

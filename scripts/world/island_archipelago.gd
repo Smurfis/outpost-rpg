@@ -35,6 +35,110 @@ var _reveal_cells: Dictionary = {}
 var _reveal_texture: ImageTexture
 var _reveal_strength: float = 0.0
 
+const SECTION = preload("res://scripts/world/island_section_mesh.gd")
+const CHAMBER = preload("res://scripts/world/chamber_visibility.gd")
+const SECTION_PICK := 1 << 18
+var section_active := false
+var section_excluded: Array[RID] = []
+var _room := {}
+var _variants := {}
+var _shown := {}
+var _sector := -1
+var section_builds := 0
+var _chamber_light: OmniLight3D
+
+func _restore_section() -> void:
+	if _chamber_light != null:
+		_chamber_light.hide()
+	for key in _shown:
+		for node in _loaded.get(key, []):
+			if node.name.begins_with("IslandRock_") or node.name.begins_with("CaveCutaway_"):
+				node.show()
+		var replacement: Node3D = _shown[key]
+		replacement.get_child(0).collision_layer = 0
+		replacement.hide()
+		replacement.queue_free()
+	_shown.clear()
+	section_excluded.clear()
+	section_active = false
+	_sector = -1
+
+func _section_update(pos: Vector3, eye: Vector3) -> bool:
+	var end: Vector3i = terrain.caves.routes[0].back()
+	var center := Vector2i(end.x,end.z)
+	var cell := Vector2i(floori(pos.x),floori(pos.z))
+	if _room.is_empty() and cell.distance_squared_to(center) < 25:
+		_room = CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells
+	var inside: bool = _room.has(cell) and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
+	if not inside:
+		if section_active:
+			_restore_section()
+		return false
+	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
+	if sector != _sector:
+		_restore_section()
+		_sector = sector
+	section_active = true
+	if _chamber_light == null:
+		_chamber_light = OmniLight3D.new()
+		_chamber_light.position = Vector3(end.x-0.8,end.y+2.6,end.z+1.5)
+		_chamber_light.light_color = Color("ffd8a3")
+		_chamber_light.light_energy = 2.0
+		_chamber_light.omni_range = 8.0
+		add_child(_chamber_light)
+	_chamber_light.show()
+	if not _variants.has(sector):
+		var hidden := {}
+		var chunks := {}
+		var dir := Vector2.from_angle(sector*TAU/8)
+		for c: Vector2i in _room:
+			var floor_y: int = terrain.caves.floor_at(c.x,c.y)
+			for distance in range(32):
+				var col := c + Vector2i((dir*distance).round())
+				# Lift the front bank along the sight line; keep the chamber floor.
+				var low := floor_y + maxi(0,floori((distance-2)*0.45))
+				for y in range(low,terrain.height_at(col.x,col.y)):
+					var voxel := Vector3i(col.x,y,col.y)
+					if not terrain.is_solid(col.x,y,col.y):
+						continue
+					hidden[voxel] = true
+					for offset in [Vector2i.ZERO,Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+						var n: Vector2i = col+offset
+						chunks[_cell_at(Vector3(n.x,0,n.y))] = true
+		_variants[sector] = {"hidden":hidden,"chunks":chunks,"geometry":{}}
+	var variant: Dictionary = _variants[sector]
+	for key: Vector2i in variant.chunks:
+		if _shown.has(key) or not _loaded.has(key):
+			continue
+		if not variant.geometry.has(key):
+			var result := SECTION.build(terrain,key,CHUNK,variant.hidden)
+			if result.mesh != null:
+				result["shape"] = result.mesh.create_trimesh_shape()
+				result.shape.backface_collision = true
+			variant.geometry[key] = result
+			section_builds += 1
+		var data: Dictionary = variant.geometry[key]
+		var replacement := MeshInstance3D.new()
+		replacement.mesh = data.mesh
+		replacement.material_override = GREEDY.material()
+		replacement.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var pick := StaticBody3D.new()
+		pick.collision_layer = SECTION_PICK
+		pick.collision_mask = 0
+		if data.has("shape"):
+			var slot := CollisionShape3D.new()
+			slot.shape = data.shape
+			pick.add_child(slot)
+		replacement.add_child(pick)
+		add_child(replacement)
+		_shown[key] = replacement
+		for node in _loaded[key]:
+			if node.name.begins_with("IslandRock_") or node.name.begins_with("CaveCutaway_"):
+				node.hide()
+			if node is StaticBody3D:
+				section_excluded.append(node.get_rid())
+	return true
+
 func setup(world_seed: int) -> void:
 	terrain = DATA.new(world_seed)
 	name = "FractalArchipelago"
@@ -56,6 +160,8 @@ func _process(delta: float) -> void:
 		return
 	var position: Vector3 = hero.global_position
 	if not terrain.near_island(position):
+		if section_active:
+			_restore_section()
 		if _cutaway_material != null:
 			_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		_set_hero_outline(hero, false)
@@ -90,6 +196,10 @@ func _update_cutaway(game: Node, position: Vector3, delta: float = 1.0) -> void:
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		return
 	_cave_mode = _is_below_terrain(position)
+	if _section_update(position,view.global_basis.z):
+		_cutaway_material.set_shader_parameter("island_cutaway_enabled",false)
+		_reveal_strength = 0.0
+		return
 	var xi: int = floori(position.x)
 	var zi: int = floori(position.z)
 	var cave_floor: int = terrain.caves.floor_at(xi, zi)
@@ -211,6 +321,9 @@ func _set_hero_outline(hero: Node3D, enabled: bool) -> void:
 
 
 func _update_hero_visibility(game: Node, hero: Node3D) -> void:
+	if section_active:
+		_set_hero_outline(hero,false)
+		return
 	if not hero is CollisionObject3D:
 		return
 	var view: Camera3D = game.get("camera") as Camera3D
@@ -288,12 +401,16 @@ func _build_pending() -> void:
 			_build_chunk(key)
 
 func _clear_stream() -> void:
+	_variants.clear()
+	_room.clear()
 	_pending.clear()
 	for key in _loaded.keys():
 		_unload(key)
 	_center = Vector2i(99999, 99999)
 
 func _unload(key: Vector2i) -> void:
+	if _shown.has(key):
+		_restore_section()
 	if terrain != null and not terrain.caves.entrances.is_empty() and _cell_at(terrain.caves.entrances[0]) == key:
 		var game := get_parent().get_parent()
 		var manager := game.get_node_or_null("Dungeons") if game != null else null
