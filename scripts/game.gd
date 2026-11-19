@@ -940,7 +940,7 @@ func target_range(target: Node3D) -> float:
 func target_in_range(target: Node3D) -> bool:
 	if not target_available(target) or hero == null:
 		return false
-	return hero.global_position.distance_to(target.global_position) < target_range(target)
+	return hero.global_position.distance_to(target.global_position) < target_range(target) and (not target.has_method("melee_visible") or target.melee_visible())
 
 func target_on_cooldown(target: Node3D) -> bool:
 	return (target.is_in_group("enemies") and attack_delay > 0.0) or (target.is_in_group("resources") and gather_delay > 0.0)

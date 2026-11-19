@@ -148,6 +148,12 @@ func _piece(at: Vector3, size: Vector3, tint: Color) -> void:
 	instance.material_override = mat
 	visual.add_child(instance)
 
+func pursuit_direction(to_player: Vector3) -> Vector3:
+	return to_player.normalized()
+
+func melee_visible() -> bool:
+	return true
+
 func _physics_process(delta: float) -> void:
 	if not alive:
 		if death_left > 0.0:
@@ -170,7 +176,7 @@ func _physics_process(delta: float) -> void:
 	var distance: float = to_player.length()
 	var direction := Vector3.ZERO
 	if distance > 1.5 and distance < 8.0 and heavy_charge_left <= 0.0:
-		direction = to_player.normalized()
+		direction = pursuit_direction(to_player)
 	velocity.x = direction.x * (2.0 + float(quality) * 0.24) * speed_multiplier
 	velocity.z = direction.z * (2.0 + float(quality) * 0.24) * speed_multiplier
 	var grounded: bool = is_on_floor()
@@ -201,7 +207,9 @@ func _physics_process(delta: float) -> void:
 		if heavy_charge_left <= 0.0:
 			_finish_heavy_attack()
 		return
-	if cooldown <= 0.0 and distance < 4.2 and heavy_attack_cooldown <= 0.0:
+	if distance >= 4.2 or not melee_visible():
+		return
+	if cooldown <= 0.0 and heavy_attack_cooldown <= 0.0:
 		_begin_heavy_attack(to_player)
 	elif distance < 1.75 and cooldown <= 0.0:
 		cooldown = 1.7
@@ -242,7 +250,7 @@ func _finish_heavy_attack() -> void:
 	if avatar != null:
 		avatar.play_event("Attack")
 	if hero != null and is_instance_valid(hero) and is_instance_valid(heavy_telegraph):
-		if heavy_telegraph.contains_position(hero.global_position):
+		if heavy_telegraph.contains_position(hero.global_position) and melee_visible():
 			hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier * 1.65, global_position)
 	_cancel_heavy_attack()
 

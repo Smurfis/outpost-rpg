@@ -31,7 +31,7 @@ func _run() -> void:
 	var land := Node3D.new()
 	host.add_child(land)
 	var island = ISLAND.new()
-	island.setup(64012)
+	island.setup(64012,false)
 	land.add_child(island)
 	var world = island.terrain
 	check(island._cutaway_material != null and island._cutaway_material != GREEDY.material(),

@@ -18,6 +18,8 @@ func run() -> void:
 	game.hero.set_physics_process(false)
 	game.hud.visible = false
 	var island = game.terrain_surface.archipelago
+	# Keep the single-chamber fixture; the physical mine has a guarded chest.
+	island.setup(island.terrain.seed,false)
 	island.set_process(false)
 	var route: Array = island.terrain.caves.routes[0]
 	var end: Vector3i = route.back()

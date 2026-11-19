@@ -23,6 +23,8 @@ func _run() -> void:
 	root.add_child(game)
 	await physics_frame
 	var streamer = game.terrain_surface.archipelago
+	# Keep the single-chamber fixture; the physical mine has a guarded chest.
+	streamer.setup(streamer.terrain.seed,false)
 	var routes: Array = streamer.terrain.caves.routes
 	check(routes.size() == 3, "Isometric test uses the three real island cave routes")
 	for index in range(routes.size()):

@@ -3,6 +3,8 @@ extends SceneTree
 var failures := 0
 
 func _initialize() -> void:
+	# Exercise the portal registry separately from the physical mine.
+	OS.set_environment("OUTPOST_TEST_PROCEDURAL_CAVE","1")
 	call_deferred("run")
 
 func check(ok: bool, message: String) -> void:

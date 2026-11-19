@@ -45,6 +45,8 @@ var _owners := {}
 var _lights: Array[Vector3] = []
 var _region := 0
 var side_chamber
+var mine
+const MINE = preload("res://scripts/world/physical_mineshaft.gd")
 
 func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	var index := _regions.size()
@@ -60,7 +62,10 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	_lights.append(Vector3(anchor.x-0.8,terrain.caves.floor_at(anchor.x,anchor.y)+2.6,anchor.y+1.5))
 
 func _identify_regions(center: Vector2i) -> void:
-	_add_region(CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells,center)
+	if mine != null:
+		_add_region(terrain.caves.mine_end_room,center)
+	else:
+		_add_region(CHAMBER.identify(terrain.caves.floors,terrain.caves.floors,center,4).cells,center)
 	if side_chamber != null:
 		_add_region(side_chamber.room,side_chamber.center)
 	elif terrain.caves.branches.is_empty():
@@ -476,13 +481,14 @@ func _prewarm(cell: Vector2i, sector: int) -> void:
 						return
 	_prewarm_complete = true
 
-func setup(world_seed: int) -> void:
+func setup(world_seed: int, physical_mineshaft := true) -> void:
 	if terrain != null:
 		_clear_stream()
 		if _chamber_light != null:
 			_chamber_light.queue_free()
 			_chamber_light = null
 	terrain = DATA.new(world_seed)
+	mine = null
 	side_chamber = null
 	if OS.get_environment("OUTPOST_TEST_SIDE_CHAMBER") == "1":
 		var addition = preload("res://scripts/world/test_side_chamber.gd").new()
@@ -490,6 +496,10 @@ func setup(world_seed: int) -> void:
 			side_chamber = addition
 		else:
 			push_warning("No roofed site for the test side chamber in this seed")
+	elif physical_mineshaft and OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") != "1":
+		var candidate = MINE.new()
+		if candidate.configure(self):
+			mine = candidate
 	name = "FractalArchipelago"
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
@@ -519,6 +529,8 @@ func _process(delta: float) -> void:
 		return
 	_queue_near(position)
 	_build_pending()
+	if mine != null:
+		mine.visit(position)
 	_update_cutaway(game, position, delta)
 	_update_hero_visibility(game, hero)
 
@@ -873,6 +885,8 @@ func _build_chunk(key: Vector2i) -> void:
 		ground.name = "IslandRock_%d_%d" % [key.x, key.y]
 		ground.mesh = PALETTE.create_mesh(surface)
 		ground.material_override = _cutaway_material
+		# The uncut shadow-only instance below already casts these triangles.
+		ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
@@ -890,6 +904,7 @@ func _build_chunk(key: Vector2i) -> void:
 		lid.name = "CaveCutaway_%d_%d" % [key.x, key.y]
 		lid.mesh = PALETTE.create_mesh(roof)
 		lid.material_override = _cutaway_material
+		lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(lid)
 		members.append(lid)
 		meshed.append(lid)
@@ -929,6 +944,8 @@ func _build_chunk(key: Vector2i) -> void:
 		var at: Vector3 = terrain.caves.chests[index]
 		if at.x < key.x or at.x >= key.x + CHUNK or at.z < key.y or at.z >= key.y + CHUNK:
 			continue
+		if index == 0 and mine != null:
+			continue
 		var chest := WORLD_OBJECT.new()
 		chest.name = "IslandCaveChest_%d" % index
 		chest.position = at + Vector3(0.0, 0.08, 0.0)
@@ -937,7 +954,9 @@ func _build_chunk(key: Vector2i) -> void:
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
 	_loaded[key] = members
-	if not terrain.caves.entrances.is_empty():
+	if mine != null:
+		mine.populate(key,game,members)
+	elif side_chamber != null or OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") == "1":
 		var mine: Vector3 = terrain.caves.entrances[0]
 		if _cell_at(mine) == key:
 			var manager := game.get_node_or_null("Dungeons") if game != null else null

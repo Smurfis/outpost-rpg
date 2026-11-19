@@ -105,18 +105,18 @@ func capture(label: String) -> void:
 		check(root.get_texture().get_image().save_png(capture_dir+label+".png")==OK,"Capture failed")
 	captures += 1
 
-func setup_walk() -> void:
-	if DisplayServer.get_name() != "headless":
+func setup_walk(player_save := "user://connected_capture.json", dungeon_save := "user://connected_dungeon.json", fresh := true) -> void:
+	if DisplayServer.get_name() != "headless" and not RenderingServer.frame_post_draw.is_connected(record_draw):
 		RenderingServer.frame_post_draw.connect(record_draw)
 	# Only this capture drives the player. Desktop key and mouse events can
 	# otherwise replace a waypoint while the offscreen window is running.
 	root.unfocusable = true
 	root.size = Vector2i(1280,720)
-	root.set_meta("outpost_new_adventure",true)
+	root.set_meta("outpost_new_adventure",fresh)
 	root.set_meta("outpost_input_mode","desktop")
 	game = load("res://scenes/main.tscn").instantiate()
-	game.save_path = "user://connected_capture.json"
-	game.get_node("Dungeons").save_path = "user://connected_dungeon.json"
+	game.save_path = player_save
+	game.get_node("Dungeons").save_path = dungeon_save
 	root.add_child(game)
 	game.set_process_unhandled_input(false)
 	game.controls.set_process_unhandled_input(false)

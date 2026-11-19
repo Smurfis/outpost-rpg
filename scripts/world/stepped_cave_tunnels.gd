@@ -10,10 +10,12 @@ var floors: Dictionary = {} # Vector2i -> absolute walkable y
 var routes: Array = []
 # Generated on the first island only when running the procedural trial.
 var branches: Array[Dictionary] = []
+var mine_end_room := {}
 var entrances: Array[Vector3] = []
 var chests: Array[Vector3] = []
 
 func configure(terrain) -> void:
+	mine_end_room.clear()
 	branches.clear()
 	floors.clear()
 	routes.clear()
@@ -52,11 +54,30 @@ func configure(terrain) -> void:
 		chests.append(Vector3(float(end.x) + 0.5, float(end.y), float(end.z) + 0.5))
 
 	if OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") == "1" and OS.get_environment("OUTPOST_TEST_SIDE_CHAMBER") != "1":
-		_generate_branches(terrain)
+		_generate_branches(terrain,terrain.seed ^ 0x4b17)
 
-func _generate_branches(terrain) -> void:
+func carve_mine(terrain, layout_seed: int) -> bool:
+	var end: Vector3i = routes[0].back()
+	# Enlarge the original end chamber only where the mountain provides a roof.
+	for dx in range(-3,4):
+		for dz in range(-3,4):
+			var cell := Vector2i(end.x+dx,end.z+dz)
+			if terrain.height_at(cell.x,cell.y) <= end.y+CORRIDOR_HEIGHT:
+				mine_end_room.clear()
+				return false
+			mine_end_room[cell] = end.y
+	var original := floors.duplicate()
+	floors.merge(mine_end_room,true)
+	_generate_branches(terrain,layout_seed)
+	if branches.is_empty():
+		floors = original
+		mine_end_room.clear()
+		return false
+	return true
+
+func _generate_branches(terrain, layout_seed: int) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = terrain.seed ^ 0x4b17
+	rng.seed = layout_seed
 	var route: Array = routes[0]
 	var wanted := rng.randi_range(3,4)
 	for attempt in 240:

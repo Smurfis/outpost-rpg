@@ -197,6 +197,7 @@ func set_weapon(id: String) -> void:
 		if replacement != null:
 			sword_mesh.mesh = replacement.mesh
 			sword_mesh.material_override = replacement.material_override
+			replacement.free()
 		sword_mesh.scale = Vector3(0.85, 0.84, 0.85) if id == "iron_blade" else Vector3(0.81, 0.78, 0.81) if id == "spear" else Vector3(0.76, 0.76, 0.76)
 	elif id == "iron_blade":
 		sword_mesh.scale = Vector3(0.90, 0.84, 0.90)
