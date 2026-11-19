@@ -6,6 +6,15 @@ var last_from := Vector2i.MAX
 var last_to := Vector2i.MAX
 var waypoints := PackedVector3Array()
 
+var profile_ai := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
+var ai_usec := 0
+
+func _physics_process(delta: float) -> void:
+	var started := Time.get_ticks_usec() if profile_ai else 0
+	super._physics_process(delta)
+	if profile_ai:
+		ai_usec += Time.get_ticks_usec()-started
+
 func _underground() -> bool:
 	var p := hero.global_position
 	var cell := Vector2i(floori(p.x),floori(p.z))

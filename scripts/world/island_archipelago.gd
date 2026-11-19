@@ -508,6 +508,9 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
 
+var profile_stream := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
+var stream_usec := 0
+
 func _process(delta: float) -> void:
 	if terrain == null:
 		return
@@ -527,8 +530,11 @@ func _process(delta: float) -> void:
 		if not _loaded.is_empty():
 			_clear_stream()
 		return
+	var started := Time.get_ticks_usec() if profile_stream else 0
 	_queue_near(position)
 	_build_pending()
+	if profile_stream:
+		stream_usec += Time.get_ticks_usec()-started
 	if mine != null:
 		mine.visit(position)
 	_update_cutaway(game, position, delta)

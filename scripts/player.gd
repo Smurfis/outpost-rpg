@@ -79,6 +79,7 @@ const STEP_LANDING_TOLERANCE: float = 0.06
 const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front edge.
 # Dungeon portal interaction state: manually operated by default.
 var interaction_target: Vector3 = Vector3.ZERO
+signal interaction_move_stopping
 var interaction_moving: bool = false
 var interaction_locked: bool = false
 var station_waypoints: PackedVector3Array = PackedVector3Array()
@@ -100,6 +101,8 @@ func move_along_station_path(path: PackedVector3Array) -> void:
 	interaction_moving = true
 
 func stop_interaction_move() -> void:
+	if interaction_moving:
+		interaction_move_stopping.emit()
 	interaction_moving = false
 	path_navigation = false
 	station_waypoints.clear()

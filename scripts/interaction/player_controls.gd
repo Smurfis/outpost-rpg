@@ -39,6 +39,8 @@ func context_button() -> MouseButton:
 
 func setup(ref: Node) -> void:
 	game = ref
+	if trace_movement:
+		game.hero.interaction_move_stopping.connect(trace_route.bind("stop"))
 	var preferred: String = str(get_tree().root.get_meta("outpost_input_mode", OS.get_environment("OUTPOST_INPUT_MODE")))
 	desktop = preferred != "touch" if preferred != "" else OS.get_name() != "Android"
 	_build_inspection()
@@ -197,10 +199,42 @@ func _unhandled_input(event: InputEvent) -> void:
 				game.camera.size = clampf(game.camera.size + 1.5, 10.0, 32.0)
 		get_viewport().set_input_as_handled()
 
+# Opt-in diagnostics. Keep raycasts, stack collection and formatting off the normal path.
+var trace_movement := OS.get_environment("OUTPOST_TRACE_MOVEMENT") == "1"
+var profile_mine_frames := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
+var path_usec := 0
+var _trace_view := ""
+var _trace_waypoint := Vector3.INF
+
+func trace_route(event: String) -> void:
+	var h = game.hero
+	var island = game.terrain_surface.archipelago if game.terrain_surface!=null else null
+	var end_cell := Vector2i(floori(destination.x),floori(destination.z))
+	var contacts := []
+	for i in h.get_slide_collision_count():
+		var contact = h.get_slide_collision(i)
+		contacts.append([contact.get_collider().name,contact.get_position(),contact.get_normal()])
+	var endpoint := {}
+	if island != null and island.terrain != null:
+		var floor_y: int = island.terrain.caves.floor_at(end_cell.x,end_cell.y)
+		endpoint = {"floor":floor_y, "backing":island.terrain.is_solid(end_cell.x,floori(destination.y)-1,end_cell.y),
+			"clearance":not island.terrain.is_solid(end_cell.x,floori(destination.y+0.1),end_cell.y),
+			"chunk_loaded":island._loaded.has(island._cell_at(destination)),
+			"visible_pick":PICKER.resolve(game,game.camera.unproject_position(destination)).get("position"),
+			"view":Vector2i(island._region,island._sector)}
+	print("ROUTE ",event," tick ",Engine.get_physics_frames()," destination ",destination," endpoint ",endpoint,
+		" player ",h.position," waypoint ",h.interaction_target," left ",h.station_waypoints.size(),
+		" contacts ",contacts," velocity ",h.velocity," recoil ",h.knockback_velocity," hp ",h.health,
+		" keyboard ",Input.get_vector("outpost_left","outpost_right","outpost_up","outpost_down"),
+		" stick ",game.hud.move_vector," modal ",modal_open()," age/stuck ",route_age,"/",stalled,
+		" stack ",get_stack() if event=="stop" else [])
+
 func primary_at(screen: Vector2, allow_hold: bool = true) -> bool:
 	if point_over_ui(screen):
 		return false
 	var hit: Dictionary = PICKER.resolve(game, screen)
+	if trace_movement:
+		print("ROUTE click ",screen," ray hit ",hit)
 	if hit.is_empty():
 		cancel()
 		return false
@@ -247,7 +281,13 @@ func approach(clicked: Node3D) -> bool:
 	return _plan(game.target_range(target))
 
 func _plan(reach: float) -> bool:
+	var started := Time.get_ticks_usec() if profile_mine_frames else 0
 	var path: PackedVector3Array = PATH.plan_world(game, game.hero.global_position, destination, reach)
+	if profile_mine_frames:
+		path_usec += Time.get_ticks_usec()-started
+	if trace_movement:
+		_trace_waypoint = Vector3.INF
+		print("ROUTE plan to ",destination," waypoints ",path)
 	if path.is_empty():
 		cancel()
 		game.hud.toast("No safe route to that location.")
@@ -259,6 +299,8 @@ func _plan(reach: float) -> bool:
 	return true
 
 func cancel() -> void:
+	if trace_movement and navigating:
+		trace_route("cancel before reset")
 	target = null
 	navigating = false
 	hold_ground = false
@@ -278,9 +320,17 @@ func _physics_process(delta: float) -> void:
 		return
 	repath_left = maxf(0.0, repath_left - delta)
 	if navigating:
+		if trace_movement and game.terrain_surface != null and game.terrain_surface.archipelago != null:
+			var island = game.terrain_surface.archipelago
+			var view := str(island._sector,"/",island._region,"/",island._center)
+			var waypoint: Vector3 = game.hero.interaction_target
+			if view != _trace_view or waypoint != _trace_waypoint or (stalled < 0.5 and stalled+delta >= 0.5):
+				_trace_view = view
+				_trace_waypoint = waypoint
+				trace_route("waypoint, view or stuck transition")
 		route_age += delta
 		if route_age > 22.0:
-			_fail_route()
+			_fail_route("route timeout")
 			return
 		if target != null:
 			if not game.target_available(target):
@@ -305,7 +355,7 @@ func _physics_process(delta: float) -> void:
 					return
 		if not game.hero.interaction_moving:
 			if target != null:
-				_fail_route()
+				_fail_route("target approach ended outside interaction range")
 			else:
 				navigating = false
 		elif game.hero.global_position.distance_to(last_position) > 0.15:
@@ -314,7 +364,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			stalled += delta
 			if stalled > 1.5:
-				_fail_route()
+				_fail_route("no physical progress for 1.5 seconds")
 	if hold_ground and repath_left <= 0.0 and not rotating:
 		var screen: Vector2 = get_viewport().get_mouse_position()
 		if point_over_ui(screen):
@@ -325,7 +375,9 @@ func _physics_process(delta: float) -> void:
 				primary_at(screen)
 			repath_left = REPATH_SECONDS
 
-func _fail_route() -> void:
+func _fail_route(reason: String) -> void:
+	if trace_movement:
+		trace_route(reason)
 	cancel()
 	game.hud.toast("Movement stopped: destination is unreachable.")
 
@@ -454,5 +506,11 @@ func _notification(what: int) -> void:
 		gesture_button = 0
 		if game != null and game.hero != null:
 			game.hero.blocking = false
-		cancel()
+		if trace_movement and navigating:
+			trace_route("application notification %d" % what)
+		hold_ground = false
+		# Focus loss releases held input. A committed ground path has no
+		# dependency on the mouse once its waypoints have been accepted.
+		if what == NOTIFICATION_APPLICATION_PAUSED or not desktop or target != null:
+			cancel()
 		hide_inspection()

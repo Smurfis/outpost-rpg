@@ -9,6 +9,26 @@ const CORNERS := [Vector3.ZERO, Vector3.RIGHT, Vector3.UP, Vector3(1, 1, 0),
 const QUADS := [[5, 1, 3, 7], [0, 4, 6, 2], [2, 6, 7, 3],
 	[4, 0, 1, 5], [4, 5, 7, 6], [1, 0, 2, 3]]
 
+# Transform complete quads with the engine's packed-array operations. Store
+# the original winding and projected atlas coordinates once per orientation.
+static var face_points: Array[PackedVector3Array] = []
+static var face_normals: Array[PackedVector3Array] = []
+static var face_uv: Array[PackedVector2Array] = []
+
+static func _init_quads() -> void:
+	for face in DIRECTIONS.size():
+		var points := PackedVector3Array()
+		var directions := PackedVector3Array()
+		var uvs := PackedVector2Array()
+		for corner in [0,3,2,0,2,1]:
+			var p: Vector3 = CORNERS[QUADS[face][corner]]
+			points.append(p)
+			directions.append(Vector3(DIRECTIONS[face]))
+			uvs.append(Vector2(p.z,p.y) if face<2 else (Vector2(p.x,p.z) if face<4 else Vector2(p.x,p.y)))
+		face_points.append(points)
+		face_normals.append(directions)
+		face_uv.append(uvs)
+
 static func build(terrain, origin: Vector2i, size: int, hidden: Dictionary) -> Dictionary:
 	var job = new()
 	var masks := {}
@@ -34,6 +54,8 @@ var face_count := 0
 var cut_faces := 0
 
 func begin(source, key: Vector2i, width: int, mask: Dictionary) -> void:
+	if face_points.is_empty():
+		_init_quads()
 	terrain = source
 	origin = key
 	size = width
@@ -60,12 +82,7 @@ func _bits(x: int, z: int) -> int:
 		var sampled := int(reusable.solid[col]) & ~int(hidden.get(col,0))
 		columns[col] = sampled
 		return sampled
-	var top: int = maxi(terrain.height_at(x,z), terrain.caves.floor_at(x,z))
-	assert(top - DATA.BEDROCK < 63)
-	var bits := 0
-	for y in range(DATA.BEDROCK,top):
-		if terrain.is_solid(x,y,z):
-			bits |= 1 << (y-DATA.BEDROCK)
+	var bits: int = terrain.solid_column(x,z)
 	if reusable.has("solid"):
 		reusable.solid[col] = bits
 	bits &= ~int(hidden.get(col,0))
@@ -107,15 +124,14 @@ func _column(x: int, z: int) -> void:
 				var tile: int = terrain.top_tile(x,z) if y == top-1 and face == 2 else 4
 				if face == 2 and y+1 == terrain.caves.floor_at(x,z) and top > y+3:
 					tile = 6 # Existing gravel atlas for the natural cave bed.
-				var q: Array = QUADS[face]
-				var p := Vector3(voxel)
-				var tile_data := Vector2(tile, -9999 if face in [2,3] else y+1)
-				for corner in [0,3,2,0,2,1]:
-					var point: Vector3 = p + CORNERS[q[corner]]
-					positions.append(point)
-					normals.append(Vector3(DIRECTIONS[face]))
-					uv.append(Vector2(point.z, point.y) if face < 2 else (Vector2(point.x, point.z) if face < 4 else Vector2(point.x, point.y)))
-					atlas_tiles.append(tile_data)
+				var base_uv := Vector2(z,y) if face<2 else (Vector2(x,z) if face<4 else Vector2(x,y))
+				positions.append_array(Transform3D(Basis.IDENTITY,Vector3(voxel))*face_points[face])
+				normals.append_array(face_normals[face])
+				uv.append_array(Transform2D(0.0,base_uv)*face_uv[face])
+				var tile_data := PackedVector2Array()
+				tile_data.resize(6)
+				tile_data.fill(Vector2(tile,-9999 if face in [2,3] else y+1))
+				atlas_tiles.append_array(tile_data)
 				face_count += 1
 			exposed >>= 1
 			y += 1
