@@ -23,9 +23,24 @@ var inspected: Node3D
 var tooltip: PanelContainer
 var tooltip_label: Label
 var highlight: MeshInstance3D
+var aim_position := Vector3.ZERO
+var aim_valid := false
+const ORBIT_DRAG_THRESHOLD := 8.0
+var gesture_button: int = 0
+var gesture_start := Vector2.ZERO
+var gesture_dragged := false
+var gesture_started_over_ui := false
+
+func orbit_button() -> MouseButton:
+	return MOUSE_BUTTON_MIDDLE
+
+func context_button() -> MouseButton:
+	return MOUSE_BUTTON_RIGHT
 
 func setup(ref: Node) -> void:
 	game = ref
+	if trace_movement:
+		game.hero.interaction_move_stopping.connect(trace_route.bind("stop"))
 	var preferred: String = str(get_tree().root.get_meta("outpost_input_mode", OS.get_environment("OUTPOST_INPUT_MODE")))
 	desktop = preferred != "touch" if preferred != "" else OS.get_name() != "Android"
 	_build_inspection()
@@ -37,6 +52,7 @@ func set_desktop(value: bool) -> void:
 	desktop = value
 	hold_ground = false
 	rotating = false
+	gesture_button = 0
 	game.hud._reset_touch()
 	game.hud.set_desktop_mode(desktop)
 	hide_inspection()
@@ -71,6 +87,14 @@ func _ui_at(node: Node, point: Vector2) -> bool:
 func _input(event: InputEvent) -> void:
 	if game == null:
 		return
+	if event is InputEventKey and event.is_action("outpost_block"):
+		if not event.pressed:
+			game.hero.blocking = false
+		if not modal_open():
+			if event.pressed and desktop and not event.echo and str(game.equipment.get("offhand", "")) == "shield":
+				game.hero.blocking = true
+			get_viewport().set_input_as_handled()
+			return
 	# Chat owns keyboard focus. Escape must close it rather than opening
 	# other modals; gameplay shortcuts must never fire while typing.
 	if game.chat != null and game.chat.chat_open and event is InputEventKey:
@@ -100,25 +124,37 @@ func _input(event: InputEvent) -> void:
 			close_interface()
 			get_viewport().set_input_as_handled()
 			return
-	# Desktop RMB orbits even above a decorative HUD panel. Some panels
-	# consume GUI mouse presses before _unhandled_input, which previously
-	# prevented the drag from starting in otherwise empty world-space.
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and desktop and not OS.has_feature("mobile") and not modal_open():
-		if event.pressed:
-			rotating = true
+	# Right click acts only on release; crossing the drag threshold makes it
+	# an orbit gesture instead. Middle drag remains an alternative orbit.
+	if event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE] and desktop and not OS.has_feature("mobile"):
+		if event.pressed and not modal_open() and gesture_button == 0:
+			gesture_button = event.button_index
+			gesture_start = event.position
+			gesture_started_over_ui = point_over_ui(event.position)
+			gesture_dragged = false
 			hold_ground = false
-		else:
+			get_viewport().set_input_as_handled()
+		elif not event.pressed and gesture_button == event.button_index:
+			var click_context: bool = gesture_button == MOUSE_BUTTON_RIGHT and not gesture_dragged and not gesture_started_over_ui and not point_over_ui(event.position) and not modal_open()
+			gesture_button = 0
 			rotating = false
-		get_viewport().set_input_as_handled()
+			if click_context:
+				var hit: Dictionary = PICKER.resolve(game, event.position)
+				var clicked: Node3D = hit.get("target")
+				if is_instance_valid(clicked):
+					approach(clicked)
+			get_viewport().set_input_as_handled()
 		return
 	# Releases must always clear gestures, including over UI or outside a modal.
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			hold_ground = false
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
+		elif event.button_index == orbit_button():
 			rotating = false
-	if event is InputEventMouseMotion and rotating:
-		if not modal_open():
+	if event is InputEventMouseMotion and gesture_button != 0:
+		if not modal_open() and (gesture_dragged or event.position.distance_to(gesture_start) >= ORBIT_DRAG_THRESHOLD):
+			gesture_dragged = true
+			rotating = true
 			game.drag_camera(event.relative.x)
 		get_viewport().set_input_as_handled()
 
@@ -127,6 +163,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if modal_open():
+			return
+		if event.is_action_pressed("outpost_build") and game.experimental_building_enabled and game.building != null:
+			game.building.set_enabled(not game.building.enabled)
+			game.hud.toast("Building enabled" if game.building.enabled else "Building closed")
+			get_viewport().set_input_as_handled()
 			return
 		if event.is_action_pressed("outpost_map"):
 			game.toggle_world_map()
@@ -145,21 +186,55 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match event.button_index:
 			MOUSE_BUTTON_LEFT:
-				if not rotating:
+				if game.building != null and game.building.enabled:
+					game.building.update_preview(event.position)
+					game.building.place_preview()
+					get_viewport().set_input_as_handled()
+					return
+				if not rotating and gesture_button == 0:
 					primary_at(event.position)
-			MOUSE_BUTTON_RIGHT:
-				rotating = true
-				hold_ground = false
 			MOUSE_BUTTON_WHEEL_UP:
 				game.camera.size = clampf(game.camera.size - 1.5, 10.0, 32.0)
 			MOUSE_BUTTON_WHEEL_DOWN:
 				game.camera.size = clampf(game.camera.size + 1.5, 10.0, 32.0)
 		get_viewport().set_input_as_handled()
 
+# Opt-in diagnostics. Keep raycasts, stack collection and formatting off the normal path.
+var trace_movement := OS.get_environment("OUTPOST_TRACE_MOVEMENT") == "1"
+var profile_mine_frames := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
+var path_usec := 0
+var _trace_view := ""
+var _trace_waypoint := Vector3.INF
+
+func trace_route(event: String) -> void:
+	var h = game.hero
+	var island = game.terrain_surface.archipelago if game.terrain_surface!=null else null
+	var end_cell := Vector2i(floori(destination.x),floori(destination.z))
+	var contacts := []
+	for i in h.get_slide_collision_count():
+		var contact = h.get_slide_collision(i)
+		contacts.append([contact.get_collider().name,contact.get_position(),contact.get_normal()])
+	var endpoint := {}
+	if island != null and island.terrain != null:
+		var floor_y: int = island.terrain.caves.floor_at(end_cell.x,end_cell.y)
+		endpoint = {"floor":floor_y, "backing":island.terrain.is_solid(end_cell.x,floori(destination.y)-1,end_cell.y),
+			"clearance":not island.terrain.is_solid(end_cell.x,floori(destination.y+0.1),end_cell.y),
+			"chunk_loaded":island._loaded.has(island._cell_at(destination)),
+			"visible_pick":PICKER.resolve(game,game.camera.unproject_position(destination)).get("position"),
+			"view":Vector2i(island._region,island._sector)}
+	print("ROUTE ",event," tick ",Engine.get_physics_frames()," destination ",destination," endpoint ",endpoint,
+		" player ",h.position," waypoint ",h.interaction_target," left ",h.station_waypoints.size(),
+		" contacts ",contacts," velocity ",h.velocity," recoil ",h.knockback_velocity," hp ",h.health,
+		" keyboard ",Input.get_vector("outpost_left","outpost_right","outpost_up","outpost_down"),
+		" stick ",game.hud.move_vector," modal ",modal_open()," age/stuck ",route_age,"/",stalled,
+		" stack ",get_stack() if event=="stop" else [])
+
 func primary_at(screen: Vector2, allow_hold: bool = true) -> bool:
 	if point_over_ui(screen):
 		return false
 	var hit: Dictionary = PICKER.resolve(game, screen)
+	if trace_movement:
+		print("ROUTE click ",screen," ray hit ",hit)
 	if hit.is_empty():
 		cancel()
 		return false
@@ -206,7 +281,13 @@ func approach(clicked: Node3D) -> bool:
 	return _plan(game.target_range(target))
 
 func _plan(reach: float) -> bool:
+	var started := Time.get_ticks_usec() if profile_mine_frames else 0
 	var path: PackedVector3Array = PATH.plan_world(game, game.hero.global_position, destination, reach)
+	if profile_mine_frames:
+		path_usec += Time.get_ticks_usec()-started
+	if trace_movement:
+		_trace_waypoint = Vector3.INF
+		print("ROUTE plan to ",destination," waypoints ",path)
 	if path.is_empty():
 		cancel()
 		game.hud.toast("No safe route to that location.")
@@ -218,6 +299,8 @@ func _plan(reach: float) -> bool:
 	return true
 
 func cancel() -> void:
+	if trace_movement and navigating:
+		trace_route("cancel before reset")
 	target = null
 	navigating = false
 	hold_ground = false
@@ -237,9 +320,17 @@ func _physics_process(delta: float) -> void:
 		return
 	repath_left = maxf(0.0, repath_left - delta)
 	if navigating:
+		if trace_movement and game.terrain_surface != null and game.terrain_surface.archipelago != null:
+			var island = game.terrain_surface.archipelago
+			var view := str(island._sector,"/",island._region,"/",island._center)
+			var waypoint: Vector3 = game.hero.interaction_target
+			if view != _trace_view or waypoint != _trace_waypoint or (stalled < 0.5 and stalled+delta >= 0.5):
+				_trace_view = view
+				_trace_waypoint = waypoint
+				trace_route("waypoint, view or stuck transition")
 		route_age += delta
 		if route_age > 22.0:
-			_fail_route()
+			_fail_route("route timeout")
 			return
 		if target != null:
 			if not game.target_available(target):
@@ -264,7 +355,7 @@ func _physics_process(delta: float) -> void:
 					return
 		if not game.hero.interaction_moving:
 			if target != null:
-				_fail_route()
+				_fail_route("target approach ended outside interaction range")
 			else:
 				navigating = false
 		elif game.hero.global_position.distance_to(last_position) > 0.15:
@@ -273,7 +364,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			stalled += delta
 			if stalled > 1.5:
-				_fail_route()
+				_fail_route("no physical progress for 1.5 seconds")
 	if hold_ground and repath_left <= 0.0 and not rotating:
 		var screen: Vector2 = get_viewport().get_mouse_position()
 		if point_over_ui(screen):
@@ -284,7 +375,9 @@ func _physics_process(delta: float) -> void:
 				primary_at(screen)
 			repath_left = REPATH_SECONDS
 
-func _fail_route() -> void:
+func _fail_route(reason: String) -> void:
+	if trace_movement:
+		trace_route(reason)
 	cancel()
 	game.hud.toast("Movement stopped: destination is unreachable.")
 
@@ -344,14 +437,33 @@ func _build_inspection() -> void:
 
 func inspect_at(screen: Vector2) -> void:
 	if point_over_ui(screen):
+		aim_valid = false
 		hide_inspection()
 		return
 	var hit: Dictionary = PICKER.resolve(game, screen)
+	aim_valid = not hit.is_empty()
+	if aim_valid:
+		aim_position = hit.position
 	inspected = hit.get("target")
 	if not is_instance_valid(inspected):
 		hide_inspection()
 		return
-	show_tip(INSPECT.world(game, inspected), screen)
+	var verb := "Interact"
+	if inspected.is_in_group("stations"):
+		verb = "Smelt" if str(inspected.station_id) == "forge" else "Craft"
+	elif inspected.is_in_group("resources"):
+		verb = "Chop" if inspected.kind == "wood" else "Mine" if inspected.kind in ["stone", "iron", "coal", "iron_ore"] else "Gather"
+	elif inspected.is_in_group("enemies"):
+		verb = "Attack"
+	elif str(inspected.get_meta("world_kind", "")) == "chest":
+		verb = "Open"
+	elif str(inspected.get_meta("world_kind", "")) == "merchant":
+		verb = "Trade"
+	elif str(inspected.get_meta("world_kind", "")) == "npc":
+		verb = "Talk"
+	else:
+		verb = str(inspected.get_meta("world_action", "Interact"))
+	show_tip("RMB " + verb if desktop else "Tap " + verb, game.camera.unproject_position(inspected.global_position + Vector3.UP))
 	highlight.global_position = inspected.global_position + Vector3.UP * 0.07
 	highlight.show()
 	if desktop:
@@ -376,15 +488,29 @@ func _process(delta: float) -> void:
 		return
 	hover_elapsed += delta
 	if modal_open():
+		aim_valid = false
 		hide_inspection()
 	elif desktop and hover_elapsed >= 0.10:
 		hover_elapsed = 0.0
-		inspect_at(get_viewport().get_mouse_position())
+		if game.building != null and game.building.enabled:
+			hide_inspection()
+			game.building.update_preview(get_viewport().get_mouse_position())
+		else:
+			inspect_at(get_viewport().get_mouse_position())
 	elif not desktop and is_instance_valid(inspected) and not inspected.is_visible_in_tree():
 		hide_inspection()
 
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
 		rotating = false
-		cancel()
+		gesture_button = 0
+		if game != null and game.hero != null:
+			game.hero.blocking = false
+		if trace_movement and navigating:
+			trace_route("application notification %d" % what)
+		hold_ground = false
+		# Focus loss releases held input. A committed ground path has no
+		# dependency on the mouse once its waypoints have been accepted.
+		if what == NOTIFICATION_APPLICATION_PAUSED or not desktop or target != null:
+			cancel()
 		hide_inspection()

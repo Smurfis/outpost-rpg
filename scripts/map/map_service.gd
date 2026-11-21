@@ -39,7 +39,7 @@ func cell_at(point: Vector3) -> Vector2i:
 	return Vector2i(floori(point.x / CELL), floori(point.z / CELL))
 
 func inside(point: Vector3) -> bool:
-	return biome != null and absf(point.x) < biome.map_half and absf(point.z) < biome.map_half
+	return biome != null and absf(point.x) < biome.map_world_half and absf(point.z) < biome.map_world_half
 
 func visibility_at(point: Vector3) -> int:
 	if not inside(point) or not discovered.has(cell_at(point)):

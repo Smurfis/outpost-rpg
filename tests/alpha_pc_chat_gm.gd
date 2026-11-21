@@ -55,7 +55,14 @@ func _run() -> void:
 	check(game.hero.health >= 100 and game.mana > 30, "GM heal restores health and mana")
 	check(GM.execute(game, ".tp 0 0").begins_with("Teleported") and absf(game.hero.global_position.x) < 1.0,
 		"GM teleport uses world terrain sample")
-	check(GM.execute(game, ".island 1").contains("fractal feature branch"), "Vanilla Alpha cannot teleport to non-existing islands")
+	var response: String = GM.execute(game, ".island 1")
+	var remote: Variant = game.terrain_surface.get("archipelago") if game.terrain_surface != null else null
+	if remote != null:
+		check(response.contains("Island 1") and absf(game.hero.global_position.x - 172.0) < 1.0,
+			"GM command can reach a generated island when the feature is available")
+	else:
+		check(response.contains("fractal feature branch"),
+			"Plain Alpha reports that procedurally generated islands are unavailable")
 	GM.execute(game, ".home")
 	check(game.hero.global_position.distance_to(Vector3(0, 0.35, 0)) < 0.01,
 		"GM home returns to original spawn")

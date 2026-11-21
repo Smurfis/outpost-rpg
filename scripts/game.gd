@@ -9,6 +9,7 @@ const HUD = preload("res://scripts/hud.gd")
 const MENU = preload("res://scripts/menu.gd")
 const STATION = preload("res://scripts/station.gd")
 const STATION_PATH = preload("res://scripts/navigation/crafting_station_path.gd")
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 const VOXEL_BIOME = preload("res://scripts/voxel/voxel_biome.gd")
 const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
@@ -39,7 +40,15 @@ const FOOD_IDS: Array[String] = ["meal", "stew", "cooked_shrimp"]
 @export var fields_biome_enabled: bool = true # Original outpost clearing remains flat.
 @export var chunk_streaming_enabled: bool = true # Stream finite 192x192 Fields in 12x12 cells.
 @export var diorama_map_enabled: bool = true # Disable to retain the legacy minimap fallback.
+@export var experimental_archipelago_enabled: bool = true # Feature branch: remote fractal islands and caves.
 const SAVE = "user://outpost_progress_v02.json"
+const KEY_BINDINGS = "user://outpost_keybindings.cfg"
+const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_building.gd")
+@export var experimental_building_enabled: bool = false
+var building: Node3D
+var saved_blocks: Array = []
+var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
+var swap_context_and_orbit: bool = false
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
 
 var hero
@@ -53,7 +62,13 @@ var camera_focus_smooth: Vector3 = Vector3.ZERO
 const CAMERA_DRAG_RADIANS_PER_PIXEL: float = 0.006
 var equipment: Dictionary = {"weapon": "training_blade", "offhand": "", "back": "", "bag": "", "tool_wood": "", "tool_mining": "", "tool_forage": ""}
 var bag_quality: Dictionary = {} # One maintained 0-3 star quality per owned bag type.
+var best_craft_rolls: Dictionary = {} # Highest scoring crafted roll retained per equipment ID.
+var last_craft_roll: Dictionary = {}
+var last_craft_improved: bool = false
 var overflow_loot: Dictionary = {} # No reward is discarded when over capacity.
+var death_tombstones: Dictionary = {} # Persisted grave-id -> position, contents, and crafted metadata.
+var next_tombstone_id: int = 1
+var tombstone_nodes: Dictionary = {}
 var active_quick_tool: String = "training_blade"
 const QUICK_TOOL_IDS: Array[String] = ["training_blade", "spear", "iron_blade", "axe", "pickaxe", "satchel", "torch", "shield"]
 var inventory: Dictionary = {"wood": 0, "stone": 0, "hide": 0, "coins": 0, "copper": 0, "silver": 0, "gold": 0, "gems": 0, "fiber": 0, "berries": 0, "meal": 0, "axe": 0, "pickaxe": 0, "shield": 0, "torch": 0, "spear": 0, "satchel": 0, "iron": 0, "coal": 0, "clay": 0, "herbs": 0, "mushrooms": 0, "reeds": 0, "iron_ingot": 0, "iron_blade": 0, "bricks": 0, "linen": 0, "cloak": 0, "tonic": 0, "stew": 0, "backpack_t1": 0, "backpack_t2": 0, "wood_satchel_t1": 0, "wood_satchel_t2": 0, "ore_satchel_t1": 0, "ore_satchel_t2": 0}
@@ -164,6 +179,9 @@ func _ready() -> void:
 	controls = CONTROLS.new()
 	add_child(controls)
 	controls.setup(self)
+	building = EXPERIMENTAL_BUILDING.new()
+	add_child(building)
+	building.setup(self, saved_blocks)
 	world_map = WORLD_MAP.new()
 	add_child(world_map)
 	world_map.setup(self, map_service)
@@ -185,15 +203,37 @@ func _register_keys() -> void:
 	if InputMap.has_action("outpost_jump"):
 		InputMap.erase_action("outpost_jump")
 	binds["map"] = [KEY_M]
+	binds["build"] = [KEY_B]
+	binds["block"] = [KEY_SHIFT]
+	var preferences := ConfigFile.new()
+	preferences.load(KEY_BINDINGS)
 	for action in binds:
 		var key_name: String = "outpost_" + str(action)
 		if not InputMap.has_action(key_name):
 			InputMap.add_action(key_name)
 		InputMap.action_erase_events(key_name)
-		for code in binds[action]:
+		var codes: Variant = preferences.get_value("keys", str(action), binds[action])
+		if not codes is Array:
+			codes = binds[action]
+		for code in codes:
+			if not (code is int) or int(code) <= 0:
+				continue
 			var event := InputEventKey.new()
 			event.physical_keycode = int(code)
 			InputMap.action_add_event(key_name, event)
+
+func rebind_key(action: String, physical_key: int) -> bool:
+	var name: String = "outpost_" + action
+	if physical_key <= 0 or not InputMap.has_action(name) or action == "cancel":
+		return false
+	var event := InputEventKey.new()
+	event.physical_keycode = physical_key
+	InputMap.action_erase_events(name)
+	InputMap.action_add_event(name, event)
+	var preferences := ConfigFile.new()
+	preferences.load(KEY_BINDINGS)
+	preferences.set_value("keys", action, [physical_key])
+	return preferences.save(KEY_BINDINGS) == OK
 
 func _unhandled_input(event: InputEvent) -> void:
 	pass # Shared controller routes InputMap actions after GUI consumption.
@@ -212,6 +252,7 @@ func _process(delta: float) -> void:
 	mana = minf(MAX_MANA, mana + MANA_REGEN_PER_SECOND * delta)
 	world_time += delta
 	_camera(delta)
+	_update_shadow_budget()
 	if day_night != null and hud != null:
 		hud.set_day_clock(day_night.clock_text(), day_night.is_night(), str(equipment.get("offhand", "")) == "torch")
 	if hero == null or hud == null:
@@ -279,7 +320,9 @@ func _camera(delta: float) -> void:
 	# camera collision. Raising the framing for that ray hit displaced the
 	# hero on screen without clearing the obstruction. Only protect the
 	# actual camera position, keeping player and world collisions unchanged.
-	camera_occlusion_rise = lerpf(camera_occlusion_rise, _camera_clearance_rise(destination), 1.0 - exp(-5.0 * t))
+	var required_rise: float = _camera_clearance_rise(destination)
+	# Never ease into solid terrain; only smooth the descent after clearance.
+	camera_occlusion_rise = maxf(required_rise, lerpf(camera_occlusion_rise, required_rise, 1.0 - exp(-5.0 * t)))
 	# Old position interpolation lagged behind smoothed yaw, so look_at()
 	# changed pitch unpredictably when users swiped sideways very quickly.
 	# Yaw and focus are already smoothed; rebuild the *exact* orbital offset
@@ -300,11 +343,11 @@ func _camera_clearance_rise(destination: Vector3) -> float:
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	# Usually one query. Extra probes are bounded and only run when solid
 	# geometry overlaps the camera itself, never for a blocked sightline.
-	for rise in range(8):
+	for rise in range(41):
 		_camera_clearance_query.transform = Transform3D(Basis.IDENTITY, destination + Vector3.UP * float(rise))
 		if space.intersect_shape(_camera_clearance_query, 1).is_empty():
 			return float(rise)
-	return 7.0
+	return 40.0
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -355,12 +398,22 @@ func _lighting() -> void:
 	if voxel_art_enabled:
 		sun.light_color = Color("ffe0a9")
 		sun.light_energy = 1.45
-	sun.shadow_enabled = false # Preserve Android budget on first visual pass.
+	sun.shadow_enabled = not OS.has_feature("mobile") # Android retains the lower-cost shadow mode.
 	add_child(sun)
 	day_night = NIGHTFALL.new()
 	day_night.name = "DayNightCycle"
 	add_child(day_night)
 	day_night.configure(env, sun, dawn)
+
+func _update_shadow_budget() -> void:
+	if day_night == null or day_night.sunlight == null or hero == null or hero.torch_light == null:
+		return
+	var budget: int = clampi(shadow_light_budget, 0, 2)
+	var torch_equipped: bool = str(equipment.get("offhand", "")) == "torch"
+	# With one shadow light, favour the torch indoors and the sun outdoors.
+	var torch_priority: bool = torch_equipped and day_night.interior_blend > 0.5
+	day_night.sunlight.shadow_enabled = budget > 0 and (budget > 1 or not torch_priority)
+	hero.torch_light.shadow_enabled = budget > 1 or (budget == 1 and torch_priority)
 
 func _world() -> void:
 	var floor_body := StaticBody3D.new()
@@ -378,7 +431,7 @@ func _world() -> void:
 		terrain_surface = landscape
 		# Stream the first 7x7 region across frames. Loading UI can show honest progress.
 		var loading_entry: bool = bool(get_tree().root.get_meta("outpost_defer_world_generation", false))
-		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry)
+		landscape.build(fields_biome_enabled, 64012, chunk_streaming_enabled, loading_entry, experimental_archipelago_enabled)
 	else:
 		block(Vector3(46, 0.98, 46), Vector3(0, -0.55, 0), Color("597a4d"))
 		_terrain_path(Vector3(-18, 0, -1), Vector3(20, 0, 2), 2.05, Color("9a8464"))
@@ -671,12 +724,16 @@ func _resources() -> void:
 
 
 func _enemies() -> void:
-	# Original voxel boar spawns are untouched. Quaternius pigs and wolves
-	# are separate animated creatures; a pig is not a boar replacement.
+	# Original hostile boar population, upgraded to animated Cube World art.
 	for pos in [Vector3(10, 0.2, 11), Vector3(-14, 0.2, -10), Vector3(16, 0.2, -13)]:
 		var boar = ENEMY.new()
 		add_child(boar)
 		boar.setup(self, hero, pos)
+	# Use the existing animated pig in the former raccoon locations.
+	for pos in [Vector3(-11, 0.2, 15), Vector3(13, 0.2, -5)]:
+		var pig = WILDLIFE.new()
+		add_child(pig)
+		pig.setup(self, hero, pos, "pig")
 	for pos in [Vector3(6, 0.2, -9), Vector3(-7, 0.2, 13)]:
 		var pig = WILDLIFE.new()
 		add_child(pig)
@@ -703,8 +760,12 @@ func enemy_display_name(enemy: Node) -> String:
 		return "Enemy"
 	if enemy.is_in_group("dungeon_guardians"):
 		return str(enemy.get("display_name"))
+	if enemy.is_in_group("gm_overlords"):
+		return "Abyssal Overlord"
 	if enemy.is_in_group("wild_boars") or enemy.name.begins_with("WildBoar"):
 		return "Wild boar"
+	if enemy.is_in_group("wild_raccoons") or enemy.name.begins_with("WildRaccoon"):
+		return "Raccoon"
 	if enemy.is_in_group("wild_wolves"):
 		return "Wolf"
 	if enemy.is_in_group("wild_pigs"):
@@ -760,7 +821,11 @@ func target_frame_data(target: Node3D) -> Dictionary:
 	var accent: Color = Color("#907e71")
 	var name_color: Color = Color("#f8ecdb")
 	var coloured_affixes: Array[Dictionary] = []
-	if target.is_in_group("dungeon_guardians"):
+	if target.is_in_group("gm_overlords"):
+		rank = "BOSS"
+		accent = Color("#e3ae63")
+		name_color = Color("#f5c97b")
+	elif target.is_in_group("dungeon_guardians"):
 		var rarity: int = DUNGEON_RARITY.bounded(int(target.get("quality")))
 		# Official dungeon rarity sets the creature portion of the name.
 		# Keep the existing gold/silver boss and elite frame accents separate.
@@ -875,7 +940,7 @@ func target_range(target: Node3D) -> float:
 func target_in_range(target: Node3D) -> bool:
 	if not target_available(target) or hero == null:
 		return false
-	return hero.global_position.distance_to(target.global_position) < target_range(target)
+	return hero.global_position.distance_to(target.global_position) < target_range(target) and (not target.has_method("melee_visible") or target.melee_visible())
 
 func target_on_cooldown(target: Node3D) -> bool:
 	return (target.is_in_group("enemies") and attack_delay > 0.0) or (target.is_in_group("resources") and gather_delay > 0.0)
@@ -1174,6 +1239,31 @@ func claim_overflow() -> int:
 		hud.toast("Recovered %d stored loot items." % moved if moved > 0 else "Make more room in your bag first.")
 	return moved
 
+func can_discard_item(item_id: String) -> bool:
+	# The starter weapon and wallet are not bag stacks. Equipped items must
+	# be unequipped before a player can destroy them deliberately.
+	return item_id != "" and item_id not in ["training_blade", "coins", "copper", "silver", "gold", "gems"] and int(inventory.get(item_id, 0)) > 0 and not is_equipped(item_id)
+
+func discard_item(item_id: String, amount: int) -> bool:
+	if amount <= 0 or not can_discard_item(item_id):
+		return false
+	var count: int = mini(amount, int(inventory.get(item_id, 0)))
+	inventory[item_id] = int(inventory.get(item_id, 0)) - count
+	if int(inventory[item_id]) <= 0:
+		best_craft_rolls.erase(item_id)
+		weapon_enchants.erase(item_id)
+		bag_quality.erase(item_id)
+		for slot in quick_slots:
+			if str(quick_slots[slot]) == item_id:
+				quick_slots[slot] = ""
+		if active_quick_tool == item_id:
+			active_quick_tool = "training_blade"
+	_save()
+	_refresh_menu()
+	if hud != null:
+		hud.toast("Destroyed %d × %s." % [count, item_id.replace("_", " ").capitalize()])
+	return true
+
 func _craft_fits(recipe: Dictionary) -> bool:
 	var staged: Dictionary = inventory.duplicate()
 	var ingredients: Dictionary = recipe.get("ingredients", {})
@@ -1185,7 +1275,7 @@ func _craft_fits(recipe: Dictionary) -> bool:
 		return CARRY.used(staged, equipped_bag_id(), equipped_bag_stars()) <= bag_capacity() + 0.0001
 	var new_bag: bool = CARRY.is_bag(result_id)
 	var already_owned: bool = int(staged.get(result_id, 0)) > 0
-	if not new_bag or not already_owned:
+	if (not new_bag or not already_owned) and not (QUALITY.is_gear(result_id) and already_owned):
 		staged[result_id] = int(staged.get(result_id, 0)) + maxi(1, int(recipe.get("amount", 1)))
 	var preview_bag: String = result_id if new_bag else equipped_bag_id()
 	var preview_stars: int = (mini(3, int(bag_quality.get(result_id, 0)) + 1)) if new_bag else equipped_bag_stars()
@@ -1206,7 +1296,7 @@ func craft_block_reason(id: String) -> String:
 			return "This weapon already has Fiery Weapon."
 		if character_level() < 3:
 			return "Requires character level 3 and consumes one level."
-	if owns_unique(result):
+	if owns_unique(result) and not QUALITY.is_gear(result):
 		return "You already own this unique item."
 	if CARRY.is_bag(result) and int(inventory.get(result, 0)) > 0 and int(bag_quality.get(result, 0)) >= 3:
 		return "This bag already has maximum 3-star quality."
@@ -1279,9 +1369,7 @@ func begin_craft(id: String) -> bool:
 		"id": id,
 		"station": str(recipe.get("station", "workbench")),
 		"elapsed": 0.0,
-		"duration": maxf(0.5, float(recipe.get("seconds", 2.0))),
-		"strokes": 0,
-		"required": maxi(1, int(recipe.get("strokes", 3)))
+		"duration": maxf(1.4, float(recipe.get("seconds", 2.0)))
 	}
 	craft_work_cooldown = 0.0
 	if menu != null:
@@ -1294,19 +1382,8 @@ func craft_item(id: String) -> void:
 		hud.toast("Cannot begin this recipe at the current station.")
 
 func work_craft() -> bool:
-	if crafting.is_empty() or craft_work_cooldown > 0.0:
-		return false
-	var strokes: int = int(crafting.get("strokes", 0))
-	var required: int = int(crafting.get("required", 1))
-	if strokes >= required:
-		return false
-	crafting["strokes"] = strokes + 1
-	craft_work_cooldown = 0.18
-	var active_station: String = str(crafting.get("station", ""))
-	if stations.has(active_station):
-		stations[active_station].stroke()
-	_try_finish_craft()
-	return true
+	# Compatibility with legacy station actions; no repeated tapping required.
+	return false
 
 func _update_crafting(delta: float) -> void:
 	craft_work_cooldown = maxf(0.0, craft_work_cooldown - delta)
@@ -1322,8 +1399,6 @@ func _try_finish_craft() -> void:
 	if crafting.is_empty():
 		return
 	if float(crafting.get("elapsed", 0.0)) < float(crafting.get("duration", 1.0)):
-		return
-	if int(crafting.get("strokes", 0)) < int(crafting.get("required", 1)):
 		return
 	var recipe: Dictionary = _recipe_by_id(str(crafting.get("id", "")))
 	var station_id: String = str(crafting.get("station", ""))
@@ -1363,15 +1438,25 @@ func _try_finish_craft() -> void:
 		inventory[str(ingredient)] = int(inventory.get(str(ingredient), 0)) - int(ingredients[ingredient])
 	var result: String = str(recipe.get("result", ""))
 	var is_bag: bool = CARRY.is_bag(result)
-	if is_bag:
-		var existing: bool = int(inventory.get(result, 0)) > 0
-		if not existing:
+	var first_craft: bool = int(inventory.get(result, 0)) == 0
+	last_craft_roll.clear()
+	last_craft_improved = false
+	if QUALITY.is_gear(result):
+		# Reforging is an RNG attempt, not an extra inventory duplicate.
+		# A failed upgrade never replaces the player's strongest existing roll.
+		last_craft_roll = QUALITY.roll_item(result)
+		last_craft_improved = QUALITY.is_upgrade(last_craft_roll, best_craft_rolls.get(result, {}))
+		if last_craft_improved:
+			best_craft_rolls[result] = last_craft_roll.duplicate(true)
+		inventory[result] = maxi(1, int(inventory.get(result, 0)))
+	elif is_bag:
+		if first_craft:
 			inventory[result] = 1
 		bag_quality[result] = mini(3, int(bag_quality.get(result, 0)) + 1)
 	else:
 		inventory[result] = int(inventory.get(result, 0)) + maxi(1, int(recipe.get("amount", 1)))
-	if hud != null and not result.is_empty():
-		hud.record_loot(result, 1 if is_bag else maxi(1, int(recipe.get("amount", 1))))
+	if hud != null and not result.is_empty() and (not QUALITY.is_gear(result) or first_craft):
+		hud.record_loot(result, 1 if is_bag or QUALITY.is_gear(result) else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
 	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
@@ -1380,7 +1465,15 @@ func _try_finish_craft() -> void:
 		equipment[slot] = result
 		_apply_equipment()
 	gain_experience(8)
-	hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
+	if hud != null:
+		if QUALITY.is_gear(result):
+			var rank_name: String = QUALITY.rarity_name(int(last_craft_roll.get("rarity", 0)))
+			var feedback: String = "%s %s • +8 XP" % [rank_name, str(recipe.get("name", result))]
+			if not last_craft_improved:
+				feedback += " • best roll retained"
+			hud.toast(feedback)
+		else:
+			hud.toast("%s • %d stars! +8 XP" % [str(recipe.get("name", result)), int(bag_quality[result])] if is_bag else "Created %s! +8 XP" % str(recipe.get("name", result)))
 	_save()
 	if menu != null:
 		menu.on_craft_completed(result)
@@ -1480,6 +1573,7 @@ func _apply_whirlwind_tick() -> void:
 		var hit_point: Vector3 = enemy.global_position
 		remember_attacked_enemy(enemy)
 		enemy.receive_damage(whirlwind_tick_damage * _armor_break_damage_multiplier(enemy))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(hit_point)
 		if str(weapon_enchants.get(whirlwind_tick_weapon, "")) == "fire" and enemy.has_method("ignite"):
 			enemy.ignite(4.0)
@@ -1506,6 +1600,48 @@ func _advance_whirlwind_ticks(delta: float) -> void:
 	while whirlwind_ticks_done < WHIRLWIND_TICK_TIMES.size() and whirlwind_tick_clock >= WHIRLWIND_TICK_TIMES[whirlwind_ticks_done]:
 		_apply_whirlwind_tick()
 
+func crafting_bonus(stat: String) -> float:
+	var total: float = 0.0
+	var seen: Dictionary = {}
+	for slot in equipment:
+		var equipped: String = str(equipment[slot])
+		if equipped.is_empty() or seen.has(equipped):
+			continue
+		seen[equipped] = true
+		var roll: Dictionary = best_craft_rolls.get(equipped, {})
+		var boosts: Dictionary = roll.get("bonuses", {})
+		total += float(boosts.get(stat, 0))
+	return total
+
+func has_crafting_affix(affix: String) -> bool:
+	for equipped in equipment.values():
+		var roll: Dictionary = best_craft_rolls.get(str(equipped), {})
+		if str(roll.get("affix", "")) == affix:
+			return true
+	return false
+
+func crafted_damage(base: float) -> float:
+	var result: float = base + crafting_bonus("damage")
+	if has_crafting_affix("Brutal"):
+		result *= 1.08
+	if has_crafting_affix("Titanic"):
+		result *= 1.12
+	if randf() * 100.0 < minf(40.0, crafting_bonus("crit_chance")):
+		result *= 1.5
+	return result
+
+func crafted_attack_delay(base: float) -> float:
+	var speed: float = crafting_bonus("attack_speed")
+	if has_crafting_affix("Swift"):
+		speed += 6.0
+	if has_crafting_affix("Titanic"):
+		speed -= 8.0
+	return base / maxf(0.65, 1.0 + speed * 0.01)
+
+func apply_crafted_lifesteal() -> void:
+	if hero != null and has_crafting_affix("Vampiric"):
+		hero.health = minf(100.0, hero.health + 2.0)
+
 func use_weapon_skill(slot: int) -> bool:
 	if slot < 0 or slot >= unlocked_skill_slots() or hero == null or (menu != null and menu.visible):
 		return false
@@ -1528,10 +1664,10 @@ func use_weapon_skill(slot: int) -> bool:
 		return false
 	var weapon: String = current_weapon_id()
 	var base: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	var dealt: float = base * LEVELS.multiplier_for_skill(skill)
+	var dealt: float = crafted_damage(base) * LEVELS.multiplier_for_skill(skill)
 	mana = maxf(0.0, mana - mana_cost)
 	skill_cooldowns[skill] = LEVELS.cooldown_for_skill(skill)
-	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else 0.55
+	attack_delay = LEVELS.WHIRLWIND_DURATION if skill == "whirlwind" else crafted_attack_delay(0.55)
 	if skill == "whirlwind":
 		# A first hit on cast, then the second and third hits at 0.30s and
 		# 0.60s. Every tick checks live positions and creates sword-tip sparks.
@@ -1545,9 +1681,12 @@ func use_weapon_skill(slot: int) -> bool:
 		whirlwind_unique_hits.clear()
 		_apply_whirlwind_tick()
 	else:
+		hero.combat_facing_target = target
+		hero.combat_facing_time = 0.65
 		hero.swing()
 		remember_attacked_enemy(target)
 		target.receive_damage(dealt * _armor_break_damage_multiplier(target))
+		apply_crafted_lifesteal()
 		hero.show_weapon_hit_effect(target.global_position)
 		if skill == "armor_break" and target_available(target):
 			# A real follow-up damage increase for six seconds. Applying it
@@ -1608,7 +1747,7 @@ func consume(item_id: String, heal: float) -> void:
 	if int(inventory.get(item_id, 0)) <= 0 or hero.health >= 99.9:
 		return
 	inventory[item_id] = int(inventory[item_id]) - 1
-	hero.health = minf(100.0, hero.health + heal)
+	hero.health = minf(100.0, hero.health + heal + crafting_bonus("ability_power"))
 	hud.toast("Used %s: +%d health" % [item_id.capitalize(), int(heal)])
 	_save()
 	_refresh_menu()
@@ -1623,6 +1762,8 @@ func attack(selected: Node3D = null) -> void:
 	if not target_available(target) or not target_in_range(target):
 		return
 	remember_attacked_enemy(target)
+	hero.combat_facing_target = target
+	hero.combat_facing_time = 0.65
 	if coop != null and coop.in_party_dungeon():
 		var guardian = target
 		if guardian == null or not guardian.has_meta("encounter_slot"):
@@ -1633,11 +1774,12 @@ func attack(selected: Node3D = null) -> void:
 		return
 	if target == null:
 		return # No popup spam when outside combat range.
-	attack_delay = 0.55
+	attack_delay = crafted_attack_delay(0.55)
 	hero.swing()
 	var weapon: String = str(equipment.get("weapon", "training_blade"))
-	var damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
-	target.receive_damage(damage * _armor_break_damage_multiplier(target))
+	var base_damage: float = 24.0 if weapon == "iron_blade" else 16.0 if weapon == "spear" else 8.0
+	target.receive_damage(crafted_damage(base_damage) * _armor_break_damage_multiplier(target))
+	apply_crafted_lifesteal()
 	hero.show_weapon_hit_effect(target.global_position)
 	if str(weapon_enchants.get(weapon, "")) == "fire" and target.has_method("ignite"):
 		target.ignite(4.0)
@@ -1648,10 +1790,11 @@ func attack(selected: Node3D = null) -> void:
 func on_enemy_killed(kind: String = "boar") -> void:
 	kills += 1
 	var is_wolf: bool = kind == "wolf"
-	var hide: int = 2 if is_wolf else 1
-	var coins: int = 5 if is_wolf else 2 if kind == "pig" else 3
-	var xp: int = 16 if is_wolf else 8 if kind == "pig" else 12
-	var label: String = "Wolf" if is_wolf else "Pig" if kind == "pig" else "Boar"
+	var is_boss: bool = kind == "overlord"
+	var hide: int = 6 if is_boss else 2 if is_wolf else 1
+	var coins: int = 60 if is_boss else 5 if is_wolf else 2 if kind in ["pig", "raccoon"] else 3
+	var xp: int = 150 if is_boss else 16 if is_wolf else 8 if kind in ["pig", "raccoon"] else 12
+	var label: String = "Abyssal Overlord" if is_boss else "Wolf" if is_wolf else "Pig" if kind == "pig" else "Raccoon" if kind == "raccoon" else "Boar"
 	grant_item("hide", hide, true)
 	grant_item("coins", coins, true)
 	gain_experience(xp)
@@ -1699,6 +1842,138 @@ func _on_first_night() -> void:
 		hud.toast("I don't care how dark the world gets. You are its light.")
 	_save()
 
+func _tombstone_position(at: Vector3) -> Vector3:
+	# Snap to ground where available so the grave does not float, while
+	# retaining the death location in tunnels and on unusual terrain.
+	var ray := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 3.0, at + Vector3.DOWN * 8.0, 1 | 2 | 8)
+	if hero != null:
+		ray.exclude = [hero.get_rid()]
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(ray)
+	if not hit.is_empty():
+		return Vector3(at.x, float(hit.position.y) + 0.05, at.z)
+	return at
+
+func _spawn_tombstone_node(tombstone_id: String) -> void:
+	if tombstone_nodes.has(tombstone_id) or not death_tombstones.has(tombstone_id):
+		return
+	var record: Dictionary = death_tombstones[tombstone_id]
+	var coords: Array = record.get("position", [])
+	if coords.size() != 3:
+		return
+	var art := Node3D.new()
+	var base := MeshInstance3D.new()
+	base.name = "TombstoneBase"
+	var plinth := BoxMesh.new()
+	plinth.size = Vector3(1.0, 0.22, 0.76)
+	base.mesh = plinth
+	base.position.y = 0.11
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color("#555864")
+	base.material_override = stone
+	art.add_child(base)
+	var head := MeshInstance3D.new()
+	head.name = "TombstoneHead"
+	var slab := BoxMesh.new()
+	slab.size = Vector3(0.7, 0.95, 0.22)
+	head.mesh = slab
+	head.position = Vector3(0, 0.65, -0.09)
+	head.material_override = stone
+	art.add_child(head)
+	var grave = WORLD_OBJECT.new()
+	grave.name = "DeathTombstone_" + tombstone_id
+	add_child(grave)
+	grave.global_position = Vector3(float(coords[0]), float(coords[1]), float(coords[2]))
+	grave.setup(self, tombstone_id, "Your Tombstone", "tombstone", art, record.get("contents", {}))
+	tombstone_nodes[tombstone_id] = grave
+
+func on_player_defeated(at: Vector3) -> void:
+	# Transfer once, before teleporting. No starter weapon is an inventory
+	# item. Currency and all carried equipment/resources are included.
+	var carried: Dictionary = {}
+	for raw_id in inventory:
+		var item_id: String = str(raw_id)
+		var amount: int = int(inventory.get(item_id, 0))
+		if amount > 0:
+			carried[item_id] = amount
+			inventory[item_id] = 0
+	for slot in equipment:
+		equipment[slot] = "training_blade" if slot == "weapon" else ""
+	active_quick_tool = "training_blade"
+	for slot in quick_slots:
+		quick_slots[slot] = ""
+	if not carried.is_empty():
+		var site: Vector3 = _tombstone_position(at)
+		var tombstone_id: String = "grave_%d" % next_tombstone_id
+		next_tombstone_id += 1
+		death_tombstones[tombstone_id] = {
+			"position": [site.x, site.y, site.z],
+			"contents": carried,
+			"bag_quality": bag_quality.duplicate(true),
+			"best_craft_rolls": best_craft_rolls.duplicate(true),
+			"weapon_enchants": weapon_enchants.duplicate(true)
+		}
+		bag_quality.clear()
+		best_craft_rolls.clear()
+		weapon_enchants.clear()
+		_spawn_tombstone_node(tombstone_id)
+	_apply_equipment()
+	_save()
+	if hud != null:
+		hud.toast("Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost.")
+
+func tombstone_contents(tombstone_id: String) -> Dictionary:
+	if not death_tombstones.has(tombstone_id):
+		return {}
+	return (death_tombstones[tombstone_id].get("contents", {}) as Dictionary).duplicate(true)
+
+func open_tombstone(tombstone_id: String) -> void:
+	if menu == null or not death_tombstones.has(tombstone_id):
+		return
+	menu.open_storage("YOUR TOMBSTONE  •  RECOVER", tombstone_contents(tombstone_id), tombstone_id)
+
+func take_tombstone_item(tombstone_id: String, item_id: String) -> int:
+	if not death_tombstones.has(tombstone_id):
+		return 0
+	var record: Dictionary = death_tombstones[tombstone_id]
+	var contents: Dictionary = record.get("contents", {})
+	var available: int = maxi(0, int(contents.get(item_id, 0)))
+	if available <= 0:
+		return 0
+	var already_owned: bool = int(inventory.get(item_id, 0)) > 0
+	var taken: int = grant_item(item_id, available)
+	if taken <= 0:
+		return 0
+	var left: int = available - taken
+	if left > 0:
+		contents[item_id] = left
+	else:
+		contents.erase(item_id)
+		if not already_owned:
+			for field in ["bag_quality", "best_craft_rolls", "weapon_enchants"]:
+				var archived: Dictionary = record.get(field, {})
+				if archived.has(item_id):
+					match field:
+						"bag_quality":
+							bag_quality[item_id] = archived[item_id]
+						"best_craft_rolls":
+							best_craft_rolls[item_id] = archived[item_id]
+						"weapon_enchants":
+							weapon_enchants[item_id] = archived[item_id]
+	if contents.is_empty():
+		death_tombstones.erase(tombstone_id)
+		if tombstone_nodes.has(tombstone_id):
+			var grave: Node = tombstone_nodes[tombstone_id]
+			tombstone_nodes.erase(tombstone_id)
+			if is_instance_valid(grave):
+				grave.queue_free()
+	else:
+		record["contents"] = contents
+		death_tombstones[tombstone_id] = record
+	_save()
+	if hud != null:
+		hud.toast("Recovered %d × %s." % [taken, item_id.replace("_", " ").capitalize()])
+	return taken
+
 func save_and_return_to_title() -> void:
 	# Single exit path for solo and LAN. Dismantle active sessions before saving
 	# so the next title visit starts offline and no ghost avatars remain.
@@ -1708,8 +1983,9 @@ func save_and_return_to_title() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/title_screen.tscn")
 
 func _save() -> void:
-	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects}
+	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	data["placed_blocks"] = building.serialize() if building != null else saved_blocks
 	if map_service != null:
 		data["map_state"] = map_service.export_state()
 	if f != null:
@@ -1727,10 +2003,12 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	if data.get("placed_blocks") is Array:
+		saved_blocks = data["placed_blocks"].duplicate(true)
 	if map_service != null:
 		map_service.import_state(data.get("map_state", {}))
 	if data.get("opened_world_objects", {}) is Dictionary:
-		opened_world_objects = data["opened_world_objects"].duplicate(true)
+		opened_world_objects = data.get("opened_world_objects", {}).duplicate(true)
 	mana = clampf(float(data.get("mana", MAX_MANA)), 0.0, MAX_MANA)
 	night_quote_seen = bool(data.get("night_quote_seen", false))
 	if data.get("weapon_mastery_xp", {}) is Dictionary:
@@ -1738,7 +2016,7 @@ func _load() -> void:
 			weapon_mastery_xp[str(key)] = maxi(0, int(data["weapon_mastery_xp"][key]))
 	if data.get("gathering_skill_xp", {}) is Dictionary:
 		for key in gathering_skill_xp:
-			gathering_skill_xp[key] = maxi(0, int(data["gathering_skill_xp"].get(key, 0)))
+			gathering_skill_xp[key] = maxi(0, int(data.get("gathering_skill_xp", {}).get(key, 0)))
 	var stored_training: String = str(data.get("last_trained_skill", "training_blade"))
 	if gathering_skill_xp.has(stored_training) or stored_training in ["training_blade", "spear", "iron_blade"]:
 		last_trained_skill = stored_training
@@ -1748,7 +2026,7 @@ func _load() -> void:
 				weapon_enchants[str(key)] = "fire"
 	if data.get("quick_slots", {}) is Dictionary:
 		for slot in ["potion", "consumable"]:
-			var chosen: String = str(data["quick_slots"].get(slot, ""))
+			var chosen: String = str(data.get("quick_slots", {}).get(slot, ""))
 			quick_slots[slot] = chosen if chosen in (["tonic"] if slot == "potion" else FOOD_IDS) else ""
 	if data.get("bag_quality", {}) is Dictionary:
 		for bag_id in data.get("bag_quality", {}):
@@ -1772,14 +2050,21 @@ func _load() -> void:
 		for key in stored:
 			if key is String and not inventory.has(key) and key.length() <= 64:
 				inventory[key] = maxi(0, int(stored[key]))
+	if data.get("best_craft_rolls", {}) is Dictionary:
+		for raw_id in data.get("best_craft_rolls", {}):
+			var item_id: String = str(raw_id)
+			if QUALITY.is_gear(item_id) and int(inventory.get(item_id, 0)) > 0:
+				var clean_roll: Dictionary = QUALITY.sanitise_roll(data["best_craft_rolls"][raw_id])
+				if not clean_roll.is_empty():
+					best_craft_rolls[item_id] = clean_roll
 	active_quick_tool = str(data.get("active_quick_tool", "training_blade"))
 	if (active_quick_tool not in QUICK_TOOL_IDS and active_quick_tool != "shrimp_net") or (active_quick_tool != "training_blade" and int(inventory.get(active_quick_tool, 0)) < 1):
 		active_quick_tool = "training_blade"
 	experience = maxi(0, int(data.get("experience", 0)))
 	kills = maxi(0, int(data.get("kills", 0)))
 	spear_crafted = bool(data.get("spear", false)) or int(inventory.get("spear", 0)) > 0
-	if spear_crafted:
-		inventory["spear"] = maxi(1, int(inventory.get("spear", 0)))
+	# A past quest completion must not silently recreate a spear discarded
+	# by the player or left behind in a tombstone on loading a save.
 	if version >= 5 and data.get("equipment", {}) is Dictionary:
 		var saved_gear: Dictionary = data.get("equipment", {})
 		for slot in equipment:
@@ -1792,6 +2077,33 @@ func _load() -> void:
 			if int(inventory.get(item, 0)) > 0:
 				equipment[equipment_slot(item)] = item
 	_apply_equipment()
+	next_tombstone_id = maxi(1, int(data.get("next_tombstone_id", 1)))
+	if data.get("death_tombstones", {}) is Dictionary:
+		for raw_id in data.get("death_tombstones", {}):
+			var id: String = str(raw_id)
+			var record: Variant = data["death_tombstones"][raw_id]
+			if id.length() > 64 or not record is Dictionary:
+				continue
+			var contents: Variant = record.get("contents", {})
+			var pos: Variant = record.get("position", [])
+			if not contents is Dictionary or not pos is Array or pos.size() != 3:
+				continue
+			var clean_contents: Dictionary = {}
+			for key in contents:
+				var key_id: String = str(key)
+				if not key_id.is_empty() and key_id.length() <= 64 and int(contents[key]) > 0:
+					clean_contents[key_id] = maxi(0, int(contents[key]))
+			if clean_contents.is_empty():
+				continue
+			var clean_record: Dictionary = {
+				"position": pos.duplicate(),
+				"contents": clean_contents,
+				"bag_quality": record.get("bag_quality", {}),
+				"best_craft_rolls": record.get("best_craft_rolls", {}),
+				"weapon_enchants": record.get("weapon_enchants", {})
+			}
+			death_tombstones[id] = clean_record
+			_spawn_tombstone_node(id)
 
 
 func _notification(what: int) -> void:

@@ -24,6 +24,7 @@ func _run() -> void:
 	var subjects: Dictionary = {
 		"Animals/glTF/Wolf.gltf": ["Idle", "Walk", "Run", "Death"],
 		"Animals/glTF/Pig.gltf": ["Idle", "Walk", "Run", "Death"],
+		"Animals/glTF/Raccoon.gltf": ["Idle", "Walk", "Run", "Headbutt", "Death"],
 		"Enemies/glTF/Skeleton.gltf": ["Idle", "Walk", "Attack", "Death"],
 	}
 	for name in subjects:

@@ -8,6 +8,7 @@ var environment: Environment
 var sunlight: DirectionalLight3D
 var sky_material: ProceduralSkyMaterial
 var _tick: float = 0.0
+var interior_blend: float = 0.0
 
 func configure(env: Environment, light: DirectionalLight3D, sky: ProceduralSkyMaterial) -> void:
 	environment = env
@@ -32,6 +33,17 @@ func set_phase(value: float) -> void:
 func _process(delta: float) -> void:
 	if environment == null or sunlight == null or day_length_seconds <= 0.0:
 		return
+	var owner_game: Node = get_parent()
+	var inside: bool = false
+	if owner_game != null:
+		var manager: Node = owner_game.get_node_or_null("Dungeons")
+		inside = manager != null and manager.get("active_instance") != null
+		var terrain: Variant = owner_game.get("terrain_surface")
+		var hero: Variant = owner_game.get("hero")
+		if terrain != null and hero != null and terrain.archipelago != null:
+			var remote: Variant = terrain.archipelago
+			inside = inside or remote._is_below_terrain(hero.global_position)
+	interior_blend = move_toward(interior_blend, 1.0 if inside else 0.0, delta * 1.4)
 	var was_night: bool = is_night()
 	phase = fposmod(phase + delta / day_length_seconds, 1.0)
 	if not was_night and is_night():
@@ -50,8 +62,8 @@ func _apply_light() -> void:
 	var daylight: float = smoothstep(-0.18, 0.74, altitude)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("8496bd").lerp(Color("fff1d8"), daylight)
-	environment.ambient_light_energy = lerpf(0.20, 0.94, daylight)
-	sunlight.light_energy = lerpf(0.04, 1.45, daylight)
+	environment.ambient_light_energy = lerpf(lerpf(0.20, 0.94, daylight), 0.12, interior_blend)
+	sunlight.light_energy = lerpf(lerpf(0.04, 1.45, daylight), 0.03, interior_blend)
 	sunlight.light_color = Color("aab9e7").lerp(Color("ffdfa9"), daylight)
 	sunlight.rotation_degrees = Vector3(-18.0 - phase * 320.0, -30.0, 0.0)
 	if sky_material != null:

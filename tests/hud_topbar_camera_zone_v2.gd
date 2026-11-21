@@ -71,8 +71,8 @@ func _run() -> void:
 	hud._input(echo)
 	verify(hud.top_menu_open, "Synthetic Android mouse echo press+release cannot close the freshly opened modal")
 	hud._set_top_menu(false)
-	verify(not wallet_button.visible and not hud.wallet_frame.visible, "Wallet is no longer a clickable dropdown or opaque popup")
-	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible, "Gold/silver/copper strip replaces separate legacy coins")
+	verify(not wallet_button.visible and hud.wallet_frame.visible, "Wallet is a non-clickable framed strip, not a dropdown")
+	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["gold"] as Label).visible and (hud.wallet_currency_rows["gems"] as Label).visible, "Gold/silver/copper/gems strip replaces separate legacy coins")
 	hud._toggle_wallet()
 	verify(not hud.wallet_open and hud.wallet_currency_rows.copper.visible, "Compatibility wallet toggle cannot hide currency totals")
 

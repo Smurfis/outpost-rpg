@@ -17,7 +17,7 @@ func check(ok: bool, desc: String) -> void:
 		push_error("FAIL CUBE CREATURE: " + desc)
 
 func _run() -> void:
-	for kind in ["pig", "wolf", "skeleton", "goblin"]:
+	for kind in ["pig", "wolf", "raccoon", "demon", "skeleton", "goblin"]:
 		var avatar = VISUAL.new()
 		root.add_child(avatar)
 		check(avatar.configure(kind, 0.7), "Native model instantiates: " + kind)
@@ -25,7 +25,7 @@ func _run() -> void:
 		check(avatar.model != null and is_equal_approx(avatar.model.rotation.y, PI),
 			"Imported +Z artwork is turned to face Outpost -Z: " + kind)
 		var motions: Array = ["Idle", "Walk", "Run", "Death"]
-		if kind in ["skeleton", "goblin"]:
+		if kind in ["skeleton", "goblin", "demon"]:
 			motions.append_array(["Attack", "HitRecieve"])
 		else:
 			motions.append("Headbutt")
@@ -46,9 +46,18 @@ func _run() -> void:
 	await process_frame
 	var pigs: Array[Node] = get_nodes_in_group("wild_pigs")
 	var wolves: Array[Node] = get_nodes_in_group("wild_wolves")
-	check(pigs.size() == 2, "Two animated pigs in the live overworld")
+	check(pigs.size() == 4, "Existing animated pigs replace the two raccoons")
 	check(wolves.size() == 2, "Two animated wolves in the live overworld")
-	check(get_nodes_in_group("wild_boars").size() == 3, "Three original boars preserved")
+	var boars: Array[Node] = get_nodes_in_group("wild_boars")
+	var raccoons: Array[Node] = get_nodes_in_group("wild_raccoons")
+	check(boars.size() == 3, "Three upgraded animated boars remain in the overworld")
+	check(raccoons.is_empty(), "Raccoons no longer spawn in the overworld")
+	check(get_nodes_in_group("gm_pitlords").is_empty(), "The GM boss does not auto-spawn")
+	if not boars.is_empty():
+		var boar = boars[0]
+		check(boar.avatar != null and boar.avatar.animator != null, "Boar uses the animated kit rig")
+		check(boar.avatar.model.get_node_or_null("BoarAccents") != null, "Boar adds tusks and bristles")
+		check(boar.map_record().get("label") == "Wild boar", "Diorama map retains boar label")
 	if not pigs.is_empty():
 		var pig = pigs[0]
 		check(pig.species == "pig" and pig.alive and pig.hp > 0, "Pig has real health / is targetable")

@@ -37,10 +37,11 @@ func _run() -> void:
 	verify(hud.wallet_coin.text.contains("147"), "Wallet shows the actual currency owned")
 	hud.render_status(83.0, {"wood": 9, "stone": 5, "coins": 147}, 40, 0, "training_blade", "Find iron", "")
 	verify(hud.wallet_resource_id == "wood" and hud.wallet_resource_count.text.contains("9"), "Recent gather changes the tracked material")
-	verify(not hud.wallet_open and not hud.wallet_frame.visible, "Wallet is a permanent transparent strip, not a flyout")
+	verify(not hud.wallet_open and hud.wallet_frame.visible, "Wallet is a passive framed strip, not a flyout")
 	verify(not hud.wallet_coin.visible and (hud.wallet_currency_rows["copper"] as Label).text == "147", "Legacy coins appear as copper in the wallet")
 	verify(not hud.wallet_resource_count.visible, "Last tracked resource no longer masquerades as currency")
-	for key in ["gold", "silver", "copper"]:
+	verify(hud.wallet_frame.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Decorative wallet is touch-through")
+	for key in ["gold", "silver", "copper", "gems"]:
 		verify(game.inventory.has(key) and int(game.inventory[key]) >= 0,
 			"Real persistable player currency account exists: " + key)
 		var icon: TextureRect = hud.wallet_currency_icons.get(key) as TextureRect
@@ -50,12 +51,12 @@ func _run() -> void:
 			verify(icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Currency art never blocks touch: " + key)
 	verify((hud.wallet_currency_rows["silver"] as Label).visible, "Silver is visible")
 	var bounds: Array[Rect2] = []
-	for key in ["gold", "silver", "copper"]:
+	for key in ["gold", "silver", "copper", "gems"]:
 		var cell: Label = hud.wallet_currency_rows[key] as Label
 		verify(cell.visible, "Currency appears without a dropdown: " + key)
 		bounds.append(cell.get_global_rect())
-	for i in range(3):
-		var currency: String = ["gold", "silver", "copper"][i]
+	for i in range(4):
+		var currency: String = ["gold", "silver", "copper", "gems"][i]
 		var symbol: TextureRect = hud.wallet_currency_icons[currency] as TextureRect
 		verify(symbol.get_global_rect().end.x <= bounds[i].position.x + 1.0,
 			"Wallet pixel-art symbol stays to the left of its amount: " + currency)
@@ -64,11 +65,11 @@ func _run() -> void:
 			"Currency counters are laid out horizontally without overlapping")
 	# Regression from real Android: the fifth currency used to sit underneath
 	# BAG because the wallet row extended into its button rectangle.
-	verify(bounds[2].end.x <= bag.get_global_rect().position.x - 3.0,
+	verify(bounds[3].end.x <= bag.get_global_rect().position.x - 3.0,
 		"Last currency ends before the BAG button; no top-row overlap")
 	verify(bounds[0].position.x >= hud.hero_status_frame.get_global_rect().end.x + 3.0,
 		"Wallet starts after the portrait and HP/MP instead of covering them")
-	for key in ["gold", "silver", "copper"]:
+	for key in ["gold", "silver", "copper", "gems"]:
 		var label: Label = hud.wallet_currency_rows[key] as Label
 		verify(label.autowrap_mode == TextServer.AUTOWRAP_OFF and label.clip_text,
 			"Wallet amount never wraps into a second line: " + key)
@@ -79,7 +80,7 @@ func _run() -> void:
 	for virtual_size in [Vector2(1280, 720), Vector2(1600, 720)]:
 		hud._layout_player_chrome_for_size(virtual_size, 1.0)
 		var bag_left: float = bag.anchor_left * virtual_size.x
-		var last_currency: Label = hud.wallet_currency_rows["copper"] as Label
+		var last_currency: Label = hud.wallet_currency_rows["gems"] as Label
 		var gems_end: float = last_currency.anchor_right * virtual_size.x
 		var coins_left: float = (hud.wallet_currency_icons["gold"] as TextureRect).anchor_left * virtual_size.x
 		var portrait_end: float = hud.hero_status_frame.anchor_right * virtual_size.x
@@ -92,7 +93,7 @@ func _run() -> void:
 	hud._refresh_wallet({"wood": 9, "stone": 5, "coins": 147})
 	var old_bag_x: float = bag.anchor_left
 	hud._toggle_wallet()
-	verify((hud.wallet_currency_rows["silver"] as Label).visible and not hud.wallet_frame.visible, "Deprecated wallet toggle never opens an opaque panel")
+	verify((hud.wallet_currency_rows["silver"] as Label).visible and hud.wallet_frame.visible and not hud.wallet_open, "Deprecated wallet toggle keeps framed strip passive")
 	verify(absf(bag.anchor_left - old_bag_x) < 0.001, "Passive wallet never shifts the Bag button")
 	hud._set_top_menu(true)
 	verify((hud.wallet_currency_rows["silver"] as Label).visible, "Menu does not hide the horizontal currency display")

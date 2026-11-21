@@ -19,6 +19,11 @@ func _test_game() -> void:
 		quit(1)
 		return
 	var game = scene.instantiate()
+	# This test asserts new-character defaults and must never touch a real save.
+	var test_id := "%d_%d" % [int(Time.get_unix_time_from_system()), OS.get_process_id()]
+	game.save_path = "user://smoke_progress_%s.json" % test_id
+	game.get_node("Dungeons").save_path = "user://smoke_dungeons_%s.json" % test_id
+	root.set_meta("outpost_new_adventure", true)
 	root.add_child(game)
 	await process_frame
 	check(game.hero != null and game.menu != null and game.hud != null, "Player and visual interface exist")
@@ -101,11 +106,10 @@ func _test_game() -> void:
 	check(int(game.inventory.get("spear", 0)) == 0, "Crafting does not instantly deliver item")
 	check(int(game.inventory.get("wood", 0)) == 7, "Materials remain reserved until completion")
 	game._update_crafting(10.0)
-	check(int(game.inventory.get("spear", 0)) == 0, "Timer alone cannot finish without work actions")
-	for i in range(3):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(game.crafting.is_empty(), "Manual workshop actions finish craft")
+	check(game.crafting.is_empty(), "Automatic crafting completes without repeated actions")
+	check(not game.last_craft_roll.is_empty(), "Equipment receives a rarity roll")
+	check(game.best_craft_rolls.has("spear"), "Best crafted spear stats are retained")
+	check(game.menu.progress_bar == null, "No obsolete action button remains after craft")
 	check(int(game.inventory.get("spear", 0)) == 1, "Completed spear enters inventory")
 	check(int(game.inventory.get("wood", 0)) == 4 and int(game.inventory.get("stone", 0)) == 3, "Ingredients deducted once on completion")
 	check(game.spear_crafted, "Spear crafted flag retained")
@@ -114,9 +118,16 @@ func _test_game() -> void:
 	check(str(game.equipment.get("weapon", "")) == "training_blade", "Unequipping restores training blade")
 	check(game.equip_item("spear"), "Owned weapon can be equipped again")
 	check(game.is_equipped("spear"), "Weapon slot now reflects equipped spear")
-	check(not game.can_craft("spear"), "Unique gear cannot be duplicated")
+	check(game.can_craft("spear"), "Owned equipment can be reforged for new RNG stats")
+	var original_spear: Dictionary = game.best_craft_rolls["spear"].duplicate(true)
+	check(game.begin_craft("spear"), "Second quality roll can start")
+	game._update_crafting(10.0)
+	check(int(game.inventory.get("spear", 0)) == 1, "Reforging does not create an extra unique item")
+	check(float(game.best_craft_rolls["spear"]["score"]) >= float(original_spear["score"]), "Reforging never destroys a better roll")
+	check(int(game.inventory.get("wood", 0)) == 1, "Reforging pays the full material cost")
 	game.menu.close_page()
 	game.inventory["stone"] = 6
+	game.inventory["wood"] = 4 # Fresh materials to test cancellation separately.
 	check(game.begin_craft("pickaxe"), "Can start another recipe after axe is already owned")
 	game.cancel_craft()
 	check(game.crafting.is_empty(), "Work can be cancelled")
@@ -149,7 +160,7 @@ func _test_game() -> void:
 	game.inventory["meal"] = 1
 	game.hero.health = 20.0
 	game.use_meal()
-	check(is_equal_approx(game.hero.health, 60.0), "Meal heals 40 HP")
+	check(is_equal_approx(game.hero.health, minf(100.0, 60.0 + game.crafting_bonus("ability_power"))), "Meal heals 40 HP plus equipped Ability Power")
 	check(int(game.inventory.get("meal", 0)) == 0, "Consumed food decrements")
 	game.hero.global_position = game.station_positions["forge"] + Vector3(0, 0.35, 0)
 	game.inventory["iron"] = 3
@@ -157,19 +168,14 @@ func _test_game() -> void:
 	check(game.can_craft("iron_ingot"), "Iron ingot can be smelted at forge")
 	check(game.begin_craft("iron_ingot"), "Forge crafting starts")
 	game._update_crafting(10.0)
-	for i in range(4):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(int(game.inventory.get("iron_ingot", 0)) == 1, "Forge produces refined ingot")
+	check(int(game.inventory.get("iron_ingot", 0)) == 1, "Automatic forge produces refined ingot")
 	check(int(game.inventory.get("iron", 0)) == 0, "Iron ore consumed by recipe")
 	game.inventory["iron_ingot"] = 2
 	game.inventory["wood"] = 2
 	check(game.begin_craft("iron_blade"), "Iron blade can be forged from ingots")
 	game._update_crafting(10.0)
-	for i in range(5):
-		game.craft_work_cooldown = 0.0
-		game.work_craft()
-	check(int(game.inventory.get("iron_blade", 0)) == 1, "Forged blade awarded")
+	check(int(game.inventory.get("iron_blade", 0)) == 1, "Automatically forged blade awarded")
+	check(game.best_craft_rolls.has("iron_blade"), "Forged blade has saved bonuses and rarity")
 	check(game.is_equipped("iron_blade"), "Forged blade automatically equips as the current weapon")
 	game.equip_item("spear")
 	check(game.is_equipped("spear"), "Can switch between owned weapons")
@@ -180,9 +186,13 @@ func _test_game() -> void:
 		game.hero.global_position = boar.global_position + Vector3(0.75, 0, 0)
 		game.menu.close_page()
 		game.attack_delay = 0.0
+		var before_hp: float = boar.hp
 		game.attack()
-		check(is_equal_approx(boar.hp, 8.0), "Iron blade upgrades combat to 24 damage")
-		boar.receive_damage(50.0)
+		# Crafted rarity adds genuine damage and may crit. An exact HP
+		# assertion is nondeterministically wrong after a quality upgrade.
+		check(boar.hp < before_hp - 23.9, "Iron blade deals at least 24 damage, plus any quality rolls")
+		if is_instance_valid(boar) and boar.hp > 0.0:
+			boar.receive_damage(50.0)
 		check(int(game.inventory.get("hide", 0)) > 0, "Boar awards hides")
 	game.queue_free()
 	print("RESULT: %d failed assertion(s)." % failures)

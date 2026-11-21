@@ -1,6 +1,5 @@
 extends SceneTree
-## Pixel boar regression: mesh/material identity, untouched combat and legacy art.
-const PIXELS = preload("res://scripts/voxel/voxel_palette.gd")
+## Existing CI test path retained: upgraded Cube World boars AND added raccoons.
 var failures: int = 0
 
 func _initialize() -> void:
@@ -15,55 +14,33 @@ func check(ok: bool, description: String) -> void:
 
 func _run() -> void:
 	var scene: PackedScene = load("res://scenes/main.tscn")
-	check(scene != null, "Gameplay scene imports")
+	check(scene != null, "Outpost scene imports")
 	if scene == null:
 		quit(1)
 		return
-	root.set_meta("outpost_new_adventure", true)
-	var game = scene.instantiate()
-	root.add_child(game)
-	await process_frame
-	var boars: Array = []
-	for child in game.get_children():
-		if child is CharacterBody3D and child.is_in_group("wild_boars"):
-			boars.append(child)
-	check(boars.size() == 3, "All original boars remain in overworld")
-	if not boars.is_empty():
-		var first: MeshInstance3D
-		for boar in boars:
-			check(boar.hp == 32.0 and boar.alive, "Enemy health and AI begin unchanged")
-			check(boar.visual.get_child_count() == 1, "Boar renders as one combined voxel mesh")
-			var mesh: MeshInstance3D = boar.visual.get_child(0) as MeshInstance3D
-			check(mesh != null and mesh.mesh != null, "Voxel creature owns a valid mesh")
-			if mesh == null:
-				continue
-			check(mesh.material_override == PIXELS.get_material(), "Boar shares the 16x16 nearest-filtered world atlas")
-			check(mesh.material_override.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST, "Creature preserves crisp pixel textures")
-			if first != null:
-				check(mesh.mesh == first.mesh, "Boars reuse a single cached mesh")
-			else:
-				first = mesh
-		var target = boars[0]
-		var start_hp: float = target.hp
-		target.receive_damage(5.0)
-		check(target.hp == start_hp - 5.0 and target.alive, "Original boar damage and combat health stay intact")
-		check(target.collision_layer == 2 and target.collision_mask == 1, "Original enemy collision groups stay intact")
-	game.queue_free()
-	await process_frame
-	var original = scene.instantiate()
-	original.voxel_art_enabled = false
-	root.add_child(original)
-	await process_frame
-	var old_boar
-	for child in original.get_children():
-		if child is CharacterBody3D and child.is_in_group("wild_boars"):
-			old_boar = child
-			break
-	check(old_boar != null, "Legacy appearance still spawns original boars")
-	if old_boar != null:
-		check(old_boar.visual.get_child_count() > 10, "Legacy boar keeps original multi-piece model")
-		check(old_boar.visual.get_node_or_null("VoxelWildBoar") == null, "Legacy graphics toggle prevents voxel creature override")
-	original.queue_free()
-	await process_frame
+	for voxel in [true, false]:
+		root.set_meta("outpost_new_adventure", true)
+		var game = scene.instantiate()
+		game.voxel_art_enabled = voxel
+		root.add_child(game)
+		await process_frame
+		var boars: Array = get_nodes_in_group("wild_boars")
+		var raccoons: Array = get_nodes_in_group("wild_raccoons")
+		check(boars.size() == 3, "Three boars spawn in voxel mode %s" % str(voxel))
+		check(raccoons.is_empty() and get_nodes_in_group("wild_pigs").size() == 4, "Existing pigs replace raccoons without replacing boars")
+		if not boars.is_empty():
+			var target = boars[0]
+			check(target.name == "WildBoar" and target.alive, "Boar remains a hostile creature")
+			check(target.avatar != null and target.avatar.model != null, "Boar uses the animated pig rig")
+			check(target.avatar.animator != null, "Boar has native animation")
+			check(target.avatar.model.get_node_or_null("BoarAccents") != null, "Distinct tusks and bristles decorate boar")
+			check(target.collision_layer == 2 and target.collision_mask == 1, "Boar preserves original hitbox")
+			check(target.hp == 32.0, "Boar starts with original health")
+			var previous: float = target.hp
+			target.receive_damage(5.0)
+			check(target.hp == previous - 5.0, "Boar still takes original combat damage")
+			check(game.enemy_display_name(target) == "Wild boar", "Target HUD identifies boar")
+		game.queue_free()
+		await process_frame
 	print("VOXEL BOAR RESULT: %d failed assertion(s)." % failures)
 	quit(0 if failures == 0 else 1)

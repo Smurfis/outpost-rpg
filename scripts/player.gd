@@ -18,6 +18,7 @@ func update_combat(delta: float) -> void:
 const MODEL_ROOT: String = "res://assets/models/"
 const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
 const WHIRLWIND_TRAIL = preload("res://scripts/vfx/whirlwind_sword_trail.gd")
 const WATER_SURFACE_Y: float = -2.82
@@ -45,6 +46,12 @@ var tool_mesh: MeshInstance3D
 var held_tool_id: String = ""
 var weapon_grip: Node3D
 var combat_phase: float = 0.0
+@export_range(0.0, 180.0) var shield_arc_degrees: float = 120.0
+@export_range(0.0, 1.0) var shield_block_multiplier: float = 0.6
+var blocking: bool = false
+var block_impact: float = 0.0
+var combat_facing_target: Node3D
+var combat_facing_time: float = 0.0
 var gather_phase: float = 0.0
 var whirlwind_remaining: float = 0.0
 var whirlwind_elapsed: float = 0.0
@@ -64,6 +71,7 @@ var step_hop_remaining: float = 0.0
 const STEP_HOP_DURATION: float = 0.28
 var last_gather: String = ""
 var gm_speed_multiplier: float = 1.0 # Temporary Alpha GM console; runtime only.
+var remote_ledge_stall_frames: int = 0 # Only recovers low voxel-edge snags on generated islands.
 @export var auto_step_enabled: bool = true
 @export_range(0.1, 1.5, 0.05) var max_auto_step_height: float = 1.05
 @export_range(0.1, 2.0, 0.05) var max_resource_hop_height: float = 1.9
@@ -71,6 +79,7 @@ const STEP_LANDING_TOLERANCE: float = 0.06
 const STEP_CAPSULE_PROBE: float = 0.46 # Move the sample past the capsule front edge.
 # Dungeon portal interaction state: manually operated by default.
 var interaction_target: Vector3 = Vector3.ZERO
+signal interaction_move_stopping
 var interaction_moving: bool = false
 var interaction_locked: bool = false
 var station_waypoints: PackedVector3Array = PackedVector3Array()
@@ -92,6 +101,8 @@ func move_along_station_path(path: PackedVector3Array) -> void:
 	interaction_moving = true
 
 func stop_interaction_move() -> void:
+	if interaction_moving:
+		interaction_move_stopping.emit()
 	interaction_moving = false
 	path_navigation = false
 	station_waypoints.clear()
@@ -189,6 +200,7 @@ func set_weapon(id: String) -> void:
 		if replacement != null:
 			sword_mesh.mesh = replacement.mesh
 			sword_mesh.material_override = replacement.material_override
+			replacement.free()
 		sword_mesh.scale = Vector3(0.85, 0.84, 0.85) if id == "iron_blade" else Vector3(0.81, 0.78, 0.81) if id == "spear" else Vector3(0.76, 0.76, 0.76)
 	elif id == "iron_blade":
 		sword_mesh.scale = Vector3(0.90, 0.84, 0.90)
@@ -250,6 +262,8 @@ func set_spear(equipped: bool) -> void:
 	set_weapon("spear" if equipped else "training_blade")
 
 func set_shield(equipped: bool) -> void:
+	if not equipped:
+		blocking = false
 	if shield_mesh != null:
 		shield_mesh.visible = equipped
 
@@ -285,7 +299,7 @@ func _build_torch() -> void:
 	torch_light.light_energy = 1.8
 	torch_light.omni_range = 8.0
 	torch_light.omni_attenuation = 1.2
-	torch_light.shadow_enabled = false
+	torch_light.shadow_enabled = not OS.has_feature("mobile")
 	torch_mesh.add_child(torch_light)
 	# Use the packaged PyroLux flame on the existing wrist-attached torch.
 	# Keep the old emissive cube + light as a fallback for source checkouts.
@@ -388,13 +402,107 @@ func _detect_surface_swimming() -> bool:
 	# Never switch buoyancy off just because the player was pushed below the
 	# expected five-metre water band. That produced infinite falling if a
 	# streamed collision tile arrived late, or a knockback crossed the band.
-	return not bool(terrain.is_land_at(global_position.x, global_position.z)) and global_position.y < WATER_SURFACE_Y + 0.6
+	var land: bool = bool(terrain.is_land_at(global_position.x, global_position.z))
+	if land:
+		# The first island beach voxel is submerged at Y=-3. Keep buoyancy
+		# through that shallow landing tile until the swimmer has climbed up
+		# to the dry one-block shoreline. Otherwise buoyancy cuts out while
+		# the avatar is still below the first step and the character sinks.
+		var remote: Variant = terrain.get("archipelago")
+		if remote != null and remote.is_land_at(global_position.x, global_position.z):
+			var beach_y: float = remote.height_at(floori(global_position.x), floori(global_position.z))
+			return beach_y < WATER_SURFACE_Y and global_position.y < WATER_SURFACE_Y + 0.6
+	return not land and global_position.y < WATER_SURFACE_Y + 0.6
+
+
+func _remote_shore_float_target(direction: Vector3) -> float:
+	# Swim up *onto* the next shallow voxel before horizontal collision
+	# reaches its vertical face. Otherwise the swimmer stays at Y=-3.6,
+	# pinned against an otherwise traversable Y=-3 or Y=-2 beach.
+	var default_depth: float = WATER_SURFACE_Y - 0.78
+	if direction.length_squared() < 0.02:
+		return default_depth
+	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
+	if terrain == null:
+		return default_depth
+	var remote: Variant = terrain.get("archipelago")
+	if remote == null or remote.terrain == null:
+		return default_depth
+	var ahead: Vector3 = global_position + direction.normalized() * 1.25
+	if not remote.is_land_at(ahead.x, ahead.z):
+		return default_depth
+	var target_y: float = remote.height_at(floori(ahead.x), floori(ahead.z))
+	var rise: float = target_y - global_position.y
+	# Allow ONLY one normal voxel step. Never swim vertically up a cliff,
+	# wall or mountain; the coast's actual terraced terrain must be used.
+	if rise < -0.30 or rise > max_auto_step_height + 0.30:
+		return default_depth
+	return maxf(default_depth, target_y + 0.16)
+
+
+func _rescue_remote_ledge_snag(direction: Vector3, requested_motion: Vector3, progressed: float) -> void:
+	# On generated voxel cliffs, Godot occasionally classifies the vertical
+	# boundary as an upward-facing *floor* normal (e.g. [-.25, .97, 0]).
+	# is_on_wall() stays false, disabling the normal auto-step solver.
+	# After repeated zero progress, clear only a genuinely safe <=1m edge.
+	if swimming or not is_on_floor() or direction.length_squared() < 0.02:
+		remote_ledge_stall_frames = 0
+		return
+	var terrain: Node = game.get_node_or_null("VoxelAtmosphere")
+	if terrain == null:
+		remote_ledge_stall_frames = 0
+		return
+	var remote: Variant = terrain.get("archipelago")
+	if remote == null or remote.terrain == null or not remote.terrain.near_island(global_position, 6.0):
+		remote_ledge_stall_frames = 0
+		return
+	var intended: float = requested_motion.length()
+	if intended < 0.015 or progressed > intended * 0.20:
+		remote_ledge_stall_frames = 0
+		return
+	remote_ledge_stall_frames += 1
+	if remote_ledge_stall_frames < 5:
+		return
+	remote_ledge_stall_frames = 0
+	var forward: Vector3 = direction.normalized() * 0.30
+	var landing: Vector3 = global_position + forward
+	var top: float = remote.height_at(floori(landing.x), floori(landing.z))
+	var rise: float = top - global_position.y
+	if rise < -0.40 or rise > max_auto_step_height:
+		return
+	# Raise a few centimetres above the coplanar voxel edge, not the next
+	# full block. Recheck both vertical and lateral collision at the new Y.
+	var upward: Vector3 = Vector3.UP * maxf(0.26, rise + 0.12)
+	var original: Transform3D = global_transform
+	# The character is *already touching* a floor-edge triangle, so
+	# test_move(original, upward) can report the existing overlap as an
+	# obstruction. Test the real prospective raised pose instead.
+	var raised: Transform3D = original.translated(upward)
+	if test_move(raised, forward):
+		return
+	var chunk: Vector2i = remote._cell_at(landing)
+	if not remote._loaded.has(chunk):
+		return
+	# The generator's solid voxel field is canonical. A thin ray cast is
+	# unreliable precisely at a voxel seam; avoid teleporting into void.
+	if not remote.terrain.is_solid(floori(landing.x), floori(top) - 1, floori(landing.z)):
+		return
+	global_position += upward + forward
+	velocity.y = 0.0
+	visual_step_offset -= upward + forward
+	visual_step_offset = visual_step_offset.limit_length(1.0)
 
 
 func _physics_process(delta: float) -> void:
 	update_combat(delta)
+	combat_facing_time = maxf(0.0, combat_facing_time - delta)
+	block_impact = maxf(0.0, block_impact - delta)
 	elapsed += delta
+	if torch_light != null and torch_light.visible:
+		torch_light.light_energy = 1.8 + 0.12 * sin(elapsed * 7.0) + 0.06 * sin(elapsed * 13.3)
 	var modal_open: bool = game.controls.modal_open() if game.controls != null else (game.menu != null and game.menu.visible) or interaction_locked
+	if modal_open or str(game.equipment.get("offhand", "")) != "shield":
+		blocking = false
 	swimming = _detect_surface_swimming()
 	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
@@ -450,19 +558,25 @@ func _physics_process(delta: float) -> void:
 	if swimming:
 		# In water, stay inside the swimmable band even if the character
 		# entered fast, or an asynchronous coastal chunk had no collision yet.
-		var float_target: float = WATER_SURFACE_Y - 0.78
+		var float_target: float = _remote_shore_float_target(direction)
 		if global_position.y < WATER_SURFACE_Y - 6.0:
 			# Recovery stays at the SAME ocean coordinates rather than
 			# teleporting to camp or waiting for minutes of slow upward speed.
 			global_position.y = float_target
 			velocity.y = 0.0
 		else:
-			velocity.y = clampf((float_target - global_position.y) * 4.5, -2.4, 4.5)
+			velocity.y = clampf((float_target - global_position.y) * 5.5, -2.4, 4.5)
 	else:
 		velocity.y = -0.1 if grounded_before_motion else velocity.y - 18.0 * delta
+	var motion_from: Vector3 = global_position
 	move_and_slide()
 	if auto_step_enabled and not modal_open and ((grounded_before_motion and velocity.y <= 0.0) or swimming) and is_on_wall() and direction.length_squared() > 0.02:
 		_try_auto_step(direction * speed * delta)
+	# The usual wall step misses rounded capsule/floor contacts on adjacent
+	# voxels. Detect actual forward displacement to avoid false wall climbing.
+	if auto_step_enabled and not modal_open and not swimming:
+		var advance: float = maxf(0.0, (global_position - motion_from).dot(direction))
+		_rescue_remote_ledge_snag(direction, direction * speed * delta, advance)
 	# Interpolate the avatar rig separately from the physics capsule. The
 	# capsule must not tunnel through a ledge and the camera stays independent.
 	visual_step_offset = visual_step_offset.lerp(Vector3.ZERO, 1.0 - exp(-11.0 * delta))
@@ -471,8 +585,20 @@ func _physics_process(delta: float) -> void:
 	if step_hop_remaining > 0.0:
 		hop = sin((1.0 - step_hop_remaining / STEP_HOP_DURATION) * PI) * 0.20
 	walk_amount = move_toward(walk_amount, direction.length(), delta * 8.0)
+	var facing: Vector3 = direction
+	if combat_facing_time > 0.0 and is_instance_valid(combat_facing_target):
+		var target_dir: Vector3 = combat_facing_target.global_position - global_position
+		target_dir.y = 0.0
+		if target_dir.length_squared() > 0.04:
+			facing = target_dir.normalized()
+	elif not modal_open and game.controls != null and game.controls.desktop and game.controls.aim_valid and not interaction_moving:
+		var aim: Vector3 = game.controls.aim_position - global_position
+		aim.y = 0.0
+		if aim.length_squared() > 0.04:
+			facing = aim.normalized()
+	if facing.length_squared() > 0.0025:
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(delta * 12.0, 1.0))
 	if direction.length() > 0.05:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), minf(delta * 12.0, 1.0))
 		walking_phase += delta * 10.6
 	visual.position = visual_step_offset + Vector3.UP * (absf(sin(walking_phase)) * 0.06 * walk_amount + hop)
 	var step: float = sin(walking_phase) * 0.58 * walk_amount
@@ -480,6 +606,8 @@ func _physics_process(delta: float) -> void:
 	right_leg.rotation.x = -step
 	left_arm.rotation.x = -step * 0.55
 	right_arm.rotation.x = step * 0.55
+	if blocking and str(game.equipment.get("offhand", "")) == "shield":
+		left_arm.rotation.x = -1.1 + block_impact * 1.2
 	# Small tuck in midair; attack/gather takes precedence below.
 	if not is_on_floor():
 		left_leg.rotation.x = 0.28
@@ -608,7 +736,16 @@ func apply_knockback(source: Vector3, force: float = 6.0) -> void:
 func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	if source != Vector3.ZERO:
 		apply_knockback(source, 6.3)
-	var protection: float = 0.6 if str(game.equipment.get("offhand", "")) == "shield" else 1.0
+	var protection: float = 1.0
+	var incoming: Vector3 = source - global_position
+	incoming.y = 0.0
+	var forward: Vector3 = -visual.global_basis.z
+	forward.y = 0.0
+	var shielded: bool = blocking and str(game.equipment.get("offhand", "")) == "shield" and source != Vector3.ZERO and incoming.length_squared() > 0.001 and forward.normalized().dot(incoming.normalized()) >= cos(deg_to_rad(shield_arc_degrees * 0.5))
+	if shielded:
+		protection = shield_block_multiplier
+		block_impact = 0.20
+		PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP, 0.0, Color("ffe8a0"), false, false)
 	if int(game.inventory.get("cloak", 0)) > 0:
 		protection *= 0.9
 	var actual: float = amount * protection
@@ -624,10 +761,16 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 	health = maxf(0.0, health - actual)
 	last_hit = elapsed
 	var defeated: bool = health <= 0.0
-	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated)
+	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.9, actual, Color("ff736b"), defeated, defeated)
 	if defeated:
+		# Solo Outpost respawns the hero immediately. Drop the visual as
+		# coloured cubes at the death location, then show the same rig at
+		# the original spawn so the controls/save loop remain unchanged.
+		CRUMBLE.spawn(game, self, visual)
+		visual.visible = false
 		knockback_velocity = Vector3.ZERO
+		game.on_player_defeated(global_position)
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
-		game.hud.toast("Defeated! Respawned at outpost; items kept.")
+		visual.visible = true
 

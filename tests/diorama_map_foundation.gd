@@ -30,7 +30,8 @@ func run() -> void:
 	check(is_equal_approx(float(cell.height), biome._tile_height(-1, 0)), "Land height matches terrain geometry")
 	cache.request_chunk(Vector2i(8, 0))
 	cache.step(144)
-	check(cache.cell_at(96, 0).is_empty(), "No terrain is generated beyond the finite world")
+	check(cache.cell_at(96, 0) == biome.map_cell_at(96, 0) if biome.archipelago != null else cache.cell_at(96, 0).is_empty(),
+		"Map samples extended ocean cells in the archipelago prototype; legacy mode remains bounded")
 	cache.invalidate(Vector2i(-1, 0))
 	check(cache.cell_at(-1, 0).is_empty(), "Invalidation removes a changed chunk")
 	cache.request_chunk(Vector2i(-1, 0))

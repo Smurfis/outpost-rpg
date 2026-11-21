@@ -54,7 +54,7 @@ func _run() -> void:
 	check(int(game.inventory.get("torch", 0)) == 1, "Torch is crafted exactly once")
 	check(game.is_equipped("torch"), "Crafted torch automatically uses offhand")
 	check(game.hero.torch_mesh.visible and game.hero.torch_light.visible, "Torch mesh and real light appear in hand")
-	check(not game.hero.torch_light.shadow_enabled, "Dynamic torch shadows disabled for Android")
+	check(game.hero.torch_light.shadow_enabled == not OS.has_feature("mobile"), "Torch shadows use the platform quality setting")
 	check(game.hero.torch_light.omni_range >= 7.0, "Torch illuminates walking distance")
 	check(int(game.inventory.get("wood", 0)) == 1 and int(game.inventory.get("fiber", 0)) == 1, "Ingredients spent once after successful crafting")
 	game.inventory["shield"] = 1

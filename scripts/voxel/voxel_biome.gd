@@ -8,6 +8,7 @@ const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const HARVESTABLE = preload("res://scripts/resource_node.gd")
 const WILD_BOAR = preload("res://scripts/enemy.gd")
 const WATER_SHADER = preload("res://scripts/voxel/coastal_water.gdshader")
+const ARCHIPELAGO = preload("res://scripts/world/island_archipelago.gd")
 const SEA_LEVEL: float = -2.82
 const SEABED_LEVEL: float = -4.20
 const CHUNK_SIZE: int = 12
@@ -34,11 +35,14 @@ const TILE_GRASS_SAND: int = 18
 const TILE_COAST_SOIL: int = 19
 
 var map_half: int = MAP_HALF
+var map_world_half: int = MAP_HALF # Map can see remote islands while home terrain stays +/-96.
+var archipelago
 var fields_enabled: bool = false
 var world_seed: int = 64012
 var _noise: FastNoiseLite
 var chunk_meshes: Array[MeshInstance3D] = []
 var _shared_water_material: ShaderMaterial
+var _island_ocean_mask: ImageTexture
 var _distant_ocean: MeshInstance3D
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
@@ -49,7 +53,7 @@ var _initial_total: int = 0
 var _initial_built: int = 0
 var _initial_completed: bool = true
 
-func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false, defer_initial_chunks: bool = false) -> void:
+func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: bool = false, defer_initial_chunks: bool = false, enable_archipelago: bool = false) -> void:
 	name = "VoxelAtmosphere"
 	fields_enabled = enable_fields
 	stream_enabled = enable_fields and enable_streaming
@@ -59,6 +63,7 @@ func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: boo
 	_initial_built = 0
 	_initial_completed = not defer_streaming
 	map_half = STREAM_MAP_HALF if stream_enabled else FIELDS_MAP_HALF if fields_enabled else MAP_HALF
+	map_world_half = 384 if stream_enabled and enable_archipelago else map_half
 	world_seed = seed
 	_noise = FastNoiseLite.new()
 	_noise.seed = world_seed
@@ -76,6 +81,11 @@ func build(enable_fields: bool = false, seed: int = 64012, enable_streaming: boo
 		_make_ground()
 	if stream_enabled:
 		_make_water_horizon()
+		if enable_archipelago:
+			archipelago = ARCHIPELAGO.new()
+			add_child(archipelago)
+			archipelago.setup(world_seed)
+			_configure_island_ocean_mask()
 	else:
 		_make_cliff_rim()
 	if not stream_enabled:
@@ -244,7 +254,7 @@ func _coast_margin(x: float, z: float) -> float:
 		minf(float(map_half) - 1.0 - absf(x), float(map_half) - 1.0 - absf(z)))
 
 func is_land_at(x: float, z: float) -> bool:
-	return _coast_margin(x, z) > 0.0
+	return _coast_margin(x, z) > 0.0 or (archipelago != null and archipelago.is_land_at(x, z))
 
 func _land_cell(x: int, z: int) -> bool:
 	return _coast_margin(float(x) + 0.5, float(z) + 0.5) > 0.0
@@ -269,6 +279,8 @@ func map_cell_at(x: int, z: int) -> Dictionary:
 	# Map consumers use the same cell heights and material choices as the
 	# terrain mesher. An empty result means no generated terrain exists here.
 	if x < -map_half or x >= map_half or z < -map_half or z >= map_half:
+		if archipelago != null and absi(x) < map_world_half and absi(z) < map_world_half:
+			return archipelago.map_cell_at(x, z)
 		return {}
 	var zone: String = coast_zone_at(float(x) + 0.5, float(z) + 0.5)
 	var ground_height: float = _tile_height(x, z)
@@ -659,6 +671,27 @@ func _water_material() -> ShaderMaterial:
 		_shared_water_material = ShaderMaterial.new()
 		_shared_water_material.shader = WATER_SHADER
 	return _shared_water_material
+
+func _configure_island_ocean_mask() -> void:
+	if archipelago == null or archipelago.terrain == null:
+		return
+	var half: int = map_world_half
+	var mask := Image.create(half * 2, half * 2, false, Image.FORMAT_R8)
+	mask.fill(Color.BLACK)
+	# Sample the existing terrain rather than approximating island shorelines.
+	# Restrict evaluation to island bounds; all other cells remain ocean.
+	for island in archipelago.terrain.islands:
+		var center: Vector2i = island["center"]
+		var radius: int = ceili(float(island["radius"]) + 5.0)
+		for x in range(maxi(-half, center.x - radius), mini(half, center.x + radius + 1)):
+			for z in range(maxi(-half, center.y - radius), mini(half, center.y + radius + 1)):
+				if archipelago.terrain.height_at(x, z) > SEA_LEVEL:
+					mask.set_pixel(x + half, z + half, Color.WHITE)
+	_island_ocean_mask = ImageTexture.create_from_image(mask)
+	var water := _water_material()
+	water.set_shader_parameter("island_land_mask", _island_ocean_mask)
+	water.set_shader_parameter("island_mask_half_extent", float(half))
+	water.set_shader_parameter("island_land_mask_enabled", true)
 
 
 func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3, shallow_amount: float) -> void:

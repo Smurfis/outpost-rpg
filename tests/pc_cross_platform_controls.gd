@@ -153,7 +153,7 @@ func run() -> void:
 	var yaw: float = game.camera_angle_target
 	var mouse := InputEventMouseButton.new()
 	mouse.position = Vector2(500, 300)
-	mouse.button_index = MOUSE_BUTTON_RIGHT
+	mouse.button_index = MOUSE_BUTTON_MIDDLE
 	mouse.pressed = true
 	Input.parse_input_event(mouse)
 	await process_frame
@@ -162,7 +162,7 @@ func run() -> void:
 	drag.relative = Vector2(40, 0)
 	Input.parse_input_event(drag)
 	await process_frame
-	verify(game.camera_angle_target != yaw and not game.controls.navigating, "RMB drag rotates without interacting")
+	verify(game.camera_angle_target != yaw and not game.controls.navigating, "Middle drag rotates without interacting")
 	mouse.pressed = false
 	Input.parse_input_event(mouse)
 	var zoom: float = game.camera.size

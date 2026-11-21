@@ -1,6 +1,6 @@
 extends Control
-## One fixed, Diablo-style target frame. Its backing, name and red health
-## meter stay in screen space; no mob-following labels or damage text spam.
+## One fixed Diablo-style target HUD: zero frame/background opacity, but
+## visible red health fill, animated damage trail, rarity rank and affix name.
 ## Built from stock Godot controls for GL Compatibility on Android.
 var backing: Panel
 var name_label: RichTextLabel
@@ -23,12 +23,13 @@ func _ready() -> void:
 	add_child(backing)
 	_rect(backing, 0.0, 0.0, 1.0, 1.0)
 	var shell := StyleBoxFlat.new()
-	shell.bg_color = Color(0.055, 0.047, 0.055, 0.89)
-	shell.border_color = _accent
-	shell.set_border_width_all(2)
-	shell.set_corner_radius_all(4)
-	shell.shadow_color = Color(0.02, 0.015, 0.02, 0.6)
-	shell.shadow_size = 5
+	shell.bg_color = Color.TRANSPARENT
+	shell.draw_center = false
+	shell.border_color = Color.TRANSPARENT
+	shell.set_border_width_all(0)
+	shell.set_corner_radius_all(0)
+	shell.shadow_color = Color.TRANSPARENT
+	shell.shadow_size = 0
 	shell.set_content_margin_all(0)
 	backing.add_theme_stylebox_override("panel", shell)
 	# Rich text colours each affix separately, with the base creature
@@ -63,6 +64,7 @@ func _ready() -> void:
 	accent_rule = ColorRect.new()
 	accent_rule.name = "TargetAccentRule"
 	accent_rule.color = _accent
+	accent_rule.visible = false # No opaque separator in the transparent frame.
 	accent_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(accent_rule)
 	_rect(accent_rule, 0.05, 0.49, 0.95, 0.51)
@@ -93,7 +95,7 @@ func _create_meter(id: String, fill_color: Color, background: bool) -> ProgressB
 	meter.value = 100.0
 	meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var empty := StyleBoxFlat.new()
-	empty.bg_color = Color("#120b11") if background else Color(0, 0, 0, 0)
+	empty.bg_color = Color.TRANSPARENT # Transparent even behind the trailing-damage meter.
 	empty.set_border_width_all(0)
 	empty.set_content_margin_all(0)
 	meter.add_theme_stylebox_override("background", empty)
@@ -145,7 +147,6 @@ func show_target(target_id: int, caption: String, hp: float, max_hp: float, rank
 	if accent != _accent:
 		_accent = accent
 		accent_rule.color = accent
-		(backing.get_theme_stylebox("panel") as StyleBoxFlat).border_color = accent
 		rank_label.add_theme_color_override("font_color", accent.lightened(0.18))
 	if fresh:
 		bar.value = _wanted_percent

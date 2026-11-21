@@ -33,6 +33,14 @@ func _run() -> void:
 	verify(frame != null and frame.name == "EnemyTargetFrame", "Single fixed target plate is installed")
 	verify(hud.root.get_node_or_null("FocusedEnemyInfo") == null, "Legacy text-only focused enemy HUD is removed")
 	verify(frame.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Target frame cannot consume movement or attack touches")
+	var shell: StyleBoxFlat = frame.backing.get_theme_stylebox("panel") as StyleBoxFlat
+	verify(shell != null and shell.bg_color.a == 0.0 and shell.border_width_left == 0 and shell.shadow_size == 0,
+		"Target backing, frame border and shadow are fully transparent")
+	verify((frame.bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color.a > 0.9,
+		"Red health bar remains fully visible without the backing")
+	verify((frame.bar.get_theme_stylebox("background") as StyleBoxFlat).bg_color.a == 0.0 and
+		(frame.damage_trail.get_theme_stylebox("background") as StyleBoxFlat).bg_color.a == 0.0,
+		"Health meter backgrounds are completely transparent")
 	var boars: Array[Node] = get_nodes_in_group("wild_boars")
 	verify(not boars.is_empty(), "Live overworld creatures are present")
 	if boars.is_empty():

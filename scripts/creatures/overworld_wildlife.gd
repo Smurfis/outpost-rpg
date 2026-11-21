@@ -1,9 +1,10 @@
 extends CharacterBody3D
-## Cube World animals in the overworld. Pig: roams/grazes and flees; Wolf: patrols,
-## chases and bites. Damage, hitboxes, drops and death/respawn remain game-owned.
+## Cube World pigs and raccoons wander/flee; wolves pursue/attack.
+## All use original hit, collision, animation and loot plumbing.
 const VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 const FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
+const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 var game: Node
 var hero: CharacterBody3D
 var species: String = "pig"
@@ -28,19 +29,19 @@ var burn_tick: float = 0.0
 func setup(game_ref: Node, player_ref: CharacterBody3D, at: Vector3, kind: String) -> void:
 	game = game_ref
 	hero = player_ref
-	species = "wolf" if kind == "wolf" else "pig"
-	name = "WildWolf" if species == "wolf" else "WildPig"
+	species = kind if kind in ["wolf", "pig", "raccoon"] else "pig"
+	name = "WildWolf" if species == "wolf" else "WildRaccoon" if species == "raccoon" else "WildPig"
 	spawn_pos = at
 	position = at
-	rng.seed = int(absf(at.x) * 271.0 + absf(at.z) * 137.0 + (993 if species == "wolf" else 311))
-	hp = 38.0 if species == "wolf" else 20.0
+	rng.seed = int(absf(at.x) * 271.0 + absf(at.z) * 137.0 + (993 if species == "wolf" else 727 if species == "raccoon" else 311))
+	hp = 38.0 if species == "wolf" else 24.0 if species == "raccoon" else 20.0
 	max_hp = hp
 	collision_layer = 2
 	collision_mask = 1
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.43 if species == "wolf" else 0.36
-	capsule.height = 1.25 if species == "wolf" else 1.05
+	capsule.radius = 0.43 if species == "wolf" else 0.38 if species == "raccoon" else 0.36
+	capsule.height = 1.25 if species == "wolf" else 1.10 if species == "raccoon" else 1.05
 	shape.shape = capsule
 	shape.position.y = capsule.height * 0.5
 	add_child(shape)
@@ -48,12 +49,19 @@ func setup(game_ref: Node, player_ref: CharacterBody3D, at: Vector3, kind: Strin
 	add_child(visual)
 	avatar = VISUAL.new()
 	visual.add_child(avatar)
-	if not avatar.configure(species, 0.78):
+	if not avatar.configure(species, 0.73 if species == "raccoon" else 0.78):
 		push_warning("Outpost overworld wildlife model unavailable: " + species)
 	add_to_group("enemies")
 	add_to_group("overworld_wildlife")
-	add_to_group("wild_wolves" if species == "wolf" else "wild_pigs")
+	add_to_group("wild_wolves" if species == "wolf" else "wild_raccoons" if species == "raccoon" else "wild_pigs")
+	add_to_group("map_creatures")
 	_choose_wander()
+
+func map_record() -> Dictionary:
+	return {"id": "mob:%d" % get_instance_id(), "position": global_position,
+		"category": "creature", "label": "Wolf" if species == "wolf" else "Raccoon" if species == "raccoon" else "Pig",
+		"dimension": "overworld", "alive": alive, "visible_on_radar": visible,
+		"disposition": "hostile" if species == "wolf" else "neutral" if species == "raccoon" else "passive"}
 
 func _choose_wander() -> void:
 	wander_timer = rng.randf_range(1.4, 4.1)
@@ -98,7 +106,7 @@ func _physics_process(delta: float) -> void:
 			cooldown = 1.7
 			avatar.play_event("Headbutt")
 			hero.take_hit(7.5, global_position)
-	elif species == "pig" and (distance < 4.7 or panic > 0.0):
+	elif species != "wolf" and (distance < 4.7 or panic > 0.0):
 		if distance > 0.05:
 			direction = -to_hero.normalized()
 		else:
@@ -114,7 +122,7 @@ func _physics_process(delta: float) -> void:
 			direction = leash.normalized()
 		else:
 			direction = wander_direction
-		speed = 1.0 if species == "pig" else 1.25
+		speed = 1.0 if species == "pig" else 1.15 if species == "raccoon" else 1.25
 	# Keep creatures in their overworld neighbourhood, not on dungeon portals.
 	var outward: Vector3 = global_position - spawn_pos
 	outward.y = 0.0
@@ -129,13 +137,13 @@ func _physics_process(delta: float) -> void:
 	if grounded and is_on_wall() and speed > 0.0:
 		VOXEL_STEP.try_step(self, direction * speed * delta, max_climb_height)
 	# A wolf stops advancing at bite range, but must still turn to face its prey.
-	# Pigs continue facing the direction they flee or wander.
+	# Pigs and raccoons face the direction they flee or wander.
 	var facing: Vector3 = direction
 	if species == "wolf" and distance <= 1.55 and distance > 0.02:
 		facing = to_hero.normalized()
 	if facing.length_squared() > 0.02:
 		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-facing.x, -facing.z), minf(1.0, delta * 8.0))
-	avatar.play_motion(speed if direction.length_squared() > 0.02 else 0.0, species == "pig" and speed < 1.2 and wander_direction == Vector3.ZERO)
+	avatar.play_motion(speed if direction.length_squared() > 0.02 else 0.0, species != "wolf" and speed < 1.2 and wander_direction == Vector3.ZERO)
 
 func _respawn() -> void:
 	alive = true
@@ -149,6 +157,7 @@ func _respawn() -> void:
 	global_position = spawn_pos
 	collision_layer = 2
 	collision_mask = 1
+	visible = true
 	visual.visible = true
 	avatar.revive()
 	_choose_wander()
@@ -172,7 +181,7 @@ func receive_damage(amount: float) -> void:
 	panic = 5.0
 	if hero != null and is_instance_valid(hero):
 		apply_knockback(hero.global_position)
-	FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.7, dealt, Color("ffcd79"), hp <= 0.0)
+	FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.7, dealt, Color("ffcd79"), hp <= 0.0, hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		respawn = 30.0
@@ -180,7 +189,9 @@ func receive_damage(amount: float) -> void:
 		collision_layer = 0
 		collision_mask = 0
 		velocity = Vector3.ZERO
-		avatar.play_event("Death")
+		CRUMBLE.spawn(game, self, visual)
+		visual.visible = false
+		visible = false
 		game.on_enemy_killed(species)
 	else:
-		avatar.play_event("Headbutt" if species == "pig" else "Idle")
+		avatar.play_event("Headbutt" if species != "wolf" else "Idle")

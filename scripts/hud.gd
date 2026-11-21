@@ -245,6 +245,12 @@ var focus_button: Button
 var focus_label: Label
 var world_touch_dragged: bool = false
 var world_touch_inspected: bool = false
+var shield_block_button: Button
+var shield_block_finger: int = -1
+var shadow_budget_button: Button
+var key_rebind_buttons: Dictionary = {}
+var key_rebind_waiting: String = ""
+var mouse_binding_button: Button
 const INSPECTION = preload("res://scripts/interaction/inspection.gd")
 
 func set_desktop_mode(value: bool) -> void:
@@ -316,7 +322,7 @@ func _layout_shared_actions() -> void:
 	if tool_gesture_hint != null:
 		tool_gesture_hint.hide()
 	if camera_gesture_hint != null:
-		camera_gesture_hint.text = "RMB drag · Wheel zoom" if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
+		camera_gesture_hint.text = "RMB / MMB drag · Wheel zoom" if desktop_mode else "Tap to move · Drag to orbit · Hold to inspect"
 
 func _ready() -> void:
 	root = Control.new()
@@ -325,6 +331,13 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shield_block_button = Button.new()
+	shield_block_button.name = "ShieldBlockButton"
+	shield_block_button.text = "HOLD BLOCK"
+	shield_block_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(shield_block_button)
+	_anchors(shield_block_button, 0.58, 0.71, 0.70, 0.79)
+	shield_block_button.hide()
 	# A single fixed nameplate, shown only for a valid target/nearby creature.
 	enemy_target_frame = TARGET_FRAME.new()
 	root.add_child(enemy_target_frame)
@@ -459,13 +472,19 @@ func _ready() -> void:
 	root.add_child(status_effect_strip)
 	status_effect_strip.visible = false
 
-	# Passive one-line currency wallet. No dropdown, click target, shaded
-	# panel or resource tracker is displayed over normal gameplay. The bag
-	# and MENU remain independent touch inputs on the minimap shoulder.
+	# One compact, passive wallet frame; it never captures clicks or opens
+	# a flyout. Keep a pixel-sharp border and a subtle backing over bright terrain.
 	wallet_frame = _panel(0.302, 0.116, 0.505, 0.470)
 	wallet_frame.name = "ResourceQuickChips"
-	wallet_frame.add_theme_stylebox_override("panel", HUD_V2.utility_card())
-	wallet_frame.visible = false
+	var wallet_style := StyleBoxFlat.new()
+	wallet_style.bg_color = Color(0.055, 0.048, 0.058, 0.70)
+	wallet_style.border_color = Color(0.83, 0.69, 0.43, 0.80)
+	wallet_style.set_border_width_all(1)
+	wallet_style.set_corner_radius_all(2)
+	wallet_style.set_content_margin_all(0)
+	wallet_style.anti_aliasing = false
+	wallet_frame.add_theme_stylebox_override("panel", wallet_style)
+	wallet_frame.visible = true
 	wallet_collapse = Button.new()
 	wallet_collapse.name = "WalletCollapse"
 	wallet_collapse.text = "◈ WALLET ▾"
@@ -495,6 +514,9 @@ func _ready() -> void:
 	for denomination in ["copper", "silver", "gold", "gems"]:
 		var line := _label(denomination.capitalize() + "    —", 15, SKIN.CREAM, 0.31, 0.20, 0.48, 0.24)
 		line.name = "WalletCurrency_" + denomination
+		line.add_theme_font_size_override("font_size", 14)
+		line.add_theme_color_override("font_outline_color", Color("#18151b"))
+		line.add_theme_constant_override("outline_size", 2)
 		line.autowrap_mode = TextServer.AUTOWRAP_OFF
 		line.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -552,9 +574,15 @@ func _ready() -> void:
 		items[key] = count
 	# Overload notification appears only when load needs attention; the bag
 	# itself shows the full capacity meter and bonus information.
-	bag_weight_label = _label("", 14, Color("#e3b75d"), 0.020, 0.132, 0.310, 0.157)
+	bag_weight_label = _label("BAG  0 / 0", 13, Color("#f0e5ca"), 0.020, 0.132, 0.310, 0.157)
 	bag_weight_label.name = "CarryWeightLabel"
-	bag_weight_label.visible = false
+	bag_weight_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	bag_weight_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bag_weight_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bag_weight_label.add_theme_color_override("font_outline_color", Color("#15131a"))
+	bag_weight_label.add_theme_constant_override("outline_size", 2)
+	bag_weight_label.clip_text = true
+	bag_weight_label.visible = true
 
 	# The persistent quest ribbon is single-line and ellipsis-safe; on
 	# completion it collapses to a small journal button instead of endlessly
@@ -1235,7 +1263,7 @@ func _toggle_wallet() -> void:
 
 func _apply_wallet_layout() -> void:
 	wallet_open = false
-	wallet_frame.visible = false
+	wallet_frame.visible = true
 	wallet_popup_title.visible = false
 	wallet_collapse.visible = false
 	wallet_collapse.disabled = true
@@ -1243,9 +1271,9 @@ func _apply_wallet_layout() -> void:
 	wallet_resource_icon.visible = false
 	wallet_resource_count.visible = false
 	for key in wallet_currency_rows:
-		(wallet_currency_rows[key] as Label).visible = key in ["gold", "silver", "copper"]
+		(wallet_currency_rows[key] as Label).visible = key in ["gold", "silver", "copper", "gems"]
 	for key in wallet_currency_icons:
-		(wallet_currency_icons[key] as TextureRect).visible = key in ["gold", "silver", "copper"]
+		(wallet_currency_icons[key] as TextureRect).visible = key in ["gold", "silver", "copper", "gems"]
 	_layout_player_chrome()
 
 func _short_currency(value: int) -> String:
@@ -1555,7 +1583,6 @@ func _build_control_settings() -> void:
 	explanation.add_theme_color_override("font_color", SKIN.GOLD)
 	explanation.add_theme_font_size_override("font_size", 17)
 	stack.add_child(explanation)
-
 	floating_mode_toggle = CheckButton.new()
 	floating_mode_toggle.name = "FloatingJoystickToggle"
 	floating_mode_toggle.text = "Dynamic movement stick (appears at touch)"
@@ -1664,6 +1691,33 @@ func _build_control_settings() -> void:
 	name_edit.text_submitted.connect(func(_value: String) -> void: _save_character_name())
 	name_edit.focus_exited.connect(_save_character_name)
 	stack.add_child(name_edit)
+	shadow_budget_button = Button.new()
+	shadow_budget_button.name = "ShadowBudgetButton"
+	shadow_budget_button.custom_minimum_size.y = 40
+	shadow_budget_button.pressed.connect(_cycle_shadow_budget)
+	stack.add_child(shadow_budget_button)
+	settings_touch_buttons.append(shadow_budget_button)
+	_refresh_shadow_budget_label()
+	mouse_binding_button = Button.new()
+	mouse_binding_button.name = "MouseBindingButton"
+	mouse_binding_button.custom_minimum_size.y = 40
+	mouse_binding_button.disabled = true
+	stack.add_child(mouse_binding_button)
+	settings_touch_buttons.append(mouse_binding_button)
+	_refresh_mouse_binding_label()
+	var keys_heading := Label.new()
+	keys_heading.text = "KEYBOARD BINDINGS"
+	keys_heading.add_theme_color_override("font_color", SKIN.GOLD)
+	stack.add_child(keys_heading)
+	for binding in ["left", "right", "up", "down", "interact", "block", "ability_1", "ability_2", "ability_3", "potion", "food", "tool_cycle", "bag", "character", "skills", "focus", "map", "build"]:
+		var key_button := Button.new()
+		key_button.name = "Rebind_" + binding
+		key_button.custom_minimum_size.y = 38
+		key_button.pressed.connect(_start_rebind.bind(binding))
+		stack.add_child(key_button)
+		settings_touch_buttons.append(key_button)
+		key_rebind_buttons[binding] = key_button
+	_refresh_key_labels()
 
 	var swim_preview := Button.new()
 	swim_preview.name = "PreviewSwimmingParticles"
@@ -1916,6 +1970,8 @@ func _show_control_settings() -> void:
 func _close_control_settings() -> void:
 	if control_settings_panel == null:
 		return
+	key_rebind_waiting = ""
+	_refresh_key_labels()
 	_save_character_name()
 	control_settings_panel.visible = false
 	settings_touch_finger = -1
@@ -2141,6 +2197,9 @@ func _save_character_name() -> void:
 func _load_control_prefs() -> void:
 	var config := ConfigFile.new()
 	if config.load(CONTROL_PREFS) == OK:
+		if game != null:
+			game.shadow_light_budget = clampi(int(config.get_value("graphics", "shadow_light_budget", game.shadow_light_budget)), 0, 2)
+			game.swap_context_and_orbit = bool(config.get_value("controls", "swap_context_and_orbit", false))
 		for stat in ["health", "mana", "xp"]:
 			var saved: String = str(config.get_value("status_text", stat, "text"))
 			status_text_modes[stat] = saved if saved in ["text", "percent", "off"] else "text"
@@ -2168,9 +2227,15 @@ func _load_control_prefs() -> void:
 	sticky_movement_toggle.set_pressed_no_signal(sticky_movement_enabled)
 	name_edit.text = player_display_name
 	_refresh_status_mode_buttons()
+	_refresh_shadow_budget_label()
+	_refresh_mouse_binding_label()
 
 func _save_control_prefs() -> void:
 	var config := ConfigFile.new()
+	config.load(CONTROL_PREFS)
+	if game != null:
+		config.set_value("graphics", "shadow_light_budget", game.shadow_light_budget)
+		config.set_value("controls", "swap_context_and_orbit", game.swap_context_and_orbit)
 	config.set_value("controls", "stick_default_enlarged_v2", true)
 	config.set_value("controls", "floating_joystick", floating_joystick_enabled)
 	config.set_value("controls", "movement_stick_scale", movement_stick_scale)
@@ -2180,6 +2245,35 @@ func _save_control_prefs() -> void:
 	for stat in ["health", "mana", "xp"]:
 		config.set_value("status_text", stat, status_text_modes.get(stat, "text"))
 	config.save(CONTROL_PREFS)
+
+func _refresh_shadow_budget_label() -> void:
+	if shadow_budget_button != null and game != null:
+		shadow_budget_button.text = "Shadow lights: %d" % int(game.shadow_light_budget)
+
+func _cycle_shadow_budget() -> void:
+	if game == null:
+		return
+	game.shadow_light_budget = (int(game.shadow_light_budget) + 1) % 3
+	game._update_shadow_budget()
+	_refresh_shadow_budget_label()
+	_save_control_prefs()
+
+func _refresh_mouse_binding_label() -> void:
+	if mouse_binding_button != null and game != null:
+		mouse_binding_button.text = "Interact: RMB click · Orbit: RMB / MMB drag"
+
+func _refresh_key_labels() -> void:
+	for action in key_rebind_buttons:
+		var button: Button = key_rebind_buttons[action]
+		var events: Array[InputEvent] = InputMap.action_get_events("outpost_" + str(action))
+		var current: String = events[0].as_text() if not events.is_empty() else "Unbound"
+		button.text = "%s: %s" % [str(action).replace("_", " ").capitalize(), current]
+
+func _start_rebind(action: String) -> void:
+	key_rebind_waiting = action
+	var button: Button = key_rebind_buttons.get(action)
+	if button != null:
+		button.text = "Press a key (Esc to cancel)"
 
 func _place_px(control: Control, screen: Vector2, region: Rect2) -> void:
 	# Keep touch targets square in pixels instead of stretching circles into
@@ -2393,21 +2487,19 @@ func _layout_player_chrome() -> void:
 	_layout_player_chrome_for_size(screen, scale)
 
 func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
-	# Preserve the portrait/HP and the top-right BAG/MENU controls. Keep
-	# all five currency captions on a single line strictly LEFT of BAG.
+	# Reserve space for four slim currency icon/number pairs between the hero
+	# frame and BAG, even at phone landscape resolutions. The frame's right edge
+	# is eight logical pixels left of BAG; all amounts stay on one line.
 	if hero_status_frame == null or screen.x <= 0.0 or screen.y <= 0.0:
 		return
 	var unit: float = scale
 	var map_side: float = minf(screen.y * 0.285, minf(228.0 * unit, screen.x * 0.23))
 	var map_left_base: float = (screen.x - 18.0 * unit - map_side) / unit
-	var wallet_left: float = map_left_base - 300.0
-	# Right edge of the five-column strip ends eight virtual pixels before
-	# BAG (whose left edge is map_left_base - 164). Earlier code ended at
-	# map_left_base - 91, drawing GOLD/GEMS UNDER the Bag button.
 	var currency_right: float = map_left_base - 172.0
-	var wallet_width: float = minf(545.0, maxf(0.0, currency_right - 354.0))
+	var wallet_width: float = minf(404.0, maxf(0.0, currency_right - 354.0))
 	var currency_start: float = currency_right - wallet_width
-	var currency_cell: float = wallet_width / 3.0
+	var currency_cell: float = wallet_width / 4.0
+	var currency_icon_size: float = clampf(currency_cell * 0.29, 17.0, 25.0)
 	var rects: Dictionary = {
 		"status": Rect2(16, 15, 326, 108),
 		"portrait_frame": Rect2(22, 20, 88, 88),
@@ -2422,14 +2514,15 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		"mana_text": Rect2(109, 76, 226, 17),
 		"weapon": Rect2(117, 78, 220, 22),
 		"effects": Rect2(117, 99, 220, 22),
-		"wallet": Rect2(wallet_left, 75, 275, 248),
+		"wallet": Rect2(currency_start - 7.0, 12.0, wallet_width + 14.0, 56.0),
 		"wallet_toggle": Rect2(map_left_base - 300.0, 17, 130, 50),
-		"popup_title": Rect2(wallet_left + 16, 83, 245, 28),
-		"coins": Rect2(currency_start + 31.0, 17.0, maxf(22.0, currency_cell - 34.0), 43.0),
-		"resource_icon": Rect2(wallet_left + 20, 278, 26, 26),
-		"resource_count": Rect2(wallet_left + 53, 278, 207, 26),
+		"popup_title": Rect2(currency_start, 83, 245, 28),
+		"coins": Rect2(currency_start, 17.0, 72.0, 43.0),
+		"resource_icon": Rect2(currency_start + 20, 278, 26, 26),
+		"resource_count": Rect2(currency_start + 53, 278, 207, 26),
 		"bag": Rect2(map_left_base - 156.0, 11, 58, 58),
-		"weight": Rect2(375, 112, 295, 24),
+		# The carry meter belongs directly below BAG, not above the quest.
+		"weight": Rect2(map_left_base - 208.0, 75.0, 161.0, 24.0),
 		"quest_frame": Rect2(16, 143, 347, 52),
 		"quest_rule": Rect2(25, 192, 335, 1.4),
 		"quest_button": Rect2(23, 151, 109, 37),
@@ -2471,15 +2564,15 @@ func _layout_player_chrome_for_size(screen: Vector2, scale: float) -> void:
 		if control != null:
 			var bounds: Rect2 = rects[key]
 			_place_px(control, screen, Rect2(bounds.position * unit, bounds.size * unit))
-	for i in range(3):
-		var key: String = ["gold", "silver", "copper"][i]
+	for i in range(4):
+		var key: String = ["gold", "silver", "copper", "gems"][i]
 		var x: float = currency_start + currency_cell * float(i)
 		var icon: TextureRect = wallet_currency_icons[key] as TextureRect
-		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 24.0) * unit,
-				Vector2(27.0, 27.0) * unit))
+		_place_px(icon, screen, Rect2(Vector2(x + 2.0, 27.0) * unit,
+				Vector2(currency_icon_size, currency_icon_size) * unit))
 		var line: Label = wallet_currency_rows[key] as Label
-		_place_px(line, screen, Rect2(Vector2(x + 31.0, 17.0) * unit,
-				Vector2(maxf(22.0, currency_cell - 34.0), 43.0) * unit))
+		_place_px(line, screen, Rect2(Vector2(x + currency_icon_size + 4.0, 17.0) * unit,
+				Vector2(maxf(10.0, currency_cell - currency_icon_size - 6.0), 43.0) * unit))
 
 func _meter(left: float, top: float, right: float, bottom: float, front: Color) -> ProgressBar:
 	var meter := ProgressBar.new()
@@ -3266,12 +3359,14 @@ func _update_enemy_target_frame() -> void:
 		var width: float = minf(298.0 * scale, screen.x * 0.30)
 		var left: float = (screen.x - width) * 0.5
 		var context_y: float = maxf(129.0 * scale, screen.y * 0.175)
-		var y: float = (205.0 if enemy_target_frame.visible else context_y / scale - 43.0) * scale
+		var y: float = context_prompt_frame.get_global_rect().end.y + 8.0 * scale if enemy_target_frame.visible and context_prompt_frame != null else context_y - 43.0 * scale
 		_place_px(toast_panel, screen, Rect2(left, y, width, 33.0 * scale))
 		_place_px(toast_label, screen, Rect2(left + 7.0 * scale, y + 1.0 * scale,
 			width - 14.0 * scale, 30.0 * scale))
 
 func _process(delta: float) -> void:
+	if shield_block_button != null and game != null:
+		shield_block_button.visible = not desktop_mode and game.controls != null and str(game.equipment.get("offhand", "")) == "shield" and not game.controls.modal_open()
 	_advance_loot_feed(delta)
 	_update_enemy_target_frame()
 	# MENU is now tap-to-open; holding is not required to interact.
@@ -3515,8 +3610,28 @@ func _handle_game_menu_input(event: InputEvent) -> void:
 				# Ignore outside mouse release; close using X, Back or an action.
  
 func _input(event: InputEvent) -> void:
+	if not key_rebind_waiting.is_empty() and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode != KEY_ESCAPE:
+			var code: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
+			game.rebind_key(key_rebind_waiting, code)
+		key_rebind_waiting = ""
+		_refresh_key_labels()
+		get_viewport().set_input_as_handled()
+		return
 	if game != null and game.world_map != null and game.world_map.is_open():
 		return
+	if event is InputEventScreenTouch and game != null and not desktop_mode and shield_block_button != null:
+		var touch: InputEventScreenTouch = event
+		if not touch.pressed and touch.index == shield_block_finger:
+			shield_block_finger = -1
+			game.hero.blocking = false
+			get_viewport().set_input_as_handled()
+			return
+		if touch.pressed and shield_block_button.visible and shield_block_button.get_global_rect().has_point(touch.position) and not game.controls.modal_open():
+			shield_block_finger = touch.index
+			game.hero.blocking = true
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventScreenTouch and desktop_mode and game.controls != null:
 		game.controls.set_desktop(false)
 	if skill_detail_panel != null and skill_detail_panel.visible:
@@ -3647,7 +3762,7 @@ func _input(event: InputEvent) -> void:
 			game.drag_camera(event.screen_relative.x)
 		get_viewport().set_input_as_handled()
 		return
-	elif event is InputEventMouseMotion and game != null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+	elif event is InputEventMouseMotion and game != null and game.controls == null and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		if _can_start_camera_drag(event.position):
 			game.drag_camera(event.relative.x)
 		return
@@ -3693,6 +3808,9 @@ func _stop_sticky_movement() -> void:
 	_position_stick()
 
 func _reset_touch() -> void:
+	shield_block_finger = -1
+	if game != null and game.hero != null:
+		game.hero.blocking = false
 	_cancel_smart_hold()
 	_cancel_quick_hold()
 	tool_swap_finger = -1
@@ -3737,9 +3855,9 @@ func render_status(hp: float, inventory: Dictionary, xp: int, _kills: int, weapo
 	if bag_weight_label != null and game != null:
 		var max_load: float = maxf(1.0, game.bag_capacity())
 		var current_load: float = game.bag_load()
-		bag_weight_label.text = "BAG NEAR LIMIT  %.0f / %.0f" % [current_load, max_load]
-		bag_weight_label.visible = current_load >= max_load * 0.85
-		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load >= max_load else Color("#e3b75d"))
+		bag_weight_label.text = "BAG  %.0f / %.0f" % [current_load, max_load]
+		bag_weight_label.visible = true
+		bag_weight_label.add_theme_color_override("font_color", Color("#e99075") if current_load > max_load else Color("#e3b75d") if current_load >= max_load * 0.85 else Color("#f0e5ca"))
 	hero_detail.visible = false
 	if game != null and xp_level_label != null:
 		var level_data: Dictionary = game.level_state()
