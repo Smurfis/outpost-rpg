@@ -562,6 +562,13 @@ func _update_cutaway(game: Node, position: Vector3, delta: float = 1.0) -> void:
 	if view == null:
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 		return
+	if mine != null and mine.access.closed and mine.access.footprint.has(Vector2i(floori(position.x), floori(position.z))):
+		if section_active:
+			_restore_section()
+		_cave_mode = false
+		_reveal_strength = 0.0
+		_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
+		return
 	_cave_mode = _is_below_terrain(position)
 	if _section_update(position,view.global_basis.z):
 		_cutaway_material.set_shader_parameter("island_cutaway_enabled",false)

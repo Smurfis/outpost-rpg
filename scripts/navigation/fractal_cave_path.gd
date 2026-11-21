@@ -11,6 +11,13 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 	if remote == null or remote.terrain == null:
 		return {"applicable": false}
 	var cave = remote.terrain.caves
+	if remote.mine != null and remote.mine.access.closed:
+		var access = remote.mine.access
+		if access.blocks_destination(target):
+			return {"applicable": true, "path": PackedVector3Array()}
+		# Surface journeys around a shut mine must use physical terrain rays.
+		if access.footprint.has(Vector2i(floori(start.x), floori(start.z))) or access.footprint.has(Vector2i(floori(target.x), floori(target.z))):
+			return {"applicable": false}
 	if not cave.has_cave(floori(start.x), floori(start.z)) or not cave.has_cave(floori(target.x), floori(target.z)):
 		return {"applicable": false}
 	var from := Vector2i(floori(start.x), floori(start.z))

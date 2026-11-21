@@ -584,30 +584,32 @@ func _load_clears() -> void:
 		for entry in saved:
 			completed_ids[str(entry)] = true
 
-func _save_clears() -> void:
+func _save_clears() -> bool:
 	if not world_site_save_valid:
-		return
+		return false
 	var tmp := save_path + ".tmp"
 	var file: FileAccess = FileAccess.open(tmp, FileAccess.WRITE)
 	if file == null:
 		push_error("Cannot write dungeon save temporary file")
-		return
+		return false
 	file.store_string(JSON.stringify({"version": 4, "completed": completed_ids.keys(), "checkpoints": floor_checkpoints, "broken_props": broken_props, "world_sites": world_sites.export_state()}))
 	file.flush()
 	var error := file.get_error()
 	file.close()
 	if error != OK:
 		push_error("Cannot flush dungeon save")
-		return
+		return false
 	var target := ProjectSettings.globalize_path(save_path)
 	if FileAccess.file_exists(save_path):
 		var backup_error := DirAccess.copy_absolute(target, ProjectSettings.globalize_path(save_path + ".bak"))
 		if backup_error != OK:
 			push_error("Cannot back up dungeon save")
-			return
+			return false
 	var rename_error := DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp), target)
 	if rename_error != OK:
 		push_error("Cannot replace dungeon save; previous save remains available")
+		return false
+	return true
 
 func _build_interface() -> void:
 	interface_layer = CanvasLayer.new()

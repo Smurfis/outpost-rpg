@@ -52,11 +52,11 @@ func guard_for(id: String) -> Node3D:
 			return mob
 	return null
 
-func collect_supplies() -> void:
+func collect_supplies(branch_index := 0) -> void:
 	for kind in ["ore","supplies"]:
 		var target
 		for entity in get_nodes_in_group("world_interactables"):
-			if entity.get("object_id")==site_id+"_"+kind+"_0":
+			if entity.get("object_id")==site_id+"_"+kind+"_"+str(branch_index):
 				target=entity
 				break
 		check(target!=null,"Missing mine "+kind)

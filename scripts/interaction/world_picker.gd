@@ -34,6 +34,8 @@ static func _cave_screen_pick(game: Node3D, screen: Vector2, remote: Variant,
 		return {}
 	var cave = remote.terrain.caves
 	var hero: Vector3 = game.hero.global_position
+	if remote.mine != null and remote.mine.access.closed and remote.mine.access.footprint.has(Vector2i(floori(hero.x), floori(hero.z))):
+		return {} # Use the real ray against the visible bulkheads.
 	var hero_floor: int = cave.floor_at(floori(hero.x), floori(hero.z))
 	if hero_floor == -99999 or absf(hero.y - float(hero_floor)) > 2.0:
 		return {}

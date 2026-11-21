@@ -1,6 +1,12 @@
 extends "res://scripts/interaction/world_object.gd"
 var mine
 
+func remaining() -> Dictionary:
+	var site: Dictionary = mine.manager.world_sites.sites[mine.site_id]
+	if site.reward_claims.has(mine.REGISTRY.treasure_receipt(site)):
+		return {}
+	return super.remaining()
+
 func reconcile() -> void:
 	# Item delivery and the remaining contents share the player save. Repair
 	# a missing registry receipt if the game stopped between the two writes.
@@ -15,7 +21,7 @@ func interact(player: Node3D) -> void:
 	if site.state != "cleared":
 		game.hud.toast("Defeat the mine guards to open the strongbox.")
 		return
-	if site.reward_claims.has("0:treasure:player"):
+	if site.reward_claims.has(mine.REGISTRY.treasure_receipt(site)):
 		game.hud.toast("Empty.")
 		return
 	super.interact(player)

@@ -96,6 +96,9 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
 	var top: float = maxf(start.y, target.y) + 5.0
 	var archipelago: Variant = game.terrain_surface.get("archipelago") if game.terrain_surface != null else null
+	var closed_access = null
+	if archipelago != null and archipelago.mine != null and archipelago.mine.access.closed:
+		closed_access = archipelago.mine.access
 	for x in range(minimum.x, maximum.x + 1):
 		for z in range(minimum.y, maximum.y + 1):
 			var cell := Vector2i(x, z)
@@ -107,7 +110,7 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 			# Sample from inside the carved air column down to its true floor.
 			if archipelago != null and archipelago.terrain != null:
 				var floor_y: int = archipelago.terrain.caves.floor_at(x, z)
-				if floor_y != -99999:
+				if floor_y != -99999 and (closed_access == null or not closed_access.roofed.has(cell)):
 					ray_top = float(floor_y) + 1.60
 					ray_bottom = float(floor_y) - 2.0
 			var query := PhysicsRayQueryParameters3D.create(Vector3(x, ray_top, z), Vector3(x, ray_bottom, z), 1, excluded)
@@ -115,6 +118,8 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 			if hit.is_empty() or (hit.normal as Vector3).y < 0.7:
 				continue
 			var point: Vector3 = hit.position
+			if closed_access != null and closed_access.blocks_destination(point):
+				continue
 			# Click routes stay on dry loaded ground. Manual swimming is retained.
 			if absf(point.x) < 100.0 and absf(point.z) < 100.0 and point.y < -2.7:
 				continue
