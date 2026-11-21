@@ -7,6 +7,21 @@ const CORRIDOR_WIDTH: int = 2
 const CORRIDOR_HEIGHT: int = 3
 const DESCENT_SPACING: int = 4
 var floors: Dictionary = {} # Vector2i -> absolute walkable y
+var natural
+
+func install_natural(terrain, protected: Dictionary, placement = null) -> bool:
+	if natural != null:
+		return true
+	var proposal = preload("res://scripts/world/natural_cave_network.gd").new()
+	if not proposal.generate(terrain, protected, placement):
+		return false
+	natural = proposal
+	return true
+
+func ceiling_at(x: int, z: int, floor_y: int) -> int:
+	if natural != null:
+		return natural.ceilings.get(Vector2i(x,z), floor_y + CORRIDOR_HEIGHT)
+	return floor_y + CORRIDOR_HEIGHT
 var routes: Array = []
 # Generated on the first island only when running the procedural trial.
 var branches: Array[Dictionary] = []

@@ -44,6 +44,7 @@ var _regions: Array[Dictionary] = []
 var _owners := {}
 var _lights: Array[Vector3] = []
 var _region := 0
+var natural_population
 var side_chamber
 var mine
 const MINE = preload("res://scripts/world/physical_mineshaft.gd")
@@ -62,6 +63,13 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	_lights.append(Vector3(anchor.x-0.8,terrain.caves.floor_at(anchor.x,anchor.y)+2.6,anchor.y+1.5))
 
 func _identify_regions(center: Vector2i) -> void:
+	_identify_mine_regions(center)
+	var cave = terrain.caves.natural
+	if cave != null:
+		for region in cave.regions:
+			_add_region(region.cells, region.anchor)
+
+func _identify_mine_regions(center: Vector2i) -> void:
 	if mine != null:
 		_add_region(terrain.caves.mine_end_room,center)
 	else:
@@ -118,17 +126,21 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	var end: Vector3i = terrain.caves.routes[0].back()
 	var center := Vector2i(end.x,end.z)
 	var cell := Vector2i(floori(pos.x),floori(pos.z))
-	if _regions.is_empty() and cell.distance_squared_to(center) < 64 * 64:
+	var nearby := center
+	if terrain.caves.natural != null and cell.distance_squared_to(terrain.caves.natural.mouth) < 64*64:
+		nearby = terrain.caves.natural.mouth
+	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
 		_identify_regions(center)
 	var next_region: int = _owners.get(cell,-1)
-	var inside: bool = next_region >= 0 and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
+	var shaft_landing: bool = terrain.caves.natural != null and terrain.caves.natural.shaft.has(cell)
+	var inside: bool = next_region >= 0 and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and (shaft_landing or pos.y < terrain.height_at(cell.x,cell.y)-1)
 	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
 	if not inside:
 		if section_active:
 			_restore_section()
-		if cell.distance_squared_to(center) < 64 * 64:
+		if cell.distance_squared_to(nearby) < 64 * 64:
 			_prewarm(cell,sector)
-		elif not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
+		elif not _regions.is_empty() and cell.distance_squared_to(nearby) > 80 * 80:
 			invalidate_section_geometry()
 		return false
 	var changed := sector != _sector or next_region != _region
@@ -244,6 +256,8 @@ func _advance_mask(v: Dictionary, region: int, sector: int, deadline: int) -> vo
 				return
 			continue
 		var low := DATA.BEDROCK
+		if terrain.caves.natural != null and terrain.caves.natural.floors.has(col):
+			low = terrain.caves.natural.floors[col]
 		if not terrain.caves.has_cave(col.x,col.y):
 			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
 				var n: Vector2i = col+d
@@ -487,6 +501,7 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 		if _chamber_light != null:
 			_chamber_light.queue_free()
 			_chamber_light = null
+	natural_population = null
 	terrain = DATA.new(world_seed)
 	mine = null
 	side_chamber = null
@@ -507,6 +522,22 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
+
+func install_natural(game) -> void:
+	var protected := {}
+	for block: Vector3i in game.building.blocks:
+		protected[Vector2i(block.x, block.z)] = true
+	var manager = game.get_node("Dungeons")
+	if not manager.world_site_save_valid:
+		return
+	for site in manager.world_sites.sites.values():
+		var gate := Vector2i(site.entrance[0],site.entrance[2])
+		for x in range(-4,5):
+			for z in range(-4,5):
+				protected[gate + Vector2i(x,z)] = true
+	if terrain.caves.install_natural(terrain, protected, game.prop_placement):
+		natural_population = preload("res://scripts/world/natural_cave_population.gd").new()
+		natural_population.configure(self)
 
 var profile_stream := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
 var stream_usec := 0
@@ -535,6 +566,8 @@ func _process(delta: float) -> void:
 	_build_pending()
 	if profile_stream:
 		stream_usec += Time.get_ticks_usec()-started
+	if natural_population != null:
+		natural_population.try_spawn(self,game)
 	if mine != null:
 		mine.visit(position)
 	_update_cutaway(game, position, delta)
@@ -967,6 +1000,8 @@ func _build_chunk(key: Vector2i) -> void:
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
 	_loaded[key] = members
+	if natural_population != null:
+		natural_population.populate(self,game,key,members)
 	if mine != null:
 		mine.populate(key,game,members)
 	elif side_chamber != null or OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") == "1":
