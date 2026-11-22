@@ -512,10 +512,8 @@ func _render_bag() -> void:
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(art)
 		if tile_rank >= 0:
-			var mini_stars := _label(ITEM_VIEW.rarity_stars(tile_rank), 10, ITEM_VIEW.rarity_color(tile_rank))
+			var mini_stars: HBoxContainer = ITEM_VIEW.make_star_strip(tile_rank, 10)
 			mini_stars.name = "BagItemRarityStars"
-			mini_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			mini_stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			slot.add_child(mini_stars)
 			mini_stars.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 			mini_stars.offset_top = -16.0
@@ -1099,7 +1097,7 @@ func _render_result() -> void:
 	if not roll.is_empty() and QUALITY.is_gear(completed_id):
 		var rarity: int = clampi(int(roll.get("rarity", 0)), 0, 4)
 		result.add_child(_label(QUALITY.rarity_name(rarity).to_upper() + "  •  " + completed_id.replace("_", " ").capitalize(), 21, ITEM_VIEW.rarity_color(rarity)))
-		var stars := _label(ITEM_VIEW.rarity_stars(rarity), 22, ITEM_VIEW.rarity_color(rarity))
+		var stars: HBoxContainer = ITEM_VIEW.make_star_strip(rarity, 22)
 		stars.name = "CraftResultRarityStars"
 		result.add_child(stars)
 		result.add_child(_label("CRAFT QUALITY", 16, SKIN.CREAM))
