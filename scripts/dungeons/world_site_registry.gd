@@ -7,6 +7,7 @@ const MINE := "physical_mine"
 const GUARDS := ["miner", "foreman"]
 const CLOSED := ["sealed", "ready_for_renewal"]
 const GENERATOR_VERSION := 1
+const MAX_MINE_CYCLE := 1000000
 const STATES := ["undiscovered", "discovered", "active", "cleared", "aftermath", "dormant", "regenerating", "ready", "abandoned"]
 const SAFE_FLAGS := ["no_players_nearby", "no_unresolved_rewards", "no_graves", "no_critical_pickups", "no_active_encounters", "no_party_or_ui", "no_navigation", "no_protected_builds", "valid_next_layout"]
 var sites: Dictionary = {}
@@ -60,6 +61,11 @@ func record_mine_defeat(site_id: String, guard: String) -> bool:
 		transition(site_id, "cleared")
 	return true
 
+static func mine_object_id(site: Dictionary, id: String) -> String:
+	if int(site.cycle) == 0:
+		return site.site_id + "_" + id
+	return "%s_cycle_%d_%s" % [site.site_id, int(site.cycle), id]
+
 static func treasure_receipt(site: Dictionary) -> String:
 	return "%d:treasure:player" % int(site.cycle)
 
@@ -88,6 +94,9 @@ func claim_reward(site_id: String, reward_id: String, recipient: String) -> bool
 	if site.reward_claims.has(receipt):
 		return false
 	site.reward_claims[receipt] = true
+	if site.kind == MINE and int(site.cycle) == 1 and reward_id == "treasure" and recipient == "player" and site.has("world_event"):
+		site.world_event.completed = true
+		site.world_event.phase = "completed"
 	return true
 
 func can_regenerate(site_id: String, now: int, authoritative_safety: Dictionary) -> bool:
@@ -159,14 +168,13 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 		var value: Variant = site[key]
 		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > 9007199254740991 or int(value) != value:
 			return false
-	# Only the initial and first renewal formats have a reconstruction contract.
-	if (site.cycle != 0 and site.cycle != 1) or site.event_id != "initial":
+	if site.cycle < 0 or site.cycle > MAX_MINE_CYCLE or site.event_id != "initial":
 		return false
 	if site.site_id != "fractal_physical_goblin_mine_1_%d" % int(site.world_seed):
 		return false
 	if site.layout_seed != cycle_seed(int(site.world_seed), site.site_id, int(site.cycle), site.event_id):
 		return false
-	if site.cycle == 1 and (site.state != "ready_for_renewal" or not site.has("world_event")):
+	if site.cycle > 0 and not site.has("world_event"):
 		return false
 	if site.chunks.is_empty() or not site.get("boss_defeated") is bool:
 		return false
@@ -192,30 +200,62 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 		var event: Variant = site.world_event
 		if not event is Dictionary or event.get("id") != "goblin_reoccupation" or event.get("site_id") != site.site_id:
 			return false
-		if event.get("completed") != false or event.get("objective") != "Investigate the disturbance at the Goblin Mine.":
+		if not event.get("phase") is String or typeof(event.get("seed")) not in [TYPE_INT, TYPE_FLOAT]:
+			return false
+		if not event.get("completed") is bool or event.get("objective") != "Investigate the disturbance at the Goblin Mine.":
 			return false
 		if event.get("seed") != cycle_seed(int(site.world_seed), site.site_id, 1, "goblin_reoccupation"):
 			return false
-		if not ((site.state == "sealed" and event.get("phase") == "reported") or (site.state == "ready_for_renewal" and event.get("phase") == "ready_for_renewal")):
+		if event.get("phase") not in ["reported", "ready_for_renewal", "completed"]:
 			return false
-	if site.has("reopened") and (site.cycle != 1 or not site.reopened is bool or not site.reopened):
+		if (event.phase == "completed") != event.completed:
+			return false
+		if event.completed and site.reward_claims.get("1:treasure:player") != true:
+			return false
+		if site.cycle == 0 and not ((site.state == "sealed" and event.phase == "reported") or (site.state == "ready_for_renewal" and event.phase == "ready_for_renewal")):
+			return false
+		if site.cycle > 0 and not event.completed and event.phase != "ready_for_renewal":
+			return false
+		if site.cycle > 1 and not event.completed:
+			return false
+	if site.has("reopened") and (site.cycle < 1 or not site.reopened is bool or not site.reopened):
+		return false
+	if site.has("reopened") and site.state in CLOSED and not (site.cycle == 1 and site.state == "ready_for_renewal" and not site.has("cycle_history")):
+		return false
+	if site.has("renewal_committed") and (not site.renewal_committed is bool or not site.renewal_committed or site.cycle < 1 or site.state != "ready_for_renewal" or site.has("renewal") or not site.has("cycle_history")):
 		return false
 	if site.has("renewal"):
 		var journal: Variant = site.renewal
-		if site.cycle != 0 or site.state != "ready_for_renewal" or not site.has("world_event") or not journal is Dictionary:
+		if site.cycle >= MAX_MINE_CYCLE or site.state != "ready_for_renewal" or not site.has("world_event") or not journal is Dictionary:
 			return false
 		for field in ["cycle", "seed", "from_cycle", "generator_version"]:
 			if journal.has(field) and typeof(journal[field]) not in [TYPE_INT, TYPE_FLOAT]:
 				return false
-		if journal.get("phase") not in ["prepared", "publishing"] or journal.get("cycle") != 1:
+		if journal.get("phase") not in ["prepared", "publishing"] or journal.get("cycle") != int(site.cycle) + 1:
 			return false
-		if journal.get("seed") != cycle_seed(int(site.world_seed), site.site_id, 1, site.event_id):
+		if journal.get("seed") != cycle_seed(int(site.world_seed), site.site_id, int(site.cycle) + 1, site.event_id):
 			return false
 		if journal.get("from_cycle", 0) != site.cycle or journal.get("generator_version", GENERATOR_VERSION) != GENERATOR_VERSION:
 			return false
 		var digest: Variant = journal.get("digest")
 		if not digest is String or digest.length() != 64 or not digest.is_valid_hex_number(false):
 			return false
-	# A sealed first renewal retains the cycle-zero treasure receipt.
-	var required_receipt := "0:treasure:player" if site.cycle == 1 else treasure_receipt(site)
+	if site.has("cycle_history"):
+		if not site.cycle_history is Dictionary or site.cycle_history.size() != int(site.cycle):
+			return false
+		for cycle in site.cycle_history:
+			if not cycle is String or not cycle.is_valid_int() or str(int(cycle)) != cycle or int(cycle) < 0 or int(cycle) >= int(site.cycle):
+				return false
+			var previous: Variant = site.cycle_history[cycle]
+			if not previous is Dictionary or previous.size() != GUARDS.size() or not previous.get("miner") is bool or not previous.get("foreman") is bool:
+				return false
+			if not previous.miner or not previous.foreman:
+				return false
+			if site.reward_claims.get(cycle + ":treasure:player") != true:
+				return false
+	elif site.cycle > 1:
+		return false
+	# Existing cycle-one records were sealed before their encounter existed.
+	var prior_cycle_pending: bool = site.get("renewal_committed", false) or (site.cycle == 1 and site.state == "ready_for_renewal" and not site.has("cycle_history"))
+	var required_receipt := "%d:treasure:player" % (int(site.cycle) - 1) if prior_cycle_pending else treasure_receipt(site)
 	return site.state not in CLOSED or site.reward_claims.has(required_receipt)

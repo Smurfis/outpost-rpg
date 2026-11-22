@@ -569,7 +569,7 @@ func finish_mine_loading(game) -> void:
 		return
 	var id := "fractal_physical_goblin_mine_1_%d" % terrain.seed
 	var site: Dictionary = manager.world_sites.sites.get(id, {}) if manager != null else {}
-	if int(site.get("cycle", 0)) == 1:
+	if int(site.get("cycle", 0)) > 0:
 		if not game.player_save_valid_for_mine:
 			mine_load_failed = true
 			push_error("Renewed mine unavailable: player construction save is missing or invalid")
@@ -604,10 +604,22 @@ func finish_mine_loading(game) -> void:
 				mine_load_failed = true
 				push_error("Renewed mine conflicts with a saved player construction")
 				return
+	if site.get("cycle", 0) == 1 and site.get("state") == "ready_for_renewal" and site.get("reopened", false) and not site.has("cycle_history"):
+		var previous := site.duplicate(true)
+		site.cycle_history = {"0": site.room_state.duplicate(true)}
+		site.room_state = {}
+		site.boss_defeated = false
+		site.state = "active"
+		if not manager._save_clears():
+			manager.world_sites.sites[id] = previous
+			mine_load_failed = true
+			push_error("Cannot migrate renewed mine progression")
+			return
 	if not candidate.configure(self, site):
 		mine_load_failed = true
 		push_error("Cannot reconstruct physical mine from saved site")
 		return
+	candidate.manager = manager
 	mine = candidate
 
 func run_mine_command(action: String) -> void:
@@ -616,7 +628,7 @@ func run_mine_command(action: String) -> void:
 		await get_tree().process_frame
 	if not is_inside_tree():
 		return
-	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or mine == null:
+	if mine == null:
 		return
 	var result := "unavailable"
 	match action:

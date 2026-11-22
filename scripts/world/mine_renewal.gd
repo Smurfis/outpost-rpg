@@ -6,20 +6,22 @@ const REGISTRY = preload("res://scripts/dungeons/world_site_registry.gd")
 const MINE = preload("res://scripts/world/physical_mineshaft.gd")
 
 static func advance(island, game) -> String:
-	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or island.mine == null:
+	if island.mine == null:
 		return "unavailable"
 	var manager = game.get_node("Dungeons")
 	var id: String = island.mine.site_id
 	var site: Dictionary = manager.world_sites.sites.get(id, {})
-	if not manager.world_site_save_valid or (not game.player_save_valid_for_mine and not game.mine_started_without_saves) or site.get("state") != "ready_for_renewal" or not site.has("world_event"):
+	if not manager.world_site_save_valid or (not game.player_save_valid_for_mine and not game.mine_started_without_saves) or not site.has("world_event"):
 		return "unavailable"
-	if site.get("reopened",false):
+	if site.get("reopened",false) and site.get("state") == "active":
 		return "open"
+	if site.get("state") != "ready_for_renewal":
+		return "unavailable"
 	if not island.mine.access.closed:
 		return "busy: entrance is not sealed"
 	if Engine.is_in_physics_frame():
 		return "busy: retry after physics update"
-	if site.cycle == 0 and not island.mine._supplies_claimed(game.opened_world_objects):
+	if not site.get("renewal_committed", false) and not (site.cycle == 1 and not site.has("cycle_history")) and not island.mine._supplies_claimed(game.opened_world_objects):
 		return "outstanding_rewards"
 	if game.hero == null or game.controls.navigating or game.hero.interaction_moving or Vector2(game.hero.velocity.x, game.hero.velocity.z).length_squared() > 0.001 or absf(game.hero.velocity.y) > 0.11 or manager.active_instance != null or (game.coop != null and game.coop.mode != "solo"):
 		return "occupied"
@@ -27,14 +29,16 @@ static func advance(island, game) -> String:
 		return "busy: close the active interface"
 	if game.station_walk_target != "" or is_instance_valid(game.controls.target):
 		return "busy: finish the current interaction"
-	if site.cycle == 1:
+	if site.get("renewal_committed", false) or (site.cycle == 1 and not site.has("cycle_history")):
 		return _reopen(island,game,manager,site)
+	if site.cycle >= REGISTRY.MAX_MINE_CYCLE:
+		return "cycle_limit"
 	# Reconstruct in an isolated terrain object. Only cave data is transferred
 	# on commit so references held by unrelated island occupants remain valid.
 	var terrain = DATA.new(island.terrain.seed)
 	var descriptor := site.duplicate(true)
-	descriptor.cycle = 1
-	descriptor.layout_seed = REGISTRY.cycle_seed(terrain.seed, id, 1, site.event_id)
+	descriptor.cycle = int(site.cycle) + 1
+	descriptor.layout_seed = REGISTRY.cycle_seed(terrain.seed, id, descriptor.cycle, site.event_id)
 	var candidate = MINE.new()
 	if not candidate.configure(island, descriptor, terrain) or candidate.entrance != island.mine.entrance:
 		return "invalid_layout"
@@ -102,7 +106,7 @@ static func advance(island, game) -> String:
 	var phase: String = journal.get("phase", "")
 	var staged := {}
 	if phase == "":
-		updated.renewal = {"phase":"prepared", "from_cycle":0, "generator_version":REGISTRY.GENERATOR_VERSION, "cycle":1, "seed":descriptor.layout_seed, "digest":digest}
+		updated.renewal = {"phase":"prepared", "from_cycle":int(site.cycle), "generator_version":REGISTRY.GENERATOR_VERSION, "cycle":descriptor.cycle, "seed":descriptor.layout_seed, "digest":digest}
 		phase = "prepared"
 	else:
 		# Streaming, camera and input run on the same thread. No await from
@@ -116,6 +120,9 @@ static func advance(island, game) -> String:
 		else:
 			updated = descriptor
 			updated.erase("renewal")
+			updated.cycle_history = site.get("cycle_history", {}).duplicate(true)
+			updated.cycle_history[str(int(site.cycle))] = site.room_state.duplicate(true)
+			updated.renewal_committed = true
 			updated.chunks = []
 			for cell: Vector2i in next.footprint:
 				var key: Vector2i = island._cell_at(Vector3(cell.x, 0, cell.y))
@@ -185,9 +192,16 @@ static func _reopen(island,game,manager,site: Dictionary) -> String:
 		if "island_%d_%d" % [key.x,key.y] in site.chunks:
 			if not _has_terrain_collision(island._loaded[key]):
 				return "invalid_collision"
+	var previous := site.duplicate(true)
+	if not site.has("cycle_history"):
+		site.cycle_history = {"0": site.room_state.duplicate(true)}
+	site.room_state = {}
+	site.boss_defeated = false
+	site.state = "active"
 	site.reopened = true
+	site.erase("renewal_committed")
 	if not manager._save_clears():
-		site.erase("reopened")
+		manager.world_sites.sites[mine.site_id] = previous
 		return "save_failed"
 	for key in mine.access.seal_chunks:
 		var nodes: Array = island._loaded.get(key,[])
@@ -197,6 +211,16 @@ static func _reopen(island,game,manager,site: Dictionary) -> String:
 				island.remove_child(node)
 				node.queue_free()
 	mine.access.closed = false
+	for key in mine.slots:
+		if not island._loaded.has(key):
+			continue
+		var members: Array = island._loaded[key]
+		for node in members.duplicate():
+			if node.has_meta("mine_occupants"):
+				members.erase(node)
+				island.remove_child(node)
+				node.queue_free()
+		mine.populate(key, game, members)
 	return "open"
 
 static func _walkable(terrain, access) -> bool:

@@ -1,7 +1,7 @@
 extends "res://tests/mine_cycle_loading.gd"
 
 func run() -> void:
-	OS.set_environment("OUTPOST_TEST_MINE_LIFECYCLE","1")
+	OS.set_environment("OUTPOST_TEST_MINE_LIFECYCLE","0")
 	var mode := OS.get_cmdline_user_args()[0]
 	player_save = "user://renew_player.json"
 	dungeon_save = "user://renew_registry.json"
@@ -40,7 +40,8 @@ func run() -> void:
 	check(site.cycle == int(committed) and mine.layout_seed == REGISTRY.cycle_seed(TEST_SEED,id,int(committed),"initial"), "Wrong recovery generation")
 	if mode != "prepare":
 		var snapshot: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("user://renew_baseline.json"))
-		check(snapshot.inventory == JSON.parse_string(JSON.stringify(game.inventory)) and snapshot.rewards == site.reward_claims and snapshot.defeats == site.room_state,"Inventory or receipts changed across checkpoints")
+		var defeats: Dictionary = site.cycle_history.get("0", {}) if site.get("reopened", false) else site.room_state
+		check(snapshot.inventory == JSON.parse_string(JSON.stringify(game.inventory)) and snapshot.rewards == site.reward_claims and snapshot.defeats == defeats,"Inventory or receipts changed across checkpoints")
 	if committed:
 		var coords := []
 		var keys: Array = island.terrain.caves.floors.keys()
@@ -124,7 +125,7 @@ func run() -> void:
 			check(island.advance_mine_renewal_for_test() == "open","Reopen failed")
 		"reload","walk":
 			check(not mine.access.closed and island.advance_mine_renewal_for_test() == "open","Open state lost")
-			check(site.reward_claims == {"0:treasure:player":true} and site.room_state.size()==2,"Historical progress lost")
+			check(site.reward_claims == {"0:treasure:player":true} and site.cycle_history["0"].size()==2 and site.room_state.is_empty(),"Historical progress lost")
 			if mode == "walk":
 				await walkthrough()
 	print("RENEWAL ",mode," ",not failed)

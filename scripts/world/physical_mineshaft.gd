@@ -97,15 +97,12 @@ func populate(key: Vector2i, game: Node, members: Array) -> void:
 		return
 	var room_state: Dictionary = manager.world_sites.sites[site_id].room_state
 	var group := Node3D.new()
+	group.set_meta("mine_occupants", true)
 	island.add_child(group)
 	members.append(group)
 	for slot: Dictionary in slots.get(key,[]):
 		var id: String = slot.id
 		var at: Vector3 = slot.at
-		# Renewed branches can have more slots than the cleared layout. Their
-		# occupants and loot have no cycle-one definition yet.
-		if manager.world_sites.sites[site_id].cycle == 1 and slot.kind in ["ore","crate","guard","treasure"]:
-			continue
 		match slot.kind:
 			"guard":
 				if room_state.has(id):
@@ -138,7 +135,7 @@ func populate(key: Vector2i, game: Node, members: Array) -> void:
 				var brass := StandardMaterial3D.new()
 				brass.albedo_color = Color("b18b47")
 				art.material_override = brass
-				chest.setup(game,site_id+"_treasure","Foreman's strongbox","chest",art,{"coins":18,"iron":3})
+				chest.setup(game,REGISTRY.mine_object_id(manager.world_sites.sites[site_id], "treasure"),"Foreman's strongbox","chest",art,{"coins":18,"iron":3})
 				chest.reconcile()
 			"ore","crate":
 				var object := OBJECT.new()
@@ -147,7 +144,7 @@ func populate(key: Vector2i, game: Node, members: Array) -> void:
 				art.scale = Vector3.ONE*0.58
 				group.add_child(object)
 				object.position = at
-				object.setup(game,site_id+"_"+id,"Iron deposit" if ore else "Mine supplies","loot" if ore else "chest",art,{"iron":2} if ore else {"wood":2})
+				object.setup(game,REGISTRY.mine_object_id(manager.world_sites.sites[site_id], id),"Iron deposit" if ore else "Mine supplies","loot" if ore else "chest",art,{"iron":2} if ore else {"wood":2})
 				if ore and object.remaining().is_empty():
 					object.hide()
 
@@ -159,6 +156,8 @@ func _defeated(id: String) -> void:
 		manager.world_sites.transition(site_id,"active")
 	if manager.world_sites.record_mine_defeat(site_id, id):
 		manager._save_clears()
+		if site.state == "cleared":
+			manager.get_parent().hud.toast("Mine cleared. Collect its treasure and supplies, then use .mine report outside.")
 
 func _supplies_claimed(opened: Dictionary) -> bool:
 	# Claims must include unloaded chunks. A partially opened crate retains
@@ -166,18 +165,18 @@ func _supplies_claimed(opened: Dictionary) -> bool:
 	for chunk_slots: Array in slots.values():
 		for slot: Dictionary in chunk_slots:
 			if slot.kind in ["ore", "crate"]:
-				var contents: Variant = opened.get(site_id + "_" + slot.id)
+				var contents: Variant = opened.get(REGISTRY.mine_object_id(manager.world_sites.sites[site_id], slot.id))
 				if not contents is Dictionary or not contents.is_empty():
 					return false
 	return true
 
-# Development trigger. The existing lifecycle flag gates all world changes.
 func trigger_reoccupation_for_test() -> bool:
-	return advance_for_test("sealed", true)
+	var site: Dictionary = manager.world_sites.sites.get(site_id, {}) if manager != null else {}
+	return advance_for_test("sealed", not site.has("world_event"))
 
-# Called only on explicit request by a lifecycle test, never by the streamer.
+# Called on an explicit player request, never by the streamer.
 func advance_for_test(next: String, reoccupation := false) -> bool:
-	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or manager == null or not manager.world_site_save_valid:
+	if manager == null or not manager.world_site_save_valid or not manager.world_sites.sites.has(site_id):
 		return false
 	var game = manager.get_parent()
 	if game.hero == null or (game.coop != null and game.coop.mode != "solo") or manager.active_instance != null:
@@ -190,6 +189,7 @@ func advance_for_test(next: String, reoccupation := false) -> bool:
 	if reoccupation and (next != "sealed" or site.has("world_event")):
 		return false
 	var previous: String = site.state
+	var was_reopened: bool = site.get("reopened", false)
 	var previous_event: Variant = site.get("world_event").duplicate(true) if site.has("world_event") else null
 	if not manager.world_sites.advance_mine(site_id, next, access.clear_of_player(game.hero.global_position)):
 		return false
@@ -197,10 +197,14 @@ func advance_for_test(next: String, reoccupation := false) -> bool:
 		site.world_event = {"id": "goblin_reoccupation", "site_id": site_id,
 			"phase": "reported", "seed": REGISTRY.cycle_seed(island.terrain.seed, site_id, 1, "goblin_reoccupation"),
 			"objective": "Investigate the disturbance at the Goblin Mine.", "completed": false}
-	elif next == "ready_for_renewal" and site.has("world_event"):
+	elif next == "ready_for_renewal" and site.has("world_event") and not site.world_event.completed:
 		site.world_event.phase = "ready_for_renewal"
+	if next == "sealed":
+		site.erase("reopened")
 	if not manager._save_clears():
 		site.state = previous
+		if was_reopened:
+			site.reopened = true
 		if previous_event == null:
 			site.erase("world_event")
 		else:
