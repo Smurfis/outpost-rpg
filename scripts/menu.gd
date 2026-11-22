@@ -3,6 +3,7 @@ const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
+const ITEM_VIEW = preload("res://scripts/ui/outpost_item_view.gd")
 const INVENTORY_WINDOW = preload("res://scripts/ui/albion_inventory_window.gd")
 ## Outpost v0.4: physical-material loading and animated hands-on craft actions.
 ## Browse remotely; to produce an item you must stand beside its matching station.
@@ -494,7 +495,8 @@ func _render_bag() -> void:
 		var slot := Button.new()
 		slot.name = "Item_" + item
 		slot.custom_minimum_size = Vector2(66, 69)
-		slot.tooltip_text = item.replace("_", " ").capitalize() + " x%d" % qty
+		var tile_rank: int = ITEM_VIEW.item_rarity(item, game.best_craft_rolls)
+		slot.tooltip_text = item.replace("_", " ").capitalize() + " x%d" % qty + ("\n" + ITEM_VIEW.rarity_caption(tile_rank) if tile_rank >= 0 else "")
 		slot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		for state in ["normal", "hover", "pressed", "disabled"]:
 			slot.add_theme_stylebox_override(state, SKIN.translucent_surface(true, item == selected_bag_id or state in ["hover", "pressed"], true))
@@ -509,6 +511,15 @@ func _render_bag() -> void:
 		art.anchor_bottom = 0.74
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(art)
+		if tile_rank >= 0:
+			var mini_stars := _label(ITEM_VIEW.rarity_stars(tile_rank), 10, ITEM_VIEW.rarity_color(tile_rank))
+			mini_stars.name = "BagItemRarityStars"
+			mini_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			mini_stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			slot.add_child(mini_stars)
+			mini_stars.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+			mini_stars.offset_top = -16.0
+			mini_stars.offset_bottom = -1.0
 		var count := Label.new()
 		count.text = str(qty)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -538,7 +549,10 @@ func _render_bag() -> void:
 			slot.add_child(equipped)
 	var focused: String = selected_bag_id
 	var detail := _column_panel(details, Color("#38271d"))
-	detail.add_child(_label(focused.replace("_", " ").capitalize(), 23, SKIN.CREAM))
+	var focused_rank: int = ITEM_VIEW.item_rarity(focused, game.best_craft_rolls)
+	detail.add_child(_label(focused.replace("_", " ").capitalize(), 23, ITEM_VIEW.rarity_color(focused_rank) if focused_rank >= 0 else SKIN.CREAM))
+	if focused_rank >= 0:
+		detail.add_child(_label(ITEM_VIEW.rarity_caption(focused_rank).to_upper(), 17, ITEM_VIEW.rarity_color(focused_rank)))
 	var item_header := HBoxContainer.new()
 	detail.add_child(item_header)
 	item_header.add_child(_icon(focused, 82))
@@ -886,8 +900,11 @@ func _render_recipe() -> void:
 	head.add_child(info)
 	info.add_child(_label(str(recipe.get("name", "")), 23, Color("ffe2a6")))
 	info.add_child(_label(str(recipe.get("category", "Equipment")).to_upper() + "  •  TIER %d" % maxi(1, CARRY.tier(product_id)), 15, Color("eabf77")))
+	if QUALITY.is_gear(product_id) and int(game.inventory.get(product_id, 0)) > 0:
+		var held_rank: int = ITEM_VIEW.item_rarity(product_id, game.best_craft_rolls)
+		info.add_child(_label("CURRENT  " + ITEM_VIEW.rarity_caption(held_rank).to_upper(), 16, ITEM_VIEW.rarity_color(held_rank)))
 	if CARRY.is_bag(product_id):
-		info.add_child(_label("QUALITY   %s    •    RECRAFT TO IMPROVE" % "★".repeat(int(game.bag_quality.get(product_id, 0))), 16, SKIN.GOLD))
+		info.add_child(_label("BAG UPGRADE   %d/3    •    RECRAFT TO IMPROVE" % int(game.bag_quality.get(product_id, 0)), 16, SKIN.GOLD))
 	info.add_child(_label(str(recipe.get("desc", "")), 16, Color("f3dfbb")))
 	if selected_id == "fiery_weapon":
 		info.add_child(_label("CHARACTER LEVEL %d / 3   •   COST: ONE LEVEL" % game.character_level(), 17, SKIN.GOLD))
@@ -1081,7 +1098,10 @@ func _render_result() -> void:
 	var roll: Dictionary = game.last_craft_roll
 	if not roll.is_empty() and QUALITY.is_gear(completed_id):
 		var rarity: int = clampi(int(roll.get("rarity", 0)), 0, 4)
-		result.add_child(_label(QUALITY.rarity_name(rarity).to_upper() + "  •  " + completed_id.replace("_", " ").capitalize(), 21, QUALITY.rarity_color(rarity)))
+		result.add_child(_label(QUALITY.rarity_name(rarity).to_upper() + "  •  " + completed_id.replace("_", " ").capitalize(), 21, ITEM_VIEW.rarity_color(rarity)))
+		var stars := _label(ITEM_VIEW.rarity_stars(rarity), 22, ITEM_VIEW.rarity_color(rarity))
+		stars.name = "CraftResultRarityStars"
+		result.add_child(stars)
 		result.add_child(_label("CRAFT QUALITY", 16, SKIN.CREAM))
 		var tier_bars := HBoxContainer.new()
 		tier_bars.name = "CraftRarityProgression"
