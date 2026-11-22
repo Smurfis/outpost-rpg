@@ -15,9 +15,9 @@ var entrance: Vector3
 var layout_seed: int
 var access = preload("res://scripts/world/mine_access.gd").new()
 
-func configure(streamer, site: Dictionary = {}) -> bool:
+func configure(streamer, site: Dictionary = {}, staged_terrain = null) -> bool:
 	island = streamer
-	var terrain = island.terrain
+	var terrain = staged_terrain if staged_terrain != null else island.terrain
 	site_id = "fractal_physical_goblin_mine_1_%d" % terrain.seed
 	layout_seed = REGISTRY.cycle_seed(terrain.seed,site_id,0,"initial")
 	if not site.is_empty():
@@ -28,15 +28,15 @@ func configure(streamer, site: Dictionary = {}) -> bool:
 	if not terrain.caves.carve_mine(terrain,layout_seed):
 		return false
 	entrance = terrain.caves.entrances[0]
-	access.configure(island, entrance)
+	access.configure(island, entrance, terrain)
 	access.closed = site.get("state", "") in REGISTRY.CLOSED
 	_slot("entrance_timber",entrance+Vector3.BACK*0.5)
 	var branches: Array = terrain.caves.branches
 	for i in branches.size():
 		var branch: Dictionary = branches[i]
-		var at := _point(branch.center)
+		var at := _point(branch.center, terrain)
 		var edge := float(branch.size.x)/2.0-0.30
-		_slot("support",_point(branch.threshold)+Vector3.RIGHT*0.5)
+		_slot("support",_point(branch.threshold, terrain)+Vector3.RIGHT*0.5)
 		_slot("ore",at+Vector3.LEFT*edge,"ore_%d" % i)
 		_slot("crate",at+Vector3.RIGHT*edge,"supplies_%d" % i)
 		if i == 0:
@@ -46,8 +46,8 @@ func configure(streamer, site: Dictionary = {}) -> bool:
 	_slot("treasure",end+Vector3(-1,0,-1),"treasure")
 	return true
 
-func _point(cell: Vector2i) -> Vector3:
-	return Vector3(cell.x+0.5,island.terrain.caves.floor_at(cell.x,cell.y),cell.y+0.5)
+func _point(cell: Vector2i, terrain) -> Vector3:
+	return Vector3(cell.x+0.5,terrain.caves.floor_at(cell.x,cell.y),cell.y+0.5)
 
 func _slot(kind: String, at: Vector3, id := "") -> void:
 	var key: Vector2i = island._cell_at(at)
@@ -101,6 +101,10 @@ func populate(key: Vector2i, game: Node, members: Array) -> void:
 	for slot: Dictionary in slots.get(key,[]):
 		var id: String = slot.id
 		var at: Vector3 = slot.at
+		# Renewed branches can have more slots than the cleared layout. Their
+		# occupants and loot have no cycle-one definition yet.
+		if manager.world_sites.sites[site_id].cycle == 1 and slot.kind in ["ore","crate","guard","treasure"]:
+			continue
 		match slot.kind:
 			"guard":
 				if room_state.has(id):

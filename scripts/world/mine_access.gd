@@ -7,8 +7,7 @@ var seal_chunks := {}
 var closed := false
 var height: int
 
-func configure(island, entrance: Vector3) -> void:
-	var terrain = island.terrain
+func configure(island, entrance: Vector3, terrain) -> void:
 	height = terrain.caves.CORRIDOR_HEIGHT
 	var queue: Array[Vector2i] = [Vector2i(floori(entrance.x), floori(entrance.z))]
 	footprint[queue[0]] = int(entrance.y)

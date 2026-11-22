@@ -581,6 +581,9 @@ func finish_mine_loading(game) -> void:
 		return
 	mine = candidate
 
+func advance_mine_renewal_for_test() -> String:
+	return preload("res://scripts/world/mine_renewal.gd").advance(self, get_parent().get_parent())
+
 func install_natural(game) -> void:
 	var protected := {}
 	for block: Vector3i in game.building.blocks:

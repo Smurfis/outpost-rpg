@@ -198,6 +198,17 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 			return false
 		if not ((site.state == "sealed" and event.get("phase") == "reported") or (site.state == "ready_for_renewal" and event.get("phase") == "ready_for_renewal")):
 			return false
+	if site.has("renewal"):
+		var journal: Variant = site.renewal
+		if site.cycle != 0 or site.state != "ready_for_renewal" or not site.has("world_event") or not journal is Dictionary:
+			return false
+		if journal.get("phase") not in ["prepared", "publishing"] or journal.get("cycle") != 1:
+			return false
+		if journal.get("seed") != cycle_seed(int(site.world_seed), site.site_id, 1, site.event_id):
+			return false
+		var digest: Variant = journal.get("digest")
+		if not digest is String or digest.length() != 64 or not digest.is_valid_hex_number(false):
+			return false
 	# A sealed first renewal retains the cycle-zero treasure receipt.
 	var required_receipt := "0:treasure:player" if site.cycle == 1 else treasure_receipt(site)
 	return site.state not in CLOSED or site.reward_claims.has(required_receipt)
