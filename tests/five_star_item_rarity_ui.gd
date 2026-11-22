@@ -13,6 +13,15 @@ func verify(ok: bool, detail: String) -> void:
 		failures += 1
 		push_error("FAIL FIVE-STAR ITEMS: " + detail)
 
+func strip_text(strip: HBoxContainer) -> String:
+	if strip == null:
+		return ""
+	var result: String = ""
+	for child in strip.get_children():
+		if child is Label:
+			result += (child as Label).text
+	return result
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -49,10 +58,16 @@ func _run() -> void:
 	var tile: Button = panel.inventory_grid.get_node_or_null("Item_spear") as Button
 	verify(tile != null, "Crafted equipment displays as a bag tile")
 	if tile != null:
-		var star_strip: Label = tile.get_node_or_null("ItemRarityStars") as Label
+		var star_strip: HBoxContainer = tile.get_node_or_null("ItemRarityStars") as HBoxContainer
 		var border: Panel = tile.get_node_or_null("ItemRarityBorder") as Panel
-		verify(star_strip != null and star_strip.text == "★★★★☆", "Bag tile uses saved Epic star row")
-		verify(border != null and border.get_theme_stylebox("panel").border_color == VIEW.rarity_color(3), "Bag tile has Epic border")
+		verify(strip_text(star_strip) == "★★★★☆", "Bag tile uses saved Epic star row")
+		var border_style: StyleBoxFlat = null
+		if border != null:
+			border_style = border.get_theme_stylebox("panel") as StyleBoxFlat
+		verify(border_style != null and border_style.border_color == VIEW.rarity_color(3), "Bag tile has Epic border")
+		if star_strip != null:
+			var unfilled: Label = star_strip.get_node_or_null("RarityStar_4") as Label
+			verify(unfilled != null and unfilled.get_theme_color("font_color") == Color("#5b534a"), "Unfilled stars stay dark")
 	verify(panel._item_tip("spear").contains("★★★★☆  Epic"), "Desktop tooltip displays item rating")
 	verify(not panel._item_tip("wood").contains("★"), "Plain wood has no fabricated rating")
 	panel._select_item("spear")
@@ -61,8 +76,10 @@ func _run() -> void:
 	verify(game.equip_item("spear"), "Equipping does not modify the saved rarity")
 	panel.refresh()
 	var slot: Button = panel.equipment_body.find_child("EquipmentSlot_weapon", true, false) as Button
-	var equipped_label: Label = slot.get_node_or_null("GearSlotName") as Label if slot != null else null
-	verify(equipped_label != null and equipped_label.text == "★★★★☆", "Equipped weapon shows its quality stars")
+	var equipped_strip: HBoxContainer = null
+	if slot != null:
+		equipped_strip = slot.get_node_or_null("ItemRarityStars") as HBoxContainer
+	verify(strip_text(equipped_strip) == "★★★★☆", "Equipped weapon shows its quality stars")
 
 	game.hud.record_loot("spear", 1)
 	verify(int(game.hud.loot_feed_entries[0].get("rarity", -1)) == 3, "Loot receipt reads saved equipment rarity")
@@ -71,8 +88,8 @@ func _run() -> void:
 	game.last_craft_improved = true
 	game.show_crafting()
 	game.menu.on_craft_completed("spear")
-	var reveal: Label = game.menu.find_child("CraftResultRarityStars", true, false) as Label
-	verify(reveal != null and reveal.text == "★★★★☆", "Craft result matches the five-star inventory display")
+	var reveal: HBoxContainer = game.menu.find_child("CraftResultRarityStars", true, false) as HBoxContainer
+	verify(strip_text(reveal) == "★★★★☆", "Craft result matches the five-star inventory display")
 	game.queue_free()
 	await process_frame
 	print("FIVE-STAR ITEM RESULT: %d failures" % failures)
