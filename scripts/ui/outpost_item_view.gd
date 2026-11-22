@@ -41,6 +41,28 @@ static func rarity_stars(item_rarity: int) -> String:
 		return ""
 	return "★".repeat(item_rarity + 1) + "☆".repeat(4 - item_rarity)
 
+## One shared star strip gives filled and unfilled stars distinct contrast.
+## It is decorative and ignores touch so item tiles remain easy to tap/drag.
+static func make_star_strip(item_rarity: int, size_px: int = 11) -> HBoxContainer:
+	var strip := HBoxContainer.new()
+	strip.name = "ItemRarityStars"
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.alignment = BoxContainer.ALIGNMENT_CENTER
+	strip.add_theme_constant_override("separation", 0)
+	if item_rarity < 0 or item_rarity >= RARITY_NAMES.size():
+		return strip
+	for index in range(5):
+		var star := Label.new()
+		star.name = "RarityStar_%d" % index
+		star.text = "★" if index <= item_rarity else "☆"
+		star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		star.add_theme_font_size_override("font_size", size_px)
+		star.add_theme_color_override("font_color", rarity_color(item_rarity) if index <= item_rarity else Color("#5b534a"))
+		star.add_theme_color_override("font_outline_color", Color("#21160f"))
+		star.add_theme_constant_override("outline_size", 1)
+		strip.add_child(star)
+	return strip
+
 static func rarity_caption(item_rarity: int) -> String:
 	if item_rarity < 0 or item_rarity >= RARITY_NAMES.size():
 		return ""
