@@ -47,6 +47,7 @@ const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_bu
 @export var experimental_building_enabled: bool = false
 var building: Node3D
 var saved_blocks: Array = []
+var player_save_valid_for_mine := false
 var natural_cave_encounters: Dictionary = {}
 var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
 var swap_context_and_orbit: bool = false
@@ -183,6 +184,8 @@ func _ready() -> void:
 	building = EXPERIMENTAL_BUILDING.new()
 	add_child(building)
 	building.setup(self, saved_blocks)
+	if terrain_surface != null and terrain_surface.get("archipelago") != null:
+		terrain_surface.archipelago.finish_mine_loading(self)
 	if terrain_surface != null and terrain_surface.get("archipelago") != null and OS.get_environment("OUTPOST_TEST_NATURAL_CAVES") == "1":
 		terrain_surface.archipelago.install_natural(self)
 	world_map = WORLD_MAP.new()
@@ -2017,6 +2020,21 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	# The renewal must account for every persisted construction before carving.
+	# Older saves without a construction list still load normally.
+	var saved_constructions: Variant = data.get("placed_blocks")
+	player_save_valid_for_mine = saved_constructions is Array and saved_constructions.size() <= EXPERIMENTAL_BUILDING.MAX_BLOCKS
+	if player_save_valid_for_mine:
+		for entry in saved_constructions:
+			if not entry is Array or entry.size() != 3:
+				player_save_valid_for_mine = false
+				break
+			for index in 3:
+				var value: Variant = entry[index]
+				var limit := 128 if index == 1 else 384
+				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
+					player_save_valid_for_mine = false
+					break
 	if data.get("natural_cave_encounters") is Dictionary:
 		natural_cave_encounters = data.natural_cave_encounters.duplicate()
 	if data.get("placed_blocks") is Array:

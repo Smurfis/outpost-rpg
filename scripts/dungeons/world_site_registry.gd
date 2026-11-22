@@ -157,10 +157,17 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 	# seed metadata before they can address a different reward namespace.
 	for key in ["cycle", "world_seed", "layout_seed"]:
 		var value: Variant = site[key]
-		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or int(value) != value:
+		if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > 9007199254740991 or int(value) != value:
 			return false
-	if site.cycle != 0 or site.event_id != "initial" or site.layout_seed != cycle_seed(int(site.world_seed), site.site_id, int(site.cycle), site.event_id):
-		return false # 6A can read only the physical layout generation it can build.
+	# Only the initial and first renewal formats have a reconstruction contract.
+	if (site.cycle != 0 and site.cycle != 1) or site.event_id != "initial":
+		return false
+	if site.site_id != "fractal_physical_goblin_mine_1_%d" % int(site.world_seed):
+		return false
+	if site.layout_seed != cycle_seed(int(site.world_seed), site.site_id, int(site.cycle), site.event_id):
+		return false
+	if site.cycle == 1 and (site.state != "ready_for_renewal" or not site.has("world_event")):
+		return false
 	if site.chunks.is_empty() or not site.get("boss_defeated") is bool:
 		return false
 	for chunk in site.chunks:
@@ -191,4 +198,6 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 			return false
 		if not ((site.state == "sealed" and event.get("phase") == "reported") or (site.state == "ready_for_renewal" and event.get("phase") == "ready_for_renewal")):
 			return false
-	return site.state not in CLOSED or site.reward_claims.has(treasure_receipt(site))
+	# A sealed first renewal retains the cycle-zero treasure receipt.
+	var required_receipt := "0:treasure:player" if site.cycle == 1 else treasure_receipt(site)
+	return site.state not in CLOSED or site.reward_claims.has(required_receipt)

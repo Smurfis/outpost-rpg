@@ -15,15 +15,21 @@ var entrance: Vector3
 var layout_seed: int
 var access = preload("res://scripts/world/mine_access.gd").new()
 
-func configure(streamer) -> bool:
+func configure(streamer, site: Dictionary = {}) -> bool:
 	island = streamer
 	var terrain = island.terrain
 	site_id = "fractal_physical_goblin_mine_1_%d" % terrain.seed
 	layout_seed = REGISTRY.cycle_seed(terrain.seed,site_id,0,"initial")
+	if not site.is_empty():
+		if site.get("site_id") != site_id or int(site.get("world_seed", -1)) != terrain.seed:
+			push_error("Physical mine identity does not match the saved site")
+			return false
+		layout_seed = int(site.layout_seed)
 	if not terrain.caves.carve_mine(terrain,layout_seed):
 		return false
 	entrance = terrain.caves.entrances[0]
 	access.configure(island, entrance)
+	access.closed = site.get("state", "") in REGISTRY.CLOSED
 	_slot("entrance_timber",entrance+Vector3.BACK*0.5)
 	var branches: Array = terrain.caves.branches
 	for i in branches.size():

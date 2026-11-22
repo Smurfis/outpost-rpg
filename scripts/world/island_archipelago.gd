@@ -44,6 +44,8 @@ var _regions: Array[Dictionary] = []
 var _owners := {}
 var _lights: Array[Vector3] = []
 var _region := 0
+var mine_pending := false
+var mine_load_failed := false
 var natural_population
 var side_chamber
 var mine
@@ -502,6 +504,8 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 			_chamber_light.queue_free()
 			_chamber_light = null
 	natural_population = null
+	mine_pending = false
+	mine_load_failed = false
 	terrain = DATA.new(world_seed)
 	mine = null
 	side_chamber = null
@@ -512,9 +516,10 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 		else:
 			push_warning("No roofed site for the test side chamber in this seed")
 	elif physical_mineshaft and OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") != "1":
-		var candidate = MINE.new()
-		if candidate.configure(self):
-			mine = candidate
+		mine_pending = true
+		var game = get_parent().get_parent() if get_parent() != null else null
+		if game == null or game.get("building") != null:
+			finish_mine_loading(game)
 	name = "FractalArchipelago"
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
@@ -522,6 +527,59 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
+
+func finish_mine_loading(game) -> void:
+	if not mine_pending:
+		return
+	mine_pending = false
+	var candidate = MINE.new()
+	var manager = game.get_node_or_null("Dungeons") if game != null else null
+	if game != null and (manager == null or not manager.world_site_save_valid):
+		mine_load_failed = true
+		push_error("Physical mine unavailable: invalid dungeon save")
+		return
+	var id := "fractal_physical_goblin_mine_1_%d" % terrain.seed
+	var site: Dictionary = manager.world_sites.sites.get(id, {}) if manager != null else {}
+	if int(site.get("cycle", 0)) == 1:
+		if not game.player_save_valid_for_mine:
+			mine_load_failed = true
+			push_error("Renewed mine unavailable: player construction save is missing or invalid")
+			return
+		var original = DATA.new(terrain.seed)
+		var proposal = DATA.new(terrain.seed)
+		if not original.caves.carve_mine(original, MINE.REGISTRY.cycle_seed(terrain.seed, id, 0, "initial")) or not proposal.caves.carve_mine(proposal, int(site.layout_seed)):
+			mine_load_failed = true
+			push_error("Cannot reconstruct the saved physical mine")
+			return
+		# Other registered sites may own terrain outside their visible entrance.
+		var changed_chunks := {}
+		for column: Vector2i in original.caves.floors:
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				var key := _cell_at(Vector3(column.x, 0, column.y))
+				changed_chunks["island_%d_%d" % [key.x, key.y]] = true
+		for column: Vector2i in proposal.caves.floors:
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				var key := _cell_at(Vector3(column.x, 0, column.y))
+				changed_chunks["island_%d_%d" % [key.x, key.y]] = true
+		for other_id in manager.world_sites.sites:
+			if other_id == id:
+				continue
+			for chunk in manager.world_sites.sites[other_id].chunks:
+				if changed_chunks.has(chunk):
+					mine_load_failed = true
+					push_error("Renewed mine overlaps another persistent site's chunks")
+					return
+		for block: Vector3i in game.building.blocks:
+			var column := Vector2i(block.x, block.z)
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				mine_load_failed = true
+				push_error("Renewed mine conflicts with a saved player construction")
+				return
+	if not candidate.configure(self, site):
+		mine_load_failed = true
+		push_error("Cannot reconstruct physical mine from saved site")
+		return
+	mine = candidate
 
 func install_natural(game) -> void:
 	var protected := {}
@@ -543,7 +601,7 @@ var profile_stream := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
 var stream_usec := 0
 
 func _process(delta: float) -> void:
-	if terrain == null:
+	if terrain == null or mine_pending or mine_load_failed:
 		return
 	var game: Node = get_parent().get_parent()
 	if game == null:
@@ -780,6 +838,8 @@ func _cell_at(point: Vector3) -> Vector2i:
 		floori(point.z / float(CHUNK)) * CHUNK)
 
 func _queue_near(point: Vector3) -> void:
+	if mine_pending or mine_load_failed:
+		return
 	var center: Vector2i = _cell_at(point)
 	if center == _center:
 		return
