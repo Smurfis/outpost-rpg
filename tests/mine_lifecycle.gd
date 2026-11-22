@@ -168,7 +168,9 @@ func run() -> void:
 	game.hero.move_along_station_path(PackedVector3Array([point(entry_cell)]))
 	check(game.hero.interaction_moving and not island.mine.advance_for_test("sealed"), "Sealed during player navigation")
 	game.controls.cancel()
-	check(island.mine.advance_for_test("sealed"), "Vacant cleared mine refused sealing")
+	check(island.mine.trigger_reoccupation_for_test(), "Vacant cleared mine refused reoccupation")
+	check(state().world_event.phase == "reported" and state().world_event.site_id == site_id, "Event not recorded")
+	check(not island.mine.trigger_reoccupation_for_test(), "Duplicate event accepted")
 	await verify_seal()
 	check(original_layout == layout_digest(), "Sealing changed cave occupancy or topology")
 	if seal_and_quit:
@@ -183,6 +185,7 @@ func run() -> void:
 	await reload_chunks()
 	check(island.mine.advance_for_test("ready_for_renewal"), "Sealed mine refused eligibility")
 	await reload_state("ready_for_renewal")
+	check(state().world_event.phase == "ready_for_renewal" and not state().world_event.completed, "Renewal event not persisted")
 	await verify_seal()
 	check(not island.mine.advance_for_test("active") and int(state().cycle) == 0, "Eligibility reset the cycle")
 	check(int(game.inventory.get("coins", 0)) == coins + 18, "Reload changed treasure payout")

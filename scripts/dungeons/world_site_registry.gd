@@ -181,4 +181,14 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 	for receipt in site.reward_claims:
 		if not receipt is String or site.reward_claims[receipt] != true:
 			return false
+	if site.has("world_event"):
+		var event: Variant = site.world_event
+		if not event is Dictionary or event.get("id") != "goblin_reoccupation" or event.get("site_id") != site.site_id:
+			return false
+		if event.get("completed") != false or event.get("objective") != "Investigate the disturbance at the Goblin Mine.":
+			return false
+		if event.get("seed") != cycle_seed(int(site.world_seed), site.site_id, 1, "goblin_reoccupation"):
+			return false
+		if not ((site.state == "sealed" and event.get("phase") == "reported") or (site.state == "ready_for_renewal" and event.get("phase") == "ready_for_renewal")):
+			return false
 	return site.state not in CLOSED or site.reward_claims.has(treasure_receipt(site))

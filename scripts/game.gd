@@ -274,6 +274,13 @@ func _process(delta: float) -> void:
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
+	var dungeons = get_node_or_null("Dungeons")
+	if dungeons != null and terrain_surface != null and terrain_surface.archipelago != null:
+		var mine = terrain_surface.archipelago.mine
+		if mine != null and dungeons.world_sites.sites.has(mine.site_id):
+			var event: Dictionary = dungeons.world_sites.sites[mine.site_id].get("world_event", {})
+			if not event.is_empty() and not event.get("completed", false):
+				goal = event.get("objective", goal)
 	var resource = _nearest_resource() if controls == null or not controls.desktop else null
 	if resource != last_hit_node:
 		if is_instance_valid(last_hit_node):

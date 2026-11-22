@@ -160,8 +160,12 @@ func _supplies_claimed(opened: Dictionary) -> bool:
 					return false
 	return true
 
+# Development trigger. The existing lifecycle flag gates all world changes.
+func trigger_reoccupation_for_test() -> bool:
+	return advance_for_test("sealed", true)
+
 # Called only on explicit request by a lifecycle test, never by the streamer.
-func advance_for_test(next: String) -> bool:
+func advance_for_test(next: String, reoccupation := false) -> bool:
 	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or manager == null or not manager.world_site_save_valid:
 		return false
 	var game = manager.get_parent()
@@ -172,15 +176,30 @@ func advance_for_test(next: String) -> bool:
 	var site: Dictionary = manager.world_sites.sites[site_id]
 	if next == "sealed" and not _supplies_claimed(game.opened_world_objects):
 		return false
+	if reoccupation and (next != "sealed" or site.has("world_event")):
+		return false
 	var previous: String = site.state
+	var previous_event: Variant = site.get("world_event").duplicate(true) if site.has("world_event") else null
 	if not manager.world_sites.advance_mine(site_id, next, access.clear_of_player(game.hero.global_position)):
 		return false
+	if reoccupation:
+		site.world_event = {"id": "goblin_reoccupation", "site_id": site_id,
+			"phase": "reported", "seed": REGISTRY.cycle_seed(island.terrain.seed, site_id, 1, "goblin_reoccupation"),
+			"objective": "Investigate the disturbance at the Goblin Mine.", "completed": false}
+	elif next == "ready_for_renewal" and site.has("world_event"):
+		site.world_event.phase = "ready_for_renewal"
 	if not manager._save_clears():
 		site.state = previous
+		if previous_event == null:
+			site.erase("world_event")
+		else:
+			site.world_event = previous_event
 		return false
 	if not access.closed:
 		access.closed = true
 		for key: Vector2i in access.seal_chunks:
 			if island._loaded.has(key):
 				access.populate(key, island, island._loaded[key])
+	if reoccupation:
+		game.hud.toast("Goblin activity has been reported near the abandoned mine.")
 	return true
