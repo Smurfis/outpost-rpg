@@ -1,6 +1,6 @@
 extends RefCounted
-## One explicit development request advances one durable checkpoint. A loaded
-## chunk keeps its current mesh and collider until it streams out normally.
+## One main-thread request advances one durable checkpoint. Staging and the
+## resident-owner exchange run synchronously, outside physics callbacks.
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const REGISTRY = preload("res://scripts/dungeons/world_site_registry.gd")
 const MINE = preload("res://scripts/world/physical_mineshaft.gd")
@@ -11,14 +11,20 @@ static func advance(island, game) -> String:
 	var manager = game.get_node("Dungeons")
 	var id: String = island.mine.site_id
 	var site: Dictionary = manager.world_sites.sites.get(id, {})
-	if not manager.world_site_save_valid or not game.player_save_valid_for_mine or site.get("state") != "ready_for_renewal" or not site.has("world_event") or not island.mine.access.closed:
+	if not manager.world_site_save_valid or (not game.player_save_valid_for_mine and not game.mine_started_without_saves) or site.get("state") != "ready_for_renewal" or not site.has("world_event"):
 		return "unavailable"
-	if site.cycle == 1:
-		return "committed"
-	if not island.mine._supplies_claimed(game.opened_world_objects):
+	if site.get("reopened",false):
+		return "open"
+	if not island.mine.access.closed or Engine.is_in_physics_frame():
+		return "busy"
+	if site.cycle == 0 and not island.mine._supplies_claimed(game.opened_world_objects):
 		return "outstanding_rewards"
 	if game.hero == null or game.controls.navigating or game.hero.interaction_moving or Vector2(game.hero.velocity.x, game.hero.velocity.z).length_squared() > 0.001 or absf(game.hero.velocity.y) > 0.11 or manager.active_instance != null or (game.coop != null and game.coop.mode != "solo"):
 		return "occupied"
+	if game.controls.modal_open() or game.station_walk_target != "" or is_instance_valid(game.controls.target) or is_instance_valid(game.controls.inspected):
+		return "busy"
+	if site.cycle == 1:
+		return _reopen(island,game,manager,site)
 	# Reconstruct in an isolated terrain object. Only cave data is transferred
 	# on commit so references held by unrelated island occupants remain valid.
 	var terrain = DATA.new(island.terrain.seed)
@@ -32,6 +38,7 @@ static func advance(island, game) -> String:
 	var next = candidate.access
 	var cells: Dictionary = current.footprint.duplicate()
 	cells.merge(next.footprint)
+	var protected_columns := cells.duplicate()
 	var keys := cells.keys()
 	keys.sort()
 	var changes := []
@@ -45,11 +52,12 @@ static func advance(island, game) -> String:
 			continue
 		changes.append([cell.x, cell.y, old_bits, new_bits])
 		for step: Vector2i in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+			protected_columns[cell+step] = true
 			affected[island._cell_at(Vector3(cell.x + step.x, 0, cell.y + step.y))] = true
 	if changes.is_empty() or not _walkable(terrain, next):
 		return "invalid_layout"
 	for block: Vector3i in game.building.blocks:
-		if cells.has(Vector2i(block.x, block.z)):
+		if protected_columns.has(Vector2i(block.x, block.z)):
 			return "protected"
 	for other_id in manager.world_sites.sites:
 		if other_id == id:
@@ -63,6 +71,9 @@ static func advance(island, game) -> String:
 			return "protected"
 	for actor in [game.hero] + game.get_tree().get_nodes_in_group("enemies"):
 		if not current.clear_of_player(actor.global_position) or not next.clear_of_player(actor.global_position):
+			return "occupied"
+	for target in [game.focus_target,game.recent_attack_target]:
+		if is_instance_valid(target) and affected.has(island._cell_at(target.global_position)):
 			return "occupied"
 	var natural = island.terrain.caves.natural
 	if natural != null:
@@ -85,13 +96,13 @@ static func advance(island, game) -> String:
 		return "layout_changed"
 	var updated := site.duplicate(true)
 	var phase: String = journal.get("phase", "")
+	var staged := {}
 	if phase == "":
-		updated.renewal = {"phase":"prepared", "cycle":1, "seed":descriptor.layout_seed, "digest":digest}
+		updated.renewal = {"phase":"prepared", "from_cycle":0, "generator_version":REGISTRY.GENERATOR_VERSION, "cycle":1, "seed":descriptor.layout_seed, "digest":digest}
 		phase = "prepared"
 	else:
-		for key in affected:
-			if island._loaded.has(key):
-				return "awaiting_unload"
+		# Streaming, camera and input run on the same thread. No await from
+		# this snapshot of resident keys through owner exchange.
 		for child in island.get_children():
 			if child.is_queued_for_deletion():
 				return "awaiting_unload"
@@ -107,20 +118,81 @@ static func advance(island, game) -> String:
 				var name := "island_%d_%d" % [key.x,key.y]
 				if name not in updated.chunks:
 					updated.chunks.append(name)
+			for key: Vector2i in affected:
+				if island._loaded.has(key):
+					var nodes: Array = island._build_chunk_geometry(key,terrain)
+					staged[key] = nodes
+					if not _has_terrain_collision(nodes):
+						_discard(staged)
+						return "invalid_collision"
 			phase = "committed"
 	# Existing atomic save replacement is the commit point. Until this
 	# succeeds a restart always constructs cycle zero, including mid-publish.
 	manager.world_sites.sites[id] = updated
 	if not manager._save_clears():
 		manager.world_sites.sites[id] = site
+		_discard(staged)
 		return "save_failed"
 	if phase == "committed":
 		island.invalidate_section_geometry()
 		island._reveal_cell = Vector2i.MAX
+		for key in staged:
+			for node in island._loaded[key]:
+				if node is MeshInstance3D:
+					island._roof_nodes.erase(node)
+				island.remove_child(node)
+				node.queue_free()
+			island._loaded.erase(key)
 		island.terrain.caves = terrain.caves
 		island.mine = candidate
 		candidate.manager = manager
+		for key in staged:
+			island._install_chunk(key,staged[key])
 	return phase
+
+static func _discard(staged: Dictionary) -> void:
+	for nodes in staged.values():
+		for node in nodes:
+			node.free()
+
+static func _has_terrain_collision(nodes: Array) -> bool:
+	for node in nodes:
+		if node is StaticBody3D and node.name.begins_with("IslandCollision_"):
+			if node.get_child_count() == 0:
+				return false
+			for collider in node.get_children():
+				if not collider is CollisionShape3D or not collider.shape is ConcavePolygonShape3D:
+					return false
+			return true
+	return false
+
+static func _reopen(island,game,manager,site: Dictionary) -> String:
+	var mine = island.mine
+	if mine.layout_seed != site.layout_seed or not _walkable(island.terrain,mine.access):
+		return "invalid_layout"
+	for actor in [game.hero] + game.get_tree().get_nodes_in_group("enemies"):
+		if not mine.access.clear_of_player(actor.global_position):
+			return "occupied"
+	for block: Vector3i in game.building.blocks:
+		if mine.access.footprint.has(Vector2i(block.x,block.z)):
+			return "protected"
+	for key in island._loaded:
+		if "island_%d_%d" % [key.x,key.y] in site.chunks:
+			if not _has_terrain_collision(island._loaded[key]):
+				return "invalid_collision"
+	site.reopened = true
+	if not manager._save_clears():
+		site.erase("reopened")
+		return "save_failed"
+	for key in mine.access.seal_chunks:
+		var nodes: Array = island._loaded.get(key,[])
+		for node in nodes.duplicate():
+			if node.has_meta("mine_bulkhead"):
+				nodes.erase(node)
+				island.remove_child(node)
+				node.queue_free()
+	mine.access.closed = false
+	return "open"
 
 static func _walkable(terrain, access) -> bool:
 	var start: Vector3 = terrain.caves.entrances[0]

@@ -56,6 +56,7 @@ func populate(key: Vector2i, island, members: Array) -> void:
 		return
 	var body := StaticBody3D.new()
 	body.name = "MineBulkhead"
+	body.set_meta("mine_bulkhead", true)
 	body.position = Vector3(key.x, 0, key.y)
 	var timber := SurfaceTool.new()
 	timber.begin(Mesh.PRIMITIVE_TRIANGLES)

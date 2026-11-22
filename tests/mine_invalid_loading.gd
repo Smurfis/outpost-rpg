@@ -33,10 +33,11 @@ func run() -> void:
 		construction.store_string(JSON.stringify({"version":5,"placed_blocks":[[changed.x,0,changed.y]]}))
 		construction.close()
 	var path := "user://invalid_%s_sites.json" % mode
-	var file := FileAccess.open(path,FileAccess.WRITE)
+	var evidence := path + ".tmp" if mode == "orphan" else path
+	var file := FileAccess.open(evidence,FileAccess.WRITE)
 	file.store_string(JSON.stringify(source))
 	file.close()
-	var raw := FileAccess.get_file_as_string(path)
+	var raw := FileAccess.get_file_as_string(evidence)
 	await setup_walk(player,path,false)
 	var manager = game.get_node("Dungeons")
 	if mode != "protected":
@@ -44,7 +45,9 @@ func run() -> void:
 	check(island.mine == null and island.mine_load_failed,"unsafe mine constructed")
 	island._queue_near(Vector3(192,3,62))
 	check(island._pending.is_empty() and island._loaded.is_empty(),"unsafe terrain queued")
-	check(FileAccess.get_file_as_string(path) == raw,"invalid save modified")
+	check(FileAccess.get_file_as_string(evidence) == raw,"invalid save modified")
+	if mode == "orphan":
+		check(not FileAccess.file_exists(path),"Uncommitted save promoted without backup")
 	print("INVALID LOAD ",mode," ",not failed)
 	game.queue_free()
 	await process_frame

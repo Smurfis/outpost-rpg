@@ -198,13 +198,20 @@ static func _valid_mine_record(site: Dictionary) -> bool:
 			return false
 		if not ((site.state == "sealed" and event.get("phase") == "reported") or (site.state == "ready_for_renewal" and event.get("phase") == "ready_for_renewal")):
 			return false
+	if site.has("reopened") and (site.cycle != 1 or not site.reopened is bool or not site.reopened):
+		return false
 	if site.has("renewal"):
 		var journal: Variant = site.renewal
 		if site.cycle != 0 or site.state != "ready_for_renewal" or not site.has("world_event") or not journal is Dictionary:
 			return false
+		for field in ["cycle", "seed", "from_cycle", "generator_version"]:
+			if journal.has(field) and typeof(journal[field]) not in [TYPE_INT, TYPE_FLOAT]:
+				return false
 		if journal.get("phase") not in ["prepared", "publishing"] or journal.get("cycle") != 1:
 			return false
 		if journal.get("seed") != cycle_seed(int(site.world_seed), site.site_id, 1, site.event_id):
+			return false
+		if journal.get("from_cycle", 0) != site.cycle or journal.get("generator_version", GENERATOR_VERSION) != GENERATOR_VERSION:
 			return false
 		var digest: Variant = journal.get("digest")
 		if not digest is String or digest.length() != 64 or not digest.is_valid_hex_number(false):

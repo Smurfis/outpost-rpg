@@ -17,6 +17,7 @@ func run() -> void:
 		quit(1)
 		return
 	var id: String = mine.site_id
+	await process_frame
 	game.hero.velocity = Vector3.ZERO
 	if mode == "prepare":
 		mine._register(game)
@@ -35,11 +36,24 @@ func run() -> void:
 		game._save()
 		check(manager._save_clears(), "Seed fixture")
 	var site: Dictionary = manager.world_sites.sites[id]
-	var committed: bool = mode == "reload"
+	var committed: bool = mode in ["reopen","reload","walk"]
 	check(site.cycle == int(committed) and mine.layout_seed == REGISTRY.cycle_seed(TEST_SEED,id,int(committed),"initial"), "Wrong recovery generation")
+	if mode != "prepare":
+		var snapshot: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("user://renew_baseline.json"))
+		check(snapshot.inventory == JSON.parse_string(JSON.stringify(game.inventory)) and snapshot.rewards == site.reward_claims and snapshot.defeats == site.room_state,"Inventory or receipts changed across checkpoints")
+	if committed:
+		var coords := []
+		var keys: Array = island.terrain.caves.floors.keys()
+		keys.sort()
+		for c: Vector2i in keys:
+			coords.append([c.x,c.y,island.terrain.caves.floors[c]])
+		check(JSON.stringify(coords).sha256_text()=="1837af8d15b1678eea5d74b266a72bb818e821bf26d343f05545e0593bb6c666","Restart changed cycle-one geometry")
 	var phase: String = site.get("renewal",{}).get("phase","")
 	match mode:
 		"prepare":
+			var snapshot := FileAccess.open("user://renew_baseline.json",FileAccess.WRITE)
+			snapshot.store_string(JSON.stringify({"inventory":game.inventory,"rewards":site.reward_claims,"defeats":site.room_state}))
+			snapshot.close()
 			var block := Vector3i(mine.entrance.floor())
 			game.building.blocks[block] = true
 			check(island.advance_mine_renewal_for_test() == "protected", "Construction bypass")
@@ -51,52 +65,55 @@ func run() -> void:
 			check(island.advance_mine_renewal_for_test() == "prepared", "Could not stage")
 		"publish":
 			check(phase == "prepared", "Prepared checkpoint missing")
+			for field in ["from_cycle","generator_version","phase","seed","digest"]:
+				var corrupted: Dictionary = manager.world_sites.export_state()
+				corrupted.sites[id].renewal[field] = "bad"
+				check(not REGISTRY.new().import_state(corrupted),"Malformed journal accepted: "+field)
+			var original_digest: String = site.renewal.digest
+			site.renewal.digest = "0".repeat(64)
+			check(island.advance_mine_renewal_for_test()=="layout_changed","Stale candidate accepted")
+			site.renewal.digest = original_digest
 			island._build_chunk(island._cell_at(mine.entrance))
-			check(island.advance_mine_renewal_for_test() == "awaiting_unload", "Loaded collider replaced")
-			island._clear_stream()
-			await process_frame
-			await physics_frame
-			game.hero.velocity = Vector3.ZERO
 			check(island.advance_mine_renewal_for_test() == "publishing", "Could not journal publication")
-		"commit":
+		"staged_fail":
+			check(phase == "publishing","Missing publishing checkpoint")
+			var before := FileAccess.get_file_as_string(dungeon_save)
+			island._build_chunk(island._cell_at(mine.entrance))
+			var path := ProjectSettings.globalize_path(dungeon_save+".tmp")
+			check(DirAccess.make_dir_absolute(path)==OK,"Fixture could not block save")
+			check(island.advance_mine_renewal_for_test()=="save_failed","Failed save replaced resident terrain")
+			check(DirAccess.remove_absolute(path)==OK,"Fixture could not unblock save")
+			check(island.mine == mine and site.cycle==0 and mine.access.closed and before==FileAccess.get_file_as_string(dungeon_save),"Uncommitted generation leaked")
+		"commit","live":
 			check(phase == "publishing", "Publish checkpoint missing")
+			island._queue_near(mine.entrance)
+			while not island._pending.is_empty():
+				island._build_pending()
+			var key: Vector2i = island._cell_at(mine.entrance)
+			var old: Array = island._loaded[key].duplicate()
 			var original: Dictionary = island.terrain.caves.floors.duplicate()
 			check(island.advance_mine_renewal_for_test() == "committed", "Live commit failed")
 			check(original != island.terrain.caves.floors, "No physical change")
-	if mode in ["commit","reload"]:
-		check(island.advance_mine_renewal_for_test() == "committed", "Retry advanced cycle")
-		check(island.mine.access.closed and manager.world_sites.sites[id].reward_claims == {"0:treasure:player":true}, "Seal or receipt changed")
-		var cell: Vector2i = island.terrain.caves.branches[0].center
-		var at := point(cell)
-		game.hero.position = at
-		island._queue_near(at)
-		while not island._pending.is_empty():
-			island._build_pending()
-		await physics_frame
-		await physics_frame
-		var query := PhysicsRayQueryParameters3D.create(at+Vector3.UP,at-Vector3.UP,1,[game.hero.get_rid()])
-		var hit: Dictionary = game.get_world_3d().direct_space_state.intersect_ray(query)
-		check(not hit.is_empty() and absf(hit.position.y-at.y)<0.15,"Missing renewed floor")
-		refresh()
-		check(not island.section_active,"Closed mine revealed through barricade")
-		# Inspect rebuilt interior geometry directly, behind the retained seal.
-		check(island._section_update(at,game.camera.global_basis.z),"Renewed section unavailable")
-		island._update_hero_visibility(game,game.hero)
-		game.day_night.interior_blend = 1.0
-		game.day_night._apply_light()
-		await physics_frame
-		var floor_position := Vector3(at.x, at.y-0.1, at.z)
-		var picked := PICK.resolve(game,game.camera.unproject_position(floor_position))
-		check(not picked.is_empty() and picked.position.distance_to(floor_position)<0.12,"Renewed floor picking")
-		if DisplayServer.get_name() != "headless":
-			await RenderingServer.frame_post_draw
-			check(root.get_texture().get_image().save_png("user://renewed-chamber.png")==OK,"Screenshot")
-			game.camera_angle_target += PI/2
-			game.camera_angle = game.camera_angle_target
-			game._camera(1.0)
-			check(island._section_update(at,game.camera.global_basis.z),"Rotated section unavailable")
-			await RenderingServer.frame_post_draw
-			check(root.get_texture().get_image().save_png("user://renewed-rotated.png")==OK,"Rotated screenshot")
+			for node in old:
+				check(not node.is_inside_tree(),"Stale generation remained resident")
+			check(island.mine.access.closed,"Commit reopened before collider install")
+			if mode == "live":
+				await physics_frame
+				await process_frame
+				game.hero.velocity = Vector3.ZERO
+				check(island.advance_mine_renewal_for_test()=="open","Resident reopen")
+				await walkthrough()
+		"reopen":
+			check(mine.access.closed,"Missing committed barricade")
+			island._queue_near(mine.entrance)
+			while not island._pending.is_empty():
+				island._build_pending()
+			check(island.advance_mine_renewal_for_test() == "open","Reopen failed")
+		"reload","walk":
+			check(not mine.access.closed and island.advance_mine_renewal_for_test() == "open","Open state lost")
+			check(site.reward_claims == {"0:treasure:player":true} and site.room_state.size()==2,"Historical progress lost")
+			if mode == "walk":
+				await walkthrough()
 	print("RENEWAL ",mode," ",not failed)
 	if not failed and OS.get_cmdline_user_args().has("interrupt"):
 		var marker := FileAccess.open("user://" + mode + ".checkpoint",FileAccess.WRITE)
@@ -109,3 +126,64 @@ func run() -> void:
 	await process_frame
 	await process_frame
 	quit(int(failed))
+
+func walkthrough() -> void:
+	var mine = island.mine
+	var entry: Vector3 = mine.entrance
+	# Position the fixture on the surface. All subsequent movement uses controls.
+	game.hero.position = entry + Vector3.RIGHT*3
+	game.hero.position.y = island.terrain.height_at(floori(game.hero.position.x),floori(game.hero.position.z))+0.08
+	island._queue_near(entry)
+	while not island._pending.is_empty():
+		island._build_pending()
+	await physics_frame
+	refresh()
+	await snapshot("open-entrance")
+	var old = DATA.new(TEST_SEED)
+	old.caves.carve_mine(old,REGISTRY.cycle_seed(TEST_SEED,mine.site_id,0,"initial"))
+	var branch: Dictionary = {}
+	for candidate in island.terrain.caves.branches:
+		if not old.caves.floors.has(candidate.center):
+			branch = candidate
+			break
+	check(not branch.is_empty(),"Missing changed room")
+	if branch.is_empty():
+		return
+	manual = false
+	await walk_shore(entry.x)
+	await visit(branch.junction)
+	await visit(branch.center)
+	check(island.section_active and not island._outline_active,"Renewed chamber hidden")
+	await snapshot("open-chamber")
+	game.camera_angle_target += PI/2
+	game.camera_angle = game.camera_angle_target
+	refresh()
+	await snapshot("open-rotated")
+	var sampled := false
+	for delta: Vector2i in [Vector2i.LEFT,Vector2i.DOWN,Vector2i.RIGHT,Vector2i.UP]:
+		var target: Vector2i = branch.center + delta
+		var at := point(target)-Vector3.UP*0.1
+		var hit := PICK.resolve(game,game.camera.unproject_position(at))
+		if hit.get("position",Vector3.INF).distance_to(at)<0.1:
+			await click_floor(target)
+			sampled = true
+			break
+	check(sampled,"No visible selectable floor")
+	manual = true
+	await visit(branch.junction)
+	await visit(Vector2i(floori(entry.x),floori(entry.z)))
+	await walk_shore(entry.x+3)
+	check(not island.section_active,"Surface not restored")
+	island._clear_stream()
+	await process_frame
+	island._queue_near(entry)
+	while not island._pending.is_empty():
+		island._build_pending()
+	for node in island.get_children():
+		check(not node.has_meta("mine_bulkhead"),"Re-streamed stale bulkhead")
+	check(guard_for("miner")==null and guard_for("foreman")==null,"Old occupants resurrected")
+
+func snapshot(label: String) -> void:
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		check(root.get_texture().get_image().save_png("user://"+label+".png")==OK,"Capture "+label)

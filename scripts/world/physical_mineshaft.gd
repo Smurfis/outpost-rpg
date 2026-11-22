@@ -29,7 +29,7 @@ func configure(streamer, site: Dictionary = {}, staged_terrain = null) -> bool:
 		return false
 	entrance = terrain.caves.entrances[0]
 	access.configure(island, entrance, terrain)
-	access.closed = site.get("state", "") in REGISTRY.CLOSED
+	access.closed = site.get("state", "") in REGISTRY.CLOSED and not site.get("reopened", false)
 	_slot("entrance_timber",entrance+Vector3.BACK*0.5)
 	var branches: Array = terrain.caves.branches
 	for i in branches.size():
@@ -66,7 +66,8 @@ func _register(game: Node) -> bool:
 			chunks["island_%d_%d" % [key.x,key.y]] = true
 		manager.world_sites.register_site(site_id,island.terrain.seed,Vector3i(entrance.floor()),chunks.keys(),REGISTRY.MINE)
 		manager._save_clears()
-	access.closed = manager.world_sites.sites[site_id].state in REGISTRY.CLOSED
+	var site: Dictionary = manager.world_sites.sites[site_id]
+	access.closed = site.state in REGISTRY.CLOSED and not site.get("reopened", false)
 	return true
 
 func visit(pos: Vector3) -> void:

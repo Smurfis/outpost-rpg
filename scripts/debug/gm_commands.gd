@@ -13,6 +13,14 @@ static func execute(game: Node, raw: String) -> String:
 	match cmd:
 		".help":
 			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .map islands true|false  .spawn overlord  .despawn overlord  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
+		".mine":
+			if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or words.size() != 2 or words[1] not in ["report","ready","renew"]:
+				return "Development command: .mine report | ready | renew"
+			var island = game.terrain_surface.archipelago
+			if island == null or island.mine == null:
+				return "Mine unavailable."
+			island.call_deferred("run_mine_command", words[1])
+			return "Checking mine."
 		".where", ".pos":
 			var p: Vector3 = game.hero.global_position
 			return "Position: X %.1f  Y %.1f  Z %.1f" % [p.x, p.y, p.z]

@@ -610,6 +610,21 @@ func finish_mine_loading(game) -> void:
 		return
 	mine = candidate
 
+func run_mine_command(action: String) -> void:
+	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or mine == null:
+		return
+	var result := "unavailable"
+	match action:
+		"report":
+			if mine.trigger_reoccupation_for_test():
+				result = "sealed"
+		"ready":
+			if mine.advance_for_test("ready_for_renewal"):
+				result = "ready for renewal"
+		"renew":
+			result = advance_mine_renewal_for_test()
+	get_parent().get_parent().chat.add_line("Mine",result)
+
 func advance_mine_renewal_for_test() -> String:
 	return preload("res://scripts/world/mine_renewal.gd").advance(self, get_parent().get_parent())
 
@@ -943,6 +958,9 @@ func _emit_face(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3,
 	GREEDY.tiled_quad(st, a, b, c, d, tile, axes)
 
 func _build_chunk(key: Vector2i) -> void:
+	_install_chunk(key, _build_chunk_geometry(key, terrain))
+
+func _build_chunk_geometry(key: Vector2i, source) -> Array:
 	# Cull invisible interior voxels. The same world-coordinate occupancy
 	# sample is used on chunk boundaries, so seams cannot expose rock faces.
 	var surface := SurfaceTool.new()
@@ -957,13 +975,13 @@ func _build_chunk(key: Vector2i) -> void:
 	var columns := PackedInt64Array()
 	for dx in range(-1,CHUNK+1):
 		for dz in range(-1,CHUNK+1):
-			columns.append(terrain.solid_column(key.x+dx,key.y+dz))
+			columns.append(source.solid_column(key.x+dx,key.y+dz))
 	for x in range(key.x, key.x + CHUNK):
 		for z in range(key.y, key.y + CHUNK):
-			var top: int = terrain.height_at(x, z)
-			var cave_here: bool = terrain.caves.has_cave(x, z)
+			var top: int = source.height_at(x, z)
+			var cave_here: bool = source.caves.has_cave(x, z)
 			if cave_here:
-				top = maxi(top, terrain.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
+				top = maxi(top, source.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
 			if top <= DATA.BEDROCK:
 				continue
 			var index := (x-key.x+1)*stride+z-key.y+1
@@ -982,9 +1000,9 @@ func _build_chunk(key: Vector2i) -> void:
 				var xf: float = float(x)
 				var yf: float = float(y)
 				var zf: float = float(z)
-				var tile: int = terrain.top_tile(x, z) if y == top - 1 else 4
+				var tile: int = source.top_tile(x, z) if y == top - 1 else 4
 				if up & bit:
-					var cutaway: bool = cave_here and y + 1 == top and terrain.caves.floor_at(x, z) < top - 1
+					var cutaway: bool = cave_here and y + 1 == top and source.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
 						Vector3(xf + 1, yf + 1, zf + 1), Vector3(xf + 1, yf + 1, zf), tile, "top")
@@ -1025,7 +1043,6 @@ func _build_chunk(key: Vector2i) -> void:
 		ground.material_override = _cutaway_material
 		# The uncut shadow-only instance below already casts these triangles.
 		ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
 		# The shadow-only mesh is shared, not duplicated geometry. Keep it on
@@ -1035,7 +1052,6 @@ func _build_chunk(key: Vector2i) -> void:
 		shadow_ground.mesh = ground.mesh
 		shadow_ground.material_override = GREEDY.material()
 		shadow_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		add_child(shadow_ground)
 		members.append(shadow_ground)
 	if roof_faces > 0:
 		var lid := MeshInstance3D.new()
@@ -1043,10 +1059,8 @@ func _build_chunk(key: Vector2i) -> void:
 		lid.mesh = PALETTE.create_mesh(roof)
 		lid.material_override = _cutaway_material
 		lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(lid)
 		members.append(lid)
 		meshed.append(lid)
-		_roof_nodes.append(lid)
 		# The visible material clips the roof; an unchanged shadow-only copy
 		# keeps the cavern from being flooded by sunlight through that hole.
 		var shadow_roof := MeshInstance3D.new()
@@ -1054,7 +1068,6 @@ func _build_chunk(key: Vector2i) -> void:
 		shadow_roof.mesh = lid.mesh
 		shadow_roof.material_override = GREEDY.material()
 		shadow_roof.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		add_child(shadow_roof)
 		members.append(shadow_roof)
 	if not meshed.is_empty():
 		var body := StaticBody3D.new()
@@ -1074,8 +1087,14 @@ func _build_chunk(key: Vector2i) -> void:
 			collider.shape = collision_mesh
 			body.add_child(collider)
 			shape_index += 1
-		add_child(body)
 		members.append(body)
+	return members
+
+func _install_chunk(key: Vector2i, members: Array) -> void:
+	for member in members:
+		if member.name.begins_with("CaveCutaway_"):
+			_roof_nodes.append(member)
+		add_child(member)
 	# The cavern chest uses the existing persistent loot contract.
 	var game: Node = get_parent().get_parent()
 	for index in range(terrain.caves.chests.size()):

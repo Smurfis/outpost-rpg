@@ -48,6 +48,7 @@ const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_bu
 var building: Node3D
 var saved_blocks: Array = []
 var player_save_valid_for_mine := false
+var mine_started_without_saves := false
 var natural_cave_encounters: Dictionary = {}
 var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
 var swap_context_and_orbit: bool = false
@@ -151,6 +152,7 @@ func _ready() -> void:
 	add_child(map_service)
 	map_service.setup(self)
 	# Title Play starts a fresh run; Continue reads the previous save.
+	mine_started_without_saves = not FileAccess.file_exists(save_path) and not FileAccess.file_exists($Dungeons.save_path) and not FileAccess.file_exists($Dungeons.save_path + ".bak")
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
 		get_tree().root.remove_meta("outpost_new_adventure")

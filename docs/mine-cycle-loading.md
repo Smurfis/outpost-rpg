@@ -14,14 +14,31 @@ Seed 64012 cycle-one startup was run in independent Godot processes using isolat
 
 Six malformed dungeon records were loaded in separate processes and rejected without changing their saved bytes. A saved player block on a changed column also prevented reconstruction. The registry imported 16 archived 5B mine records. The existing lifecycle, save, picking, camera, streaming and natural-cave fixtures cover cycle-zero compatibility.
 
-## Handoff to 8B.2
+## Resident publication and recovery
 
-Live renewal needs a durable transaction or journal, generation revision and immutable candidate. It must recheck all player locations, construction protection and other site ownership at commit time. Build replacement chunk meshes and collision while the old world stays authoritative. Atomically publish the selected generation, invalidate navigation and every affected cutaway/picking cache, then release the barrier. Recovery must reconstruct either the old sealed generation or the fully committed new one after every interruption. Cycle-one enemies, reward IDs and event completion remain separate later work. Android is untested.
+Use a separate test save and enable `OUTPOST_TEST_MINE_LIFECYCLE=1`. Clear the guards, empty the strongbox and all supplies, and walk outside. In chat use `.mine report` to seal the site, then `.mine ready`. Each `.mine renew` requests the next checkpoint. The chat response reports the checkpoint or the reason for refusal. The fourth successful request opens the mine.
 
-## 8B.2 unloaded-chunk publication
+| Checkpoint returned by the request | Authoritative terrain on restart | Entrance |
+|---|---|---|
+| prepared | Cycle zero. The journal identifies the candidate by seed and occupancy-change digest. | Sealed |
+| publishing | Cycle zero. A retry regenerates the candidate and checks the digest and safety gates again. | Sealed |
+| committed | Cycle one. A restart reconstructs the candidate using the saved cycle and seed. | Sealed |
+| open | Cycle one, with a persisted reopening receipt. Repeating the command returns open. | Open |
 
-With the lifecycle development flag enabled, call `advance_mine_renewal_for_test()` on the archipelago. Each successful call advances one checkpoint. The registry holds a digest of the sorted changed occupancy columns and the target cycle and seed. On restart both prepared and publishing records reconstruct the committed cycle zero. The next explicit request regenerates the candidate and checks its digest and safety conditions again. The final atomic dungeon-save replacement commits cycle one. The live data swap runs on the main thread in that same call. A restart after the replacement takes the existing cycle-one startup path.
+`mine_renewal.advance` owns publication. It compares solid-column masks in the union of the two connected footprints. The affected chunks include adjacent faces at the seams. The build ledger covers unloaded chunks. Changed supports, other sites, graves, actors, current navigation, selected interactions and modal UI can prevent a swap.
 
-Publication requires all chunks containing either mine footprint, plus neighbours with affected mesh faces, to have streamed out. The caller receives `awaiting_unload` while they are resident. The ordinary streamer builds the next meshes and physical shapes on demand. No player navigation request may be pending. The mine stays sealed. Behind-seal screenshots use the normal section renderer invoked directly from the test. The next increment needs staged replacement of resident meshes and colliders, followed by verified reopening and traversal.
+The streamer uses `_build_chunk_geometry` for normal loads and staging. Candidate visual nodes, shadows and their trimesh collision shapes remain outside the scene tree until validated. The durable cycle commit is the dungeon manager's successful temporary-file replacement. Failure discards the staged nodes. After success, the same main-thread call removes old owners from the tree, swaps cave topology, installs the staged members and reconstructs the sealed props. Streaming and camera updates cannot interleave with this synchronous exchange. A queued chunk key builds against the new topology when serviced. This can cost a frame on a slow device.
 
-For the recovery fixture use a fresh isolated Godot user directory and run `tests/mine_renewal.gd` with user arguments `prepare`, `publish`, `commit`, then `reload` in separate processes sharing that directory. Adding `interrupt` to any of the first three writes a PID checkpoint after the assertions and waits for the harness to terminate that process. The reload run also checks physical and pickable floor heights. Use GL Compatibility for the two chamber captures.
+Path planning reads the current cave floor map and access footprint. Publication requires idle movement. Section geometry invalidation releases visibility masks, mesh variants, source face pages and pick bodies. The ordinary player-camera update then selects rooms using the new topology. The final reopen request checks the committed seed, connectivity, occupancy and resident collision shapes, persists reopening, and detaches the blocking visual and physics bodies together. Historical defeats and reward IDs remain in the site record. Cycle one has no new encounters or payouts in this milestone.
+
+The nested registry remains schema 2. Earlier cycle-one saves without a reopening receipt load sealed and can use the same reopen request. Portal migration is unchanged. With no committed file or backup, an orphaned temporary dungeon save blocks reconstruction.
+
+Run `tests/mine_renewal_recovery.ps1 -Godot <path-to-Godot-GUI-executable>` on Windows to verify abrupt termination and recovery. It uses a fresh temporary user directory and one process at a time. For the resident walkthrough, run `tests/mine_renewal.gd` in fresh isolated data with arguments `prepare`, `publish`, `live`, then `walk` in sequence. Use GL Compatibility to capture the entrance and chamber. World seed 64012 and the cycle-one occupancy signature above are the regression fixture.
+
+### Desktop verification
+
+On Windows with Godot 4.7.2, seed 64012 completed resident publication, reopen, movement from the entrance to a changed branch, a floor click, camera rotation and manual backtracking to the surface in one running game. The same walkthrough passed after restart. The Windows recovery fixture killed a separate process at prepared, publishing, failed staged save, committed and reopened checkpoints. A final restart retained the cycle-one signature, inventory, defeats and historical receipts.
+
+The registry imported 16 archived 5B records. The mine lifecycle, stability, physical mine, portal streaming, cave picking, natural network generation and walkthrough, building, save, startup and gameplay fixtures passed. The GL walkthrough captured a cold camera cutaway update of 31 ms. Testing used a desktop integrated GPU. Android runtime verification remains outstanding.
+
+[Entrance](../artifacts/cave_render/renewal/live/open-entrance.png) · [Changed chamber](../artifacts/cave_render/renewal/live/open-chamber.png) · [Rotated chamber](../artifacts/cave_render/renewal/live/open-rotated.png)
