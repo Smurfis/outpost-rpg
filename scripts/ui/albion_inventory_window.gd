@@ -483,13 +483,7 @@ func _add_rarity_border(target: Control, rank: int) -> void:
 func _add_rarity_stars(target: Control, rank: int) -> void:
 	if rank < 0:
 		return
-	var stars := _text(ITEM_VIEW.rarity_stars(rank), 10, ITEM_VIEW.rarity_color(rank), true)
-	stars.name = "ItemRarityStars"
-	stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stars.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	stars.add_theme_color_override("font_outline_color", Color("#21160f"))
-	stars.add_theme_constant_override("outline_size", 1)
+	var stars: HBoxContainer = ITEM_VIEW.make_star_strip(rank, 10)
 	target.add_child(stars)
 	stars.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	stars.offset_top = -15.0
@@ -540,14 +534,15 @@ func _gear_button(slot: String) -> Button:
 	}.get(slot, slot), 10, SKIN.CREAM)
 	small.name = "GearSlotName"
 	if rank >= 0:
-		small.text = ITEM_VIEW.rarity_stars(rank)
-		small.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(rank))
+		small.visible = false # Occupied slots use the five-star strip instead.
 	small.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	small.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	small.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	small.offset_top = -16.0
 	small.offset_bottom = -2.0
 	button.add_child(small)
+	if rank >= 0:
+		_add_rarity_stars(button, rank)
 	if id.is_empty():
 		var plus := _text("+", 12, SKIN.GOLD)
 		plus.name = "UnfilledGearHint"
