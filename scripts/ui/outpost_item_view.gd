@@ -30,8 +30,10 @@ static func rarity_color(item_rarity: int) -> Color:
 static func item_rarity(item_id: String, crafted_rolls: Dictionary) -> int:
 	if crafted_rolls.has(item_id):
 		var raw_roll: Variant = crafted_rolls[item_id]
-		if raw_roll is Dictionary and (raw_roll as Dictionary).has("rarity"):
-			return clampi(int((raw_roll as Dictionary)["rarity"]), 0, 4)
+		if raw_roll is Dictionary:
+			var roll: Dictionary = raw_roll
+			if roll.has("rarity"):
+				return clampi(int(roll["rarity"]), 0, 4)
 	if item_id == "training_blade" or QUALITY.is_gear(item_id):
 		return 0
 	return -1
