@@ -611,6 +611,11 @@ func finish_mine_loading(game) -> void:
 	mine = candidate
 
 func run_mine_command(action: String) -> void:
+	await get_tree().process_frame
+	while Engine.is_in_physics_frame():
+		await get_tree().process_frame
+	if not is_inside_tree():
+		return
 	if OS.get_environment("OUTPOST_TEST_MINE_LIFECYCLE") != "1" or mine == null:
 		return
 	var result := "unavailable"

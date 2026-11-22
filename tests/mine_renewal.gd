@@ -79,7 +79,15 @@ func run() -> void:
 			check(island.advance_mine_renewal_for_test()=="layout_changed","Stale candidate accepted")
 			site.renewal.digest = original_digest
 			island._build_chunk(island._cell_at(mine.entrance))
-			check(island.advance_mine_renewal_for_test() == "publishing", "Could not journal publication")
+			game.hero.set_physics_process(false)
+			await physics_frame
+			game.hero.velocity = Vector3.ZERO
+			game.chat.chat_open = true
+			game.chat._submit(".mine renew")
+			await process_frame
+			await process_frame
+			check(game.chat.lines.back() == "Mine: publishing", "Chat renewal failed after physics frame")
+			game.hero.set_physics_process(true)
 		"staged_fail":
 			check(phase == "publishing","Missing publishing checkpoint")
 			var before := FileAccess.get_file_as_string(dungeon_save)
