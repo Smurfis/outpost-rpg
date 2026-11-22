@@ -4,6 +4,7 @@ extends Control
 const SKIN = preload("res://scripts/ui/outpost_skin.gd")
 const CARRY = preload("res://scripts/inventory/carry_capacity.gd")
 const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
+const ITEM_VIEW = preload("res://scripts/ui/outpost_item_view.gd")
 const CURRENCY = preload("res://scripts/inventory/currency.gd")
 const TOUCH_SCROLL = preload("res://scripts/ui/touch_scroll_container.gd")
 const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
@@ -460,12 +461,49 @@ func _render_equipment() -> void:
 		gear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		slots.add_child(gear)
 
+func _rarity_rank(id: String) -> int:
+	return ITEM_VIEW.item_rarity(id, game.best_craft_rolls)
+
+func _add_rarity_border(target: Control, rank: int) -> void:
+	if rank < 0:
+		return
+	var frame := Panel.new()
+	frame.name = "ItemRarityBorder"
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var outline := StyleBoxFlat.new()
+	outline.draw_center = false
+	outline.border_color = ITEM_VIEW.rarity_color(rank)
+	outline.set_border_width_all(2)
+	outline.set_corner_radius_all(6)
+	outline.anti_aliasing = false
+	frame.add_theme_stylebox_override("panel", outline)
+	target.add_child(frame)
+	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+func _add_rarity_stars(target: Control, rank: int) -> void:
+	if rank < 0:
+		return
+	var stars := _text(ITEM_VIEW.rarity_stars(rank), 10, ITEM_VIEW.rarity_color(rank), true)
+	stars.name = "ItemRarityStars"
+	stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stars.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	stars.add_theme_color_override("font_outline_color", Color("#21160f"))
+	stars.add_theme_constant_override("outline_size", 1)
+	target.add_child(stars)
+	stars.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	stars.offset_top = -15.0
+	stars.offset_bottom = -1.0
+
 func _gear_button(slot: String) -> Button:
 	var id: String = str(game.equipment.get(slot, ""))
 	var button: Button = EQUIP_DRAG.new() as Button
 	button.name = "EquipmentSlot_" + slot
 	button.custom_minimum_size = Vector2(53, 44)
 	SKIN.apply_translucent_button(button, "wood_selected" if slot == selected_slot else "wood")
+	var rank: int = _rarity_rank(id)
+	if rank >= 0:
+		_add_rarity_border(button, rank)
 	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to inspect or drag a compatible item here")
 	button.pressed.connect(_gear_clicked.bind(slot))
 	button.set("game_ref", game)
@@ -501,6 +539,9 @@ func _gear_button(slot: String) -> Button:
 		"tool_fishing":"FISHING", "tool_forage":"FORAGING"
 	}.get(slot, slot), 10, SKIN.CREAM)
 	small.name = "GearSlotName"
+	if rank >= 0:
+		small.text = ITEM_VIEW.rarity_stars(rank)
+		small.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(rank))
 	small.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	small.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	small.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -670,6 +711,9 @@ func _render_items() -> void:
 		image.anchor_bottom = 0.85
 		image.custom_minimum_size = Vector2.ZERO
 		tile.add_child(image)
+		var rank: int = _rarity_rank(id)
+		if rank >= 0:
+			_add_rarity_border(tile, rank)
 		var count := _text(str(int(game.inventory[id])), 14, SKIN.CREAM)
 		count.name = "ItemCount"
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -678,7 +722,16 @@ func _render_items() -> void:
 		count.offset_left = 4.0
 		count.offset_right = -4.0
 		count.offset_top = -23.0
+		if rank >= 0:
+			# Reserve the lower edge for five stars; quantity moves top-right.
+			count.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+			count.offset_left = -28.0
+			count.offset_right = -4.0
+			count.offset_top = 2.0
+			count.offset_bottom = 20.0
 		tile.add_child(count)
+		if rank >= 0:
+			_add_rarity_stars(tile, rank)
 		if game.is_equipped(id):
 			var worn := _text("◆", 15, SKIN.GOLD)
 			worn.name = "EquippedMarker"
@@ -714,6 +767,9 @@ func _item_tip(id: String) -> String:
 		heading += "  •  EQUIPPED"
 	var weight: float = CARRY.weight(id, game.equipped_bag_id(), game.equipped_bag_stars())
 	var result: String = heading + "\n" + _kind(id).capitalize() + "  •  Weight %.2f" % weight
+	var rank: int = _rarity_rank(id)
+	if rank >= 0:
+		result += "\n" + ITEM_VIEW.rarity_caption(rank)
 	for recipe in game.recipes:
 		if str(recipe.get("result", "")) == id:
 			result += "\n" + str(recipe.get("desc", ""))
@@ -722,7 +778,6 @@ func _item_tip(id: String) -> String:
 		result += "\nTier %d  •  Quality %d stars" % [CARRY.tier(id), int(game.bag_quality.get(id, 0))]
 	if game.best_craft_rolls.has(id):
 		var roll: Dictionary = game.best_craft_rolls[id]
-		result += "\n" + QUALITY.rarity_name(int(roll.get("rarity", 0))) + " quality"
 		for stat in QUALITY.STAT_KEYS:
 			var boosts: Dictionary = roll.get("bonuses", {})
 			if boosts.has(stat):
@@ -752,14 +807,19 @@ func _render_details() -> void:
 	heading.add_child(_icon(selected_id, 66))
 	var attrs := VBoxContainer.new()
 	heading.add_child(attrs)
-	attrs.add_child(_text(selected_id.replace("_", " ").capitalize(), 18, SKIN.CREAM))
+	var item_rank: int = _rarity_rank(selected_id)
+	attrs.add_child(_text(selected_id.replace("_", " ").capitalize(), 18, ITEM_VIEW.rarity_color(item_rank) if item_rank >= 0 else SKIN.CREAM))
+	if item_rank >= 0:
+		var rating := _text(ITEM_VIEW.rarity_caption(item_rank).to_upper(), 15, ITEM_VIEW.rarity_color(item_rank), true)
+		rating.name = "ItemRarityCaption"
+		attrs.add_child(rating)
 	attrs.add_child(_text("STARTER WEAPON  •  EQUIPPED" if selected_id == "training_blade" else _kind(selected_id).to_upper() + "  ×%d" % int(game.inventory.get(selected_id, 0)), 15, SKIN.GOLD))
 	var weight: float = CARRY.weight(selected_id, game.equipped_bag_id(), game.equipped_bag_stars())
 	item_info.add_child(_text("WEIGHT  %.2f each" % weight, 15, SKIN.CREAM))
 	if game.best_craft_rolls.has(selected_id):
 		var quality_roll: Dictionary = game.best_craft_rolls[selected_id]
 		var rank: int = int(quality_roll.get("rarity", 0))
-		item_info.add_child(_text(QUALITY.rarity_name(rank).to_upper() + "  •  CRAFTED QUALITY", 17, QUALITY.rarity_color(rank)))
+		item_info.add_child(_text("CRAFTED QUALITY  •  BONUS STATS", 16, ITEM_VIEW.rarity_color(rank)))
 		var boosts: Dictionary = quality_roll.get("bonuses", {})
 		for stat in QUALITY.STAT_KEYS:
 			if boosts.has(stat):
