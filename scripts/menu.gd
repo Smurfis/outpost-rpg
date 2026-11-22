@@ -530,8 +530,8 @@ func _render_bag() -> void:
 		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		count.anchor_left = 0.45
 		count.anchor_right = 0.93
-		count.anchor_top = 0.68
-		count.anchor_bottom = 0.96
+		count.anchor_top = 0.08 if tile_rank >= 0 else 0.68
+		count.anchor_bottom = 0.30 if tile_rank >= 0 else 0.96
 		slot.add_child(count)
 		if item == selected_bag_id:
 			var gold_outline := Panel.new()
