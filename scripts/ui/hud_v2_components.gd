@@ -27,11 +27,11 @@ static func effect_icon(is_debuff: bool) -> StyleBoxFlat:
 static func loot_icon_border(item_rarity: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	var colors: Array[Color] = [
-		Color("#b5ada2"), # Common
-		Color("#70b75e"), # Uncommon
-		Color("#548fce"), # Rare
-		Color("#b77ce0"), # Epic
-		Color("#e3a353")  # Legendary
+		Color("#a6adad"), # Common
+		Color("#55b777"), # Uncommon
+		Color("#568de0"), # Rare
+		Color("#ae69da"), # Epic
+		Color("#e4b35b")  # Legendary
 	]
 	style.bg_color = Color("#261c1c")
 	style.border_color = Color("#83766c") if item_rarity < 0 else colors[clampi(item_rarity, 0, 4)]
