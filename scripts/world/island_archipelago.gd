@@ -44,6 +44,9 @@ var _regions: Array[Dictionary] = []
 var _owners := {}
 var _lights: Array[Vector3] = []
 var _region := 0
+var mine_pending := false
+var mine_load_failed := false
+var natural_population
 var side_chamber
 var mine
 const MINE = preload("res://scripts/world/physical_mineshaft.gd")
@@ -62,6 +65,37 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	_lights.append(Vector3(anchor.x-0.8,terrain.caves.floor_at(anchor.x,anchor.y)+2.6,anchor.y+1.5))
 
 func _identify_regions(center: Vector2i) -> void:
+	_identify_mine_regions(center)
+	if mine != null:
+		for index in range(1, terrain.caves.routes.size()):
+			_add_cache_cave_regions(terrain.caves.routes[index])
+	var cave = terrain.caves.natural
+	if cave != null:
+		for region in cave.regions:
+			_add_region(region.cells, region.anchor)
+
+func _add_cache_cave_regions(route: Array) -> void:
+	var end: Vector3i = route.back()
+	var center := Vector2i(end.x, end.z)
+	var room := {}
+	for dx in range(-2,3):
+		for dz in range(-2,3):
+			var cell := center + Vector2i(dx,dz)
+			if terrain.caves.floors.has(cell):
+				room[cell] = true
+	_add_region(room, center)
+	var passage := {}
+	for i in range(route.size()-1,-1,-1):
+		var at: Vector3i = route[i]
+		for lane in terrain.caves.CORRIDOR_WIDTH:
+			var cell := Vector2i(at.x,at.z+lane)
+			if not _owners.has(cell):
+				passage[cell] = true
+		if passage.size() >= 18 or (i == 0 and not passage.is_empty()):
+			_add_region(passage,Vector2i(at.x,at.z))
+			passage = {}
+
+func _identify_mine_regions(center: Vector2i) -> void:
 	if mine != null:
 		_add_region(terrain.caves.mine_end_room,center)
 	else:
@@ -118,17 +152,26 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	var end: Vector3i = terrain.caves.routes[0].back()
 	var center := Vector2i(end.x,end.z)
 	var cell := Vector2i(floori(pos.x),floori(pos.z))
-	if _regions.is_empty() and cell.distance_squared_to(center) < 64 * 64:
+	var nearby := center
+	if mine != null:
+		for chest: Vector3 in terrain.caves.chests:
+			var anchor := Vector2i(floori(chest.x),floori(chest.z))
+			if cell.distance_squared_to(anchor) < cell.distance_squared_to(nearby):
+				nearby = anchor
+	if terrain.caves.natural != null and cell.distance_squared_to(terrain.caves.natural.mouth) < 64*64:
+		nearby = terrain.caves.natural.mouth
+	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
 		_identify_regions(center)
 	var next_region: int = _owners.get(cell,-1)
-	var inside: bool = next_region >= 0 and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and pos.y < terrain.height_at(cell.x,cell.y)-1
+	var shaft_landing: bool = terrain.caves.natural != null and terrain.caves.natural.shaft.has(cell)
+	var inside: bool = next_region >= 0 and absf(pos.y-terrain.caves.floor_at(cell.x,cell.y)) < 2.1 and (shaft_landing or pos.y < terrain.height_at(cell.x,cell.y)-1)
 	var sector := posmod(roundi(atan2(eye.z,eye.x)*8/TAU),8)
 	if not inside:
 		if section_active:
 			_restore_section()
-		if cell.distance_squared_to(center) < 64 * 64:
+		if cell.distance_squared_to(nearby) < 64 * 64:
 			_prewarm(cell,sector)
-		elif not _regions.is_empty() and cell.distance_squared_to(center) > 80 * 80:
+		elif not _regions.is_empty() and cell.distance_squared_to(nearby) > 80 * 80:
 			invalidate_section_geometry()
 		return false
 	var changed := sector != _sector or next_region != _region
@@ -244,6 +287,8 @@ func _advance_mask(v: Dictionary, region: int, sector: int, deadline: int) -> vo
 				return
 			continue
 		var low := DATA.BEDROCK
+		if terrain.caves.natural != null and terrain.caves.natural.floors.has(col):
+			low = terrain.caves.natural.floors[col]
 		if not terrain.caves.has_cave(col.x,col.y):
 			for d in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
 				var n: Vector2i = col+d
@@ -487,6 +532,9 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 		if _chamber_light != null:
 			_chamber_light.queue_free()
 			_chamber_light = null
+	natural_population = null
+	mine_pending = false
+	mine_load_failed = false
 	terrain = DATA.new(world_seed)
 	mine = null
 	side_chamber = null
@@ -497,9 +545,10 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 		else:
 			push_warning("No roofed site for the test side chamber in this seed")
 	elif physical_mineshaft and OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") != "1":
-		var candidate = MINE.new()
-		if candidate.configure(self):
-			mine = candidate
+		mine_pending = true
+		var game = get_parent().get_parent() if get_parent() != null else null
+		if game == null or game.get("building") != null:
+			finish_mine_loading(game)
 	name = "FractalArchipelago"
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
@@ -508,11 +557,115 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
 
+func finish_mine_loading(game) -> void:
+	if not mine_pending:
+		return
+	mine_pending = false
+	var candidate = MINE.new()
+	var manager = game.get_node_or_null("Dungeons") if game != null else null
+	if game != null and (manager == null or not manager.world_site_save_valid):
+		mine_load_failed = true
+		push_error("Physical mine unavailable: invalid dungeon save")
+		return
+	var id := "fractal_physical_goblin_mine_1_%d" % terrain.seed
+	var site: Dictionary = manager.world_sites.sites.get(id, {}) if manager != null else {}
+	if int(site.get("cycle", 0)) > 0:
+		if not game.player_save_valid_for_mine:
+			mine_load_failed = true
+			push_error("Renewed mine unavailable: player construction save is missing or invalid")
+			return
+		var original = DATA.new(terrain.seed)
+		var proposal = DATA.new(terrain.seed)
+		if not original.caves.carve_mine(original, MINE.REGISTRY.cycle_seed(terrain.seed, id, 0, "initial")) or not proposal.caves.carve_mine(proposal, int(site.layout_seed)):
+			mine_load_failed = true
+			push_error("Cannot reconstruct the saved physical mine")
+			return
+		# Other registered sites may own terrain outside their visible entrance.
+		var changed_chunks := {}
+		for column: Vector2i in original.caves.floors:
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				var key := _cell_at(Vector3(column.x, 0, column.y))
+				changed_chunks["island_%d_%d" % [key.x, key.y]] = true
+		for column: Vector2i in proposal.caves.floors:
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				var key := _cell_at(Vector3(column.x, 0, column.y))
+				changed_chunks["island_%d_%d" % [key.x, key.y]] = true
+		for other_id in manager.world_sites.sites:
+			if other_id == id:
+				continue
+			for chunk in manager.world_sites.sites[other_id].chunks:
+				if changed_chunks.has(chunk):
+					mine_load_failed = true
+					push_error("Renewed mine overlaps another persistent site's chunks")
+					return
+		for block: Vector3i in game.building.blocks:
+			var column := Vector2i(block.x, block.z)
+			if original.caves.floors.get(column) != proposal.caves.floors.get(column):
+				mine_load_failed = true
+				push_error("Renewed mine conflicts with a saved player construction")
+				return
+	if site.get("cycle", 0) == 1 and site.get("state") == "ready_for_renewal" and site.get("reopened", false) and not site.has("cycle_history"):
+		var previous := site.duplicate(true)
+		site.cycle_history = {"0": site.room_state.duplicate(true)}
+		site.room_state = {}
+		site.boss_defeated = false
+		site.state = "active"
+		if not manager._save_clears():
+			manager.world_sites.sites[id] = previous
+			mine_load_failed = true
+			push_error("Cannot migrate renewed mine progression")
+			return
+	if not candidate.configure(self, site):
+		mine_load_failed = true
+		push_error("Cannot reconstruct physical mine from saved site")
+		return
+	candidate.manager = manager
+	mine = candidate
+
+func run_mine_command(action: String) -> void:
+	await get_tree().process_frame
+	while Engine.is_in_physics_frame():
+		await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	if mine == null:
+		return
+	var result := "unavailable"
+	match action:
+		"report":
+			if mine.trigger_reoccupation_for_test():
+				result = "sealed"
+		"ready":
+			if mine.advance_for_test("ready_for_renewal"):
+				result = "ready for renewal"
+		"renew":
+			result = advance_mine_renewal_for_test()
+	get_parent().get_parent().chat.add_line("Mine",result)
+
+func advance_mine_renewal_for_test() -> String:
+	return preload("res://scripts/world/mine_renewal.gd").advance(self, get_parent().get_parent())
+
+func install_natural(game) -> void:
+	var protected := {}
+	for block: Vector3i in game.building.blocks:
+		protected[Vector2i(block.x, block.z)] = true
+	var manager = game.get_node("Dungeons")
+	if not manager.world_site_save_valid:
+		return
+	for site in manager.world_sites.sites.values():
+		var gate := Vector2i(site.entrance[0],site.entrance[2])
+		for x in range(-4,5):
+			for z in range(-4,5):
+				protected[gate + Vector2i(x,z)] = true
+	if terrain.caves.install_natural(terrain, protected, game.prop_placement):
+		natural_population = preload("res://scripts/world/natural_cave_population.gd").new()
+		natural_population.configure(self)
+
 var profile_stream := OS.get_environment("OUTPOST_PROFILE_MINE") == "1"
 var stream_usec := 0
 
 func _process(delta: float) -> void:
-	if terrain == null:
+	if terrain == null or mine_pending or mine_load_failed:
 		return
 	var game: Node = get_parent().get_parent()
 	if game == null:
@@ -535,6 +688,8 @@ func _process(delta: float) -> void:
 	_build_pending()
 	if profile_stream:
 		stream_usec += Time.get_ticks_usec()-started
+	if natural_population != null:
+		natural_population.try_spawn(self,game)
 	if mine != null:
 		mine.visit(position)
 	_update_cutaway(game, position, delta)
@@ -747,6 +902,8 @@ func _cell_at(point: Vector3) -> Vector2i:
 		floori(point.z / float(CHUNK)) * CHUNK)
 
 func _queue_near(point: Vector3) -> void:
+	if mine_pending or mine_load_failed:
+		return
 	var center: Vector2i = _cell_at(point)
 	if center == _center:
 		return
@@ -818,6 +975,9 @@ func _emit_face(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3,
 	GREEDY.tiled_quad(st, a, b, c, d, tile, axes)
 
 func _build_chunk(key: Vector2i) -> void:
+	_install_chunk(key, _build_chunk_geometry(key, terrain))
+
+func _build_chunk_geometry(key: Vector2i, source) -> Array:
 	# Cull invisible interior voxels. The same world-coordinate occupancy
 	# sample is used on chunk boundaries, so seams cannot expose rock faces.
 	var surface := SurfaceTool.new()
@@ -832,13 +992,13 @@ func _build_chunk(key: Vector2i) -> void:
 	var columns := PackedInt64Array()
 	for dx in range(-1,CHUNK+1):
 		for dz in range(-1,CHUNK+1):
-			columns.append(terrain.solid_column(key.x+dx,key.y+dz))
+			columns.append(source.solid_column(key.x+dx,key.y+dz))
 	for x in range(key.x, key.x + CHUNK):
 		for z in range(key.y, key.y + CHUNK):
-			var top: int = terrain.height_at(x, z)
-			var cave_here: bool = terrain.caves.has_cave(x, z)
+			var top: int = source.height_at(x, z)
+			var cave_here: bool = source.caves.has_cave(x, z)
 			if cave_here:
-				top = maxi(top, terrain.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
+				top = maxi(top, source.caves.floor_at(x, z)) # Include guaranteed stone step foundations.
 			if top <= DATA.BEDROCK:
 				continue
 			var index := (x-key.x+1)*stride+z-key.y+1
@@ -857,9 +1017,9 @@ func _build_chunk(key: Vector2i) -> void:
 				var xf: float = float(x)
 				var yf: float = float(y)
 				var zf: float = float(z)
-				var tile: int = terrain.top_tile(x, z) if y == top - 1 else 4
+				var tile: int = source.top_tile(x, z) if y == top - 1 else 4
 				if up & bit:
-					var cutaway: bool = cave_here and y + 1 == top and terrain.caves.floor_at(x, z) < top - 1
+					var cutaway: bool = cave_here and y + 1 == top and source.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
 						Vector3(xf + 1, yf + 1, zf + 1), Vector3(xf + 1, yf + 1, zf), tile, "top")
@@ -900,7 +1060,6 @@ func _build_chunk(key: Vector2i) -> void:
 		ground.material_override = _cutaway_material
 		# The uncut shadow-only instance below already casts these triangles.
 		ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(ground)
 		members.append(ground)
 		meshed.append(ground)
 		# The shadow-only mesh is shared, not duplicated geometry. Keep it on
@@ -910,7 +1069,6 @@ func _build_chunk(key: Vector2i) -> void:
 		shadow_ground.mesh = ground.mesh
 		shadow_ground.material_override = GREEDY.material()
 		shadow_ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		add_child(shadow_ground)
 		members.append(shadow_ground)
 	if roof_faces > 0:
 		var lid := MeshInstance3D.new()
@@ -918,10 +1076,8 @@ func _build_chunk(key: Vector2i) -> void:
 		lid.mesh = PALETTE.create_mesh(roof)
 		lid.material_override = _cutaway_material
 		lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(lid)
 		members.append(lid)
 		meshed.append(lid)
-		_roof_nodes.append(lid)
 		# The visible material clips the roof; an unchanged shadow-only copy
 		# keeps the cavern from being flooded by sunlight through that hole.
 		var shadow_roof := MeshInstance3D.new()
@@ -929,7 +1085,6 @@ func _build_chunk(key: Vector2i) -> void:
 		shadow_roof.mesh = lid.mesh
 		shadow_roof.material_override = GREEDY.material()
 		shadow_roof.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		add_child(shadow_roof)
 		members.append(shadow_roof)
 	if not meshed.is_empty():
 		var body := StaticBody3D.new()
@@ -949,8 +1104,14 @@ func _build_chunk(key: Vector2i) -> void:
 			collider.shape = collision_mesh
 			body.add_child(collider)
 			shape_index += 1
-		add_child(body)
 		members.append(body)
+	return members
+
+func _install_chunk(key: Vector2i, members: Array) -> void:
+	for member in members:
+		if member.name.begins_with("CaveCutaway_"):
+			_roof_nodes.append(member)
+		add_child(member)
 	# The cavern chest uses the existing persistent loot contract.
 	var game: Node = get_parent().get_parent()
 	for index in range(terrain.caves.chests.size()):
@@ -967,6 +1128,8 @@ func _build_chunk(key: Vector2i) -> void:
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
 	_loaded[key] = members
+	if natural_population != null:
+		natural_population.populate(self,game,key,members)
 	if mine != null:
 		mine.populate(key,game,members)
 	elif side_chamber != null or OS.get_environment("OUTPOST_TEST_PROCEDURAL_CAVE") == "1":

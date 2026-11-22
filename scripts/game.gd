@@ -47,6 +47,9 @@ const EXPERIMENTAL_BUILDING = preload("res://scripts/interaction/experimental_bu
 @export var experimental_building_enabled: bool = false
 var building: Node3D
 var saved_blocks: Array = []
+var player_save_valid_for_mine := false
+var mine_started_without_saves := false
+var natural_cave_encounters: Dictionary = {}
 var shadow_light_budget: int = 0 if OS.has_feature("mobile") else 2
 var swap_context_and_orbit: bool = false
 @export var save_path: String = SAVE # Existing default; tests can isolate their saves.
@@ -149,6 +152,7 @@ func _ready() -> void:
 	add_child(map_service)
 	map_service.setup(self)
 	# Title Play starts a fresh run; Continue reads the previous save.
+	mine_started_without_saves = not FileAccess.file_exists(save_path) and not FileAccess.file_exists($Dungeons.save_path) and not FileAccess.file_exists($Dungeons.save_path + ".bak")
 	var fresh_start: bool = bool(get_tree().root.get_meta("outpost_new_adventure", false))
 	if get_tree().root.has_meta("outpost_new_adventure"):
 		get_tree().root.remove_meta("outpost_new_adventure")
@@ -182,6 +186,10 @@ func _ready() -> void:
 	building = EXPERIMENTAL_BUILDING.new()
 	add_child(building)
 	building.setup(self, saved_blocks)
+	if terrain_surface != null and terrain_surface.get("archipelago") != null:
+		terrain_surface.archipelago.finish_mine_loading(self)
+	if terrain_surface != null and terrain_surface.get("archipelago") != null and OS.get_environment("OUTPOST_TEST_NATURAL_CAVES") == "1":
+		terrain_surface.archipelago.install_natural(self)
 	world_map = WORLD_MAP.new()
 	add_child(world_map)
 	world_map.setup(self, map_service)
@@ -271,6 +279,13 @@ func _process(delta: float) -> void:
 	var goal: String = "Gather wood and stone, then craft a spear at the workbench"
 	if spear_crafted or int(inventory.get("iron_blade", 0)) > 0:
 		goal = "Hunt one wild boar in the forest" if kills == 0 else "Starter quest finished: craft new gear, explore and survive"
+	var dungeons = get_node_or_null("Dungeons")
+	if dungeons != null and terrain_surface != null and terrain_surface.archipelago != null:
+		var mine = terrain_surface.archipelago.mine
+		if mine != null and dungeons.world_sites.sites.has(mine.site_id):
+			var event: Dictionary = dungeons.world_sites.sites[mine.site_id].get("world_event", {})
+			if not event.is_empty() and not event.get("completed", false):
+				goal = event.get("objective", goal)
 	var resource = _nearest_resource() if controls == null or not controls.desktop else null
 	if resource != last_hit_node:
 		if is_instance_valid(last_hit_node):
@@ -1795,6 +1810,8 @@ func on_enemy_killed(kind: String = "boar") -> void:
 	var coins: int = 60 if is_boss else 5 if is_wolf else 2 if kind in ["pig", "raccoon"] else 3
 	var xp: int = 150 if is_boss else 16 if is_wolf else 8 if kind in ["pig", "raccoon"] else 12
 	var label: String = "Abyssal Overlord" if is_boss else "Wolf" if is_wolf else "Pig" if kind == "pig" else "Raccoon" if kind == "raccoon" else "Boar"
+	if kind == "goblin":
+		label = "Cave goblin"
 	grant_item("hide", hide, true)
 	grant_item("coins", coins, true)
 	gain_experience(xp)
@@ -1985,6 +2002,8 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if not natural_cave_encounters.is_empty():
+		data["natural_cave_encounters"] = natural_cave_encounters
 	data["placed_blocks"] = building.serialize() if building != null else saved_blocks
 	if map_service != null:
 		data["map_state"] = map_service.export_state()
@@ -2003,6 +2022,23 @@ func _load() -> void:
 	var version: int = int(data.get("version", 0))
 	if version not in [2, 3, 4, 5]:
 		return
+	# The renewal must account for every persisted construction before carving.
+	# Older saves without a construction list still load normally.
+	var saved_constructions: Variant = data.get("placed_blocks")
+	player_save_valid_for_mine = saved_constructions is Array and saved_constructions.size() <= EXPERIMENTAL_BUILDING.MAX_BLOCKS
+	if player_save_valid_for_mine:
+		for entry in saved_constructions:
+			if not entry is Array or entry.size() != 3:
+				player_save_valid_for_mine = false
+				break
+			for index in 3:
+				var value: Variant = entry[index]
+				var limit := 128 if index == 1 else 384
+				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
+					player_save_valid_for_mine = false
+					break
+	if data.get("natural_cave_encounters") is Dictionary:
+		natural_cave_encounters = data.natural_cave_encounters.duplicate()
 	if data.get("placed_blocks") is Array:
 		saved_blocks = data["placed_blocks"].duplicate(true)
 	if map_service != null:

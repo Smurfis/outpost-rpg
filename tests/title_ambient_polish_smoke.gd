@@ -86,11 +86,10 @@ func _run() -> void:
 		await process_frame
 		_check(not bool(ProjectSettings.get_setting("application/boot_splash/show_image", true)), "Godot boot logo is suppressed before Five Star ident")
 		_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "Five Star splash fills 20:9 Android instead of being pillarboxed")
-		var emblem: TextureRect = intro.get_node_or_null("StarMark") as TextureRect
-		_check(emblem != null and emblem.anchor_left <= 0.1 and emblem.anchor_right >= 0.9, "Five Star branding spans widescreen Android")
-		var twinkles: Control = intro.get_node_or_null("StarTwinkles") as Control
-		_check(twinkles != null, "Five Star pixel glints are added")
-		_check(twinkles != null and twinkles.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Intro stars cannot block tap-to-skip")
+		var stage := intro.get_node_or_null("Stage") as SubViewportContainer
+		_check(stage != null and stage.anchor_left == 0 and stage.anchor_right == 1 and stage.stretch, "Five Star cinematic spans widescreen Android")
+		_check(intro.get_node_or_null("Stage/Viewport/World") is Node3D, "Five Star cinematic has a live 3D stage")
+		_check(stage != null and stage.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Stage preserves tap-to-skip")
 		_check(intro.has_method("_go_next"), "Five Star retains the skip transition")
 		intro.queue_free()
 		await process_frame

@@ -13,6 +13,12 @@ func reconcile() -> void:
 	if game.opened_world_objects.has(object_id) and remaining().is_empty():
 		if mine.manager.world_sites.claim_reward(mine.site_id,"treasure","player"):
 			mine.manager._save_clears()
+			if site_event_completed():
+				game.hud.toast("Goblin Mine investigation complete.")
+
+func site_event_completed() -> bool:
+	var site: Dictionary = mine.manager.world_sites.sites[mine.site_id]
+	return int(site.cycle) == 1 and site.get("world_event", {}).get("completed", false)
 
 func interact(player: Node3D) -> void:
 	if not game.target_in_range(self):

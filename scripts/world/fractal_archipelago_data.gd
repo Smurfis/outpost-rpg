@@ -113,7 +113,7 @@ func is_solid(x: int, y: int, z: int) -> bool:
 		# Perlin valleys to remove the stairs beneath the player's feet.
 		if y < cave_floor:
 			return true
-		if y < cave_floor + CAVES.CORRIDOR_HEIGHT:
+		if y < caves.ceiling_at(x, z, cave_floor):
 			return false
 	return y < height_at(x, z)
 
@@ -125,7 +125,8 @@ func solid_column(x: int, z: int) -> int:
 	assert(top-BEDROCK < 63)
 	var solid := (1 << (top-BEDROCK))-1
 	if floor_y != CAVES.INVALID_FLOOR:
-		solid &= ~(((1 << CAVES.CORRIDOR_HEIGHT)-1) << (floor_y-BEDROCK))
+		var clearance: int = caves.ceiling_at(x, z, floor_y) - floor_y
+		solid &= ~(((1 << clearance)-1) << (floor_y-BEDROCK))
 	return solid
 
 func top_tile(x: int, z: int) -> int:

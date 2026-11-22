@@ -560,6 +560,9 @@ func _load_clears() -> void:
 	if not FileAccess.file_exists(source) and FileAccess.file_exists(save_path + ".bak"):
 		source = save_path + ".bak"
 	if not FileAccess.file_exists(source):
+		if FileAccess.file_exists(save_path + ".tmp"):
+			world_site_save_valid = false
+			push_error("Interrupted dungeon save has no committed file or backup")
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(source))
 	if not (parsed is Dictionary):
