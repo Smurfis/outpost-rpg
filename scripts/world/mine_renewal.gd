@@ -15,14 +15,18 @@ static func advance(island, game) -> String:
 		return "unavailable"
 	if site.get("reopened",false):
 		return "open"
-	if not island.mine.access.closed or Engine.is_in_physics_frame():
-		return "busy"
+	if not island.mine.access.closed:
+		return "busy: entrance is not sealed"
+	if Engine.is_in_physics_frame():
+		return "busy: retry after physics update"
 	if site.cycle == 0 and not island.mine._supplies_claimed(game.opened_world_objects):
 		return "outstanding_rewards"
 	if game.hero == null or game.controls.navigating or game.hero.interaction_moving or Vector2(game.hero.velocity.x, game.hero.velocity.z).length_squared() > 0.001 or absf(game.hero.velocity.y) > 0.11 or manager.active_instance != null or (game.coop != null and game.coop.mode != "solo"):
 		return "occupied"
-	if game.controls.modal_open() or game.station_walk_target != "" or is_instance_valid(game.controls.target) or is_instance_valid(game.controls.inspected):
-		return "busy"
+	if game.controls.modal_open():
+		return "busy: close the active interface"
+	if game.station_walk_target != "" or is_instance_valid(game.controls.target):
+		return "busy: finish the current interaction"
 	if site.cycle == 1:
 		return _reopen(island,game,manager,site)
 	# Reconstruct in an isolated terrain object. Only cave data is transferred
@@ -134,6 +138,7 @@ static func advance(island, game) -> String:
 		_discard(staged)
 		return "save_failed"
 	if phase == "committed":
+		game.controls.hide_inspection()
 		island.invalidate_section_geometry()
 		island._reveal_cell = Vector2i.MAX
 		for key in staged:

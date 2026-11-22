@@ -62,7 +62,12 @@ func run() -> void:
 			game.hero.position = mine.entrance
 			check(island.advance_mine_renewal_for_test() == "occupied", "Presence bypass")
 			game.hero.position = original
-			check(island.advance_mine_renewal_for_test() == "prepared", "Could not stage")
+			var hovered := Node3D.new()
+			game.add_child(hovered)
+			game.controls.inspected = hovered
+			check(island.advance_mine_renewal_for_test() == "prepared", "Hover blocked staging")
+			hovered.queue_free()
+			game.controls.inspected = null
 		"publish":
 			check(phase == "prepared", "Prepared checkpoint missing")
 			for field in ["from_cycle","generator_version","phase","seed","digest"]:
