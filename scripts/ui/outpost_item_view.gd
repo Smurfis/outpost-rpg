@@ -1,13 +1,15 @@
 extends RefCounted
 ## Single item presentation model for HUD, inventory, crafting and bank UIs.
-## Do not equate dungeon portal quality or bag-star quality with item rarity.
+## Five-star rating means ITEM rarity, never portal difficulty or the independent
+## 0-3 bag-capacity upgrade stars.
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 const RARITY_NAMES: Array[String] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const RARITY_COLORS: Array[Color] = [
-	Color("#b5ada2"),
-	Color("#70b75e"),
-	Color("#548fce"),
-	Color("#b77ce0"),
-	Color("#e3a353")
+	Color("#a6adad"),
+	Color("#55b777"),
+	Color("#568de0"),
+	Color("#ae69da"),
+	Color("#e4b35b")
 ]
 
 static func display_name(item_id: String) -> String:
@@ -22,6 +24,27 @@ static func rarity_color(item_rarity: int) -> Color:
 	if item_rarity < 0 or item_rarity >= RARITY_COLORS.size():
 		return Color("#e2d4bd")
 	return RARITY_COLORS[item_rarity]
+
+## Existing crafted rarity is authoritative. Legacy/starter gear is Common,
+## while ungraded materials and bag-upgrade levels have no implied item rarity.
+static func item_rarity(item_id: String, crafted_rolls: Dictionary) -> int:
+	if crafted_rolls.has(item_id):
+		var raw_roll: Variant = crafted_rolls[item_id]
+		if raw_roll is Dictionary and (raw_roll as Dictionary).has("rarity"):
+			return clampi(int((raw_roll as Dictionary)["rarity"]), 0, 4)
+	if item_id == "training_blade" or QUALITY.is_gear(item_id):
+		return 0
+	return -1
+
+static func rarity_stars(item_rarity: int) -> String:
+	if item_rarity < 0 or item_rarity >= RARITY_NAMES.size():
+		return ""
+	return "★".repeat(item_rarity + 1) + "☆".repeat(4 - item_rarity)
+
+static func rarity_caption(item_rarity: int) -> String:
+	if item_rarity < 0 or item_rarity >= RARITY_NAMES.size():
+		return ""
+	return rarity_stars(item_rarity) + "  " + rarity_name(item_rarity)
 
 static func description(item_id: String, recipes: Array) -> String:
 	for recipe in recipes:
