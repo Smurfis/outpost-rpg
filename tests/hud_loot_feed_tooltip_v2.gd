@@ -71,7 +71,7 @@ func _run() -> void:
 	epic_tap.pressed = true
 	epic_tap.position = rare.get_global_rect().get_center()
 	hud._input(epic_tap)
-	verify(hud.loot_tooltip_name.text == "Stone" and hud.loot_tooltip_rarity.text == "Epic", "Rarity and name update from actual supplied item metadata")
+	verify(hud.loot_tooltip_name.text == "Stone" and hud.loot_tooltip_rarity.text == "★★★★☆  Epic", "Rarity name and five-star display update from supplied item metadata")
 	hud.record_combat_event("Boar defeated")
 	verify(hud.loot_feed_entries[0].get("kind", "") == "combat", "Combat events share the same readable feed")
 	verify(hud.loot_feed_rows.get_child(0).get_node_or_null("LootReceiptText").text == "Boar defeated", "Combat line renders without pretending it was a loot drop")

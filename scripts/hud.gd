@@ -1049,6 +1049,10 @@ func record_loot(item_id: String, quantity: int, item_rarity: int = -1) -> void:
 	if quantity <= 0 or item_id.is_empty() or loot_feed_panel == null:
 		return
 	var quality: int = clampi(item_rarity, -1, 4)
+	# Real crafted item metadata is authoritative when callers omit rarity;
+	# never copy dungeon difficulty onto materials or invent an item roll.
+	if quality < 0 and game != null:
+		quality = ITEM_VIEW.item_rarity(item_id, game.best_craft_rolls)
 	for i in range(loot_feed_entries.size()):
 		var old: Dictionary = loot_feed_entries[i]
 		if str(old.get("kind", "")) == "item" and str(old.get("id", "")) == item_id:
@@ -1141,6 +1145,8 @@ func _refresh_loot_feed() -> void:
 		var name_text: String = ITEM_VIEW.display_name(item_id)
 		var times: int = int(entry.get("count", 1))
 		var title_text: String = "You received ×%d %s" % [count, name_text] if is_item else str(entry.get("message", "")) + (" ×%d" % times if times > 1 else "")
+		if is_item and quality >= 0:
+			title_text = ITEM_VIEW.rarity_stars(quality) + "  " + title_text
 		var line := HBoxContainer.new()
 		line.name = "LootReceipt"
 		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1225,7 +1231,7 @@ func _toggle_loot_tooltip(item_id: String, quality: int) -> void:
 	var recipes: Array = game.recipes if game != null else []
 	loot_tooltip_name.text = ITEM_VIEW.display_name(item_id)
 	loot_tooltip_name.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(quality))
-	loot_tooltip_rarity.text = ITEM_VIEW.rarity_name(quality)
+	loot_tooltip_rarity.text = ITEM_VIEW.rarity_caption(quality) if quality >= 0 else ITEM_VIEW.rarity_name(quality)
 	loot_tooltip_rarity.add_theme_color_override("font_color", ITEM_VIEW.rarity_color(quality))
 	loot_tooltip_description.text = ITEM_VIEW.description(item_id, recipes)
 	_set_loot_tooltip_visible(true)

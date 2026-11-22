@@ -295,6 +295,12 @@ jobs:
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/albion_inventory_window.gd 2>&1 | tee albion-inventory.log
           if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL INVENTORY:' albion-inventory.log; then exit 1; fi
           grep -q "INVENTORY RESULT: 0 failures" albion-inventory.log
+      - name: Verify five-star item rarity in inventory, equipped slots, loot and crafting
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=5s 65s ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . -s res://tests/five_star_item_rarity_ui.gd 2>&1 | tee five-star-items.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL FIVE-STAR ITEMS:' five-star-items.log; then exit 1; fi
+          grep -q "FIVE-STAR ITEM RESULT: 0 failures" five-star-items.log
       - name: Verify carry limits, specialist bags, star crafting and touch camera smoothing
         run: |
           set -o pipefail
