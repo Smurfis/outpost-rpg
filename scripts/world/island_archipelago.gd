@@ -66,10 +66,34 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 
 func _identify_regions(center: Vector2i) -> void:
 	_identify_mine_regions(center)
+	if mine != null:
+		for index in range(1, terrain.caves.routes.size()):
+			_add_cache_cave_regions(terrain.caves.routes[index])
 	var cave = terrain.caves.natural
 	if cave != null:
 		for region in cave.regions:
 			_add_region(region.cells, region.anchor)
+
+func _add_cache_cave_regions(route: Array) -> void:
+	var end: Vector3i = route.back()
+	var center := Vector2i(end.x, end.z)
+	var room := {}
+	for dx in range(-2,3):
+		for dz in range(-2,3):
+			var cell := center + Vector2i(dx,dz)
+			if terrain.caves.floors.has(cell):
+				room[cell] = true
+	_add_region(room, center)
+	var passage := {}
+	for i in range(route.size()-1,-1,-1):
+		var at: Vector3i = route[i]
+		for lane in terrain.caves.CORRIDOR_WIDTH:
+			var cell := Vector2i(at.x,at.z+lane)
+			if not _owners.has(cell):
+				passage[cell] = true
+		if passage.size() >= 18 or (i == 0 and not passage.is_empty()):
+			_add_region(passage,Vector2i(at.x,at.z))
+			passage = {}
 
 func _identify_mine_regions(center: Vector2i) -> void:
 	if mine != null:
@@ -129,6 +153,11 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 	var center := Vector2i(end.x,end.z)
 	var cell := Vector2i(floori(pos.x),floori(pos.z))
 	var nearby := center
+	if mine != null:
+		for chest: Vector3 in terrain.caves.chests:
+			var anchor := Vector2i(floori(chest.x),floori(chest.z))
+			if cell.distance_squared_to(anchor) < cell.distance_squared_to(nearby):
+				nearby = anchor
 	if terrain.caves.natural != null and cell.distance_squared_to(terrain.caves.natural.mouth) < 64*64:
 		nearby = terrain.caves.natural.mouth
 	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
