@@ -1,7 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/company_splash.gd" id="1"]
-[ext_resource type="Texture2D" path="res://assets/ui/title/five_star_mark.svg" id="2"]
+[ext_resource type="Shader" path="res://assets/branding/studio_sunset.gdshader" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/studio_ident_world.gd" id="3"]
+
+[sub_resource type="ShaderMaterial" id="Sunset"]
+shader = ExtResource("2")
 
 [node name="FiveStarInteractive" type="Control"]
 layout_mode = 3
@@ -20,60 +24,72 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.039, 0.049, 0.096, 1)
+material = SubResource("Sunset")
+color = Color(1, 1, 1, 1)
 
-[node name="StarMark" type="TextureRect" parent="."]
+[node name="Stage" type="SubViewportContainer" parent="."]
 layout_mode = 1
-anchor_left = 0.34
-anchor_top = 0.08
-anchor_right = 0.66
-anchor_bottom = 0.61
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-texture = ExtResource("2")
-expand_mode = 1
-stretch_mode = 5
+stretch = true
+
+[node name="Viewport" type="SubViewport" parent="Stage"]
+transparent_bg = true
+size = Vector2i(1280, 720)
+render_target_update_mode = 4
+
+[node name="World" type="Node3D" parent="Stage/Viewport"]
+script = ExtResource("3")
 
 [node name="StudioName" type="Label" parent="."]
 layout_mode = 1
-anchor_left = 0.2
-anchor_top = 0.58
-anchor_right = 0.8
-anchor_bottom = 0.73
+anchor_left = 0.16
+anchor_top = 0.78
+anchor_right = 0.84
+anchor_bottom = 0.88
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.887, 0.650, 1)
-theme_override_colors/font_outline_color = Color(0.18, 0.10, 0.15, 1)
+theme_override_colors/font_color = Color(1, 0.83, 0.48, 1)
+theme_override_colors/font_outline_color = Color(0.17, 0.09, 0.10, 1)
 theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 65
+theme_override_font_sizes/font_size = 56
 text = "FIVE STAR"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Subtitle" type="Label" parent="."]
 layout_mode = 1
-anchor_left = 0.2
-anchor_top = 0.73
-anchor_right = 0.8
-anchor_bottom = 0.83
+anchor_left = 0.20
+anchor_top = 0.87
+anchor_right = 0.80
+anchor_bottom = 0.93
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.86, 0.64, 1)
-theme_override_colors/font_outline_color = Color(0.16, 0.11, 0.18, 1)
+theme_override_colors/font_color = Color(1, 0.81, 0.51, 1)
+theme_override_colors/font_outline_color = Color(0.17, 0.09, 0.10, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 31
-text = "i n t e r a c t i v e"
+theme_override_font_sizes/font_size = 25
+text = "I N T E R A C T I V E"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Hint" type="Label" parent="."]
 layout_mode = 1
-anchor_left = 0.2
-anchor_top = 0.91
-anchor_right = 0.8
-anchor_bottom = 0.97
+anchor_left = 0.22
+anchor_top = 0.955
+anchor_right = 0.78
+anchor_bottom = 0.99
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.725, 0.698, 0.729, 1)
-theme_override_font_sizes/font_size = 20
-text = "Tap anywhere to continue"
+theme_override_colors/font_color = Color(0.86, 0.78, 0.75, 0.68)
+theme_override_font_sizes/font_size = 16
+text = "Tap anywhere to skip"
 horizontal_alignment = 1
 vertical_alignment = 1

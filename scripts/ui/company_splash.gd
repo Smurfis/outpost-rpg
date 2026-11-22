@@ -1,71 +1,65 @@
 extends Control
-## Short Five Star Interactive ident, independent of title and world loading.
+## Five Star Interactive cinematic ident, independent of game/title rendering.
+## Tap/click/key to skip. Reduced-motion uses the finished 3D crest.
 @export var next_scene_path: String = "res://scenes/ui/title_screen.tscn"
 @export var auto_advance: bool = true
-@export var hold_seconds: float = 2.0
+@export var hold_seconds: float = 1.8
 
-const STUDIO_LOGO := "res://assets/ui/title/five_star_logo.png"
-const STUDIO_TWINKLES := preload("res://scripts/ui/studio_twinkles.gd")
 const UI_PREFS := "user://outpost_ui.cfg"
+const STAR_FLIGHT := 6.0
+var _elapsed: float = 0.0
 var _transition_started: bool = false
 var _reduced_motion: bool = false
 var _previous_window_aspect: int = -1
+@onready var _world: Node3D = $Stage/Viewport/World
+@onready var _studio: Label = $StudioName
+@onready var _subtitle: Label = $Subtitle
 
 func _ready() -> void:
-	# The engine's default 16:9 keep-aspect setting pillarboxes the entire
-	# studio ident on 20:9 Android. Expand only during this intro scene.
-	var window: Window = get_window()
-	_previous_window_aspect = window.content_scale_aspect
-	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	_previous_window_aspect = get_window().content_scale_aspect
+	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var prefs := ConfigFile.new()
 	if prefs.load(UI_PREFS) == OK:
 		_reduced_motion = bool(prefs.get_value("title", "reduced_motion", false))
-	var emblem: TextureRect = get_node_or_null("StarMark") as TextureRect
-	if emblem != null:
-		emblem.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		# Widescreen Android: the studio ident owns the full screen, never a
-		# narrow fixed 16:9 logo slot. Preserve the artwork aspect ratio.
-		emblem.anchor_left = 0.08
-		emblem.anchor_top = 0.04
-		emblem.anchor_right = 0.92
-		emblem.anchor_bottom = 0.62
-		emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		# Keep the SVG art as the no-download fallback. Use final art if added.
-		if ResourceLoader.exists(STUDIO_LOGO):
-			emblem.texture = load(STUDIO_LOGO) as Texture2D
-			emblem.anchor_bottom = 0.88
-			get_node("StudioName").visible = false
-			get_node("Subtitle").visible = false
-	var twinkles: Control = STUDIO_TWINKLES.new()
-	twinkles.name = "StarTwinkles"
-	add_child(twinkles)
-	twinkles.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	twinkles.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	twinkles.set("reduced_motion", _reduced_motion)
-	# Short fade and a tiny shimmer rather than a long unskippable logo.
 	modulate.a = 0.0
 	var fade := create_tween()
 	fade.set_trans(Tween.TRANS_SINE)
-	fade.tween_property(self, "modulate:a", 1.0, 0.45)
+	fade.tween_property(self, "modulate:a", 1.0, 0.35)
+	_draw_state()
+
+func _process(delta: float) -> void:
+	if _transition_started:
+		return
+	_elapsed += delta
+	_draw_state()
 	if auto_advance:
-		await get_tree().create_timer(maxf(0.5, hold_seconds)).timeout
-		_go_next()
+		var total: float = (1.4 if _reduced_motion else STAR_FLIGHT) + hold_seconds
+		if _elapsed >= total:
+			_go_next()
+
+func _draw_state() -> void:
+	var seconds: float = STAR_FLIGHT if _reduced_motion else minf(STAR_FLIGHT, _elapsed)
+	_world.call("seek", seconds)
+	var alpha: float = 1.0 if _reduced_motion else _smooth(5.0, 6.0, _elapsed)
+	_studio.modulate.a = alpha
+	_subtitle.modulate.a = alpha
+
+func _smooth(start: float, finish: float, value: float) -> float:
+	var t: float = clampf((value - start) / maxf(0.001, finish - start), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
 
 func _exit_tree() -> void:
 	if _previous_window_aspect >= 0:
 		get_window().content_scale_aspect = _previous_window_aspect
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		if (event as InputEventScreenTouch).pressed:
-			_go_next()
-	elif event is InputEventMouseButton:
-		if (event as InputEventMouseButton).pressed:
-			_go_next()
+	if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+		_go_next()
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		_go_next()
 	elif event is InputEventKey:
-		var key_event: InputEventKey = event
+		var key_event: InputEventKey = event as InputEventKey
 		if key_event.pressed and not key_event.echo:
 			_go_next()
 
