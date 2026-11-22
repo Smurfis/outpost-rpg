@@ -33,7 +33,8 @@ func seek(seconds: float) -> void:
 	_portal.rotation.z = 0.018 * sin(_time * 0.60) * reveal
 	for i in range(STAR_COUNT):
 		var star: MeshInstance3D = _stars[i]
-		var fly_t: float = clampf((_time - float(i) * 0.16) / 5.7, 0.0, 1.0)
+		var delay: float = float(i) * 0.16
+		var fly_t: float = clampf((_time - delay) / (FLIGHT_SECONDS - delay), 0.0, 1.0)
 		star.position = _flight_position(i, fly_t)
 		star.rotation = Vector3(0.18 * (1.0 - fly_t), 0.9 * (1.0 - fly_t), (1.0 - fly_t) * (2.0 + float(i) * 0.55))
 		star.scale = Vector3.ONE * (0.82 + 0.10 * _smooth(0.0, 1.0, fly_t))
@@ -245,6 +246,7 @@ func _tri(tool: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 
 func _build_stars() -> void:
 	var gold := _material(Color("#ffd16b"), 0.72, 0.30)
+	gold.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var glow := StandardMaterial3D.new()
 	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
