@@ -50,6 +50,8 @@ var natural_population
 var side_chamber
 var mine
 const MINE = preload("res://scripts/world/physical_mineshaft.gd")
+const MINE_AUTO = preload("res://scripts/world/mine_auto_renewal.gd")
+var mine_auto = MINE_AUTO.new()
 
 func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 	var index := _regions.size()
@@ -673,6 +675,9 @@ func _process(delta: float) -> void:
 	var hero: Node3D = game.get("hero")
 	if hero == null:
 		return
+	# The scheduler must keep gameplay time while the player is off-island.
+	# It only checks the mine once per second and uses the existing journal.
+	mine_auto.tick(self, game, delta)
 	var position: Vector3 = hero.global_position
 	if not terrain.near_island(position):
 		if section_active:

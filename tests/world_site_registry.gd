@@ -66,8 +66,10 @@ func check_mine_lifecycle() -> void:
 	var layout: int = restored.sites[id].layout_seed
 	for stage in ["sealed", "ready_for_renewal"]:
 		check(restored.advance_mine(id, stage, true), "Advance to " + stage)
+		if stage == "sealed":
+			restored.sites[id].auto_renew_remaining_ms = 1000
 		var encoded: Variant = JSON.parse_string(JSON.stringify(restored.export_state()))
-		check(restored.import_state(encoded) and restored.sites[id].state == stage, "Reload " + stage)
+		check(restored.import_state(encoded) and restored.sites[id].state == stage and restored.sites[id].get("auto_renew_remaining_ms") == 1000, "Reload " + stage)
 		check(not restored.record_mine_defeat(id, "miner") and not restored.claim_reward(id, "treasure", "player"), "Closed site rejects new progression")
 	check(restored.sites[id].reward_claims == receipts and restored.sites[id].layout_seed == layout and restored.sites[id].cycle == 0, "Renewal eligibility preserves current cycle")
 	var gates := {}
@@ -78,5 +80,10 @@ func check_mine_lifecycle() -> void:
 	gates.erase("no_protected_builds")
 	check(restored.renewal_proposal(id, 0, gates).is_empty(), "No renewal proposal without protection evidence")
 	var corrupt: Dictionary = restored.export_state()
+	for invalid in [-1, 1.5, 3600001]:
+		corrupt = restored.export_state()
+		corrupt.sites[id].auto_renew_remaining_ms = invalid
+		check(not restored.import_state(corrupt), "Invalid mine timer rejected " + str(invalid))
+	corrupt = restored.export_state()
 	corrupt.sites[id].reward_claims.clear()
 	check(not restored.import_state(corrupt) and restored.sites[id].reward_claims == receipts, "Invalid closed record leaves loaded state intact")
