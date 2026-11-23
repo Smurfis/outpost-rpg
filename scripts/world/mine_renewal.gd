@@ -200,6 +200,8 @@ static func _reopen(island,game,manager,site: Dictionary) -> String:
 	site.state = "active"
 	site.reopened = true
 	site.erase("renewal_committed")
+	# A sealed gameplay timer must not survive into the newly active cycle.
+	site.erase("auto_renew_remaining_ms")
 	if not manager._save_clears():
 		manager.world_sites.sites[mine.site_id] = previous
 		return "save_failed"

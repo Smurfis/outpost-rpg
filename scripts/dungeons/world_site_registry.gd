@@ -162,6 +162,12 @@ func import_state(data: Variant) -> bool:
 	return true
 
 static func _valid_mine_record(site: Dictionary) -> bool:
+	if site.has("auto_renew_remaining_ms"):
+		var timer: Variant = site.auto_renew_remaining_ms
+		if typeof(timer) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(timer)) or int(timer) != timer or timer < 0 or timer > 3600000:
+			return false
+		if site.state not in CLOSED:
+			return false
 	# JSON numbers load as floats. Reject fractional generations and invalid
 	# seed metadata before they can address a different reward namespace.
 	for key in ["cycle", "world_seed", "layout_seed"]:

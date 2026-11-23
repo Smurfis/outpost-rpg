@@ -5,6 +5,9 @@ func capture(_label: String) -> void:
 
 func run() -> void:
 	OS.set_environment("OUTPOST_TEST_MINE_LIFECYCLE", "0")
+	var automatic := OS.get_environment("OUTPOST_TEST_MINE_AUTO") == "1"
+	if automatic:
+		OS.set_environment("OUTPOST_TEST_MINE_RENEWAL_SECONDS", "1")
 	await load_world(true)
 	game.inventory["backpack_t2"] = 1
 	game.equipment["bag"] = "backpack_t2"
@@ -82,15 +85,55 @@ func run() -> void:
 			site = loaded
 			entry = mine.entrance
 			await walk_shore(entry.x+3)
-		check(mine.trigger_reoccupation_for_test(), "could not seal")
-		check(mine.advance_for_test("ready_for_renewal"), "could not prepare renewal")
-		for expected in ["prepared", "publishing", "committed", "open"]:
-			await process_frame
-			game.hero.velocity = Vector3.ZERO
-			var result: String = island.advance_mine_renewal_for_test()
-			check(result == expected, "renewal expected %s got %s" % [expected,result])
-			if failed:
-				break
+		if automatic:
+			await walk_shore(entry.x+10)
+			await walk_shore(entry.x+20)
+			for step in 10:
+				await process_frame
+				game.hero.velocity = Vector3.ZERO
+				island.mine_auto.tick(island, game, 1.0)
+				if step == 0:
+					check(site.state == "sealed" and site.auto_renew_remaining_ms == 1000, "automatic seal or timer failed")
+					if cycle == 0:
+						game._save()
+						game.queue_free()
+						await process_frame
+						await process_frame
+						await load_world(false)
+						mine = island.mine
+						site = mine.manager.world_sites.sites[site_id]
+						check(site.state == "sealed" and site.auto_renew_remaining_ms == 1000 and mine.access.closed, "sealed countdown did not survive reload")
+						await walk_shore(entry.x+10)
+						await walk_shore(entry.x+20)
+				if step == 2 and cycle == 0:
+					check(site.state == "ready_for_renewal", "automatic ready transition failed")
+					game._save()
+					game.queue_free()
+					await process_frame
+					await process_frame
+					await load_world(false)
+					mine = island.mine
+					site = mine.manager.world_sites.sites[site_id]
+					check(site.state == "ready_for_renewal" and mine.access.closed, "ready state did not survive reload")
+					await walk_shore(entry.x+10)
+					await walk_shore(entry.x+20)
+				if island.mine.manager.world_sites.sites[site_id].get("reopened", false):
+					break
+			check(island.mine.manager.world_sites.sites[site_id].state == "active", "automatic renewal did not reopen")
+			var opened_cycle: int = int(island.mine.manager.world_sites.sites[site_id].cycle)
+			for callback in 3:
+				island.mine_auto.tick(island, game, 1.0)
+			check(int(island.mine.manager.world_sites.sites[site_id].cycle) == opened_cycle and island.mine.manager.world_sites.sites[site_id].state == "active", "repeated callback advanced a new cycle")
+		else:
+			check(mine.trigger_reoccupation_for_test(), "could not seal")
+			check(mine.advance_for_test("ready_for_renewal"), "could not prepare renewal")
+			for expected in ["prepared", "publishing", "committed", "open"]:
+				await process_frame
+				game.hero.velocity = Vector3.ZERO
+				var result: String = island.advance_mine_renewal_for_test()
+				check(result == expected, "renewal expected %s got %s" % [expected,result])
+				if failed:
+					break
 		if failed:
 			break
 		game._save()

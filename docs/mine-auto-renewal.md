@@ -1,0 +1,9 @@
+# Automatic Goblin Mineshaft renewal (8B.4)
+
+The island streamer calls `mine_auto_renewal.gd` once per rendered frame, including while the player is away from the island. The scheduler checks the mine at one-second intervals. It does not construct cave geometry. It calls the existing guarded lifecycle transitions and `mine_renewal.gd` transaction one durable stage at a time.
+
+After both guards are defeated and the strongbox, ore and crates are emptied, the player must leave the mine and a 16-voxel radius around its entrance. Active navigation, interaction, a moving player, another actor in the mine or entrance area, and an invalid save all defer sealing. The existing bulkhead is published by the lifecycle transition. The default sealed interval is 180 seconds of active gameplay. `OUTPOST_TEST_MINE_RENEWAL_SECONDS=1` accelerates isolated development tests; values from 1 through 3600 seconds are accepted.
+
+The site record stores `auto_renew_remaining_ms` while sealed and ready. Countdown progress is saved atomically every five seconds, or at expiry. A crash can repeat up to five seconds of gameplay time; it cannot skip the cooldown. Missing timers in older sealed saves start a full interval. Invalid saved timers are rejected. The timer is removed by the durable reopening commit, before the site becomes active again. The renewal journal, construction checks, resident chunk swap, collision, picking and cache invalidation remain owned by the existing 8B.2 pipeline. Automatic callbacks cannot advance a reopened site twice.
+
+For verification, run `tests/mine_repeat_cycles.gd` with `OUTPOST_TEST_MINE_AUTO=1` and an isolated `APPDATA`. The test clears and loots cycles 0, 1 and 2, walks away, advances the scheduler without mine commands, reloads during sealed and ready states, and checks historical receipts. `tests/mine_renewal_recovery.ps1` covers abrupt termination at each publication checkpoint. Run Godot processes sequentially.
