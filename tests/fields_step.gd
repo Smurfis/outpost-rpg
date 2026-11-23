@@ -23,6 +23,15 @@ func _box(caption: String, position: Vector3, dimensions: Vector3) -> StaticBody
 	shape.size = dimensions
 	child.shape = shape
 	node.add_child(child)
+	var visible_box := MeshInstance3D.new()
+	var block_mesh := BoxMesh.new()
+	block_mesh.size = dimensions
+	visible_box.mesh = block_mesh
+	var block_material := StandardMaterial3D.new()
+	block_material.albedo_color = Color("b79c6b")
+	block_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	visible_box.material_override = block_material
+	node.add_child(visible_box)
 	return node
 
 func _run() -> void:
@@ -85,6 +94,18 @@ func _run() -> void:
 	var stepped: bool = game.hero._try_auto_step(Vector3(0, 0, -0.88))
 	check(stepped, "Controller steps across one-voxel obstacle")
 	check(game.hero.global_position.y > 20.90, "Controller actually rises onto step")
+	check(get_nodes_in_group("outpost_step_dust").size() == 1, "Terrain step kicks up one brief dust puff")
+	if not get_nodes_in_group("outpost_step_dust").is_empty():
+		var puff = get_nodes_in_group("outpost_step_dust")[0]
+		var expected_tile: int = terrain._ground_tile(0, -1)
+		check(puff.tone == puff.tile_colour(expected_tile).darkened(0.24), "Dust inherits the climbed terrain tile colour")
+	if DisplayServer.get_name() != "headless":
+		await create_timer(0.07).timeout
+		game.camera_focus_smooth = game.hero.global_position + Vector3.UP
+		game.camera.size = 10.0
+		game._camera(0.0)
+		await RenderingServer.frame_post_draw
+		check(root.get_texture().get_image().save_png("user://step-dust.png") == OK, "Step dust graphical capture")
 	game.hero.global_position = Vector3(3, 20.03, 0.1)
 	game.hero.velocity = Vector3.ZERO
 	await physics_frame

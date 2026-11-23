@@ -5,6 +5,7 @@ const VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const VOXEL_STEP = preload("res://scripts/world/voxel_step.gd")
 const FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
+const DAMAGE_BEAT = preload("res://scripts/vfx/enemy_damage_beat.gd")
 var game: Node
 var hero: CharacterBody3D
 var species: String = "pig"
@@ -159,6 +160,8 @@ func _respawn() -> void:
 	collision_mask = 1
 	visible = true
 	visual.visible = true
+	visual.rotation.z = 0.0
+	visual.position = Vector3.ZERO
 	avatar.revive()
 	_choose_wander()
 
@@ -182,6 +185,7 @@ func receive_damage(amount: float) -> void:
 	if hero != null and is_instance_valid(hero):
 		apply_knockback(hero.global_position)
 	FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.7, dealt, Color("ffcd79"), hp <= 0.0, hp <= 0.0)
+	DAMAGE_BEAT.play(self, visual, game, hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		respawn = 30.0
@@ -189,9 +193,7 @@ func receive_damage(amount: float) -> void:
 		collision_layer = 0
 		collision_mask = 0
 		velocity = Vector3.ZERO
-		CRUMBLE.spawn(game, self, visual)
-		visual.visible = false
-		visible = false
+		# Keep the fallen model visible until the shared beat starts the crumble.
 		game.on_enemy_killed(species)
 	else:
 		avatar.play_event("Headbutt" if species != "wolf" else "Idle")

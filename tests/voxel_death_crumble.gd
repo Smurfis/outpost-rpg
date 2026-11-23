@@ -21,6 +21,13 @@ func check(ok: bool, what: String) -> void:
 		errors += 1
 		push_error("FAIL VOXEL CRUMBLE: " + what)
 
+func capture_creature(game: Node, creature: Node3D, label: String) -> void:
+	game.camera_focus_smooth = creature.global_position + Vector3.UP * 0.6
+	game.camera.size = 5.0
+	game._camera(0.0)
+	await RenderingServer.frame_post_draw
+	check(root.get_texture().get_image().save_png("user://" + label + ".png") == OK, label + " graphical capture")
+
 func _new_rig_color_test(world: Node3D) -> void:
 	var actor := Node3D.new()
 	world.add_child(actor)
@@ -59,17 +66,33 @@ func _run() -> void:
 	var game = scene.instantiate()
 	root.add_child(game)
 	await physics_frame
+	if DisplayServer.get_name() != "headless":
+		game.set_process(false)
+		game.hud.hide()
 	_new_rig_color_test(game)
 	await physics_frame
 	var boars: Array[Node] = get_nodes_in_group("wild_boars")
 	var wildlife: Array[Node] = get_nodes_in_group("overworld_wildlife")
 	check(not boars.is_empty() and wildlife.size() >= 2, "Live overworld has animated boars, pigs and wolves")
 	for target in [boars[0], wildlife[0], wildlife[1]]:
+		if target == boars[0] and DisplayServer.get_name() != "headless":
+			target.global_position = Vector3(30.5, game.terrain_surface.surface_y_at(30, 30) + 0.1, 30.5)
+			game.hero.global_position = target.global_position + Vector3(2.0, 0.0, 2.0)
 		var before: int = get_nodes_in_group("outpost_death_crumbles").size()
 		var old_hp: float = target.hp
 		target.receive_damage(old_hp + 100.0)
+		check(not target.alive and target.visual.visible and target.get_node_or_null("EnemyDamageBeat") != null, "Dead creature flashes before falling")
+		if target == boars[0] and DisplayServer.get_name() != "headless":
+			await capture_creature(game, target, "monster-white-flash")
+		await create_timer(0.26).timeout
+		check(target.visual.rotation.z > 1.0, "Dead creature remains visibly laid flat")
+		if target == boars[0] and DisplayServer.get_name() != "headless":
+			await capture_creature(game, target, "monster-fallen")
+		await create_timer(0.55).timeout
+		if target == boars[0] and DisplayServer.get_name() != "headless":
+			await capture_creature(game, target, "monster-crumble")
 		var effects: Array[Node] = get_nodes_in_group("outpost_death_crumbles")
-		check(not target.alive and not target.visual.visible, "Death swaps original animated model immediately")
+		check(not target.alive and not target.visual.visible, "Fallen model yields to original crumble")
 		check(effects.size() == before + 1, "Exactly one independent crumble per defeat")
 		var burst = effects.back()
 		check(burst.cube_count() > 20 and burst.cube_count() <= CRUMBLE.MAX_PC,
@@ -86,7 +109,9 @@ func _run() -> void:
 	check(guard.avatar != null, "Imported animated dungeon guardian is available")
 	var before_guard: int = get_nodes_in_group("outpost_death_crumbles").size()
 	guard.receive_damage(100000.0)
-	check(not guard.alive and not guard.visual.visible, "Dungeon guardian also crumbles without death animation")
+	check(not guard.alive and guard.visual.visible, "Guardian visibly falls before crumble")
+	await create_timer(0.80).timeout
+	check(not guard.visual.visible, "Dungeon guardian also crumbles after fallen pose")
 	check(fake.defeated == 1, "Dungeon defeat / reward callback still fires exactly once")
 	check(get_nodes_in_group("outpost_death_crumbles").size() == before_guard + 1, "Dungeon crumble is independent of despawning guardian")
 	for frame in range(125):

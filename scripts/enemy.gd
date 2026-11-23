@@ -6,6 +6,7 @@ const VISUAL = preload("res://scripts/creatures/cube_world_visual.gd")
 const BOAR_STYLE = preload("res://scripts/creatures/boar_style.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
+const DAMAGE_BEAT = preload("res://scripts/vfx/enemy_damage_beat.gd")
 var hero
 var game
 var max_hp: float = 32.0
@@ -100,6 +101,8 @@ func _physics_process(delta: float) -> void:
 			if burn_flame != null:
 				burn_flame.visible = false
 			visual_step_offset = Vector3.ZERO
+			visual.rotation.z = 0.0
+			visual.position = Vector3.ZERO
 			collision_layer = 2
 			collision_mask = 1
 		return
@@ -192,14 +195,12 @@ func receive_damage(amount: float, trigger_recoil: bool = true) -> void:
 	if trigger_recoil and hp > 0.0 and is_instance_valid(hero):
 		apply_knockback(hero.global_position)
 	PIXEL_FEEDBACK.emit_feedback(game, global_position + Vector3.UP * 0.74, dealt, Color("ffcd79"), hp <= 0.0, hp <= 0.0)
+	DAMAGE_BEAT.play(self, visual, game, hp <= 0.0)
 	if hp <= 0.0:
 		alive = false
 		death_display = 1.2
-		# Replace the model instantly with its own colour-matched falling cubes.
-		# The burst lives under the world, not the respawning enemy.
-		CRUMBLE.spawn(game, self, visual)
-		visual.visible = false
-		visible = false # Dead actor is hidden from targeting/map until its original respawn.
+		# The visual remains briefly for its flash and fallen pose; gameplay
+		# targeting and collision stop immediately, then the rig crumbles.
 		collision_layer = 0
 		collision_mask = 0
 		respawn = 20.0

@@ -20,6 +20,7 @@ const VOXEL_CHARACTER = preload("res://scripts/voxel/voxel_character.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const CRUMBLE = preload("res://scripts/vfx/voxel_death_crumble.gd")
 const SWIM_SPLASH = preload("res://scripts/vfx/swimming_splashes.gd")
+const STEP_DUST = preload("res://scripts/vfx/step_dust.gd")
 const WHIRLWIND_TRAIL = preload("res://scripts/vfx/whirlwind_sword_trail.gd")
 const WATER_SURFACE_Y: float = -2.82
 
@@ -723,6 +724,20 @@ func _try_auto_step(horizontal_motion: Vector3) -> bool:
 	visual_step_offset = visual_step_offset.limit_length(1.65)
 	if rise >= 0.24 and rise <= 0.68:
 		step_hop_remaining = STEP_HOP_DURATION
+	# Only a real terrain step kicks up dust. Resource hops and item props
+	# keep their existing motion without suggesting that they are soil.
+	var landing_collider: Object = hit.get("collider")
+	if resource_obstacle == null and landing_collider is Node and not landing_collider.is_in_group("auto_hop_resources") and not landing_collider.is_in_group("resources"):
+		var x := floori((hit.position as Vector3).x)
+		var z := floori((hit.position as Vector3).z)
+		var tile := 4
+		var surface = game.terrain_surface
+		if surface != null and surface.archipelago != null and surface.archipelago.terrain != null and surface.archipelago.terrain.near_island(hit.position):
+			var island_terrain = surface.archipelago.terrain
+			tile = island_terrain.top_tile(x, z) if hit.position.y >= island_terrain.height_at(x, z) - 1.1 else 4
+		elif surface != null:
+			tile = surface._ground_tile(x, z)
+		STEP_DUST.puff(game, hit.position + Vector3.UP * 0.04, horizontal_motion, tile)
 	return true
 
 func apply_knockback(source: Vector3, force: float = 6.0) -> void:

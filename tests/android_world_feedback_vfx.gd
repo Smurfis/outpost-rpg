@@ -61,7 +61,9 @@ func _run() -> void:
 		print("DEBUG PIXEL BURSTS: ", get_nodes_in_group("outpost_pixel_feedback").size(), " children=", game.get_child_count())
 		check(found_number, "Hits create readable floating damage numbers and pixel sparks")
 		boar.receive_damage(100.0)
-		check(not boar.alive and not boar.visible, "Defeated boar still follows original respawn rules")
+		check(not boar.alive and boar.visual.visible, "Defeated boar flashes before its fallen pose")
+		await create_timer(0.80).timeout
+		check(not boar.visible, "Defeated boar still follows original respawn rules")
 		var lethal_visual: bool = false
 		for child in get_nodes_in_group("outpost_death_crumbles"):
 			if child.cube_count() >= 20 and child.get_node_or_null("ScatteredVoxelCubes") != null:
