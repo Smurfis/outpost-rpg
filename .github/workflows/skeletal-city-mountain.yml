@@ -1,0 +1,40 @@
+name: Skeletal City mountain layout check
+
+on:
+  push:
+    branches:
+      - feature/skeletal-city-mountain
+  pull_request:
+    paths:
+      - scripts/world/skeletal_city_mountain_plan.gd
+      - tests/skeletal_city_mountain_plan.gd
+      - .github/workflows/skeletal-city-mountain.yml
+  workflow_dispatch:
+
+jobs:
+  validate-multilevel-spiral:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project's Godot 4.7.2
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip \
+            https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Import resources
+        run: |
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit 2>&1 | tee import.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' import.log | grep -Ev 'resource_name'; then
+            exit 1
+          fi
+      - name: Validate stacked spiral floors and supported one-voxel steps
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . \
+            --script res://tests/skeletal_city_mountain_plan.gd 2>&1 | tee skeletal-city.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access|FAIL SKELETAL CITY:' skeletal-city.log; then
+            exit 1
+          fi
+          grep -q 'SKELETAL CITY MOUNTAIN PLAN RESULT: 0 failures' skeletal-city.log
