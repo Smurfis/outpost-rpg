@@ -1,10 +1,9 @@
 extends RefCounted
-## Deterministic, isolated geometry proposal for Skeletal City's entrance and
-## three-turn dwarven descent. This does NOT modify live terrain or save data.
+## Deterministic, isolated geometry proposal for Skeletal City's gateway and
+## three-turn dwarven descent. Does NOT modify live terrain or save data.
 ##
-## The current cave system stores one floor per Vector2i. This landmark must
-## instead support several walkable Y levels at a single X/Z column, so all
-## proposed cells are keyed by Vector3i until a 3D terrain adapter exists.
+## Unlike existing 2D cave floor columns, this reserves multiple walkable Y
+## levels per X/Z column. The eventual terrain adapter must preserve them.
 
 const TURNS: int = 3
 const TILES_PER_DROP: int = 10
@@ -15,56 +14,65 @@ const EXIT_LENGTH: int = 18
 const CITY_HALF_WIDTH: int = 48
 
 func generate(world_seed: int, origin: Vector3i = Vector3i(0, 43, 0)) -> Dictionary:
-	# An angular spiral suits the dwarven masonry and keeps every movement
-	# orthogonal; later rendered corners may be bevelled without changing it.
 	var radius: int = 15 + posmod(world_seed, 3)
 	var ring: Array[Vector2i] = _square_ring(radius)
-	var floors: Dictionary = {} # Vector3i -> true, at standing-foot elevation
-	var air: Dictionary = {} # Vector3i -> true, carved/open
-	var supports: Dictionary = {} # Vector3i -> true, solid underneath foot
-	var levels: Dictionary = {} # Vector2i -> Array of walkable Y levels
+	var candidates: Dictionary = {} # Vector2i -> Array of proposed foot Ys
+	var floors: Dictionary = {} # Vector3i -> true, standing elevation
+	var air: Dictionary = {} # Vector3i -> true, must be carved
+	var supports: Dictionary = {} # Vector3i -> true, must stay solid
+	var levels: Dictionary = {} # Vector2i -> Array of valid foot Ys
 	var entrance: Array[Vector3i] = []
 	var spiral: Array[Vector3i] = []
 	var exit_path: Array[Vector3i] = []
 
-	# The gateway is a horizontal, roofed tunnel approaching the first turn.
+	# Carved entrance corridor from the mountain face into the spiral.
 	for z in range(-radius - GATE_LENGTH, -radius + 1):
 		var center := Vector3i(origin.x + radius, origin.y, origin.z + z)
 		entrance.append(center)
 		for dx in range(-2, 3):
-			_register_floor(Vector3i(center.x + dx, center.y, center.z), floors, air, supports, levels)
+			_add_candidate(Vector3i(center.x + dx, center.y, center.z), candidates)
 
-	# Build each turn independently. Within a turn, shared width cells take
-	# the lower of adjacent step heights, avoiding conflicting floor surfaces.
-	# Separate turns intentionally share horizontal columns at DIFFERENT Y.
+	# Each revolution descends around the same X/Z perimeter, but at a
+	# different height. Even ONE turn overlaps near its seam: never collapse
+	# all heights into one floor as the existing cave column format does.
 	for turn in range(TURNS):
-		var turn_floors: Dictionary = {} # Vector2i -> Y
 		for i in range(ring.size()):
 			var local: Vector2i = ring[i]
 			var foot_y: int = origin.y - int((turn * ring.size() + i) / TILES_PER_DROP)
+			var foot := Vector3i(origin.x + local.x, foot_y, origin.z + local.y)
+			spiral.append(foot)
 			for band_cell: Vector2i in _inner_band(local, radius):
-				var cell := Vector2i(origin.x + band_cell.x, origin.z + band_cell.y)
-				turn_floors[cell] = mini(int(turn_floors.get(cell, foot_y)), foot_y)
-		for cell: Vector2i in turn_floors:
-			_register_floor(Vector3i(cell.x, int(turn_floors[cell]), cell.y),
-				floors, air, supports, levels)
-		for local: Vector2i in ring:
-			var at := Vector2i(origin.x + local.x, origin.z + local.y)
-			spiral.append(Vector3i(at.x, int(turn_floors[at]), at.y))
+				_add_candidate(Vector3i(origin.x + band_cell.x, foot_y,
+					origin.z + band_cell.y), candidates)
 
-	# The lowest landing leads away from the shaft towards the future city
-	# overlook. This is a real walkable route, not a teleport destination.
+	# Final landing bridges to a reserved cavern/city-overlook anchor.
 	var end: Vector3i = spiral.back()
 	exit_path.append(end)
 	for i in range(1, EXIT_LENGTH + 1):
 		var at := Vector3i(end.x, end.y, end.z - i)
 		exit_path.append(at)
 		for dx in range(-1, 2):
-			_register_floor(Vector3i(at.x + dx, at.y, at.z),
-				floors, air, supports, levels)
+			_add_candidate(Vector3i(at.x + dx, at.y, at.z), candidates)
 
-	for column: Vector2i in levels:
-		(levels[column] as Array).sort()
+	# Close floor candidates from adjacent stair slices are one continuous
+	# step surface; distant Y layers remain independently traversable.
+	for column: Vector2i in candidates:
+		var proposed: Array = candidates[column]
+		proposed.sort()
+		var merged: Array[int] = []
+		for value in proposed:
+			var y: int = int(value)
+			if merged.is_empty() or y - merged.back() > 2:
+				merged.append(y)
+		for y: int in merged:
+			_register_floor(Vector3i(column.x, y, column.y),
+				floors, air, supports, levels)
+		levels[column] = merged
+
+	# Snap the route to the actual band floor without erasing separate turns.
+	_snap_route(entrance, levels)
+	_snap_route(spiral, levels)
+	_snap_route(exit_path, levels)
 
 	var exit_at: Vector3i = exit_path.back()
 	return {
@@ -84,17 +92,29 @@ func generate(world_seed: int, origin: Vector3i = Vector3i(0, 43, 0)) -> Diction
 		"radius": radius
 	}
 
+func _add_candidate(foot: Vector3i, candidates: Dictionary) -> void:
+	var column := Vector2i(foot.x, foot.z)
+	var elevations: Array = candidates.get(column, [])
+	elevations.append(foot.y)
+	candidates[column] = elevations
+
 func _register_floor(foot: Vector3i, floors: Dictionary, air: Dictionary,
 		supports: Dictionary, levels: Dictionary) -> void:
 	floors[foot] = true
 	supports[foot + Vector3i.DOWN] = true
 	for dy in range(WALKWAY_CLEARANCE):
 		air[foot + Vector3i(0, dy, 0)] = true
-	var column := Vector2i(foot.x, foot.z)
-	var elevations: Array = levels.get(column, [])
-	if not elevations.has(foot.y):
-		elevations.append(foot.y)
-	levels[column] = elevations
+
+func _snap_route(route: Array[Vector3i], levels: Dictionary) -> void:
+	for i in range(route.size()):
+		var pos: Vector3i = route[i]
+		var elevations: Array = levels[Vector2i(pos.x, pos.z)]
+		var best: int = int(elevations[0])
+		for value in elevations:
+			var y: int = int(value)
+			if absi(y - pos.y) < absi(best - pos.y):
+				best = y
+		route[i] = Vector3i(pos.x, best, pos.z)
 
 func _inner_band(cell: Vector2i, radius: int) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
