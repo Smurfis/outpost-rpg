@@ -17,15 +17,19 @@ func check(ok: bool, message: String) -> void:
 func _check_path(route: Array, floors: Dictionary, air: Dictionary,
 		supports: Dictionary, name: String) -> void:
 	check(not route.is_empty(), name + " exists")
+	var invalid_tiles: int = 0
+	var invalid_transitions: int = 0
 	for i in range(route.size()):
 		var at: Vector3i = route[i]
-		check(floors.has(at) and air.has(at) and supports.has(at + Vector3i.DOWN),
-			name + " has supported, carved tile %d" % i)
+		if not (floors.has(at) and air.has(at) and supports.has(at + Vector3i.DOWN)):
+			invalid_tiles += 1
 		if i > 0:
 			var prev: Vector3i = route[i - 1]
-			check(absi(at.y - prev.y) <= 1 and
-				absi(at.x - prev.x) + absi(at.z - prev.z) <= 1,
-				name + " has continuous one-voxel traversal at step %d" % i)
+			if absi(at.y - prev.y) > 1 or (
+					absi(at.x - prev.x) + absi(at.z - prev.z) > 1):
+				invalid_transitions += 1
+	check(invalid_tiles == 0, "%s has all %d supported air tiles" % [name, route.size()])
+	check(invalid_transitions == 0, "%s maintains one-voxel traversable steps" % name)
 
 func _run() -> void:
 	for world_seed in [64012, 64013, 64014]:
