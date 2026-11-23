@@ -28,10 +28,9 @@ func run() -> void:
 		initial.reward_claims = {"0:treasure:player":true}
 		initial.world_event = {"id":"goblin_reoccupation","site_id":id,"phase":"ready_for_renewal","seed":REGISTRY.cycle_seed(TEST_SEED,id,1,"goblin_reoccupation"),"objective":"Investigate the disturbance at the Goblin Mine.","completed":false}
 		mine.access.closed = true
-		check(island.advance_mine_renewal_for_test() == "outstanding_rewards", "Missing player receipts accepted")
 		for slots: Array in mine.slots.values():
 			for slot in slots:
-				if slot.kind in ["ore","crate","treasure"]:
+				if slot.kind == "treasure":
 					game.opened_world_objects[id + "_" + slot.id] = {}
 		game._save()
 		check(manager._save_clears(), "Seed fixture")

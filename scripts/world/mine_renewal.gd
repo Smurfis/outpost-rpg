@@ -21,13 +21,12 @@ static func advance(island, game) -> String:
 		return "busy: entrance is not sealed"
 	if Engine.is_in_physics_frame():
 		return "busy: retry after physics update"
-	if not site.get("renewal_committed", false) and not (site.cycle == 1 and not site.has("cycle_history")) and not island.mine._supplies_claimed(game.opened_world_objects):
-		return "outstanding_rewards"
 	if game.hero == null or game.controls.navigating or game.hero.interaction_moving or Vector2(game.hero.velocity.x, game.hero.velocity.z).length_squared() > 0.001 or absf(game.hero.velocity.y) > 0.11 or manager.active_instance != null or (game.coop != null and game.coop.mode != "solo"):
 		return "occupied"
 	if game.controls.modal_open():
 		return "busy: close the active interface"
-	if game.station_walk_target != "" or is_instance_valid(game.controls.target):
+	# A remembered click target is harmless after navigation has stopped.
+	if game.station_walk_target != "":
 		return "busy: finish the current interaction"
 	if site.get("renewal_committed", false) or (site.cycle == 1 and not site.has("cycle_history")):
 		return _reopen(island,game,manager,site)
@@ -78,11 +77,12 @@ static func advance(island, game) -> String:
 		if pos.size() != 3 or cells.has(Vector2i(floori(pos[0]), floori(pos[2]))):
 			return "protected"
 	for actor in [game.hero] + game.get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(actor) or actor.is_queued_for_deletion():
+			continue
 		if not current.clear_of_player(actor.global_position) or not next.clear_of_player(actor.global_position):
 			return "occupied"
-	for target in [game.focus_target,game.recent_attack_target]:
-		if is_instance_valid(target) and affected.has(island._cell_at(target.global_position)):
-			return "occupied"
+	# Focus pointers can outlive a defeated goblin. Live occupants and active
+	# routes are checked above; a remembered pointer cannot occupy terrain.
 	var natural = island.terrain.caves.natural
 	if natural != null:
 		for cell in natural.floors:
@@ -183,6 +183,8 @@ static func _reopen(island,game,manager,site: Dictionary) -> String:
 	if mine.layout_seed != site.layout_seed or not _walkable(island.terrain,mine.access):
 		return "invalid_layout"
 	for actor in [game.hero] + game.get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(actor) or actor.is_queued_for_deletion():
+			continue
 		if not mine.access.clear_of_player(actor.global_position):
 			return "occupied"
 	for block: Vector3i in game.building.blocks:

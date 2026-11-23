@@ -12,13 +12,15 @@ static func execute(game: Node, raw: String) -> String:
 	var cmd: String = words[0].to_lower()
 	match cmd:
 		".help":
-			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .mine report|ready|renew  .map islands true|false  .spawn overlord  .despawn overlord  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
+			return "GM: .help  .where  .home  .tp X Z  .island 1-3  .mine status|report|ready|renew  .map islands true|false  .spawn overlord  .despawn overlord  .heal  .give ITEM [COUNT]  .time day|night|dawn|dusk  .speed 1-3  .clear"
 		".mine":
-			if words.size() != 2 or words[1] not in ["report","ready","renew"]:
-				return "Mine command: .mine report | ready | renew"
+			if words.size() != 2 or words[1] not in ["status","report","ready","renew"]:
+				return "Mine command: .mine status | report | ready | renew"
 			var island = game.terrain_surface.archipelago
 			if island == null or island.mine == null:
 				return "Mine unavailable."
+			if words[1] == "status":
+				return island.mine_auto.status(island, game)
 			island.call_deferred("run_mine_command", words[1])
 			return "Checking mine."
 		".where", ".pos":

@@ -157,7 +157,7 @@ func _defeated(id: String) -> void:
 	if manager.world_sites.record_mine_defeat(site_id, id):
 		manager._save_clears()
 		if site.state == "cleared":
-			manager.get_parent().hud.toast("Mine cleared. Collect its treasure and supplies, then leave the area.")
+			manager.get_parent().hud.toast("Mine cleared. Claim the strongbox, then leave the area.")
 
 func _supplies_claimed(opened: Dictionary) -> bool:
 	# Claims must include unloaded chunks. A partially opened crate retains
@@ -184,8 +184,6 @@ func advance_for_test(next: String, reoccupation := false) -> bool:
 	if game.hero.interaction_moving or game.controls.navigating or access.seal_chunks.is_empty():
 		return false
 	var site: Dictionary = manager.world_sites.sites[site_id]
-	if next == "sealed" and not _supplies_claimed(game.opened_world_objects):
-		return false
 	if reoccupation and (next != "sealed" or site.has("world_event")):
 		return false
 	var previous: String = site.state
