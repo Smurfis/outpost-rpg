@@ -1,10 +1,15 @@
 extends RefCounted
 ## Pure, local city blueprint. No scene nodes, global floats or save mutations.
+const Region = preload("res://scripts/world/city_lab_region.gd")
+const PREFABS = "res://data/city_lab/prefabs.json"
 const LOT: int = 8
 const LOTS: int = 11
 const SIZE: int = LOT * LOTS
 const TYPES: Array[String] = ["house", "ruin", "garden", "tower", "market"]
 const DIRS: Array[Vector2i] = [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]
+var region := Region.new()
+var prefabs: Dictionary = {}
+var entrances: Dictionary = {}
 var blocks: Dictionary = {}
 var blocked: Dictionary = {}
 var districts: Dictionary = {}
@@ -15,12 +20,42 @@ var start := Vector2i(44, 2)
 var goal := Vector2i(44, 44)
 
 func height_at(p: Vector2i) -> int:
-	# One-block steps, not a flattened foundation. Central keep sits on a terrace.
-	if p.y < 32:
-		return floori(p.y / 8.0)
-	if p.y < 56:
-		return 4
-	return 4 + floori((p.y - 56) / 8.0)
+	return region.height_at(p)
+
+func _load_prefabs() -> bool:
+	prefabs.clear()
+	var root: Variant = JSON.parse_string(FileAccess.get_file_as_string(PREFABS))
+	if not root is Dictionary or root.get("schema_version",0) != 1: return false
+	if not root.get("prefabs") is Array: return false
+	for item in root["prefabs"]:
+		if not item is Dictionary: return false
+		var kind: String = str(item.get("kind",""))
+		if not TYPES.has(kind) or prefabs.has(kind): return false
+		if int(item.get("weight",0)) < 1 or int(item.get("weight",0)) > 100: return false
+		if int(item.get("height",0)) < 1 or int(item.get("height",0)) > 8: return false
+		if int(item.get("material",-1)) < 0 or int(item.get("material",-1)) > 6: return false
+		if not item.get("sockets") is Array or item["sockets"].is_empty(): return false
+		for side in item["sockets"]:
+			if not ["north","east","south","west"].has(side): return false
+		prefabs[kind] = item
+	return prefabs.size() == TYPES.size()
+
+func _socket_directions(p: Vector2i, kind: String) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	var names := ["east","west","south","north"]
+	for i in range(DIRS.size()):
+		if prefabs[kind]["sockets"].has(names[i]) and _road(p+DIRS[i]):
+			result.append(DIRS[i])
+	return result
+
+func _weighted(options: Array) -> String:
+	var total := 0
+	for kind in options: total += int(prefabs[kind]["weight"])
+	var roll := rng.randi_range(1,total)
+	for kind in options:
+		roll -= int(prefabs[kind]["weight"])
+		if roll <= 0: return kind
+	return options.back()
 
 func _inside(p: Vector2i) -> bool:
 	return p.x >= 0 and p.y >= 0 and p.x < SIZE and p.y < SIZE
@@ -29,9 +64,7 @@ func _keep(p: Vector2i) -> bool:
 	return p.x >= 4 and p.x <= 6 and p.y >= 4 and p.y <= 6
 
 func _road(p: Vector2i) -> bool:
-	if _keep(p):
-		return false
-	return p.x == 3 or p.x == 7 or p.y == 3 or p.y == 7 or p.x == 5 or p.y == 5
+	return region.road_lots.has(p)
 
 func _compatible(a: String, b: String) -> bool:
 	# Symmetric thematic adjacency constraints, applied by propagation.
@@ -52,11 +85,9 @@ func _solve(seed_value: int) -> bool:
 				elif _road(p): domains[p] = ["road"]
 				else:
 					var options: Array[String] = TYPES.duplicate()
-					var adjacent := false
-					for d in DIRS:
-						if _road(p+d) and p.x+d.x >= 0 and p.x+d.x < LOTS and p.y+d.y >= 0 and p.y+d.y < LOTS:
-							adjacent = true
-					if not adjacent: options.erase("market")
+					for kind in TYPES:
+						if bool(prefabs[kind].get("road_required",false)) and _socket_directions(p,kind).is_empty():
+							options.erase(kind)
 					if x > 1 and x < 9 and z > 1 and z < 9: options.erase("tower")
 					domains[p] = options
 				cells.append(p)
@@ -75,7 +106,7 @@ func _solve(seed_value: int) -> bool:
 			if best.is_empty(): break
 			var chosen: Vector2i = best[rng.randi_range(0,best.size()-1)]
 			var options: Array = domains[chosen]
-			domains[chosen] = [options[rng.randi_range(0,options.size()-1)]]
+			domains[chosen] = [_weighted(options)]
 			var queue: Array[Vector2i] = [chosen]
 			if not _propagate(domains, queue):
 				failed = true
@@ -140,8 +171,8 @@ func _building(p: Vector2i, kind: String) -> void:
 				var at := base+Vector2i(x,z)
 				blocks[Vector3i(at.x,height_at(at)+3,at.y)] = 6
 		return
-	var h: int = 3 if kind == "house" else (7 if kind == "tower" else 2)
-	var mat: int = 4 if kind == "house" else 2
+	var h: int = int(prefabs[kind]["height"])
+	var mat: int = int(prefabs[kind]["material"])
 	_line(a,Vector2i(b.x,a.y),Vector2i(base.x+3,a.y),h,mat)
 	_line(Vector2i(a.x,b.y),b,Vector2i(base.x+3,b.y),h,mat)
 	_line(a,Vector2i(a.x,b.y),Vector2i(a.x,base.y+3),h,mat)
@@ -180,12 +211,17 @@ func _open(p: Vector2i) -> void:
 		blocks.erase(Vector3i(p.x,y,p.y))
 	blocked.erase(p)
 
-func generate(seed_value: int) -> bool:
+func generate(seed_value: int, region_x: int = 0, region_z: int = 0) -> bool:
+	if not _load_prefabs(): return false
+	region.configure(seed_value,region_x,region_z)
+	entrances.clear()
 	blocks.clear()
 	blocked.clear()
 	roads.clear()
 	rooms.clear()
-	if not _solve(seed_value): return false
+	var digest := ("%d:%d:%d:districts:v1" % [seed_value,region_x,region_z]).sha256_buffer()
+	var local_seed: int = int(digest[0]) | (int(digest[1]) << 8) | (int(digest[2]) << 16) | (int(digest[3]) << 24)
+	if not _solve(local_seed): return false
 	for z in range(SIZE):
 		for x in range(SIZE):
 			var p := Vector2i(x,z)
@@ -196,7 +232,17 @@ func generate(seed_value: int) -> bool:
 				blocks[Vector3i(x,y,z)] = (1 if is_road else 0) if y == height_at(p) else 3
 	for p in districts:
 		var kind: String = districts[p]
-		if kind != "road" and kind != "keep": _building(p,kind)
+		if kind != "road" and kind != "keep":
+			_building(p,kind)
+			var sockets := _socket_directions(p,kind)
+			if not sockets.is_empty():
+				var d: Vector2i = sockets[0]
+				var base: Vector2i = p*LOT
+				var door := base+Vector2i(3,3)
+				if d.x != 0: door.x = base.x+(6 if d.x>0 else 1)
+				else: door.y = base.y+(6 if d.y>0 else 1)
+				_open(door)
+				entrances[p] = door
 	# Perimeter with two broad entrances.
 	for i in range(SIZE):
 		if absi(i-44)>2:
@@ -247,4 +293,6 @@ func validate() -> bool:
 		if walkable(p) and not seen.has(p): return false
 	for room in rooms:
 		if not seen.has(room.position+room.size/2): return false
+	for p in entrances.values():
+		if not seen.has(p): return false
 	return true
