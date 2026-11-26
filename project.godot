@@ -2,10 +2,10 @@
 config_version=5
 
 [application]
-config/name="Outpost"
-run/main_scene="res://scenes/ui/company_splash.tscn"
+config/name="Outpost City Lab"
+run/main_scene="res://scenes/terrain_city_lab.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
-config/description="Original isometric fantasy crafting RPG prototype"
+config/description="Isolated terrain-aware city generation experiment"
 ; Show the Five Star Interactive scene first; suppress Godot’s built-in boot logo.
 boot_splash/show_image=false
 boot_splash/bg_color=Color(0.039, 0.049, 0.096, 1)
