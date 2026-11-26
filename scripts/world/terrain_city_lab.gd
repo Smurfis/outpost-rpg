@@ -132,6 +132,7 @@ func _build() -> void:
 		instance.material_override = material
 		city.add_child(instance)
 		face_count += faces
+	grid.clear()
 	grid.region = Rect2i(0,0,Plan.SIZE,Plan.SIZE)
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	grid.update()
