@@ -87,6 +87,13 @@ func _test_creator() -> void:
 	check(stamp.size() == 12 and stamp.has(Vector3i(32,21,31)),"Quarter-turn stamp bounds")
 	check(edits.apply(plan,stamp,plan.start),"Stamp rejected")
 	var encoded: Variant = JSON.parse_string(JSON.stringify(edits.encode(64012,1000000000000,-1000000000000)))
+	var test_file := "user://city_lab_test_%d.json" % Time.get_ticks_usec()
+	check(edits.write_json(test_file,encoded),"Overlay disk write failed")
+	check(edits.write_json(test_file,encoded),"Overlay replacement failed")
+	var disk_value: Variant = edits.read_json(test_file)
+	check(disk_value == encoded,"Overlay disk round trip")
+	if FileAccess.file_exists(test_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(test_file))
 	var overlay: Variant = edits.decode(encoded,64012,1000000000000,-1000000000000)
 	check(overlay is Dictionary and overlay.size() == 24,"Overlay round trip")
 	check(edits.decode(encoded,64012,1000000000001,-1000000000000) == null,"Wrong-region overlay accepted")
