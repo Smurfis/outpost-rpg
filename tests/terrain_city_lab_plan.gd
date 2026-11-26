@@ -86,7 +86,7 @@ func _test_creator() -> void:
 	var stamp := prefab.stamp(captured,Vector3i(30,20,30),1)
 	check(stamp.size() == 12 and stamp.has(Vector3i(32,21,31)),"Quarter-turn stamp bounds")
 	check(edits.apply(plan,stamp,plan.start),"Stamp rejected")
-	var encoded := JSON.parse_string(JSON.stringify(edits.encode(64012,1000000000000,-1000000000000)))
+	var encoded: Variant = JSON.parse_string(JSON.stringify(edits.encode(64012,1000000000000,-1000000000000)))
 	var overlay: Variant = edits.decode(encoded,64012,1000000000000,-1000000000000)
 	check(overlay is Dictionary and overlay.size() == 24,"Overlay round trip")
 	check(edits.decode(encoded,64012,1000000000001,-1000000000000) == null,"Wrong-region overlay accepted")
