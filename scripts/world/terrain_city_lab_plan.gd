@@ -273,7 +273,9 @@ func generate(seed_value: int, region_x: int = 0, region_z: int = 0) -> bool:
 	return validate()
 
 func walkable(p: Vector2i) -> bool:
-	return _inside(p) and not blocked.has(p)
+	if not _inside(p): return false
+	var h := height_at(p)
+	return blocks.has(Vector3i(p.x,h,p.y)) and not blocks.has(Vector3i(p.x,h+1,p.y)) and not blocks.has(Vector3i(p.x,h+2,p.y))
 
 func validate() -> bool:
 	if not walkable(start) or not walkable(goal): return false
