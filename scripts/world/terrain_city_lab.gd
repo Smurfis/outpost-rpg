@@ -33,6 +33,7 @@ var material := StandardMaterial3D.new()
 var city_ready := false
 
 func _ready() -> void:
+	get_tree().auto_accept_quit = false
 	material.vertex_color_use_as_albedo = true
 	material.cull_mode = BaseMaterial3D.CULL_BACK
 	material.roughness = 1.0
@@ -97,13 +98,15 @@ func _ui() -> void:
 	column.add_child(help)
 	var bar := HBoxContainer.new()
 	column.add_child(bar)
-	for entry in ["New seed","Rotate left","Rotate right","Zoom in","Zoom out","Go to keep","Far region"]:
+	for entry in ["New seed","Previous seed","Reload","Rotate left","Rotate right","Zoom in","Zoom out","Go to keep","Far region"]:
 		var button := Button.new()
 		button.text = entry
 		button.custom_minimum_size = Vector2(85,42)
 		bar.add_child(button)
 		match entry:
 			"New seed": button.pressed.connect(_next_seed)
+			"Previous seed": button.pressed.connect(_previous_seed)
+			"Reload": button.pressed.connect(_reload)
 			"Rotate left": button.pressed.connect(func(): angle -= PI/4)
 			"Rotate right": button.pressed.connect(func(): angle += PI/4)
 			"Zoom in": button.pressed.connect(func(): zoom = maxf(18.0,zoom-6.0))
@@ -263,6 +266,15 @@ func _next_seed() -> void:
 	seed_value += 1
 	_build()
 
+func _previous_seed() -> void:
+	if unsaved and not _save(): return
+	seed_value -= 1
+	_build()
+
+func _reload() -> void:
+	if unsaved and not _save(): return
+	_build()
+
 func _build() -> void:
 	city_ready = false
 	unsaved = false
@@ -392,3 +404,9 @@ func _process(delta: float) -> void:
 			player.position = target
 			path.pop_front()
 	_update_camera()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if not unsaved or _save(): get_tree().quit()
+	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		if unsaved: _save()
