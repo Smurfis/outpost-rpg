@@ -1,16 +1,8 @@
 extends Node3D
 ## Standalone in-engine lab; deliberately never reads/writes RPG saves.
 const Plan = preload("res://scripts/world/terrain_city_lab_plan.gd")
-const NORMALS: Array[Vector3i] = [Vector3i.RIGHT,Vector3i.LEFT,Vector3i.UP,Vector3i.DOWN,Vector3i.BACK,Vector3i.FORWARD]
-const PALETTE: Array[Color] = [Color("#71855c"),Color("#a99b82"),Color("#777d83"),Color("#4d5158"),Color("#997452"),Color("#4c754c"),Color("#8e3c3e")]
-const CORNERS = [
-	[Vector3(1,0,0),Vector3(1,1,0),Vector3(1,1,1),Vector3(1,0,1)],
-	[Vector3(0,0,1),Vector3(0,1,1),Vector3(0,1,0),Vector3(0,0,0)],
-	[Vector3(0,1,0),Vector3(0,1,1),Vector3(1,1,1),Vector3(1,1,0)],
-	[Vector3(0,0,1),Vector3(0,0,0),Vector3(1,0,0),Vector3(1,0,1)],
-	[Vector3(1,0,1),Vector3(1,1,1),Vector3(0,1,1),Vector3(0,0,1)],
-	[Vector3(0,0,0),Vector3(0,1,0),Vector3(1,1,0),Vector3(1,0,0)]
-]
+const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
+var mesher := Mesher.new()
 var plan := Plan.new()
 var city: Node3D
 var player: Node3D
@@ -19,13 +11,15 @@ var status: Label
 var grid := AStarGrid2D.new()
 var path: Array[Vector2i] = []
 var seed_value := 64012
+var region_x: int = 0
+var region_z: int = 0
 var angle := 0.75
 var zoom := 44.0
 var material := StandardMaterial3D.new()
 
 func _ready() -> void:
 	material.vertex_color_use_as_albedo = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_BACK
 	material.roughness = 1.0
 	var environment := WorldEnvironment.new()
 	var env := Environment.new()
@@ -80,7 +74,7 @@ func _ui() -> void:
 	column.add_child(help)
 	var bar := HBoxContainer.new()
 	column.add_child(bar)
-	for entry in ["New seed","Rotate left","Rotate right","Zoom in","Zoom out","Go to keep"]:
+	for entry in ["New seed","Rotate left","Rotate right","Zoom in","Zoom out","Go to keep","Far region"]:
 		var button := Button.new()
 		button.text = entry
 		button.custom_minimum_size = Vector2(85,42)
@@ -92,6 +86,12 @@ func _ui() -> void:
 			"Zoom in": button.pressed.connect(func(): zoom = maxf(18.0,zoom-6.0))
 			"Zoom out": button.pressed.connect(func(): zoom = minf(100.0,zoom+6.0))
 			"Go to keep": button.pressed.connect(func(): _route(plan.goal))
+			"Far region": button.pressed.connect(_far_region)
+
+func _far_region() -> void:
+	region_x = 1000000000000 if region_x == 0 else 0
+	region_z = -1000000000000 if region_x != 0 else 0
+	_build()
 
 func _next_seed() -> void:
 	seed_value += 1
@@ -104,34 +104,22 @@ func _build() -> void:
 		city.queue_free()
 	city = Node3D.new()
 	add_child(city)
-	if not plan.generate(seed_value):
+	if not plan.generate(seed_value,region_x,region_z):
 		status.text = "City validation failed for seed %d — choose New seed" % seed_value
 		return
-	var buckets: Dictionary = {}
-	for pos: Vector3i in plan.blocks:
-		var key := Vector2i(floori(pos.x/16.0),floori(pos.z/16.0))
-		if not buckets.has(key): buckets[key] = []
-		buckets[key].append(pos)
+	var buckets := mesher.bucket(plan.blocks)
 	var face_count := 0
-	for key in buckets:
-		var surface := SurfaceTool.new()
-		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-		var faces := 0
-		for pos: Vector3i in buckets[key]:
-			var col: Color = PALETTE[int(plan.blocks[pos])]
-			for i in range(6):
-				if plan.blocks.has(pos+NORMALS[i]): continue
-				faces += 1
-				for corner in [0,1,2,0,2,3]:
-					surface.set_normal(Vector3(NORMALS[i]))
-					surface.set_color(col)
-					surface.add_vertex(Vector3(pos)+CORNERS[i][corner])
-		if faces == 0: continue
+	var quad_count := 0
+	for key: Vector3i in buckets:
+		var result := mesher.rectangles(plan.blocks,buckets[key],key)
+		face_count += int(result["exposed"])
+		quad_count += result["quads"].size()
+		if result["quads"].is_empty(): continue
 		var instance := MeshInstance3D.new()
-		instance.mesh = surface.commit()
+		instance.mesh = mesher.build_mesh(result)
 		instance.material_override = material
 		city.add_child(instance)
-		face_count += faces
+		instance.position = Vector3(key*Mesher.SECTION)
 	grid.clear()
 	grid.region = Rect2i(0,0,Plan.SIZE,Plan.SIZE)
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
@@ -140,7 +128,7 @@ func _build() -> void:
 		grid.set_point_solid(p,true)
 	player.position = _standing(plan.start)
 	_update_camera()
-	status.text = "OUTPOST CITY LAB | Seed %d | %d lots | %d BSP rooms | %d chunk meshes | %d faces" % [seed_value,plan.districts.size(),plan.rooms.size(),city.get_child_count(),face_count]
+	status.text = "CITY LAB | %d | Region %d,%d | %d lots | %d BSP rooms | %d meshes | %d/%d quads" % [seed_value,region_x,region_z,plan.districts.size(),plan.rooms.size(),city.get_child_count(),quad_count,face_count]
 
 func _standing(p: Vector2i) -> Vector3:
 	return Vector3(p.x+0.5,plan.height_at(p)+1.0,p.y+0.5)
