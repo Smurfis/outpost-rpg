@@ -277,7 +277,7 @@ func walkable(p: Vector2i) -> bool:
 	var h := height_at(p)
 	return blocks.has(Vector3i(p.x,h,p.y)) and not blocks.has(Vector3i(p.x,h+1,p.y)) and not blocks.has(Vector3i(p.x,h+2,p.y))
 
-func validate() -> bool:
+func validate(required: Vector2i = Vector2i(-1,-1)) -> bool:
 	if not walkable(start) or not walkable(goal): return false
 	var seen: Dictionary = {start:true}
 	var queue: Array[Vector2i] = [start]
@@ -291,6 +291,7 @@ func validate() -> bool:
 				seen[q] = true
 				queue.append(q)
 	if not seen.has(goal): return false
+	if required != Vector2i(-1,-1) and not seen.has(required): return false
 	for p in roads:
 		if walkable(p) and not seen.has(p): return false
 	for room in rooms:
