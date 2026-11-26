@@ -1,6 +1,8 @@
 extends SceneTree
 const Plan = preload("res://scripts/world/terrain_city_lab_plan.gd")
 const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
+const Prefab = preload("res://scripts/world/city_lab_prefab.gd")
+const Edits = preload("res://scripts/world/city_lab_edits.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -56,5 +58,52 @@ func _initialize() -> void:
 		exposed += int(result["exposed"])
 	check(exposed == 10,"Cross-section internal face was emitted")
 	check(mesher.section_of(Vector3i(-1,-1,-1)) == Vector3i(-1,-1,-1),"Negative section addressing")
+	_test_creator()
 	print("CITY LAB RESULT: %d failures" % failures)
 	quit(0 if failures == 0 else 1)
+
+func _test_creator() -> void:
+	var prefab := Prefab.new()
+	var edits := Edits.new()
+	var plan := Plan.new()
+	if not plan.generate(64012):
+		check(false,"Cannot test editor without a valid city")
+		return
+	edits.reset(plan.blocks)
+	var original := plan.blocks.duplicate()
+	var a := Vector3i(15,20,15)
+	var b := Vector3i(16,21,17)
+	var patch: Dictionary = {}
+	for p in prefab.selection(b,a): patch[p] = 2
+	check(patch.size() == 12,"Inclusive reversed selection")
+	check(edits.apply(plan,patch,plan.start),"Valid fill rejected")
+	check(edits.changes.size() == 12,"Overlay did not record fill")
+	var dirty := edits.dirty_sections(patch)
+	check(dirty.has(Vector3i(0,1,0)) and dirty.has(Vector3i(1,1,1)),"Boundary dirty sections missing")
+	var captured := prefab.capture(plan.blocks,a,b)
+	var decoded := prefab.decode(JSON.parse_string(JSON.stringify(captured)))
+	check(not decoded.is_empty() and decoded.get("size") == Vector3i(2,2,3),"Prefab round trip dimensions")
+	var stamp := prefab.stamp(captured,Vector3i(30,20,30),1)
+	check(stamp.size() == 12 and stamp.has(Vector3i(32,21,31)),"Quarter-turn stamp bounds")
+	check(edits.apply(plan,stamp,plan.start),"Stamp rejected")
+	var encoded := JSON.parse_string(JSON.stringify(edits.encode(64012,1000000000000,-1000000000000)))
+	var overlay: Variant = edits.decode(encoded,64012,1000000000000,-1000000000000)
+	check(overlay is Dictionary and overlay.size() == 24,"Overlay round trip")
+	check(edits.decode(encoded,64012,1000000000001,-1000000000000) == null,"Wrong-region overlay accepted")
+	var fresh := Plan.new()
+	if fresh.generate(64012) and overlay is Dictionary:
+		var replay := Edits.new()
+		replay.reset(fresh.blocks)
+		check(replay.apply(fresh,overlay,fresh.start,false) and fresh.blocks == plan.blocks,"Overlay replay changed world")
+	else:
+		check(false,"Cannot test replay")
+	var before := plan.blocks.duplicate()
+	var forbidden := Vector3i(plan.start.x,plan.height_at(plan.start)+1,plan.start.y)
+	check(not edits.apply(plan,{forbidden:2},plan.start),"Blocking the spawn was accepted")
+	check(before == plan.blocks,"Rejected edit mutated occupancy")
+	check(not edits.undo(plan,plan.start).is_empty(),"Stamp undo failed")
+	check(not edits.undo(plan,plan.start).is_empty(),"Fill undo failed")
+	check(plan.blocks == original and edits.changes.is_empty(),"Undo did not restore generated base")
+	check(prefab.decode({"schema_version":1,"size":[2,2,2],"voxels":[[0,0,0,2],[0,0,0,3]]}).is_empty(),"Duplicate prefab positions accepted")
+	check(prefab.selection(Vector3i.ZERO,Vector3i(24,0,0)).is_empty(),"Oversized selection accepted")
+	check(prefab.stamp(captured,Vector3i(87,20,87),1).is_empty(),"Out-of-bounds stamp accepted")
