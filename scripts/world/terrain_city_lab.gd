@@ -16,6 +16,7 @@ var region_z: int = 0
 var angle := 0.75
 var zoom := 44.0
 var material := StandardMaterial3D.new()
+var city_ready := false
 
 func _ready() -> void:
 	material.vertex_color_use_as_albedo = true
@@ -98,6 +99,7 @@ func _next_seed() -> void:
 	_build()
 
 func _build() -> void:
+	city_ready = false
 	path.clear()
 	if city != null:
 		remove_child(city)
@@ -124,11 +126,16 @@ func _build() -> void:
 	grid.region = Rect2i(0,0,Plan.SIZE,Plan.SIZE)
 	grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	grid.update()
-	for p in plan.blocked:
-		grid.set_point_solid(p,true)
+	for z in range(Plan.SIZE):
+		for x in range(Plan.SIZE):
+			var cell := Vector2i(x,z)
+			if not plan.walkable(cell): grid.set_point_solid(cell,true)
 	player.position = _standing(plan.start)
 	_update_camera()
 	status.text = "CITY LAB | %d | Region %d,%d | %d lots | %d BSP rooms | %d meshes | %d/%d quads" % [seed_value,region_x,region_z,plan.districts.size(),plan.rooms.size(),city.get_child_count(),quad_count,face_count]
+
+	city_ready = true
+	print("CITY LAB READY: ",status.text)
 
 func _standing(p: Vector2i) -> Vector3:
 	return Vector3(p.x+0.5,plan.height_at(p)+1.0,p.y+0.5)
@@ -137,7 +144,7 @@ func _player_cell() -> Vector2i:
 	return Vector2i(floori(player.position.x),floori(player.position.z))
 
 func _route(to: Vector2i) -> void:
-	if not plan.walkable(to) or not plan.walkable(_player_cell()): return
+	if not city_ready or not plan.walkable(to) or not plan.walkable(_player_cell()): return
 	path.clear()
 	for cell in grid.get_id_path(_player_cell(),to):
 		path.append(cell)
@@ -146,14 +153,16 @@ func _route(to: Vector2i) -> void:
 func _pick(screen: Vector2) -> void:
 	var origin := camera.project_ray_origin(screen)
 	var direction := camera.project_ray_normal(screen)
-	# Pick the first terrain column under the ray; buildings are ignored intentionally
-	# for roofless diorama navigation. The grid rejects blocked cells.
-	for i in range(700):
-		var point := origin+direction*(i*0.25)
-		var cell := Vector2i(floori(point.x),floori(point.z))
-		if plan.walkable(cell) and point.y <= plan.height_at(cell)+1.0:
+	# Stop at first occupied voxel rather than selecting through visible walls.
+	if not city_ready: return
+	for i in range(1200):
+		var point := origin+direction*(i*0.125)
+		var voxel := Vector3i(floori(point.x),floori(point.y),floori(point.z))
+		if not plan.blocks.has(voxel): continue
+		var cell := Vector2i(voxel.x,voxel.z)
+		if plan.walkable(cell) and voxel.y == plan.height_at(cell):
 			_route(cell)
-			return
+		return
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
@@ -182,7 +191,7 @@ func _update_camera() -> void:
 
 func _process(delta: float) -> void:
 	if player == null or camera == null: return
-	if not path.is_empty():
+	if city_ready and not path.is_empty():
 		var target := _standing(path[0])
 		player.position = player.position.move_toward(target,8.0*delta)
 		if player.position.distance_to(target) < 0.03:
