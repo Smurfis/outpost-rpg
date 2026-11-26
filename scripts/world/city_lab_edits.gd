@@ -36,7 +36,7 @@ func valid_patch(patch: Dictionary) -> bool:
 		if not material is int or material < -1 or material > 6: return false
 	return true
 
-func apply(plan: RefCounted, patch: Dictionary, player_cell: Vector2i, remember: bool = true) -> bool:
+func apply(plan, patch: Dictionary, player_cell: Vector2i, remember: bool = true) -> bool:
 	if not valid_patch(patch): return false
 	var inverse: Dictionary = {}
 	var count := changes.size()
@@ -51,7 +51,7 @@ func apply(plan: RefCounted, patch: Dictionary, player_cell: Vector2i, remember:
 	for p: Vector3i in inverse: _put(plan.blocks,p,int(patch[p]))
 	# Lab navigation is single-surface. Refuse edits that remove that ground,
 	# trap the player or disconnect the reserved city targets.
-	if not plan.walkable(player_cell) or not plan.validate():
+	if not plan.walkable(player_cell) or not plan.validate(player_cell):
 		for p: Vector3i in inverse: _put(plan.blocks,p,int(inverse[p]))
 		return false
 	for p: Vector3i in inverse: _record(p,int(patch[p]))
@@ -60,7 +60,7 @@ func apply(plan: RefCounted, patch: Dictionary, player_cell: Vector2i, remember:
 		if undo_stack.size() > 32: undo_stack.pop_front()
 	return true
 
-func undo(plan: RefCounted, player_cell: Vector2i) -> Dictionary:
+func undo(plan, player_cell: Vector2i) -> Dictionary:
 	if undo_stack.is_empty(): return {}
 	var inverse: Dictionary = undo_stack.back()
 	if not apply(plan,inverse,player_cell,false): return {}
