@@ -1,0 +1,25 @@
+name: Terrain City Lab validation
+on:
+  push:
+    branches:
+      - feature/terrain-aware-city-lab
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot matching repository version
+        run: |
+          curl --fail --location --retry 3 --silent --show-error -o godot.zip https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          chmod +x Godot_v4.7.2-stable_linux.x86_64
+      - name: Import project and test
+        run: |
+          set -o pipefail
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit 2>&1 | tee import.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . --script res://tests/terrain_city_lab_plan.gd 2>&1 | tee test.log
+          grep -q 'CITY LAB RESULT: 0 failures' test.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . --quit-after 10 2>&1 | tee launch.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' test.log launch.log; then exit 1; fi
