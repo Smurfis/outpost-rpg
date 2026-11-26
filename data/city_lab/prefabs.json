@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "prefabs": [
+    {
+      "id": "outpost:house",
+      "kind": "house",
+      "weight": 5,
+      "height": 3,
+      "material": 4,
+      "sockets": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "road_required": false
+    },
+    {
+      "id": "outpost:ruin",
+      "kind": "ruin",
+      "weight": 3,
+      "height": 2,
+      "material": 2,
+      "sockets": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "road_required": false
+    },
+    {
+      "id": "outpost:garden",
+      "kind": "garden",
+      "weight": 4,
+      "height": 1,
+      "material": 4,
+      "sockets": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "road_required": false
+    },
+    {
+      "id": "outpost:tower",
+      "kind": "tower",
+      "weight": 2,
+      "height": 7,
+      "material": 2,
+      "sockets": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "road_required": false
+    },
+    {
+      "id": "outpost:market",
+      "kind": "market",
+      "weight": 3,
+      "height": 2,
+      "material": 4,
+      "sockets": [
+        "north",
+        "east",
+        "south",
+        "west"
+      ],
+      "road_required": true
+    }
+  ]
+}
