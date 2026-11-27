@@ -49,3 +49,11 @@ CI now includes extreme-address sector repeatability, reciprocal gate alignment,
 5. Use WFC for local architecture and optional compatible modules, not as the sole guarantee that mandatory paths connect. Reserve critical graph routes, then solve and validate the geometry.
 
 No Alpha or stable changes, APK or confirmed runtime verification. The new scene and creator import/export are committed source code.
+
+## Multi-prefab packs and city site linkage
+
+The lab supports a versioned `outpost:dungeon_pack` envelope with a namespaced pack ID, 0–100 loop percentage and up to 64 named captured modules (4 MB JSON limit). Modules are validated before registration, sorted by ID, and duplicate IDs are refused. The current sector generator uses only the standard stone_corridor type and fixed module aperture. Creator controls add captured modules to a local pack without replacing existing IDs. Dungeon Lab imports that pack or the original single module. Zero loop density keeps the spanning tree; 100 percent adds all possible cardinal grid edges. Neither value guarantees an arbitrary specific authored room will be selected.
+
+The keep in City Lab can now open its address-derived dungeon. Enter keep dungeon routes to the keep first; activate again at the destination. The scene tree retains the original city seed and exact integer region identity and returning restores the city at its keep. Dungeon seed is a derived 32-bit RNG seed, not the full persistent site ID. This is a lab scene transition, not a physical underground entrance. Dungeon progression is not saved. The full site identity is retained in memory only during the preview. Pack modifications change future layouts; persistent production sites will need to pin pack versions/fingerprints.
+
+Added pack/loop/site tests are not yet runtime verified. The desktop-only WorldEdit console and flight controls are design-only, see [CREATOR_STUDIO_PC_PLAN.md](CREATOR_STUDIO_PC_PLAN.md).
