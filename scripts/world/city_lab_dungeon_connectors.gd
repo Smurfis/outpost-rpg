@@ -14,6 +14,7 @@ const SHAPES := [
 var library: Dictionary = {}
 var modules: Dictionary = {}
 var links: Dictionary = {}
+var external: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var codec := Prefab.new()
 
@@ -104,15 +105,11 @@ func _builtin(id: String, dirs: Array, weight: int, wide: bool = false) -> Dicti
 	for z in range(SIDE):
 		for x in range(SIDE):
 			voxels.append([x,0,z,3])
-			# Rock walls only next to a passage: avoids solid exterior bulk.
 			var p := Vector2i(x,z)
 			if open.has(p): continue
-			var adjacent := false
-			for d in DIRS:
-				if open.has(p+d): adjacent = true
-			# Solid edge walls prevent undeclared exits, including corners.
-			if adjacent or x == 0 or z == 0 or x == SIDE-1 or z == SIDE-1:
-				for y in range(1,HEIGHT): voxels.append([x,y,z,2])
+			# Fill non-passage cells so no inaccessible decorative void can
+			# accidentally become a second navigable space.
+			for y in range(1,HEIGHT): voxels.append([x,y,z,2])
 	var sockets: Array = []
 	for d in dirs: sockets.append({"direction":d,"type":"stone_corridor"})
 	return {"schema_version":1,"id":id,"weight":weight,"prefab":{"schema_version":1,"size":[SIDE,HEIGHT,SIDE],"voxels":voxels},"sockets":sockets}
@@ -140,6 +137,7 @@ func _connect(a: Vector2i, d: int, b: Vector2i) -> void:
 func generate(seed_value: int, count: int) -> bool:
 	modules.clear()
 	links.clear()
+	external.clear()
 	if count<1 or count>MAX_MODULES: return false
 	if library.is_empty() and not load_defaults(): return false
 	if not library.has("cross"): return false
@@ -211,7 +209,7 @@ func materialize(p: Vector2i) -> Dictionary:
 		result[_rotate(v,data["turns"])] = library[data["id"]]["cells"][v]
 	# Close every unmatched connector with actual wall voxels.
 	for d in data["sockets"]:
-		if links[p].has(d): continue
+		if links[p].has(d) or external.get(p,{}).has(d): continue
 		var edge := _edge(d)
 		var across: Vector2i = DIRS[(d+1)%4]
 		for offset in range(-1,2):
