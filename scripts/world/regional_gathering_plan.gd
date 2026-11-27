@@ -32,7 +32,7 @@ func _clear_walk(plan,p: Vector2i) -> bool:
 	return true
 
 func _approach(plan,p: Vector2i,kind: String) -> Array[Vector2i]:
-	var distance := 2 if kind=="wood" else 1
+	var distance := 2 if kind in ["wood","stone","coal","iron","clay"] else 1
 	for d in DIRS:
 		var stand := p+d*distance
 		if not _clear_walk(plan,stand): continue
