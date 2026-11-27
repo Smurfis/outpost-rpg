@@ -138,6 +138,9 @@ func _build_ui() -> void:
 	if _dev_travel_allowed() and service.biome.archipelago!=null and service.biome.archipelago.terrain.goblin_city!=null:
 		_button(left,"Goblin City (DEV)",_travel_goblin_city)
 		_button(left,"Regenerate city (DEV)",_regenerate_goblin_city)
+		if service.biome.archipelago.terrain.skeletal_city!=null:
+			_button(left,"Skeletal City (DEV)",_travel_skeletal_city)
+			_button(left,"Regenerate skeletal (DEV)",_regenerate_skeletal_city)
 	search_box = LineEdit.new()
 	search_box.placeholder_text = "Search discovered places"
 	search_box.custom_minimum_size = Vector2(235, 44)
@@ -504,6 +507,9 @@ func _dev_travel_to(point: Vector3) -> void:
 	if chosen==3 and remote.terrain.goblin_city!=null:
 		var hub: Vector2i = remote.terrain.goblin_city.hub
 		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	elif chosen==4 and remote.terrain.skeletal_city!=null:
+		var hub: Vector2i = remote.terrain.skeletal_city.hub
+		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
 	elif plan!=null:
 		var hub: Vector2i = plan.hub
 		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
@@ -564,4 +570,21 @@ func _regenerate_goblin_city() -> void:
 	service.dirty=true
 	service.changed.emit()
 	footer.text="Goblin City layout %d ready; tap Goblin City to visit." % remote.terrain.goblin_city.cycle
+	dirty=true
+
+func _travel_skeletal_city() -> void:
+	if not _dev_travel_allowed(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.skeletal_city==null: return
+	var hub: Vector2i = remote.terrain.skeletal_city.hub
+	await _dev_travel_to(Vector3(hub.x,0,hub.y))
+
+func _regenerate_skeletal_city() -> void:
+	if not _dev_travel_allowed() or dev_travel_busy or not service.in_overworld(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.skeletal_city==null: return
+	if not remote.regenerate_skeletal_city_for_preview(game.hero):
+		footer.text="Leave Skeletal City before regenerating."
+		return
+	footer.text="Skeletal City layout %d ready." % remote.terrain.skeletal_city.cycle
 	dirty=true
