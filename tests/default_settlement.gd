@@ -3,6 +3,8 @@ const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const BUILDING = preload("res://scripts/world/default_settlement_building.gd")
 const SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
 const ADVENTURE = preload("res://scripts/world/regional_adventure_policy.gd")
+const MATURITY = preload("res://scripts/world/ore_maturity.gd")
+const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -78,6 +80,7 @@ func _run() -> void:
 			building.queue_free()
 	_test_regional_plans()
 	_test_adventure_policy()
+	_test_maturity()
 	print("DEFAULT SETTLEMENT RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
 
@@ -96,8 +99,8 @@ func _test_regional_plans() -> void:
 		var west_again = reverse.settlement_plan(1)
 		check(south_again!=null and west_again!=null,"Reverse generation lost site")
 		if south_again==null or west_again==null: continue
-		check(west.buildings==west_again.buildings and west.roads==west_again.roads and west.landmarks==west_again.landmarks and west.fields==west_again.fields and west.scenery==west_again.scenery and west.quest_anchors==west_again.quest_anchors,"Western site changes with visit order")
-		check(south.buildings==south_again.buildings and south.roads==south_again.roads and south.landmarks==south_again.landmarks and south.fields==south_again.fields and south.scenery==south_again.scenery and south.quest_anchors==south_again.quest_anchors,"Southern site changes with visit order")
+		check(west.buildings==west_again.buildings and west.roads==west_again.roads and west.landmarks==west_again.landmarks and west.fields==west_again.fields and west.scenery==west_again.scenery and west.quest_anchors==west_again.quest_anchors and west.gathering.nodes==west_again.gathering.nodes,"Western site changes with visit order")
+		check(south.buildings==south_again.buildings and south.roads==south_again.roads and south.landmarks==south_again.landmarks and south.fields==south_again.fields and south.scenery==south_again.scenery and south.quest_anchors==south_again.quest_anchors and south.gathering.nodes==south_again.gathering.nodes,"Southern site changes with visit order")
 		check(west.profile=="frontier_waystation" and south.profile=="market_town","Regional identities lost")
 		check(west.buildings.size()==3 and south.buildings.size()==6,"Default regional kit incomplete")
 		var ids: Dictionary = {}
@@ -119,6 +122,7 @@ func _test_regional_plans() -> void:
 				check(source.top_tile(cell.x,cell.y)==(6 if plan.plaza.has(cell) else 5),"Regional terrain map differs from road plan")
 			_test_countryside(source,plan)
 			_test_quest_anchors(source,plan)
+			_test_gathering(source,plan)
 			print("REGION SEED %d | %s | %d buildings | %d road cells | %d landmarks" % [seed_value,plan.profile,plan.buildings.size(),plan.roads.size(),plan.landmarks.size()])
 
 func _test_countryside(source,plan) -> void:
@@ -190,3 +194,49 @@ func _test_adventure_policy() -> void:
 	check(ADVENTURE.reward_preview(100,ADVENTURE.EXPEDITION)==250,"Expedition multiplier incorrect")
 	check(ADVENTURE.reward_preview(1,ADVENTURE.EXPEDITION)==3,"Reward rounding mismatch")
 	check(ADVENTURE.reward_preview(100,ADVENTURE.UNAVAILABLE)==-1,"Unavailable offer rewarded")
+
+func _test_gathering(source,plan) -> void:
+	var ids: Dictionary = {}
+	var kinds: Dictionary = {}
+	for record in plan.gathering.nodes:
+		var p: Vector2i = record["cell"]
+		check(not ids.has(record["id"]),"Duplicate regional node")
+		ids[record["id"]]=true
+		kinds[record["kind"]]=true
+		check(record["tier"]>=1 and record["tier"]<=3,"Invalid gathering tier")
+		if record["habitat"]=="cavern":
+			check(source.caves.floor_at(p.x,p.y)==floori(record["position"].y),"Cave node not on cave floor")
+			continue
+		check(not plan.roads.has(p) and not plan.reserved.has(p) and not plan.field_tiles.has(p) and not source.caves.has_cave(p.x,p.y),"Gathering node intersects reserved land")
+		var route: Array = record["approach"]
+		check(not route.is_empty(),"Gathering node lacks approach")
+		if route.is_empty(): continue
+		check(plan.roads.has(route.back()),"Gathering approach not linked to road")
+		for i in range(1,route.size()):
+			var a: Vector2i = route[i-1]
+			var b: Vector2i = route[i]
+			check(a.distance_squared_to(b)==1 and absi(source.height_at(a.x,a.y)-source.height_at(b.x,b.y))<=1,"Unwalkable gathering approach")
+	check(kinds.has("wood"),"No woodland tree node")
+	check(kinds.has("stone") or kinds.has("iron") or kinds.has("coal"),"No mineral node")
+	print("GATHERING | %s | %d nodes" % [plan.profile,ids.size()])
+
+func _test_maturity() -> void:
+	check(MATURITY.stars(0)==0 and MATURITY.stars(29.9)==0,"Ore recovers too soon")
+	check(MATURITY.stars(30)==1 and MATURITY.stars(120)==2,"Early maturity stage incorrect")
+	check(MATURITY.stars(390)==5 and MATURITY.stars(99999)==5,"Ore maturity not capped")
+	check(MATURITY.age(1000,900)==0 and MATURITY.age(0,900)==MATURITY.MAX_AGE,"Ore timestamp handling incorrect")
+	var previous := 0.0
+	for stars in range(1,6):
+		var odds := MATURITY.rarity_chances(stars)
+		var sum := 0.0
+		for chance in odds:
+			check(chance>0,"Rarity chance removed")
+			sum+=chance
+		check(is_equal_approx(sum,1.0),"Crafting odds do not sum to one")
+		check(odds[4]>=previous,"Mature materials reduce legendary chance")
+		previous=odds[4]
+	var a := RandomNumberGenerator.new()
+	var b := RandomNumberGenerator.new()
+	a.seed=64012
+	b.seed=64012
+	check(QUALITY.roll_item("iron_blade",a)==QUALITY.roll_item("iron_blade",b,1),"Baseline crafting RNG changed")
