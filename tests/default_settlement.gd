@@ -25,6 +25,15 @@ func _run() -> void:
 			check(repeat.roads==plan.roads and repeat.buildings==plan.buildings,"Settlement is nondeterministic")
 		check(plan.buildings.size()>=2,"Missing built-in structures")
 		check(plan.roads.has(plan.hub) and plan.roads.has(plan.landing),"Missing coastal approach")
+		check(plan._graph.get_point_count()==0 and plan._ids.is_empty() and plan._heights.is_empty(),"Planning graph retained after generation")
+		if not plan.cave_route.is_empty():
+			check(plan.cave_route.front()==plan.hub and plan.cave_route.back()==plan.cave_approach,"Cave trail misses its POI approach")
+			for i in range(1,plan.cave_route.size()):
+				var a: Vector2i = plan.cave_route[i-1]
+				var b: Vector2i = plan.cave_route[i]
+				check(a.distance_squared_to(b)==1 and absi(source.height_at(a.x,a.y)-source.height_at(b.x,b.y))<=1,"Unsafe cave approach step")
+				check(plan.roads.has(b) and not plan.reserved.has(b),"Cave approach intersects a building or lacks path material")
+		print("SETTLEMENT SEED %d: %d buildings, %d road cells, %d cave approach cells" % [seed_value,plan.buildings.size(),plan.roads.size(),plan.cave_route.size()])
 		for p: Vector2i in plan.roads:
 			check(not source.caves.has_cave(p.x,p.y),"Road intersects cave")
 			check(source.top_tile(p.x,p.y)==5,"Terrain sampler disagrees with planned path")
