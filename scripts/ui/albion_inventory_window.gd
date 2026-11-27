@@ -10,7 +10,7 @@ const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
 const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage", "tool_fishing"]
 const SLOT_NAMES: Dictionary = {
 	"weapon":"MAIN HAND", "offhand":"OFF HAND", "back":"CLOAK", "bag":"BACKPACK",
-	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_fishing":"FISHING", "tool_forage":"FORAGING"
+	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_fishing":"FISHING", "tool_forage":"FORAGING","trinket":"BOAT","trinket":"BOAT / TRINKET"
 }
 const CONSUMABLES: Array[String] = ["meal", "tonic", "stew", "cooked_shrimp"]
 var game
@@ -289,8 +289,19 @@ func _layout_windows() -> void:
 		return
 	var bounds: Vector2 = get_viewport().get_visible_rect().size
 	var width_px: float = minf(900.0, bounds.x - 24.0) if storage_mode else minf(500.0, maxf(330.0, bounds.x * 0.38))
+	var wide: bool = _preview_layout() and not storage_mode and bounds.x>=720.0
+	if wide: width_px=minf(980.0,maxf(580.0,bounds.x*0.70))
+	if equipment_section!=null and storage_row!=null:
+		var vertical: Node = window.get_node("InventoryLayout")
+		var wanted: Node = storage_row if wide else vertical
+		if equipment_section.get_parent()!=wanted:
+			equipment_section.reparent(wanted,false)
+			wanted.move_child(equipment_section,0 if wide else 2)
+		equipment_section.custom_minimum_size.x=width_px*0.46 if wide else 0.0
+		equipment_section.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		equipment_scroll.custom_minimum_size.y=0 if wide else 173
 	width_px = minf(width_px, bounds.x - 24.0)
-	var height_px: float = minf(bounds.y - 28.0, maxf(500.0, bounds.y * 0.88))
+	var height_px: float = minf(bounds.y - 28.0, maxf(500.0, bounds.y * (0.96 if wide else 0.88)))
 	window.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	window.position = Vector2(bounds.x - width_px - 10.0, maxf(10.0, bounds.y * 0.025))
 	window.size = Vector2(width_px, height_px)
@@ -382,13 +393,21 @@ func _matches_filter(id: String) -> bool:
 			return kind == filter_kind
 	return false
 
+func _preview_layout() -> bool:
+	return str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview"
+
+func _bag_quantity(id: String) -> int:
+	var amount: int = int(game.inventory.get(id,0))
+	# Presentation-only until ownership is migrated in the save schema.
+	return maxi(0,amount-(1 if _preview_layout() and game.is_equipped(id) else 0))
+
 func _ordered_items() -> Array[String]:
 	var ids: Array[String] = []
 	for raw_id in game.inventory:
 		var id: String = str(raw_id)
 		if id in ["coins", "copper", "silver", "gold"]:
 			continue
-		if int(game.inventory.get(id, 0)) > 0 and _matches_filter(id):
+		if _bag_quantity(id) > 0 and _matches_filter(id):
 			ids.append(id)
 	ids.sort_custom(_item_before)
 	return ids
@@ -455,7 +474,9 @@ func _render_equipment() -> void:
 	slots.add_theme_constant_override("h_separation", 4)
 	slots.add_theme_constant_override("v_separation", 2)
 	band.add_child(slots)
-	for slot in EQUIPMENT_SLOTS:
+	var slots_to_show: Array[String] = EQUIPMENT_SLOTS.duplicate()
+	if game.equipment.has("trinket"): slots_to_show.append("trinket")
+	for slot in slots_to_show:
 		var gear: Button = _gear_button(slot)
 		gear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		slots.add_child(gear)
@@ -464,7 +485,7 @@ func _gear_button(slot: String) -> Button:
 	var id: String = str(game.equipment.get(slot, ""))
 	var button: Button = EQUIP_DRAG.new() as Button
 	button.name = "EquipmentSlot_" + slot
-	button.custom_minimum_size = Vector2(53, 44)
+	button.custom_minimum_size = Vector2(66, 62) if _preview_layout() else Vector2(53, 44)
 	SKIN.apply_translucent_button(button, "wood_selected" if slot == selected_slot else "wood")
 	button.tooltip_text = SLOT_NAMES[slot] + ": " + _equipped_name(slot) + ("\n" + _item_tip(id) if id != "" else "\nTap to inspect or drag a compatible item here")
 	button.pressed.connect(_gear_clicked.bind(slot))
@@ -477,7 +498,7 @@ func _gear_button(slot: String) -> Button:
 	var placeholder_icons: Dictionary = {
 		"weapon": "training_blade", "offhand": "shield", "back": "cloak",
 		"bag": "backpack_t1", "tool_wood": "axe", "tool_mining": "pickaxe",
-		"tool_forage": "satchel", "tool_fishing": "shrimp_net"
+		"tool_forage": "satchel", "tool_fishing": "shrimp_net","trinket":"rowboat"
 	}
 	var art_id: String = id if id != "" else str(placeholder_icons.get(slot, "flag"))
 	var icon: TextureRect = _icon(art_id, 30)
@@ -569,6 +590,9 @@ func _add_avatar(parent: Node) -> void:
 	scene.add_child(light)
 
 func _gear_clicked(slot: String) -> void:
+	if _preview_layout() and selected_slot.is_empty() and _bag_quantity(selected_id)>0 and str(game.equipment_slot(selected_id))==slot:
+		_drop_equipment_item(selected_id,slot)
+		return
 	selected_slot = slot
 	var item: String = str(game.equipment.get(slot, ""))
 	if item == "":
@@ -644,7 +668,7 @@ func _recover_from_tombstone(item_id: String) -> void:
 
 func _render_items() -> void:
 	_clear(inventory_grid)
-	var width_px: float = window.size.x
+	var width_px: float = bag_area.size.x+42.0 if _preview_layout() and equipment_section.get_parent()==storage_row and equipment_section.visible and bag_area.size.x>150 else window.size.x
 	inventory_grid.columns = 4 if storage_mode else 6 if width_px >= 460.0 else 5 if width_px >= 390.0 else 4
 	var column_count: int = inventory_grid.columns
 	var available_width: float = (width_px * 0.5 - 29.0) if storage_mode else width_px - 42.0
@@ -670,7 +694,7 @@ func _render_items() -> void:
 		image.anchor_bottom = 0.85
 		image.custom_minimum_size = Vector2.ZERO
 		tile.add_child(image)
-		var count := _text(str(int(game.inventory[id])), 14, SKIN.CREAM)
+		var count := _text(str(_bag_quantity(id)), 14, SKIN.CREAM)
 		count.name = "ItemCount"
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		count.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -679,7 +703,7 @@ func _render_items() -> void:
 		count.offset_right = -4.0
 		count.offset_top = -23.0
 		tile.add_child(count)
-		if game.is_equipped(id):
+		if game.is_equipped(id) and not _preview_layout():
 			var worn := _text("◆", 15, SKIN.GOLD)
 			worn.name = "EquippedMarker"
 			worn.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -779,7 +803,7 @@ func _render_details() -> void:
 	item_info.add_child(_text(description, 15, SKIN.CREAM))
 	if _kind(selected_id) == "equipment" and selected_id != "training_blade":
 		var equipped: bool = game.is_equipped(selected_id)
-		var gear_action := _button("UNEQUIP" if equipped else "EQUIP", "green")
+		var gear_action := _button("RETURN TO BAG" if equipped else "EQUIP / SWAP", "green")
 		gear_action.custom_minimum_size = Vector2(0, 48)
 		gear_action.pressed.connect(_equip_selected)
 		item_info.add_child(gear_action)
