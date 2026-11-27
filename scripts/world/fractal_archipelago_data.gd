@@ -245,7 +245,7 @@ func height_at(x: int, z: int) -> int:
 	if _cove_apron.has(key): return int(_cove_apron[key])
 	if skeletal_city!=null:
 		var skeletal_height: int = skeletal_city.height_override(key)
-		if skeletal_height!=-99999: return skeletal_height
+		if skeletal_height!=-99999 and margin_at(x+0.5,z+0.5)>0.0: return skeletal_height
 	if goblin_city!=null:
 		var override: int = goblin_city.height_override(key)
 		if override!=-99999: return override
