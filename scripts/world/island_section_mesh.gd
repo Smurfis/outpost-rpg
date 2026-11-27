@@ -126,6 +126,8 @@ func _column(x: int, z: int) -> void:
 					tile = 6 # Existing gravel atlas for the natural cave bed.
 					if terrain.goblin_city!=null and terrain.goblin_city.floors.has(Vector2i(x,z)):
 						tile=12 if (x+z)%3!=0 else 6
+					if terrain.skeletal_city!=null and terrain.skeletal_city.floors.has(Vector2i(x,z)):
+						tile=12 if posmod(x+z,4)!=0 else 13
 				var base_uv := Vector2(z,y) if face<2 else (Vector2(x,z) if face<4 else Vector2(x,y))
 				positions.append_array(Transform3D(Basis.IDENTITY,Vector3(voxel))*face_points[face])
 				normals.append_array(face_normals[face])
