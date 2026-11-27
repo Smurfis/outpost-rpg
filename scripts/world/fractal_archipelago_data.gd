@@ -3,8 +3,8 @@ extends RefCounted
 ## starter island so Outpost's existing terrain, camp and coastline stay intact.
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const SETTLEMENT = preload("res://scripts/world/default_settlement_plan.gd")
-var _settlement
-var _settlement_attempted := false
+var _settlements: Dictionary = {}
+var _settlement_attempted: Dictionary = {}
 const SEA_LEVEL: float = -2.82
 const BEDROCK: int = -7
 const OCEAN_PLAY_HALF: int = 384
@@ -132,27 +132,33 @@ func solid_column(x: int, z: int) -> int:
 		solid &= ~(((1 << clearance)-1) << (floor_y-BEDROCK))
 	return solid
 
-func near_settlement(x: float,z: float,padding: float = 0.0) -> bool:
-	var c: Vector2i = islands[2]["center"]
-	return absf(x-c.x)<=44.0+padding and absf(z-c.y)<=44.0+padding
+func settlement_index_at(x: float,z: float,padding: float = 0.0) -> int:
+	for index in [1,2]:
+		var c: Vector2i = islands[index]["center"]
+		if absf(x-c.x)<=44.0+padding and absf(z-c.y)<=44.0+padding: return index
+	return -1
 
-func settlement_plan():
-	# Lazy and deterministic for each source, including mine staging snapshots.
-	# The first island never pays the settlement planning cost.
-	if not _settlement_attempted:
-		_settlement_attempted = true
+func near_settlement(x: float,z: float,padding: float = 0.0) -> bool:
+	return settlement_index_at(x,z,padding)>=0
+
+func settlement_plan(index: int = 2):
+	# One immutable regional blueprint per settlement, independent of visit order.
+	# The Goblin Mineshaft island never pays settlement planning costs.
+	if index not in [1,2]: return null
+	if not _settlement_attempted.has(index):
+		_settlement_attempted[index] = true
 		var proposal := SETTLEMENT.new()
-		if proposal.generate(self): _settlement = proposal
-	return _settlement
+		if proposal.generate(self,index): _settlements[index] = proposal
+	return _settlements.get(index)
 
 func settlement_at(x: int,z: int) -> Dictionary:
-	if not near_settlement(x,z): return {}
-	var plan = settlement_plan()
+	var plan = settlement_plan(settlement_index_at(x,z))
 	return plan.building_at(Vector2i(x,z)) if plan != null else {}
 
 func top_tile(x: int, z: int) -> int:
-	if near_settlement(x,z):
-		var plan = settlement_plan()
+	var index := settlement_index_at(x,z)
+	if index>=0:
+		var plan = settlement_plan(index)
 		if plan != null:
 			if plan.plaza.has(Vector2i(x,z)): return 6
 			if plan.is_road(x,z): return 5
