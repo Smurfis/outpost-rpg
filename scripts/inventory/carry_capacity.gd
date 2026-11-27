@@ -2,7 +2,9 @@ extends RefCounted
 ## Centralized, deterministic carry-weight rules. No inventory mutation here.
 ## This is intentionally not a fixed slot-count: varied resources weigh
 ## differently and specialist bags help specific gatherings.
-const BASE_CAPACITY: float = 36.0
+const BASE_CAPACITY: float = 1800.0
+const RESOURCE_STACK_MAX := 999
+const STACKABLE_RESOURCES := ["wood","stone","fiber","berries","iron","coal","clay","herbs","mushrooms","reeds","hide","iron_ingot","linen","bricks","shrimp","cooked_shrimp"]
 const BAG_DEFINITIONS: Dictionary = {
 	"backpack_t1": {"tier":1, "bonus":26.0, "specialty":""},
 	"backpack_t2": {"tier":2, "bonus":52.0, "specialty":""},
@@ -65,11 +67,13 @@ static func remaining(inventory: Dictionary, equipped_bag: String = "", stars: i
 static func can_fit(inventory: Dictionary, item_id: String, count: int, equipped_bag: String = "", stars: int = 0) -> bool:
 	if count <= 0:
 		return true
-	return remaining(inventory, equipped_bag, stars) + 0.0001 >= weight(item_id, equipped_bag, stars) * float(count)
+	return max_fit(inventory,item_id,count,equipped_bag,stars)==count
 
 static func max_fit(inventory: Dictionary, item_id: String, requested: int, equipped_bag: String = "", stars: int = 0) -> int:
 	if requested <= 0:
 		return 0
+	if item_id in STACKABLE_RESOURCES:
+		requested = mini(requested,maxi(0,RESOURCE_STACK_MAX-int(inventory.get(item_id,0))))
 	var per_item: float = weight(item_id, equipped_bag, stars)
 	if per_item <= 0.0:
 		return requested
