@@ -22,6 +22,8 @@ var _ridges: FastNoiseLite
 var _height_cache: Dictionary = {}
 var _margin_cache: Dictionary = {}
 var _cave_cover: Dictionary = {}
+var ore_slots: Dictionary = {} # Exact wall voxel -> regenerating material
+var _ore_column_masks: Dictionary = {}
 
 func _init(world_seed: int = 64012) -> void:
 	seed = world_seed
@@ -48,6 +50,7 @@ func _init(world_seed: int = 64012) -> void:
 	caves = CAVES.new()
 	caves.configure(self)
 	_cover_remote_caves()
+	_plan_cave_ore()
 
 # Keep a short exposed mouth, then a real roof above the tunnel.
 # Never change the first island / physical mine save contract.
@@ -77,6 +80,43 @@ func _cover_column(cell: Vector2i,mouth: Vector3i) -> void:
 			if margin_at(q.x+0.5,q.y+0.5)<=0: continue
 			var required := roof-maxi(absi(dx),absi(dz))
 			_cave_cover[q]=maxi(int(_cave_cover.get(q,BEDROCK)),required)
+
+func _plan_cave_ore() -> void:
+	# Reserve actual solid wall voxels in the remote end chambers. Base
+	# terrain mesh omits these cells; a separately streamed one-metre block
+	# occupies each socket until mined. No excavation of support or roof.
+	for index in [1,2]:
+		var end: Vector3i = caves.routes[index].back()
+		var candidates: Array[Vector3i] = []
+		for dz in range(-2,3):
+			for dx in range(-2,3):
+				var inner := Vector2i(end.x+dx,end.z+dz)
+				if caves.floor_at(inner.x,inner.y)!=end.y: continue
+				for direction in [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.UP,Vector2i.DOWN]:
+					var wall: Vector2i = inner+direction
+					if caves.has_cave(wall.x,wall.y): continue
+					var back: Vector2i = wall+direction
+					var y := end.y+1
+					if not is_solid(wall.x,y,wall.y) or not is_solid(back.x,y,back.y): continue
+					if height_at(wall.x,wall.y)<y+2: continue
+					var cell := Vector3i(wall.x,y,wall.y)
+					if not candidates.has(cell): candidates.append(cell)
+		candidates.sort_custom(func(a: Vector3i,b: Vector3i) -> bool:
+			var ha := posmod(a.x*73856093+a.z*19349663+seed,2147483647)
+			var hb := posmod(b.x*73856093+b.z*19349663+seed,2147483647)
+			return ha<hb if ha!=hb else (a.x<b.x if a.x!=b.x else a.z<b.z))
+		var placed := 0
+		for cell in candidates:
+			if placed>=6: break
+			var adjacent := false
+			for old: Vector3i in ore_slots:
+				if old.distance_squared_to(cell)<=1: adjacent=true
+			if adjacent: continue
+			var kind: String = ["iron","coal","stone"][placed%3]
+			ore_slots[cell]={"kind":kind,"tier":2 if kind=="stone" else 3,"island":index}
+			var column := Vector2i(cell.x,cell.z)
+			_ore_column_masks[column]=int(_ore_column_masks.get(column,0)) | (1 << (cell.y-BEDROCK))
+			placed+=1
 
 func margin_at(x: float, z: float) -> float:
 	var key := Vector2i(floori(x), floori(z))
@@ -139,7 +179,7 @@ func height_at(x: int, z: int) -> int:
 	return maxi(height,int(_cave_cover.get(key,BEDROCK)))
 
 func is_solid(x: int, y: int, z: int) -> bool:
-	if y < BEDROCK:
+	if y < BEDROCK or ore_slots.has(Vector3i(x,y,z)):
 		return false
 	var cave_floor: int = caves.floor_at(x, z)
 	if cave_floor != CAVES.INVALID_FLOOR:
@@ -161,7 +201,7 @@ func solid_column(x: int, z: int) -> int:
 	if floor_y != CAVES.INVALID_FLOOR:
 		var clearance: int = caves.ceiling_at(x, z, floor_y) - floor_y
 		solid &= ~(((1 << clearance)-1) << (floor_y-BEDROCK))
-	return solid
+	return solid & ~int(_ore_column_masks.get(Vector2i(x,z),0))
 
 func settlement_index_at(x: float,z: float,padding: float = 0.0) -> int:
 	for index in [1,2]:
