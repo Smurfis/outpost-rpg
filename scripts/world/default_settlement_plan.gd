@@ -11,6 +11,9 @@ var profile := "market_town"
 var roles: Array = KINDS.duplicate()
 var footprints: Array[Vector2i] = FOOTPRINTS.duplicate()
 var landmarks: Array[Dictionary] = []
+var fields: Array[Dictionary] = []
+var field_tiles: Dictionary = {}
+var scenery: Dictionary = {}
 var west_route: Array[Vector2i] = []
 var eastern_landing := Vector2i.MAX
 var eastern_route: Array[Vector2i] = []
@@ -75,6 +78,9 @@ func generate(source, index: int = 2) -> bool:
 		footprints.append(Vector2i(5,7))
 		footprints.append(Vector2i(5,5))
 	landmarks.clear()
+	fields.clear()
+	field_tiles.clear()
+	scenery.clear()
 	west_route.clear()
 	eastern_landing = Vector2i.MAX
 	eastern_route.clear()
@@ -195,6 +201,7 @@ func generate(source, index: int = 2) -> bool:
 			var q := p+d
 			if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
 				roads[q] = true
+	_plan_countryside(source)
 	_build_landmarks(source)
 	var valid: bool = buildings.size()>=2 and _validate_network(source)
 	# The immutable result is enough for streamed terrain, map and buildings;
@@ -256,6 +263,65 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 		return true
 	return false
 
+func _plan_countryside(source) -> void:
+	# Locate modest agricultural plots beside existing roads. No terraforming
+	# or path displacement: every accepted cell is on safe, gently sloped land.
+	var candidates: Array[Vector2i] = []
+	for z in range(hub.y-26,hub.y+27,2):
+		for x in range(hub.x-26,hub.x+27,2):
+			candidates.append(Vector2i(x,z))
+	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		var da := a.distance_squared_to(hub)
+		var db := b.distance_squared_to(hub)
+		return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
+	var limit := 2 if island_index==2 else 1
+	for at in candidates:
+		if fields.size()>=limit: break
+		var size := Vector2i(5,7) if fields.size()%2==0 else Vector2i(7,5)
+		var rect := Rect2i(at,size)
+		var low := 999
+		var high := -999
+		var valid := true
+		var entry := Vector2i.MAX
+		for z in range(rect.position.y,rect.end.y):
+			for x in range(rect.position.x,rect.end.x):
+				var p := Vector2i(x,z)
+				if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p):
+					valid=false
+					continue
+				var h: int = _heights[p]
+				if h<0: valid=false
+				low=mini(low,h)
+				high=maxi(high,h)
+				for d in DIRS:
+					var q := p+d
+					if roads.has(q) and absi(h-int(_heights.get(q,h+99)))<=1:
+						if entry==Vector2i.MAX or q.distance_squared_to(hub)<entry.distance_squared_to(hub):
+							entry=q
+		if not valid or high-low>1 or entry==Vector2i.MAX: continue
+		var kind := "crop_field"
+		fields.append({"id":"%s_field_%d" % [site_id,fields.size()],"kind":kind,"rect":rect,"entry":entry})
+		for z in range(rect.position.y,rect.end.y):
+			for x in range(rect.position.x,rect.end.x):
+				var p := Vector2i(x,z)
+				field_tiles[p]=true
+				# Rows with a perimeter margin. Crops remain decorative and low.
+				if x>rect.position.x and x<rect.end.x-1 and z>rect.position.y and z<rect.end.y-1 and (x-rect.position.x)%2==1:
+					scenery[p]={"kind":"crop","height":int(_heights[p]),"variant":posmod(x*31+z*17+source.seed,3)}
+	# Sparse roadside flowers and low stone markers, kept outside roads,
+	# foundations, cave clearance and farm plots. Stable by world cell.
+	var cells: Array = roads.keys()
+	cells.sort_custom(func(a: Vector2i,b: Vector2i) -> bool: return a.x<b.x if a.x!=b.x else a.y<b.y)
+	for p: Vector2i in cells:
+		if plaza.has(p) or posmod(p.x*31+p.y*17+source.seed,11)!=0: continue
+		for d in DIRS:
+			var q := p+d
+			if not _heights.has(q) or roads.has(q) or reserved.has(q) or field_tiles.has(q) or scenery.has(q): continue
+			if int(_heights[q])<0 or absi(int(_heights[q])-int(_heights[p]))>1: continue
+			var kind := "waystone" if posmod(q.x*19+q.y*23+source.seed,5)==0 else "flowers"
+			scenery[q]={"kind":kind,"height":int(_heights[q]),"variant":posmod(q.x*13+q.y*7+source.seed,3)}
+			break
+
 func _add_landmark(source, suffix: String, label: String, role: String, p: Vector2i) -> void:
 	landmarks.append({"id":"%s:%s" % [site_id,suffix],"label":label,"role":role,
 		"position":Vector3(p.x+0.5,source.height_at(p.x,p.y),p.y+0.5),"cell":p})
@@ -267,6 +333,8 @@ func _build_landmarks(source) -> void:
 		_add_landmark(source,"east","Eastern Landing","landing",eastern_landing)
 	if not cave_route.is_empty():
 		_add_landmark(source,"cave","Cavern Approach","cave_approach",cave_approach)
+	for field in fields:
+		_add_landmark(source,str(field["id"]),"Cultivated Fields","farm",field["entry"])
 	for item in buildings:
 		var p: Vector2i = item["door"]+item["direction"]
 		_add_landmark(source,str(item["kind"]),str(item["kind"]).capitalize(),"architecture",p)
