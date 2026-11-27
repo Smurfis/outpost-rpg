@@ -1,4 +1,5 @@
 extends SceneTree
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const PLAN = preload("res://scripts/world/goblin_city_plan.gd")
 const MAIN = preload("res://scenes/main.tscn")
@@ -94,6 +95,8 @@ func _run() -> void:
 		check(game.equip_item("axe") and bag._bag_quantity("axe")==1,"Unequipped gear not returned to displayed bag")
 		game.inventory["rowboat"]=1
 		check(game.equip_item("rowboat") and game.equipment["trinket"]=="rowboat","Boat trinket equip failed")
+		OCEAN.update(coast)
+		_test_wave_field(coast)
 		game.hero.swimming=true
 		game.hero._update_boat()
 		game.hero._update_boat_pose(0.0,Vector3.ZERO)
@@ -120,3 +123,14 @@ func _run() -> void:
 	await process_frame
 	print("WORLD PREVIEW RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
+
+func _test_wave_field(at: Vector3) -> void:
+	var p := Vector2(at.x,at.z)
+	var h := OCEAN.height_at(p,2.0)
+	check(is_equal_approx(h,OCEAN.height_at(p,2.0)),"Wave sampler nondeterministic")
+	check(absf(h)<=0.6,"Ocean displacement outside safe visual bound")
+	check(not is_equal_approx(h,OCEAN.height_at(p,3.0)),"Wave field static")
+	check(is_zero_approx(OCEAN.height_at(OCEAN.center+Vector2(48.0,0),2.0)),"Near/far wave seam not flat")
+	var pose := OCEAN.hull_pose(at,0.4)
+	check(pose.is_finite() and absf(pose.y)<=0.20 and absf(pose.z)<=0.20,"Invalid six-point hull pose")
+	check(OCEAN.coefficients.size()==6 and OCEAN.dynamics.size()==6,"Shared wave parameters missing")
