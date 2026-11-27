@@ -1158,7 +1158,29 @@ func select_quick_tool(item_id: String) -> bool:
 	_refresh_menu()
 	return true
 
+func _nearby_world_interaction() -> Node3D:
+	if hero==null: return null
+	var best: Node3D
+	var distance := INF
+	for candidate in get_tree().get_nodes_in_group("world_interactables"):
+		if not target_available(candidate) or not target_in_range(candidate): continue
+		var kind: String = str(candidate.get_meta("world_kind",""))
+		if kind not in ["chest","loot","tombstone","npc","portal","exit","inspect"] and not candidate.has_meta("dungeon_bonus") and not candidate.has_meta("dungeon_exit"): continue
+		if candidate.has_method("remaining") and kind in ["chest","loot","tombstone"] and candidate.remaining().is_empty(): continue
+		# Range alone must not permit collecting through intact cave walls.
+		var ray := PhysicsRayQueryParameters3D.create(hero.global_position+Vector3.UP*0.7,candidate.global_position+Vector3.UP*0.35,1,[hero.get_rid()])
+		var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+		if not hit.is_empty() and hit.position.distance_to(candidate.global_position+Vector3.UP*0.35)>0.4: continue
+		var gap: float = hero.global_position.distance_to(candidate.global_position)
+		if gap<distance:
+			distance=gap
+			best=candidate
+	return best
+
 func smart_context() -> Dictionary:
+	var object := _nearby_world_interaction()
+	if object!=null:
+		return {"kind":"world_object","label":str(object.get_meta("world_action","Interact")).to_upper(),"icon":"hand"}
 	if valid_focus():
 		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	# One smart action, showing its REAL current intent; never a redundant
@@ -1185,6 +1207,10 @@ func smart_context() -> Dictionary:
 
 func smart_interact() -> void:
 	if menu != null and menu.visible:
+		return
+	var object := _nearby_world_interaction()
+	if object!=null:
+		interact_target(object)
 		return
 	if valid_focus():
 		if target_in_range(focus_target):
