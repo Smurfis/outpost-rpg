@@ -7,6 +7,7 @@ const PICKER = preload("res://scripts/interaction/world_picker.gd")
 const SOLID = preload("res://scripts/interaction/resource_collision.gd")
 const ROOTED_TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
 var rooted_tree: Dictionary = {}
+var cave_ore_block := false
 var tree_mesh: MeshInstance3D
 var tree_cutaway_hidden := false
 const MATURITY = preload("res://scripts/world/ore_maturity.gd")
@@ -40,7 +41,8 @@ var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
-func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}) -> void:
+func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}, wall_block: bool = false) -> void:
+	cave_ore_block=wall_block
 	kind = resource_type
 	bundle_count = clampi(count, 1, 3)
 	name = kind.capitalize() + "Node"
@@ -53,15 +55,18 @@ func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}) ->
 				tree_mesh=ROOTED_TREE.mesh_for(rooted_tree)
 				add_child(tree_mesh)
 		"stone":
-			_rock()
+			if cave_ore_block: _wall_ore()
+			else: _rock()
 		"fiber":
 			_bush(false)
 		"berries":
 			_bush(true)
 		"iron":
-			_ore(Color("717b86"), Color("dfe5e8"))
+			if cave_ore_block: _wall_ore()
+			else: _ore(Color("717b86"), Color("dfe5e8"))
 		"coal":
-			_ore(Color("303b44"), Color("63737e"))
+			if cave_ore_block: _wall_ore()
+			else: _ore(Color("303b44"), Color("63737e"))
 		"clay":
 			_clay()
 		"herbs":
@@ -83,6 +88,7 @@ func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}) ->
 					add_child(bundled)
 	max_hits = (3 if kind in ["wood", "stone", "iron", "coal", "clay", "shrimp"] else 2) * bundle_count
 	if not rooted_tree.is_empty(): max_hits = clampi(roundi(float(rooted_tree["height"])),4,8)
+	if cave_ore_block: max_hits=1
 	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
@@ -105,6 +111,7 @@ func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void
 	set_meta("regional_resource_id",id)
 	set_meta("resource_tier",tier)
 	set_meta("resource_habitat",habitat)
+	if cave_ore_block: set_meta("cave_ore_block",true)
 	var saved: Dictionary = game.regional_resource_state.get(id,{})
 	last_break=float(saved.get("last_break",0.0))
 	var saved_hits := clampi(int(saved.get("hits_left",max_hits)),0,max_hits)
@@ -181,6 +188,11 @@ func _is_maturing_ore() -> bool:
 
 func _update_maturity(force: bool = false) -> void:
 	var stars := MATURITY.stars(MATURITY.age(last_break,Time.get_unix_time_from_system()))
+	# A depleted wall voxel is a small accessible recess. Never regenerate
+	# a physical cube while the player overlaps that recess.
+	if cave_ore_block and stars>0 and not active and is_instance_valid(regional_game) and regional_game.hero!=null:
+		var offset: Vector3 = regional_game.hero.global_position-global_position
+		if absf(offset.x)<0.95 and absf(offset.z)<0.95 and offset.y<1.0 and offset.y>-2.0: stars=0
 	if not force and stars==maturity_stars: return
 	var was_active := active
 	maturity_stars=stars
@@ -190,7 +202,7 @@ func _update_maturity(force: bool = false) -> void:
 	if resource_body!=null:
 		resource_body.set_deferred("collision_layer",1 if active else 0)
 	visible=true
-	var visual_scale := 0.55+float(stars)*0.09
+	var visual_scale := (1.0 if stars>0 else 0.22) if cave_ore_block else 0.55+float(stars)*0.09
 	for mesh in _mesh_scales:
 		if is_instance_valid(mesh):
 			mesh.scale=Vector3(_mesh_scales[mesh])*visual_scale
@@ -319,6 +331,18 @@ func _block(size: Vector3, at: Vector3, color: Color) -> void:
 	var m := BoxMesh.new()
 	m.size = size
 	_part(m, at, Vector3.ONE, color)
+
+func _wall_ore() -> void:
+	var base := Color("747e85") if kind=="stone" else Color("58626a") if kind=="coal" else Color("838b90")
+	var vein := Color("9ba5ac") if kind=="stone" else Color("242b32") if kind=="coal" else Color("cf9b70")
+	_block(Vector3.ONE,Vector3(0,0.5,0),base)
+	# Flat inset-looking flecks on the four exposed-capable sides.
+	for i in range(3):
+		var a := -0.27+float(i)*0.25
+		var y := 0.24+float((i*2)%3)*0.23
+		for sign_value in [-1.0,1.0]:
+			_block(Vector3(0.14,0.17,0.008),Vector3(a,y,sign_value*0.5),vein)
+			_block(Vector3(0.008,0.17,0.14),Vector3(sign_value*0.5,y,a),vein)
 
 func _pine() -> void:
 	# Original OBJ, with a twisted trunk and layered low-poly foliage.
