@@ -12,9 +12,9 @@ const BEDROCK: int = -7
 const OCEAN_PLAY_HALF: int = 384
 # Exploration islands lie across real swimmable water, beyond home +/-96.
 var islands: Array[Dictionary] = [
-	{"center": Vector2i(172, 62), "radius": 36.0, "strength": 0.7},
-	{"center": Vector2i(-200, -58), "radius": 44.0, "strength": 1.15},
-	{"center": Vector2i(18, 232), "radius": 46.0, "strength": 1.4},
+	{"center": Vector2i(172, 62), "radius": 36.0, "strength": 0.7,"biome":"rocky_highlands","name":"Goblin Mineshaft","sea":"rocky_shoals"},
+	{"center": Vector2i(-200, -58), "radius": 44.0, "strength": 1.15,"biome":"temperate_woodland","name":"Frontier Waystation","sea":"kelp_coast"},
+	{"center": Vector2i(18, 232), "radius": 46.0, "strength": 1.4,"biome":"warm_meadow","name":"Market Town","sea":"sandbanks"},
 ]
 var seed: int
 var caves
@@ -52,7 +52,7 @@ func _init(world_seed: int = 64012) -> void:
 	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" or OS.get_environment("OUTPOST_TEST_GOBLIN_CITY")=="1":
 		goblin_city=GOBLIN_CITY.new()
 		goblin_city.generate(seed,0)
-		islands.append({"center":GOBLIN_CITY.CENTER,"radius":GOBLIN_CITY.RADIUS,"strength":1.4})
+		islands.append({"center":GOBLIN_CITY.CENTER,"radius":GOBLIN_CITY.RADIUS,"strength":1.4,"biome":"goblin_badlands","name":"Goblin Territory","sea":"cold_reef"})
 	caves = CAVES.new()
 	caves.configure(self)
 	if goblin_city!=null: _install_city_caves()
@@ -263,6 +263,17 @@ func settlement_at(x: int,z: int) -> Dictionary:
 	var plan = settlement_plan(settlement_index_at(x,z))
 	return plan.building_at(Vector2i(x,z)) if plan != null else {}
 
+func biome_at(x: float,z: float) -> String:
+	var best := -INF
+	var result := "open_ocean"
+	for island in islands:
+		var c: Vector2i = island["center"]
+		var m: float = float(island["radius"])-Vector2(x-c.x,z-c.y).length()
+		if m>best:
+			best=m
+			result=str(island["biome"]) if m>=0.0 else (str(island["sea"]) if m>=-18.0 else "open_ocean")
+	return result
+
 func top_tile(x: int, z: int) -> int:
 	if goblin_city!=null and goblin_city.roads.has(Vector2i(x,z)): return 6
 	var index := settlement_index_at(x,z)
@@ -279,6 +290,12 @@ func top_tile(x: int, z: int) -> int:
 		return 16 # Dry sand
 	if height_at(x, z) > 11:
 		return 4 # Bare mountain rock
+	if goblin_city!=null and goblin_city.contains(Vector2i(x,z)): return 4 if height_at(x,z)>8 else 3
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" or OS.get_environment("OUTPOST_TEST_GOBLIN_CITY")=="1":
+		match biome_at(x+0.5,z+0.5):
+			"rocky_highlands": return 7 if height_at(x,z)<7 else 4
+			"temperate_woodland": return 2
+			"warm_meadow": return 1
 	return 0 # Grass
 
 func chunk_near_land(chunk_x: int, chunk_z: int, chunk_size: int) -> bool:
@@ -303,4 +320,4 @@ func map_cell_at(x: int, z: int) -> Dictionary:
 	return {"height": float(height) if land else SEA_LEVEL,
 		"ground_height": float(height) if land else -5.0,
 		"ground_tile": top_tile(x, z) if land else 4,
-		"zone": "inland" if land else "water"}
+		"zone": "inland" if land else "water","biome":biome_at(x+0.5,z+0.5)}
