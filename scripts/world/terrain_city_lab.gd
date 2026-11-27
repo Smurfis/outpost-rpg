@@ -4,6 +4,9 @@ const Plan = preload("res://scripts/world/terrain_city_lab_plan.gd")
 const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
 const Prefab = preload("res://scripts/world/city_lab_prefab.gd")
 const Edits = preload("res://scripts/world/city_lab_edits.gd")
+const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
+var socket_checks: Array[CheckBox] = []
+var module_weight: SpinBox
 var prefab := Prefab.new()
 var edits := Edits.new()
 var mesher := Mesher.new()
@@ -115,6 +118,7 @@ func _ui() -> void:
 			"Far region": button.pressed.connect(_far_region)
 
 	_add_creator_ui(column)
+	_add_connector_ui(column)
 
 func _add_creator_ui(column: VBoxContainer) -> void:
 	var tools := HBoxContainer.new()
@@ -149,6 +153,46 @@ func _add_creator_ui(column: VBoxContainer) -> void:
 	edit_status = Label.new()
 	edit_status.text = "Creator: select two corners, then fill, erase or capture."
 	column.add_child(edit_status)
+
+func _add_connector_ui(column: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	column.add_child(row)
+	var hint := Label.new()
+	hint.text = "Module sockets:"
+	row.add_child(hint)
+	for direction in ["N","E","S","W"]:
+		var check := CheckBox.new()
+		check.text = direction
+		row.add_child(check)
+		socket_checks.append(check)
+	module_weight = SpinBox.new()
+	module_weight.min_value = 1
+	module_weight.max_value = 100
+	module_weight.value = 5
+	module_weight.prefix = "Weight "
+	row.add_child(module_weight)
+	_tool(row,"Export module",_export_module)
+	_tool(row,"Dungeon Lab",_open_dungeon)
+
+func _export_module() -> void:
+	if copied.is_empty():
+		edit_status.text = "Capture a 15 x 5 x 15 module first"
+		return
+	var sockets: Array = []
+	for d in range(4):
+		if socket_checks[d].button_pressed:
+			sockets.append({"direction":d,"type":"stone_corridor"})
+	var asset := {"schema_version":1,"id":"creator:custom_module","weight":int(module_weight.value),"prefab":copied,"sockets":sockets}
+	var validator := Dungeon.new()
+	if not validator.register_asset(asset):
+		edit_status.text = "Invalid module: check size, central 3x3 openings, floor and connectivity"
+		return
+	var ok := edits.write_json("user://city_lab_connector.json",asset)
+	edit_status.text = "Module exported. Open Dungeon Lab and Import module." if ok else "Module export failed"
+
+func _open_dungeon() -> void:
+	if unsaved and not _save(): return
+	get_tree().change_scene_to_file("res://scenes/city_lab_dungeon_preview.tscn")
 
 func _tool(parent: HBoxContainer, label: String, action: Callable) -> void:
 	var button := Button.new()
