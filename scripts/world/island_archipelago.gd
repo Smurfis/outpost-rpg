@@ -211,6 +211,10 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		_chamber_light.omni_range = 8.0
 		add_child(_chamber_light)
 	_chamber_light.position = _lights[_region]
+	var skeletal: bool = terrain.skeletal_city!=null and terrain.skeletal_city.contains(cell)
+	_chamber_light.light_color=Color("#9fcaff") if skeletal else Color("ffd8a3")
+	_chamber_light.omni_range=13.0 if skeletal else 8.0
+	_chamber_light.light_energy=3.0 if skeletal else 2.0
 	_chamber_light.show()
 	var variant := _variant(_region,sector)
 	for key: Vector2i in variant.chunks:
