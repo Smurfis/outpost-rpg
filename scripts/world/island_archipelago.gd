@@ -561,6 +561,7 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
 	_cutaway_material = GREEDY.material().duplicate() as ShaderMaterial
+	_cutaway_material.set_shader_parameter("terrain_gradient_enabled",true)
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
