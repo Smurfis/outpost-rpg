@@ -81,7 +81,7 @@ void fragment() {
 	vec3 pigment = mix(ocean_deep.rgb, ocean_swell.rgb, water_band * 0.82);
 	// Shallow tint is constant across both triangles of each streamed water cell.
 	// Bright water has depth and remains opaque (Android Compatibility-safe).
-	float shallow = clamp(COLOR.r, 0.0, 1.0);
+	float shallow = wave_surface_mode == 0 ? clamp(COLOR.r, 0.0, 1.0) : 0.0;
 	pigment = mix(pigment, ocean_shallow.rgb, shallow * (0.43 + water_band * 0.24));
 
 	// Broken cyan currents, with hashed gaps so they resemble clusters of
