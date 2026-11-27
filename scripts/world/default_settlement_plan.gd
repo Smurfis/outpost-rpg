@@ -1,10 +1,17 @@
 extends RefCounted
-## Built-in settlement blueprint for the third exploration island.
+## Built-in settlement blueprint for a bounded exploration island.
 ## Terrain heights are authoritative; no cave or terrain columns are edited.
 const DIRS: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
 const MAX_BUILDINGS := 6
 const KINDS := ["watchtower","smithy","storehouse","house","inn","guardhouse"]
 const FOOTPRINTS: Array[Vector2i] = [Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5)]
+var island_index := 2
+var site_id := "settlement"
+var profile := "market_town"
+var roles: Array = KINDS.duplicate()
+var footprints: Array[Vector2i] = FOOTPRINTS.duplicate()
+var eastern_landing := Vector2i.MAX
+var eastern_route: Array[Vector2i] = []
 var plaza: Dictionary = {}
 var roads: Dictionary = {}
 var buildings: Array[Dictionary] = []
@@ -52,7 +59,15 @@ func _disable(rect: Rect2i, disabled: bool) -> void:
 func _record_road(route: Array[Vector2i]) -> void:
 	for p in route: roads[p] = true
 
-func generate(source) -> bool:
+func generate(source, index: int = 2) -> bool:
+	if index not in [1,2]: return false
+	island_index = index
+	site_id = "settlement" if index==2 else "waystation"
+	profile = "market_town" if index==2 else "frontier_waystation"
+	roles = KINDS.duplicate() if index==2 else ["guardhouse","storehouse","house"]
+	footprints = FOOTPRINTS.duplicate() if index==2 else [Vector2i(5,5),Vector2i(5,7),Vector2i(5,5)]
+	eastern_landing = Vector2i.MAX
+	eastern_route.clear()
 	roads.clear()
 	plaza.clear()
 	cave_approach = Vector2i.MAX
@@ -62,7 +77,7 @@ func generate(source) -> bool:
 	_heights.clear()
 	_ids.clear()
 	_graph.clear()
-	var center: Vector2i = source.islands[2]["center"]
+	var center: Vector2i = source.islands[island_index]["center"]
 	# Restrict planning to one bounded island, and preserve its cave corridor.
 	for z in range(center.y-44,center.y+45):
 		for x in range(center.x-44,center.x+45):
@@ -107,14 +122,14 @@ func generate(source) -> bool:
 		for x in range(hub.x-28,hub.x+29,2):
 			candidates.append(Vector2i(x,z))
 	var rng := RandomNumberGenerator.new()
-	rng.seed = source.seed ^ 0x51c17
+	rng.seed = source.seed ^ 0x51c17 ^ (0 if island_index==2 else 0x192a)
 	# Stable per-seed tie breaks without relying on dictionary iteration.
 	var tie: Dictionary = {}
 	for p in candidates: tie[p] = rng.randf()
 	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
 		return float(a.distance_squared_to(hub))+float(tie[a])*30.0 < float(b.distance_squared_to(hub))+float(tie[b])*30.0)
-	for index in range(MAX_BUILDINGS):
-		if not _place_building(candidates,index): break
+	for role_index in range(roles.size()):
+		if not _place_building(candidates,role_index): break
 
 	# Reserve a modest public square around the hub without altering slopes.
 	for dz in range(-2,3):
@@ -128,8 +143,8 @@ func generate(source) -> bool:
 			_record_road(route)
 	# Connect another existing POI without modifying the cave's own cells.
 	# The endpoint is a safe exterior staging tile, not a tunnel floor.
-	if source.caves.entrances.size()>2:
-		var entrance: Vector3 = source.caves.entrances[2]
+	if source.caves.entrances.size()>island_index:
+		var entrance: Vector3 = source.caves.entrances[island_index]
 		var anchor := Vector2i(floori(entrance.x),floori(entrance.z))
 		var approaches: Array[Vector2i] = []
 		for p: Vector2i in _ids:
@@ -146,6 +161,21 @@ func generate(source) -> bool:
 			cave_route = route
 			_record_road(route)
 			break
+	# Connect the existing eastern coastal access corridor after mandatory
+	# building reservations. This is a real safe dry approach, not a dock.
+	var east: Array[Vector2i] = []
+	for p: Vector2i in _ids:
+		if p.x>center.x and absi(p.y-center.y)<=2 and source.margin_at(p.x+0.5,p.y+0.5)<5.0:
+			east.append(p)
+	east.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		return a.x>b.x if a.x!=b.x else a.y<b.y)
+	for p in east:
+		var route := _route(hub,p)
+		if route.is_empty(): continue
+		eastern_landing = p
+		eastern_route = route
+		_record_road(route)
+		break
 	# Expand narrow centerlines by one tile on gentle slopes. The road remains
 	# a terrain material, not another set of mesh nodes or colliders.
 	var centerlines: Array = roads.keys()
@@ -163,7 +193,7 @@ func generate(source) -> bool:
 
 func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 	for at in candidates:
-		var size: Vector2i = FOOTPRINTS[index]
+		var size: Vector2i = footprints[index]
 		var rect := Rect2i(at,size)
 		var hi := -999
 		var lo := 999
@@ -209,7 +239,7 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 		for offset in range(-1,2): roads[door+direction+side*offset] = true
 		for z in range(at.y,rect.end.y):
 			for x in range(at.x,rect.end.x): reserved[Vector2i(x,z)] = true
-		buildings.append({"id":"settlement_%s" % KINDS[index],"kind":KINDS[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+		buildings.append({"id":"%s_%s" % [site_id,roles[index]],"kind":roles[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
 		return true
 	return false
 
