@@ -8,7 +8,7 @@ static var shared_material: StandardMaterial3D
 
 static func spawn(parent: Node3D, at: Vector3, heading: float, contact: bool = false) -> void:
 	if parent==null: return
-	var mark := preload("res://scripts/vfx/rowboat_wake.gd").new() as Node3D
+	var mark := load("res://scripts/vfx/rowboat_wake.gd").new() as Node3D
 	parent.add_child(mark)
 	mark.global_position=at
 	mark.rotation.y=heading
@@ -33,7 +33,7 @@ func _ready() -> void:
 		shared_material.albedo_color=Color(0.76,0.94,1.0,0.8)
 	art=MeshInstance3D.new()
 	art.mesh=shared_mesh
-	art.material_override=shared_material
+	art.material_override=shared_material.duplicate() as StandardMaterial3D
 	art.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(art)
 
@@ -44,4 +44,5 @@ func _process(delta: float) -> void:
 		return
 	var progress := age/LIFE
 	art.scale=Vector3(1.0+progress*0.65,1.0,1.0+progress*0.3)
-	art.transparency=progress
+	var material := art.material_override as StandardMaterial3D
+	material.albedo_color=Color(0.76,0.94,1.0,0.8*(1.0-progress))
