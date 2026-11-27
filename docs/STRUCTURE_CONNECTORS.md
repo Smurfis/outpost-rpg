@@ -31,11 +31,21 @@ Start at a central cross module; pick an unoccupied frontier slot; choose a weig
 
 Tests verify default/custom asset validation, obstruction and incorrect orientation rejection, deterministic 32-module layouts, connectivity, reciprocal physical apertures, closed caps and maximum size. They are wired to CI, not yet observed passing.
 
+## Sector preview and creator integration (next iteration)
+
+City Lab now has N/E/S/W connector toggles, selection weight and Export module. Capture a 15 × 5 × 15 volume (including its floor), designate its centered 3 × 3 doorway directions, then export. The registry checks physical clearance and center access before saving `user://city_lab_connector.json`. The Dungeon Lab button saves pending city edits and opens a separate roofless preview. Import module loads that one custom asset into the built-in pool; it participates only when its rotated socket mask exactly fits a planned room. Default pack removes it from the current preview.
+
+Each independently generated 5 × 5 module sector uses a seeded depth-first spanning tree plus optional loops. Four fixed centered gates align with the neighboring sector's opposite gate; every sector has a guaranteed path between them. Weighted prefab selection occurs after graph planning, matching the full required mask. Geometry uses 16³ greedy render sections and a local A* grid built only from reachable physical floors. Click/tap a floor or choose a gate button. Reaching the middle gate cell switches to the neighbor's local scene and places the player one cell inside the reciprocal doorway. Global signed 64-bit sector addresses are never converted to world-space floats.
+
+This is a bounded one-sector-at-a-time preview (75 × 75 blocks, 25 modules); transitions are synchronous scene rebuilds, not seamless streaming. The original finite frontier solver remains available separately. No saved dungeon progression, collision bodies, combat, multi-floor modules, visible authoring marker blocks or graphical runtime verification yet.
+
+CI now includes extreme-address sector repeatability, reciprocal gate alignment, actual A* routes from the center to all four gates, and a dungeon scene launch check.
+
 ## Remaining work
-1. Creator UI: place directional markers on faces of captured pieces; attach named socket types, pool, weight and aperture. Preview rotated pairs and report errors before export. The pure registry accepts captured voxel payloads now, but marker editing and import into the running dungeon are not yet wired.
-2. Render/physics: adapt materialized module occupancy to the City Lab section mesher and shared 3D navigation; later attach to the physical Skeletal City entrance.
+1. Replace the initial cardinal socket toggles with physical directional marker blocks, typed pools, configurable apertures and a dedicated module construction workspace. Add multi-asset library import and rotated pair preview.
+2. Extend the existing roofless section-meshed preview and local 2D navigation to true 3D occupancy, collision, cutaways and the physical Skeletal City entrance.
 3. Add variable-size and multi-floor modules, vertical stairs, alignment offsets, reserved clearance volumes, terrain carving, boss/key/quest placement, and a typed pool/transition policy.
 4. For endless dungeons do not extend a mutable random frontier in player exploration order. Plan bounded sectors using exact signed integer addresses, deterministic seeds, shared border sockets and a guaranteed backbone. Stream only nearby sectors and keep persistent edits/rewards keyed by site and cycle. Cap terminal branches; never promise infinite in-memory assembly.
 5. Use WFC for local architecture and optional compatible modules, not as the sole guarantee that mandatory paths connect. Reserve critical graph routes, then solve and validate the geometry.
 
-No Alpha or stable changes, APK, scene integration, or runtime verification in this stage.
+No Alpha or stable changes, APK or confirmed runtime verification. The new scene and creator import/export are committed source code.
