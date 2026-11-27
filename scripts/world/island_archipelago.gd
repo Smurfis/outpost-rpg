@@ -1189,12 +1189,12 @@ func _install_gathering(plan,key: Vector2i,game: Node,members: Array) -> void:
 		if spec["habitat"]=="cavern":
 			if terrain.caves.floor_at(cell.x,cell.y)!=floori(at.y): continue
 		elif terrain.caves.has_cave(cell.x,cell.y): continue
-		var radius := RESOURCE_PLACEMENT.radius_for(spec["kind"])
+		var radius := float(spec.get("radius",RESOURCE_PLACEMENT.radius_for(spec["kind"])))
 		if not game.prop_placement.available(at,radius): continue
 		var resource := REGIONAL_RESOURCE.new()
 		add_child(resource)
 		resource.global_position=at
-		resource.setup(spec["kind"],1)
+		resource.setup(spec["kind"],1,spec.get("tree",{}))
 		resource.configure_regional(str(terrain.seed)+":"+str(spec["id"]),int(spec["tier"]),str(spec["habitat"]),game)
 		game.prop_placement.reserve(at,radius,resource)
 		members.append(resource)
