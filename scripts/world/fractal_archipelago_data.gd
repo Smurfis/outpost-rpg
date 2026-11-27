@@ -3,6 +3,8 @@ extends RefCounted
 ## starter island so Outpost's existing terrain, camp and coastline stay intact.
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const SETTLEMENT = preload("res://scripts/world/default_settlement_plan.gd")
+const GOBLIN_CITY = preload("res://scripts/world/goblin_city_plan.gd")
+var goblin_city: RefCounted
 var _settlements: Dictionary = {}
 var _settlement_attempted: Dictionary = {}
 const SEA_LEVEL: float = -2.82
@@ -47,8 +49,13 @@ func _init(world_seed: int = 64012) -> void:
 	_ridges.frequency = 0.039
 	_ridges.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	_ridges.fractal_octaves = 4
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" or OS.get_environment("OUTPOST_TEST_GOBLIN_CITY")=="1":
+		goblin_city=GOBLIN_CITY.new()
+		goblin_city.generate(seed,0)
+		islands.append({"center":GOBLIN_CITY.CENTER,"radius":GOBLIN_CITY.RADIUS,"strength":1.4})
 	caves = CAVES.new()
 	caves.configure(self)
+	if goblin_city!=null: _install_city_caves()
 	_cover_remote_caves()
 	_plan_cave_ore()
 
@@ -118,6 +125,30 @@ func _plan_cave_ore() -> void:
 			_ore_column_masks[column]=int(_ore_column_masks.get(column,0)) | (1 << (cell.y-BEDROCK))
 			placed+=1
 
+func _install_city_caves() -> void:
+	# The old route list, entrance and chest indexes stay intact. The
+	# experimental island has no ordinary reward chest or mine registry.
+	for p: Vector2i in goblin_city.floors:
+		caves.floors[p]=goblin_city.floors[p]
+		caves.extra_ceilings[p]=goblin_city.ceilings[p]
+	caves.routes.append(goblin_city.route)
+	var start: Vector3i = goblin_city.route.front()
+	caves.entrances.append(Vector3(start)+Vector3(0.5,0,0.5))
+
+func regenerate_goblin_city() -> bool:
+	if goblin_city==null: return false
+	var next := GOBLIN_CITY.new()
+	next.generate(seed,goblin_city.cycle+1)
+	if not next.validate(): return false
+	for p: Vector2i in goblin_city.floors:
+		caves.floors.erase(p)
+		caves.extra_ceilings.erase(p)
+	caves.routes.pop_back()
+	caves.entrances.pop_back()
+	goblin_city=next
+	_install_city_caves()
+	return true
+
 func margin_at(x: float, z: float) -> float:
 	var key := Vector2i(floori(x), floori(z))
 	if _margin_cache.has(key):
@@ -138,6 +169,9 @@ func is_land_at(x: float, z: float) -> bool:
 
 func height_at(x: int, z: int) -> int:
 	var key := Vector2i(x, z)
+	if goblin_city!=null:
+		var override: int = goblin_city.height_override(key)
+		if override!=-99999: return override
 	if _height_cache.has(key):
 		return maxi(int(_height_cache[key]),int(_cave_cover.get(key,BEDROCK)))
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
@@ -210,6 +244,7 @@ func settlement_index_at(x: float,z: float,padding: float = 0.0) -> int:
 	return -1
 
 func near_settlement(x: float,z: float,padding: float = 0.0) -> bool:
+	if goblin_city!=null and Vector2(x-GOBLIN_CITY.CENTER.x,z-GOBLIN_CITY.CENTER.y).length()<=GOBLIN_CITY.RADIUS+padding: return true
 	return settlement_index_at(x,z,padding)>=0
 
 func settlement_plan(index: int = 2):
@@ -223,10 +258,13 @@ func settlement_plan(index: int = 2):
 	return _settlements.get(index)
 
 func settlement_at(x: int,z: int) -> Dictionary:
+	if goblin_city!=null and goblin_city.contains(Vector2i(x,z)):
+		return goblin_city.building_at(Vector2i(x,z))
 	var plan = settlement_plan(settlement_index_at(x,z))
 	return plan.building_at(Vector2i(x,z)) if plan != null else {}
 
 func top_tile(x: int, z: int) -> int:
+	if goblin_city!=null and goblin_city.roads.has(Vector2i(x,z)): return 6
 	var index := settlement_index_at(x,z)
 	if index>=0:
 		var plan = settlement_plan(index)
