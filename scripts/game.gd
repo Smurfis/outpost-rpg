@@ -87,6 +87,7 @@ var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+var regional_resource_state: Dictionary = {} # Stable regional node depletion and partial harvest state.
 var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
 var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
@@ -2002,6 +2003,8 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if not regional_resource_state.is_empty():
+		data["regional_resource_state"] = regional_resource_state
 	if not natural_cave_encounters.is_empty():
 		data["natural_cave_encounters"] = natural_cave_encounters
 	data["placed_blocks"] = building.serialize() if building != null else saved_blocks
@@ -2037,6 +2040,17 @@ func _load() -> void:
 				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
 					player_save_valid_for_mine = false
 					break
+	regional_resource_state.clear()
+	var stored_resources: Variant = data.get("regional_resource_state",{})
+	if stored_resources is Dictionary and stored_resources.size()<=4096:
+		for key in stored_resources:
+			var record: Variant = stored_resources[key]
+			if not key is String or key.length()>180 or not record is Dictionary: continue
+			var stamp: Variant = record.get("last_break",0)
+			var hits: Variant = record.get("hits_left",0)
+			if typeof(stamp) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(stamp)) or float(stamp)<0: continue
+			if typeof(hits) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(hits)): continue
+			regional_resource_state[key]={"last_break":minf(float(stamp),Time.get_unix_time_from_system()),"hits_left":clampi(int(hits),0,9)}
 	if data.get("natural_cave_encounters") is Dictionary:
 		natural_cave_encounters = data.natural_cave_encounters.duplicate()
 	if data.get("placed_blocks") is Array:
