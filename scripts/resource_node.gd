@@ -5,6 +5,8 @@ const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const PICKER = preload("res://scripts/interaction/world_picker.gd")
 const SOLID = preload("res://scripts/interaction/resource_collision.gd")
+const ROOTED_TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
+var rooted_tree: Dictionary = {}
 const MATURITY = preload("res://scripts/world/ore_maturity.gd")
 var regional_id := ""
 var regional_tier := 0
@@ -36,13 +38,17 @@ var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
-func setup(resource_type: String, count: int = 1) -> void:
+func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}) -> void:
 	kind = resource_type
 	bundle_count = clampi(count, 1, 3)
 	name = kind.capitalize() + "Node"
 	match kind:
 		"wood":
-			_pine()
+			if tree_spec.is_empty():
+				_pine()
+			else:
+				rooted_tree=ROOTED_TREE.generate(tree_spec)
+				add_child(ROOTED_TREE.mesh_for(rooted_tree))
 		"stone":
 			_rock()
 		"fiber":
@@ -73,6 +79,7 @@ func setup(resource_type: String, count: int = 1) -> void:
 					bundled.scale *= 0.72
 					add_child(bundled)
 	max_hits = (3 if kind in ["wood", "stone", "iron", "coal", "clay", "shrimp"] else 2) * bundle_count
+	if not rooted_tree.is_empty(): max_hits = clampi(roundi(float(rooted_tree["height"])),4,8)
 	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
@@ -220,7 +227,7 @@ func _setup_target_marker() -> void:
 	target_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	target_label.font_size = 43
 	target_label.pixel_size = 0.006
-	target_label.position = Vector3(0, 1.85, 0)
+	target_label.position = Vector3(0, 2.2 if not rooted_tree.is_empty() else 1.85, 0)
 	target_label.modulate = Color("fff0c4")
 	target_label.visible = false
 	add_child(target_label)
