@@ -95,6 +95,7 @@ func _run() -> void:
 	check(not remote.settlement_nodes.is_empty(),"Settlement failed to reconstruct on re-entry")
 	_check_countryside_chunks(remote,plan)
 	await _test_waystation(game,remote)
+	await _test_resource_lifecycle(game,remote)
 	_finish(game)
 
 func _test_waystation(game,remote) -> void:
@@ -172,6 +173,77 @@ func _check_countryside_chunks(remote,plan) -> void:
 		check(batches==(1 if expected>0 else 0),"Scenery batch has wrong chunk ownership")
 		found+=expected
 	check(found>0,"No countryside geometry streamed near settlement")
+
+func _test_resource_lifecycle(game,remote) -> void:
+	var plan = remote.terrain.settlement_plan(2)
+	var wood_spec: Dictionary = {}
+	var ore_spec: Dictionary = {}
+	for spec in plan.gathering.nodes:
+		if spec["kind"]=="wood" and wood_spec.is_empty(): wood_spec=spec
+		if spec["kind"] in ["stone","iron","coal"] and ore_spec.is_empty(): ore_spec=spec
+	check(not wood_spec.is_empty() and not ore_spec.is_empty(),"Missing default gathering test nodes")
+	if wood_spec.is_empty() or ore_spec.is_empty(): return
+	var at: Vector3 = ore_spec["position"]
+	game.hero.global_position=at+Vector3(2,0,0)
+	remote._queue_near(game.hero.global_position)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	await physics_frame
+	var ore = _find_resource(remote,str(remote.terrain.seed)+":"+str(ore_spec["id"]))
+	check(is_instance_valid(ore),"Regional ore not streamed")
+	if not is_instance_valid(ore): return
+	check(ore.maturity_stars==5 and ore.active,"Fresh ore not mature")
+	for i in range(ore.max_hits): check(ore.harvest()==ore.kind,"Harvest failed")
+	await physics_frame
+	check(not ore.active and ore.visible and ore.maturity_stars==0,"Depleted ore did not retain weakened art")
+	check(ore.harvest()=="" and ore.resource_body.collision_layer==0,"Depleted ore harvest or collision still active")
+	ore.last_break=Time.get_unix_time_from_system()-31.0
+	ore._update_maturity()
+	check(ore.active and ore.maturity_stars==1,"Ore did not recover to one star")
+	ore.last_break=Time.get_unix_time_from_system()-400.0
+	ore._update_maturity()
+	check(ore.maturity_stars==5 and ore.maturity_particles.emitting,"Mature ore lacks particles")
+	ore.harvest()
+	var remaining: int = ore.hits_left
+	var id: String = ore.regional_id
+	game._save()
+	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(game.save_path))
+	check(saved is Dictionary and saved.get("regional_resource_state",{}).get(id,{}).get("hits_left",-1)==remaining,"Partial resource progress not saved")
+	game.hero.global_position=Vector3(0,0.35,0)
+	remote._queue_near(game.hero.global_position)
+	await process_frame
+	await process_frame
+	game.hero.global_position=at+Vector3(2,0,0)
+	remote._queue_near(game.hero.global_position)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	ore=_find_resource(remote,id)
+	check(is_instance_valid(ore) and ore.hits_left==remaining,"Ore reset on chunk reload")
+	var tree_at: Vector3 = wood_spec["position"]
+	game.hero.global_position=tree_at+Vector3(2,0,0)
+	remote._queue_near(game.hero.global_position)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	var tree = _find_resource(remote,str(remote.terrain.seed)+":"+str(wood_spec["id"]))
+	check(is_instance_valid(tree),"Regional tree not streamed")
+	if not is_instance_valid(tree): return
+	for i in range(tree.max_hits): tree.harvest()
+	check(tree.falling and not tree.active,"Tree did not enter whole-tree felling state")
+	await create_timer(0.6).timeout
+	check(not tree.visible and not tree.falling and tree.resource_body.collision_layer==0,"Felled tree retained canopy or collision")
+	print("REGIONAL RESOURCE LIFECYCLE COMPLETE")
+
+func _find_resource(remote,id: String):
+	for key in remote._loaded:
+		for node in remote._loaded[key]:
+			if is_instance_valid(node) and node.get_meta("regional_resource_id","")==id: return node
+	return null
 
 func _finish(game: Node) -> void:
 	game.queue_free()
