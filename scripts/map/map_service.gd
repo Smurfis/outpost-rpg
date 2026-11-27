@@ -244,7 +244,7 @@ func import_state(data: Variant) -> void:
 			record.position = Vector3(float(entry.position[0]), float(entry.position[1]), float(entry.position[2]))
 			if visibility_at(record.position) == 0:
 				continue
-			if list_id == "known" and record.get("category", "") in ["zones", "stations", "portals"] and record.get("label") is String:
+			if list_id == "known" and record.get("category", "") in ["zones", "stations", "portals", "special_resources"] and record.get("label") is String:
 				known[str(record.get("id", ""))] = record
 			elif list_id == "scenery" and record.get("size") is Array and record.size.size() == 3 and record.get("kind", "") in ["wood", "stone", "iron", "coal", "clay"]:
 				record.size = Vector3(float(record.size[0]), float(record.size[1]), float(record.size[2])).clamp(Vector3.ONE * 0.1, Vector3.ONE * 20)
