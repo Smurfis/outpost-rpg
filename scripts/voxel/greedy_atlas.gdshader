@@ -10,6 +10,7 @@ uniform sampler2D coast_texture : source_color, filter_nearest, repeat_disable;
 // Off by default: starter Fields, ordinary dungeons, maps and all existing
 // users of the shared atlas render exactly as before. The remote islands
 // duplicate the material and supply their own player/camera uniforms.
+uniform bool terrain_gradient_enabled = false;
 uniform bool island_cutaway_enabled = false;
 uniform bool island_cave_mode = false;
 uniform vec3 island_cutaway_focus = vec3(0.0);
@@ -97,6 +98,22 @@ void fragment() {
 			vec2 grass_uv = (vec2(0.5) + local_uv * 15.0) / 64.0;
 			vec3 grass = texture(atlas_texture, grass_uv).rgb;
 			pigment = mix(pigment, grass * 0.88, 0.92);
+		}
+	}
+	// A vertical face gradient repeats per block, even on merged quads.
+	if (terrain_gradient_enabled) {
+		float wall = 1.0 - smoothstep(0.3, 0.85, abs(island_world_normal.y));
+		float local_y = fract(island_world_position.y);
+		float brightness = mix(0.78, 1.08, smoothstep(0.0, 1.0, local_y));
+		pigment *= mix(1.0, brightness, wall);
+		float broad = 0.5 + 0.5*sin(island_world_position.x*0.085 + sin(island_world_position.z*0.09)*1.8);
+		if (id == 16.0 || id == 17.0) {
+			pigment *= mix(vec3(0.94,0.88,0.79),vec3(1.16,1.07,0.90),broad);
+		} else if (id == 4.0) {
+			float cool = smoothstep(7.0, 17.0, island_world_position.y);
+			pigment = mix(pigment,pigment*vec3(0.76,1.02,1.30)+vec3(0.018,0.04,0.07),cool*0.72);
+		} else if (id == 0.0) {
+			pigment *= mix(vec3(0.87,0.96,0.88),vec3(1.06,1.08,0.96),broad);
 		}
 	}
 	ALBEDO = pigment;
