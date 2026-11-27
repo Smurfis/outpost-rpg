@@ -151,7 +151,7 @@ func _build_ui() -> void:
 	left.add_child(filters)
 	filters.hide()
 	_button(left, "Layers", func(): filters.visible = not filters.visible)
-	for key in ["mobs", "stations", "portals", "zones", "resources"]:
+	for key in ["mobs", "stations", "portals", "zones", "resources", "special_resources"]:
 		var check := CheckButton.new()
 		check.text = str(key).capitalize()
 		check.button_pressed = service.preferences[key]
