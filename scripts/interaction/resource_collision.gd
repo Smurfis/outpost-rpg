@@ -73,7 +73,7 @@ func _configure_rooted_tree(shape: Dictionary) -> void:
 		var span: Vector2i = columns[key]
 		var low := float(span.x)*0.5
 		var high := float(span.y+1)*0.5
-		_add_box(Vector3(key.x*0.5,(low+high)*0.5,key.y*0.5),Vector3(0.5,high-low,0.5),"TreeRoot")
+		_add_box(Vector3(key.x*0.5,(low+high)*0.5,key.y*0.5),Vector3(0.5,high-low,0.5),"TreeRoot_%d_%d" % [key.x,key.y])
 	if crown_min.is_finite() and crown_max.is_finite():
 		_add_box((crown_min+crown_max)*0.5,crown_max-crown_min,"TreeCanopy")
 
