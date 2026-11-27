@@ -64,6 +64,8 @@ var swimming: bool = false
 var boat_art: MeshInstance3D
 var boating := false
 const BOAT_LAUNCH_TIME := 0.76
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
+var boat_wave_pose := Vector3.ZERO
 const BOAT_WAKE = preload("res://scripts/vfx/rowboat_wake.gd")
 var boat_launch_age := -1.0
 var boat_impact_age := 0.0
@@ -853,13 +855,14 @@ func _update_boat(delta: float = 0.0) -> void:
 		boat_contact=false
 		boat_impact_age=0.0
 		boat_row_phase=0.0
+		boat_wave_pose=OCEAN.hull_pose(global_position,visual.rotation.y)
 	if boat_launch_age>=0.0:
 		boat_launch_age+=delta
 		if boat_launch_age>=0.48 and not boat_contact:
 			boat_contact=true
 			boat_impact_age=0.0
 			_emit_swim_splash()
-			BOAT_WAKE.spawn(get_parent() as Node3D,Vector3(global_position.x,WATER_SURFACE_Y+0.075,global_position.z),visual.rotation.y,true)
+			BOAT_WAKE.spawn(get_parent() as Node3D,Vector3(global_position.x,OCEAN.surface_y(global_position)+0.075,global_position.z),visual.rotation.y,true)
 		if boat_launch_age>=BOAT_LAUNCH_TIME:
 			boat_launch_age=-1.0
 			boating=true
@@ -867,19 +870,21 @@ func _update_boat(delta: float = 0.0) -> void:
 
 func _update_boat_pose(delta: float,direction: Vector3) -> void:
 	if boat_art==null or not boat_art.visible: return
-	var water_y := WATER_SURFACE_Y-global_position.y-0.12
+	var desired_pose := OCEAN.hull_pose(global_position,visual.rotation.y)
+	boat_wave_pose=boat_wave_pose.lerp(desired_pose,1.0-exp(-12.0*maxf(delta,0.0)))
+	var water_y := WATER_SURFACE_Y-global_position.y-0.12+boat_wave_pose.x
 	boat_art.rotation.y=visual.rotation.y
-	var bob := sin(elapsed*2.4)*0.045
+	var bob := 0.0
 	if boat_contact:
 		bob-=sin(boat_impact_age*14.0)*0.16*exp(-boat_impact_age*5.0)
-	boat_art.rotation.x=sin(elapsed*1.8)*0.018
-	boat_art.rotation.z=sin(elapsed*2.1)*0.026
+	boat_art.rotation.x=boat_wave_pose.y
+	boat_art.rotation.z=boat_wave_pose.z
 	if boat_launch_age>=0.0:
 		var progress := clampf(boat_launch_age/BOAT_LAUNCH_TIME,0.0,1.0)
 		var release := smoothstep(0.22,0.63,progress)
 		# Presentation-only hop: the swimming capsule never jumps through terrain.
 		boat_art.position=Vector3(0,lerpf(2.08,water_y+bob,release),0)
-		boat_art.rotation.x=sin(release*PI)*0.34
+		boat_art.rotation.x=sin(release*PI)*0.34+boat_wave_pose.y*release
 		visual.position.y=lerpf(0.0,water_y+0.37,release)+sin(progress*PI)*0.66
 		left_arm.rotation.x=lerpf(PI*0.93,0.80,release)
 		right_arm.rotation.x=left_arm.rotation.x
@@ -912,6 +917,6 @@ func _update_boat_pose(delta: float,direction: Vector3) -> void:
 			boat_wake_age=0.0
 			var stern := Vector3(sin(visual.rotation.y),0,cos(visual.rotation.y))*1.28
 			var at := global_position+stern
-			at.y=WATER_SURFACE_Y+0.065
+			at.y=OCEAN.surface_y(at)+0.065
 			BOAT_WAKE.spawn(get_parent() as Node3D,at,visual.rotation.y)
 	else: boat_wake_age=0.0
