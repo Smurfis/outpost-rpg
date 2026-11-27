@@ -153,7 +153,9 @@ func settlement_at(x: int,z: int) -> Dictionary:
 func top_tile(x: int, z: int) -> int:
 	if near_settlement(x,z):
 		var plan = settlement_plan()
-		if plan != null and plan.is_road(x,z): return 5
+		if plan != null:
+			if plan.plaza.has(Vector2i(x,z)): return 6
+			if plan.is_road(x,z): return 5
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin < 2.0:
 		return 17 # Wet sand
