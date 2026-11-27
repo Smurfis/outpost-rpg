@@ -1,6 +1,7 @@
 extends RefCounted
 ## Equipment crafting quality rolls. Everything here is pure game logic so
 ## station UI, save migration and combat can share the same roll definitions.
+const MATURITY = preload("res://scripts/world/ore_maturity.gd")
 const RARITY_NAMES: Array[String] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
 const CHANCES: Array[float] = [0.60, 0.27, 0.10, 0.025, 0.005]
 const STAT_KEYS: Array[String] = ["damage", "attack_speed", "crit_chance", "ability_power"]
@@ -50,7 +51,7 @@ static func _score(rarity: int, bonuses: Dictionary, affix: String) -> float:
 		total += 7.0
 	return total
 
-static func roll_item(item_id: String, rng: RandomNumberGenerator = null) -> Dictionary:
+static func roll_item(item_id: String, rng: RandomNumberGenerator = null, material_maturity: int = 1) -> Dictionary:
 	if not is_gear(item_id):
 		return {}
 	var random: RandomNumberGenerator = rng
@@ -60,8 +61,9 @@ static func roll_item(item_id: String, rng: RandomNumberGenerator = null) -> Dic
 	var chance: float = random.randf()
 	var rarity: int = 0
 	var threshold: float = 0.0
-	for rank in range(CHANCES.size()):
-		threshold += CHANCES[rank]
+	var odds: Array[float] = CHANCES if material_maturity<=1 else MATURITY.rarity_chances(material_maturity)
+	for rank in range(odds.size()):
+		threshold += odds[rank]
 		if chance < threshold:
 			rarity = rank
 			break
