@@ -101,8 +101,9 @@ func generate(source, index: int = 2) -> bool:
 	_graph.clear()
 	var center: Vector2i = source.islands[island_index]["center"]
 	# Restrict planning to one bounded island, and preserve its cave corridor.
-	for z in range(center.y-44,center.y+45):
-		for x in range(center.x-44,center.x+45):
+	var extent := ceili(float(source.islands[island_index]["radius"])) if source.expanded_preview else 44
+	for z in range(center.y-extent,center.y+extent+1):
+		for x in range(center.x-extent,center.x+extent+1):
 			var p := Vector2i(x,z)
 			if not _safe(source,p): continue
 			var h: int = source.height_at(x,z)
@@ -114,7 +115,7 @@ func generate(source, index: int = 2) -> bool:
 		var roughness := 0.0
 		for d in DIRS:
 			if _heights.has(p+d): roughness += absf(float(_heights[p]-_heights[p+d]))
-		_graph.set_point_weight_scale(_ids[p],1.0+roughness*0.35)
+		_graph.set_point_weight_scale(_ids[p],1.0+roughness*(1.2 if source.expanded_preview else 0.35))
 		for d in [Vector2i.RIGHT,Vector2i.DOWN]:
 			var q: Vector2i = p+d
 			if _ids.has(q) and absi(int(_heights[p]) - int(_heights[q]))<=1:
@@ -141,8 +142,9 @@ func generate(source, index: int = 2) -> bool:
 		break
 	if not found: return false
 	var candidates: Array[Vector2i] = []
-	for z in range(hub.y-28,hub.y+29,2):
-		for x in range(hub.x-28,hub.x+29,2):
+	var plot_extent := 34 if source.expanded_preview else 28
+	for z in range(hub.y-plot_extent,hub.y+plot_extent+1,2):
+		for x in range(hub.x-plot_extent,hub.x+plot_extent+1,2):
 			candidates.append(Vector2i(x,z))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = source.seed ^ 0x51c17 ^ (0 if island_index==2 else 0x192a)
@@ -199,15 +201,15 @@ func generate(source, index: int = 2) -> bool:
 		eastern_route = route
 		_record_road(route)
 		break
-	# Expand narrow centerlines by one tile on gentle slopes. The road remains
+	# Expand narrow centerlines on gentle slopes. The road remains
 	# a terrain material, not another set of mesh nodes or colliders.
-	var centerlines: Array = roads.keys()
-	for p: Vector2i in centerlines:
-		for d in DIRS:
-			var q := p+d
-			if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
-				roads[q] = true
-	_plan_half_steps()
+	for pass_index in range(2 if source.expanded_preview else 1):
+		var centerlines: Array = roads.keys()
+		for p: Vector2i in centerlines:
+			for d in DIRS:
+				var q := p+d
+				if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
+					roads[q] = true
 	_plan_countryside(source)
 	_build_landmarks(source)
 	_plan_quest_anchors(source)
@@ -236,6 +238,12 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 				hi = maxi(hi,_heights[p])
 				lo = mini(lo,_heights[p])
 		if not valid or hi-lo>2: continue
+		if source.expanded_preview:
+			var spacing_ok := true
+			for old in buildings:
+				var footprint: Rect2i = old["rect"]
+				if rect.grow(2).intersects(footprint): spacing_ok=false
+			if not spacing_ok: continue
 		# Building floor is a single flat, accessible layer on a shallow
 		# foundation. Door must meet the outside terrain by <= one step.
 		var floor_y := hi+1
