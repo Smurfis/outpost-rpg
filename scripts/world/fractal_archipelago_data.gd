@@ -24,6 +24,7 @@ var _ridges: FastNoiseLite
 var _height_cache: Dictionary = {}
 var _margin_cache: Dictionary = {}
 var _cave_cover: Dictionary = {}
+var _cove_apron: Dictionary = {}
 var ore_slots: Dictionary = {} # Exact wall voxel -> regenerating material
 var _ore_column_masks: Dictionary = {}
 
@@ -59,34 +60,59 @@ func _init(world_seed: int = 64012) -> void:
 	_cover_remote_caves()
 	_plan_cave_ore()
 
-# Keep a short exposed mouth, then a real roof above the tunnel.
-# Never change the first island / physical mine save contract.
+# West retains the original entrance; south gets a fully roofed lateral
+# mouth. Preserve tunnel floor addresses, chest IDs and the first mine.
 func _cover_remote_caves() -> void:
 	for index in [1,2]:
 		var route: Array = caves.routes[index]
 		if route.is_empty(): continue
 		var mouth: Vector3i = route[0]
-		for i in range(5,route.size()):
+		if index==2:
+			# A taller opening tapering to the ordinary three-block tunnel.
+			for i in range(3):
+				var step: Vector3i = route[i]
+				for width in range(CAVES.CORRIDOR_WIDTH):
+					var cell := Vector2i(step.x,step.z+width)
+					caves.extra_ceilings[cell]=caves.floor_at(cell.x,cell.y)+(5 if i==0 else 4)
+		for i in range(0 if index==2 else 5,route.size()):
 			var step: Vector3i = route[i]
 			for width in range(CAVES.CORRIDOR_WIDTH):
 				var cell := Vector2i(step.x,step.z+width)
-				_cover_column(cell,mouth)
+				_cover_column(cell,mouth,index==2,i<5)
 		var end: Vector3i = route.back()
 		for dz in range(-2,3):
 			for dx in range(-2,3):
-				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth)
+				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,index==2,false)
+		if index==2: _plan_cove_apron(mouth)
 
-func _cover_column(cell: Vector2i,mouth: Vector3i) -> void:
+func _cover_column(cell: Vector2i,mouth: Vector3i,cove: bool,entrance: bool) -> void:
 	var floor_y: int = caves.floor_at(cell.x,cell.y)
 	if floor_y==CAVES.INVALID_FLOOR: return
 	var roof: int = caves.ceiling_at(cell.x,cell.y,floor_y)+2
-	for dz in range(-3,4):
-		for dx in range(-3,4):
+	var radius := 5 if cove and entrance else 3
+	for dz in range(-radius,radius+1):
+		for dx in range(-radius,radius+1):
 			var q := cell+Vector2i(dx,dz)
-			if q.x>mouth.x-5 and caves.has_cave(q.x,q.y): continue
+			# Keep the front face open horizontally, never open to the sky.
+			if cove and q.x>mouth.x: continue
+			if not cove and q.x>mouth.x-5 and caves.has_cave(q.x,q.y): continue
 			if margin_at(q.x+0.5,q.y+0.5)<=0: continue
-			var required := roof-maxi(absi(dx),absi(dz))
+			var distance := maxi(absi(dx),absi(dz))
+			var required := roof-ceili(float(distance)*0.75) if cove and entrance else roof-distance
 			_cave_cover[q]=maxi(int(_cave_cover.get(q,BEDROCK)),required)
+
+func _plan_cove_apron(mouth: Vector3i) -> void:
+	# A level forecourt under the east-facing arch. Blend outward into the
+	# existing terraced approach, limiting each forward change to one voxel.
+	for lane in range(-1,3):
+		var previous := mouth.y
+		for step in range(1,9):
+			var p := Vector2i(mouth.x+step,mouth.z+lane)
+			if margin_at(p.x+0.5,p.y+0.5)<=2.0: break
+			var original := height_at(p.x,p.y)
+			var next := mouth.y if step<=2 else clampi(original,previous-1,previous+1)
+			_cove_apron[p]=next
+			previous=next
 
 func _plan_cave_ore() -> void:
 	# Reserve actual solid wall voxels in the remote end chambers. Base
@@ -169,6 +195,7 @@ func is_land_at(x: float, z: float) -> bool:
 
 func height_at(x: int, z: int) -> int:
 	var key := Vector2i(x, z)
+	if _cove_apron.has(key): return int(_cove_apron[key])
 	if goblin_city!=null:
 		var override: int = goblin_city.height_override(key)
 		if override!=-99999: return override
