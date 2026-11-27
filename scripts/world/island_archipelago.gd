@@ -1147,8 +1147,9 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 		chest.setup(game, "island_cave_%d_%d" % [terrain.seed, index],
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
-	if terrain.near_settlement(key.x,key.y,float(CHUNK)):
-		var plan = terrain.settlement_plan()
+	var settlement_index: int = terrain.settlement_index_at(key.x,key.y,float(CHUNK))
+	if settlement_index>=0:
+		var plan = terrain.settlement_plan(settlement_index)
 		if plan != null:
 			for item in plan.buildings:
 				var rect: Rect2i = item["rect"]
