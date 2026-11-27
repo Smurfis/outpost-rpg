@@ -93,6 +93,7 @@ func _run() -> void:
 		await process_frame
 	await physics_frame
 	check(not remote.settlement_nodes.is_empty(),"Settlement failed to reconstruct on re-entry")
+	_check_countryside_chunks(remote,plan)
 	await _test_waystation(game,remote)
 	_finish(game)
 
@@ -113,6 +114,7 @@ func _test_waystation(game,remote) -> void:
 		remote._build_pending()
 		await process_frame
 	await physics_frame
+	_check_countryside_chunks(remote,plan)
 	map.observe_player()
 	check(map.known.has(marker_id),"Visited waystation not discovered")
 	check(not map.search("Frontier Waystation").is_empty(),"Discovered waystation not searchable")
@@ -154,6 +156,22 @@ func _test_waystation(game,remote) -> void:
 		var hit := PICKER.resolve(game,game.camera.unproject_position(floor_target))
 		check(not hit.is_empty() and hit.get("target")==null and Vector3(hit.get("position",Vector3.INF)).distance_to(floor_target)<0.25,"Waystation interior pick failed at angle %d" % i)
 	print("WAYSTATION GAME CHECK COMPLETE")
+
+func _check_countryside_chunks(remote,plan) -> void:
+	var found := 0
+	for key: Vector2i in remote._loaded:
+		var expected := 0
+		for cell: Vector2i in plan.scenery:
+			if cell.x>=key.x and cell.x<key.x+remote.CHUNK and cell.y>=key.y and cell.y<key.y+remote.CHUNK:
+				expected+=1
+		var batches := 0
+		for node in remote._loaded[key]:
+			if is_instance_valid(node) and node.has_meta("scenery_count"):
+				batches+=1
+				check(node.get_meta("scenery_count")==expected,"Wrong streamed scenery count")
+		check(batches==(1 if expected>0 else 0),"Scenery batch has wrong chunk ownership")
+		found+=expected
+	check(found>0,"No countryside geometry streamed near settlement")
 
 func _finish(game: Node) -> void:
 	game.queue_free()
