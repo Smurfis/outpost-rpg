@@ -2,6 +2,7 @@ extends RefCounted
 ## Each 5x5 sector is independently reproducible, with four fixed shared
 ## stone-corridor gateways and a seeded spanning tree. No global float positions.
 const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
+const Pack = preload("res://scripts/world/city_lab_dungeon_pack.gd")
 const WIDTH := 5
 const MID := 2
 const SIDE := WIDTH*Dungeon.SIDE
@@ -9,6 +10,8 @@ const KIND := "stone_corridor"
 const DIRS = Dungeon.DIRS
 var solver := Dungeon.new()
 var rng := RandomNumberGenerator.new()
+var pack_id := "outpost:default"
+var loop_percent := 22
 
 func gate(d: int) -> Vector2i:
 	return Vector2i(MID,MID)+DIRS[d]*MID
@@ -23,7 +26,18 @@ func _add(graph: Dictionary,a: Vector2i,d: int) -> void:
 
 func generate(world_seed: int, sx: int, sz: int, custom: Variant = null) -> bool:
 	if not solver.load_defaults(): return false
-	if custom != null and not solver.register_asset(custom): return false
+	pack_id = "outpost:default"
+	loop_percent = 22
+	if custom != null:
+		if custom is Dictionary and custom.get("format","") == Pack.FORMAT:
+			var pack := Pack.new().normalize(custom)
+			if pack.is_empty(): return false
+			pack_id = pack["id"]
+			loop_percent = pack["loop_percent"]
+			for asset in pack["modules"]:
+				if not solver.register_asset(asset): return false
+		elif not solver.register_asset(custom):
+			return false
 	solver.modules.clear()
 	solver.links.clear()
 	solver.external.clear()
@@ -55,7 +69,7 @@ func generate(world_seed: int, sx: int, sz: int, custom: Variant = null) -> bool
 		for x in range(WIDTH):
 			var p := Vector2i(x,z)
 			for d in [1,2]:
-				if _inside(p+DIRS[d]) and not graph[p].has(d) and rng.randf()<0.22:
+				if _inside(p+DIRS[d]) and not graph[p].has(d) and rng.randf()<float(loop_percent)/100.0:
 					_add(graph,p,d)
 	for d in range(4):
 		var p := gate(d)
