@@ -41,7 +41,7 @@ func configure(terrain) -> void:
 	chests.clear()
 	for island in terrain.islands.slice(0,3):
 		var center: Vector2i = island["center"]
-		var radius: float = island["radius"]
+		var radius: float = island.get("cave_radius",island["radius"])
 		# Put the entrance on the inland shoulder, NOT the beach. The old
 		# 0.80 radius point sometimes had terrain Y=-1 but the forced
 		# cave floor Y=+1, forming a 2-block wall in the access path.
