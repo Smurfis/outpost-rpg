@@ -4,7 +4,6 @@ extends Node3D
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const SETTLEMENT_BUILDING = preload("res://scripts/world/default_settlement_building.gd")
 const SETTLEMENT_SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
-const SETTLEMENT_STEPS = preload("res://scripts/world/default_settlement_steps.gd")
 const REGIONAL_RESOURCE = preload("res://scripts/resource_node.gd")
 const RESOURCE_PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 var settlement_nodes: Array[Node3D] = []
@@ -1195,9 +1194,6 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 			if scenery != null:
 				add_child(scenery)
 				members.append(scenery)
-			for tread in SETTLEMENT_STEPS.build(plan,key,CHUNK):
-				add_child(tread)
-				members.append(tread)
 			_install_gathering(plan,key,game,members)
 	_install_goblin_city(key,game,members)
 	_install_cave_ore(key,game,members)
