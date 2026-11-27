@@ -669,7 +669,7 @@ func _distance_segment(pos: Vector2, a: Vector2, b: Vector2) -> float:
 func _water_material() -> ShaderMaterial:
 	if _shared_water_material == null:
 		_shared_water_material = ShaderMaterial.new()
-		_shared_water_material.shader = WATER_SHADER
+		_shared_water_material.shader = preload("res://scripts/voxel/coastal_water_preview.gdshader") if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" else WATER_SHADER
 	return _shared_water_material
 
 func _configure_island_ocean_mask() -> void:
