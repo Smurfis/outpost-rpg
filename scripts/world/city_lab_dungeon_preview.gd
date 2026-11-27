@@ -72,9 +72,9 @@ func _ui() -> void:
 	var row := HBoxContainer.new()
 	column.add_child(row)
 	_button(row,"City Lab",func(): get_tree().change_scene_to_file("res://scenes/terrain_city_lab.tscn"))
-	_button(row,"New seed",func(): seed_value+=1; _build(Vector2i(37,37)))
+	_button(row,"New seed",_new_seed)
 	_button(row,"Import module",_import_module)
-	_button(row,"Default pack",func(): custom=null; _build(Vector2i(37,37)))
+	_button(row,"Default pack",_default_pack)
 	_button(row,"Rotate",func(): yaw+=PI/4)
 	_button(row,"Zoom +",func(): zoom=maxf(15.0,zoom-8.0))
 	_button(row,"Zoom -",func(): zoom=minf(90.0,zoom+8.0))
@@ -92,6 +92,14 @@ func _button(row: HBoxContainer, title: String, action: Callable) -> void:
 	button.custom_minimum_size = Vector2(0,40)
 	button.pressed.connect(action)
 	row.add_child(button)
+
+func _new_seed() -> void:
+	seed_value += 1
+	_build(Vector2i(37,37))
+
+func _default_pack() -> void:
+	custom = null
+	_build(Vector2i(37,37))
 
 func _import_module() -> void:
 	var asset: Variant = files.read_json("user://city_lab_connector.json")
