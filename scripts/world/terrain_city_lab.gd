@@ -39,8 +39,11 @@ var angle := 0.75
 var zoom := 44.0
 var material := StandardMaterial3D.new()
 var city_ready := false
+var mobile_preview := false
+var build_started_ms: int = 0
 
 func _ready() -> void:
+	mobile_preview = OS.has_feature("android") or OS.has_feature("city_lab_mobile") or OS.get_cmdline_user_args().has("--lab-mobile")
 	get_tree().auto_accept_quit = false
 	material.vertex_color_use_as_albedo = true
 	material.cull_mode = BaseMaterial3D.CULL_BACK
@@ -112,6 +115,9 @@ func _ui() -> void:
 	status = Label.new()
 	status.add_theme_font_size_override("font_size",18)
 	column.add_child(status)
+	if mobile_preview:
+		_mobile_ui(column)
+		return
 	var help := Label.new()
 	help.text = "Click / tap ground to walk | WASD | Q/E rotate | wheel zoom"
 	column.add_child(help)
@@ -135,6 +141,36 @@ func _ui() -> void:
 
 	_add_creator_ui(column)
 	_add_connector_ui(column)
+
+func _mobile_ui(column: VBoxContainer) -> void:
+	status.custom_minimum_size.x = 700
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var first := HBoxContainer.new()
+	column.add_child(first)
+	_mobile_button(first,"New city",_next_seed)
+	_mobile_button(first,"Previous",_previous_seed)
+	_mobile_button(first,"Go to keep",func(): _route(plan.goal))
+	_mobile_button(first,"Enter dungeon",_enter_keep_dungeon)
+	var second := HBoxContainer.new()
+	column.add_child(second)
+	_mobile_button(second,"Rotate left",func(): angle -= PI/4)
+	_mobile_button(second,"Rotate right",func(): angle += PI/4)
+	_mobile_button(second,"Zoom +",func(): zoom = maxf(18.0,zoom-6.0))
+	_mobile_button(second,"Zoom -",func(): zoom = minf(100.0,zoom+6.0))
+	_mobile_button(second,"Dungeon Lab",_open_dungeon)
+	edit_status = Label.new()
+	edit_status.text = "Tap terrain to walk. Developer editing is PC-only."
+	edit_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(edit_status)
+	print("CITY LAB MOBILE CONTROLS READY")
+
+func _mobile_button(parent: HBoxContainer, label_text: String, action: Callable) -> void:
+	var button := Button.new()
+	button.text = label_text
+	button.custom_minimum_size = Vector2(120,56)
+	button.add_theme_font_size_override("font_size",20)
+	button.pressed.connect(action)
+	parent.add_child(button)
 
 func _add_creator_ui(column: VBoxContainer) -> void:
 	var tools := HBoxContainer.new()
@@ -394,6 +430,7 @@ func _reload() -> void:
 	_build()
 
 func _build() -> void:
+	build_started_ms = Time.get_ticks_msec()
 	city_ready = false
 	unsaved = false
 	_clear_selection()
@@ -427,6 +464,8 @@ func _build() -> void:
 	status.text = "CITY LAB | %d | Region %d,%d | %d lots | %d BSP rooms | %d meshes | %d/%d quads" % [seed_value,region_x,region_z,plan.districts.size(),plan.rooms.size(),city.get_child_count(),quad_count,face_count]
 
 	city_ready = true
+	if mobile_preview:
+		status.text = "CITY LAB | Seed %d | %d meshes | %d ms build" % [seed_value,city.get_child_count(),Time.get_ticks_msec()-build_started_ms]
 	print("CITY LAB READY: ",status.text)
 
 func _render_section(key: Vector3i, cells: Array) -> Dictionary:
@@ -480,7 +519,7 @@ func _pick(screen: Vector2) -> void:
 		if not plan.blocks.has(voxel):
 			previous = voxel
 			continue
-		if select_mode.selected != 0:
+		if not mobile_preview and select_mode != null and select_mode.selected != 0:
 			_select(voxel if select_mode.selected == 1 else previous)
 			return
 		var cell := Vector2i(voxel.x,voxel.z)
@@ -493,7 +532,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT: _pick(event.position)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP: zoom = maxf(18.0,zoom-4.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: zoom = minf(100.0,zoom+4.0)
-	elif event is InputEventScreenTouch and event.pressed:
+	elif event is InputEventScreenTouch and event.pressed and not ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch",true):
 		_pick(event.position)
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_Q: angle -= PI/4
