@@ -100,26 +100,6 @@ func generate(source) -> bool:
 		found = true
 		break
 	if not found: return false
-	# Connect another existing POI without modifying the cave's own cells.
-	# The endpoint is a safe exterior staging tile, not a tunnel floor.
-	if source.caves.entrances.size()>2:
-		var entrance: Vector3 = source.caves.entrances[2]
-		var anchor := Vector2i(floori(entrance.x),floori(entrance.z))
-		var approaches: Array[Vector2i] = []
-		for p: Vector2i in _ids:
-			if p.distance_squared_to(anchor)<=64 and absf(float(_heights[p])-entrance.y)<=2.0:
-				approaches.append(p)
-		approaches.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
-			var da := a.distance_squared_to(anchor)
-			var db := b.distance_squared_to(anchor)
-			return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
-		for p in approaches:
-			var route := _route(hub,p)
-			if route.is_empty(): continue
-			cave_approach = p
-			cave_route = route
-			_record_road(route)
-			break
 	var candidates: Array[Vector2i] = []
 	for z in range(hub.y-20,hub.y+21,2):
 		for x in range(hub.x-20,hub.x+21,2):
@@ -178,6 +158,26 @@ func generate(source) -> bool:
 		for z in range(at.y,at.y+LOT):
 			for x in range(at.x,at.x+LOT): reserved[Vector2i(x,z)] = true
 		buildings.append({"id":"settlement_%s" % KINDS[buildings.size()],"kind":KINDS[buildings.size()],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+	# Connect another existing POI without modifying the cave's own cells.
+	# The endpoint is a safe exterior staging tile, not a tunnel floor.
+	if source.caves.entrances.size()>2:
+		var entrance: Vector3 = source.caves.entrances[2]
+		var anchor := Vector2i(floori(entrance.x),floori(entrance.z))
+		var approaches: Array[Vector2i] = []
+		for p: Vector2i in _ids:
+			if p.distance_squared_to(anchor)<=64 and absf(float(_heights[p])-entrance.y)<=2.0:
+				approaches.append(p)
+		approaches.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+			var da := a.distance_squared_to(anchor)
+			var db := b.distance_squared_to(anchor)
+			return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
+		for p in approaches:
+			var route := _route(hub,p)
+			if route.is_empty(): continue
+			cave_approach = p
+			cave_route = route
+			_record_road(route)
+			break
 	# Expand narrow centerlines by one tile on gentle slopes. The road remains
 	# a terrain material, not another set of mesh nodes or colliders.
 	var centerlines: Array = roads.keys()
