@@ -43,6 +43,7 @@ var _reveal_texture: ImageTexture
 var _reveal_strength: float = 0.0
 
 const SECTION = preload("res://scripts/world/island_section_mesh.gd")
+const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
 const CHAMBER = preload("res://scripts/world/chamber_visibility.gd")
 const SECTION_PICK := 1 << 18
 var section_active := false
@@ -76,12 +77,15 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 func _identify_regions(center: Vector2i) -> void:
 	_identify_mine_regions(center)
 	if mine != null:
-		for index in range(1, terrain.caves.routes.size()):
+		for index in range(1, mini(3,terrain.caves.routes.size())):
 			_add_cache_cave_regions(terrain.caves.routes[index])
 	var cave = terrain.caves.natural
 	if cave != null:
 		for region in cave.regions:
 			_add_region(region.cells, region.anchor)
+	if terrain.goblin_city!=null:
+		for region in terrain.goblin_city.regions:
+			_add_region(region.cells,region.anchor)
 
 func _add_cache_cave_regions(route: Array) -> void:
 	var end: Vector3i = route.back()
@@ -169,6 +173,8 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 				nearby = anchor
 	if terrain.caves.natural != null and cell.distance_squared_to(terrain.caves.natural.mouth) < 64*64:
 		nearby = terrain.caves.natural.mouth
+	if terrain.goblin_city!=null and terrain.goblin_city.contains(cell):
+		nearby=terrain.goblin_city.throne
 	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
 		_identify_regions(center)
 	var next_region: int = _owners.get(cell,-1)
@@ -717,8 +723,16 @@ func update_settlement_views(position: Vector3,camera: Camera3D) -> void:
 			revealed = building.spec
 			break
 	var toward := camera.global_transform.basis.z.normalized()
+	var below_city: bool = terrain.goblin_city!=null and terrain.goblin_city.floors.has(Vector2i(floori(position.x),floori(position.z))) and position.y<7.0
 	for building in settlement_nodes:
-		if is_instance_valid(building): building.update_view(position,camera.global_position,revealed,toward)
+		if not is_instance_valid(building): continue
+		if str(building.spec["id"]).begins_with("goblin_city_"):
+			building.visible=not below_city
+		building.update_view(position,camera.global_position,revealed,toward)
+		if not building.visible:
+			for part in building.parts.values(): part["body"].set_meta("building_cutaway_hidden",true)
+		else:
+			for part in building.parts.values(): part["body"].set_meta("building_cutaway_hidden",not part["mesh"].visible)
 	for tree in regional_trees:
 		if is_instance_valid(tree): tree.update_tree_cutaway(revealed,toward)
 
@@ -1177,6 +1191,7 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				add_child(tread)
 				members.append(tread)
 			_install_gathering(plan,key,game,members)
+	_install_goblin_city(key,game,members)
 	_install_cave_ore(key,game,members)
 	_loaded[key] = members
 	if natural_population != null:
@@ -1223,3 +1238,42 @@ func _install_cave_ore(key: Vector2i,game: Node,members: Array) -> void:
 		resource.setup(record["kind"],1,{},true)
 		resource.configure_regional("%d:wall_ore:%d:%d:%d" % [terrain.seed,cell.x,cell.y,cell.z],int(record["tier"]),"cave_wall",game)
 		members.append(resource)
+
+func _install_goblin_city(key: Vector2i,game: Node,members: Array) -> void:
+	var city = terrain.goblin_city
+	if city==null or game==null: return
+	for item in city.buildings:
+		var rect: Rect2i = item["rect"]
+		if _cell_at(Vector3(rect.position.x,0,rect.position.y))!=key: continue
+		var building := SETTLEMENT_BUILDING.new()
+		building.name=str(item["id"])
+		add_child(building)
+		building.build(item,terrain)
+		members.append(building)
+		settlement_nodes.append(building)
+	for record in city.guards:
+		var cell: Vector2i = record["cell"]
+		var y: int = city.floors[cell] if record["underground"] else terrain.height_at(cell.x,cell.y)
+		var at := Vector3(cell.x+0.5,y+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var group := Node3D.new()
+		add_child(group)
+		members.append(group)
+		var guard := CITY_GUARD.new()
+		guard.terrain=terrain
+		guard.underground_guard=record["underground"]
+		guard.home=at
+		group.add_child(guard)
+		guard.setup(game.hero,null,1,at,"goblin")
+		guard.display_name="Goblin city guard"
+
+func regenerate_city_for_preview(hero: Node3D) -> bool:
+	if terrain==null or terrain.goblin_city==null or mine_pending or mine_load_failed: return false
+	# Never replace geometry around the player or another island's dungeon.
+	if terrain.goblin_city.contains(Vector2i(floori(hero.global_position.x),floori(hero.global_position.z))): return false
+	if not terrain.regenerate_goblin_city(): return false
+	invalidate_section_geometry()
+	for key: Vector2i in _loaded.keys():
+		if terrain.goblin_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
+	_center=Vector2i(99999,99999)
+	return true
