@@ -162,6 +162,7 @@ func top_tile(x: int, z: int) -> int:
 		if plan != null:
 			if plan.plaza.has(Vector2i(x,z)): return 6
 			if plan.is_road(x,z): return 5
+			if plan.field_tiles.has(Vector2i(x,z)): return 3
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin < 2.0:
 		return 17 # Wet sand
