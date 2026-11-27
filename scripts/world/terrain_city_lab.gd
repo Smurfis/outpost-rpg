@@ -6,6 +6,7 @@ const Prefab = preload("res://scripts/world/city_lab_prefab.gd")
 const Edits = preload("res://scripts/world/city_lab_edits.gd")
 const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
 const Pack = preload("res://scripts/world/city_lab_dungeon_pack.gd")
+const Site = preload("res://scripts/world/city_lab_site.gd")
 var pack_codec := Pack.new()
 var module_name: LineEdit
 var loop_density: SpinBox
@@ -76,7 +77,18 @@ func _ready() -> void:
 	_box(player,Vector3(0,1.07,0),Vector3(0.66,0.55,0.66),Color("#f1d5a2"))
 	_box(player,Vector3(0,1.4,0),Vector3(0.72,0.14,0.72),Color("#88423b"))
 	_ui()
+	var returning := get_tree().has_meta(Site.META)
+	if returning:
+		var site: Dictionary = get_tree().get_meta(Site.META)
+		seed_value = site["seed"]
+		region_x = site["rx"]
+		region_z = site["rz"]
+		get_tree().remove_meta(Site.META)
 	_build()
+	if returning and city_ready:
+		player.position = _standing(plan.goal)
+		_update_camera()
+		edit_status.text = "Returned to the city keep"
 
 func _box(parent: Node3D, at: Vector3, size: Vector3, color: Color) -> void:
 	var instance := MeshInstance3D.new()
@@ -192,6 +204,7 @@ func _add_connector_ui(column: VBoxContainer) -> void:
 	pack_row.add_child(loop_density)
 	_tool(pack_row,"Add to pack",_add_module_to_pack)
 	_tool(pack_row,"Update pack loops",_update_pack_loops)
+	_tool(pack_row,"Enter keep dungeon",_enter_keep_dungeon)
 
 func _captured_module(id: String) -> Dictionary:
 	if copied.is_empty(): return {}
@@ -240,6 +253,16 @@ func _export_module() -> void:
 		return
 	var ok := edits.write_json("user://city_lab_connector.json",asset)
 	edit_status.text = "Module exported. Open Dungeon Lab and Import module." if ok else "Module export failed"
+
+func _enter_keep_dungeon() -> void:
+	if not city_ready: return
+	if _player_cell() != plan.goal:
+		_route(plan.goal)
+		edit_status.text = "Walk to the keep, then select Enter keep dungeon again"
+		return
+	if unsaved and not _save(): return
+	get_tree().set_meta(Site.META,Site.new().context(seed_value,region_x,region_z))
+	get_tree().change_scene_to_file("res://scenes/city_lab_dungeon_preview.tscn")
 
 func _open_dungeon() -> void:
 	if unsaved and not _save(): return
