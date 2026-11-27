@@ -1,6 +1,7 @@
 extends SceneTree
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const BUILDING = preload("res://scripts/world/default_settlement_building.gd")
+const SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -93,8 +94,8 @@ func _test_regional_plans() -> void:
 		var west_again = reverse.settlement_plan(1)
 		check(south_again!=null and west_again!=null,"Reverse generation lost site")
 		if south_again==null or west_again==null: continue
-		check(west.buildings==west_again.buildings and west.roads==west_again.roads and west.landmarks==west_again.landmarks,"Western site changes with visit order")
-		check(south.buildings==south_again.buildings and south.roads==south_again.roads and south.landmarks==south_again.landmarks,"Southern site changes with visit order")
+		check(west.buildings==west_again.buildings and west.roads==west_again.roads and west.landmarks==west_again.landmarks and west.fields==west_again.fields and west.scenery==west_again.scenery,"Western site changes with visit order")
+		check(south.buildings==south_again.buildings and south.roads==south_again.roads and south.landmarks==south_again.landmarks and south.fields==south_again.fields and south.scenery==south_again.scenery,"Southern site changes with visit order")
 		check(west.profile=="frontier_waystation" and south.profile=="market_town","Regional identities lost")
 		check(west.buildings.size()==3 and south.buildings.size()==6,"Default regional kit incomplete")
 		var ids: Dictionary = {}
@@ -114,4 +115,37 @@ func _test_regional_plans() -> void:
 			for cell: Vector2i in plan.roads:
 				check(not source.caves.has_cave(cell.x,cell.y) and not plan.reserved.has(cell),"Regional route intersects protected geometry")
 				check(source.top_tile(cell.x,cell.y)==(6 if plan.plaza.has(cell) else 5),"Regional terrain map differs from road plan")
+			_test_countryside(source,plan)
 			print("REGION SEED %d | %s | %d buildings | %d road cells | %d landmarks" % [seed_value,plan.profile,plan.buildings.size(),plan.roads.size(),plan.landmarks.size()])
+
+func _test_countryside(source,plan) -> void:
+	check(not plan.fields.is_empty(),"No farmland on default regional seed")
+	check(not plan.scenery.is_empty(),"No countryside scenery")
+	var chunks: Dictionary = {}
+	for field in plan.fields:
+		var rect: Rect2i = field["rect"]
+		var entry: Vector2i = field["entry"]
+		check(plan.roads.has(entry),"Farm disconnected from road")
+		for z in range(rect.position.y,rect.end.y):
+			for x in range(rect.position.x,rect.end.x):
+				var p := Vector2i(x,z)
+				check(plan.field_tiles.has(p) and not plan.roads.has(p) and not plan.reserved.has(p),"Farm overlaps protected land")
+				check(not source.caves.has_cave(x,z) and source.top_tile(x,z)==3,"Farm sampler or cave clearance mismatch")
+	for p: Vector2i in plan.scenery:
+		var spec: Dictionary = plan.scenery[p]
+		check(not plan.roads.has(p) and not plan.reserved.has(p) and not source.caves.has_cave(p.x,p.y),"Scenery obstructs reserved route or cave")
+		check(spec["height"]==source.height_at(p.x,p.y),"Scenery floats above terrain")
+		if spec["kind"]=="crop": check(plan.field_tiles.has(p),"Crop outside field")
+		var key := Vector2i(floori(p.x/16.0)*16,floori(p.y/16.0)*16)
+		chunks[key]=int(chunks.get(key,0))+1
+	var total := 0
+	for key: Vector2i in chunks:
+		var mesh := SCENERY.build(plan,key,16)
+		check(mesh!=null,"Missing countryside mesh")
+		if mesh==null: continue
+		check(mesh.mesh.get_surface_count()==1 and mesh.get_child_count()==0,"Scenery not a single collision-free batch")
+		check(mesh.get_meta("scenery_count")==chunks[key],"Wrong chunk scenery count")
+		total+=int(mesh.get_meta("scenery_count"))
+		mesh.free()
+	check(total==plan.scenery.size(),"Scenery missing or duplicated across chunks")
+	print("COUNTRYSIDE | %s | %d fields | %d decorations | %d batches" % [plan.profile,plan.fields.size(),total,chunks.size()])
