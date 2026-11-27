@@ -1,6 +1,7 @@
 extends Node3D
 ## Short-lived, world-space wake marks. One mesh, no collision or physics.
 const LIFE := 0.8
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 var age := 0.0
 var art: MeshInstance3D
 static var shared_mesh: ArrayMesh
@@ -38,6 +39,7 @@ func _ready() -> void:
 	add_child(art)
 
 func _process(delta: float) -> void:
+	global_position.y=OCEAN.surface_y(global_position)+0.075
 	age+=delta
 	if age>=LIFE:
 		queue_free()
