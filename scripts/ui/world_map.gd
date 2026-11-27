@@ -135,6 +135,9 @@ func _build_ui() -> void:
 	var left := VBoxContainer.new()
 	left.position = Vector2(12, 68)
 	screen.add_child(left)
+	if _dev_travel_allowed() and service.biome.archipelago!=null and service.biome.archipelago.terrain.goblin_city!=null:
+		_button(left,"Goblin City (DEV)",_travel_goblin_city)
+		_button(left,"Regenerate city (DEV)",_regenerate_goblin_city)
 	search_box = LineEdit.new()
 	search_box.placeholder_text = "Search discovered places"
 	search_box.custom_minimum_size = Vector2(235, 44)
@@ -498,7 +501,10 @@ func _dev_travel_to(point: Vector3) -> void:
 		return
 	var destination: Vector3
 	var plan = remote.terrain.settlement_plan(chosen)
-	if plan!=null:
+	if chosen==3 and remote.terrain.goblin_city!=null:
+		var hub: Vector2i = remote.terrain.goblin_city.hub
+		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	elif plan!=null:
 		var hub: Vector2i = plan.hub
 		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
 	else:
@@ -534,3 +540,28 @@ func _dev_travel_to(point: Vector3) -> void:
 	dev_travel_busy=false
 	dev_travel=false
 	if dev_travel_button!=null: dev_travel_button.text="Dev travel: OFF"
+
+func _travel_goblin_city() -> void:
+	if not _dev_travel_allowed(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.goblin_city==null: return
+	var center: Vector2i = remote.terrain.goblin_city.hub
+	await _dev_travel_to(Vector3(center.x,0,center.y))
+
+func _regenerate_goblin_city() -> void:
+	if not _dev_travel_allowed() or dev_travel_busy or not service.in_overworld(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.goblin_city==null: return
+	if not remote.regenerate_city_for_preview(game.hero):
+		footer.text="Leave Goblin Territory before regenerating."
+		return
+	# Existing discovered terrain tiles should resample the changed city.
+	var center: Vector2i = remote.terrain.goblin_city.hub
+	for z in range(-60,61,12):
+		for x in range(-60,61,12):
+			service._touch_chunk(Vector3(center.x+x,0,center.y+z))
+	service.revision+=1
+	service.dirty=true
+	service.changed.emit()
+	footer.text="Goblin City layout %d ready; tap Goblin City to visit." % remote.terrain.goblin_city.cycle
+	dirty=true
