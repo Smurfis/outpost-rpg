@@ -97,6 +97,7 @@ func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void
 	set_meta("resource_habitat",habitat)
 	var saved: Dictionary = game.regional_resource_state.get(id,{})
 	last_break=float(saved.get("last_break",0.0))
+	var saved_hits := clampi(int(saved.get("hits_left",max_hits)),0,max_hits)
 	if _is_maturing_ore():
 		maturity_label=Label3D.new()
 		maturity_label.billboard=BaseMaterial3D.BILLBOARD_ENABLED
@@ -127,6 +128,7 @@ func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void
 		maturity_particles.draw_pass_1=spark
 		add_child(maturity_particles)
 		_update_maturity(true)
+		if active and saved_hits>0: hits_left=saved_hits
 	else:
 		var elapsed := maxf(0.0,Time.get_unix_time_from_system()-last_break)
 		if last_break>0 and elapsed<recovery:
@@ -135,6 +137,8 @@ func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void
 			cooldown=recovery-elapsed
 			visible=false
 			if resource_body!=null: resource_body.set_deferred("collision_layer",0)
+		elif saved_hits>0:
+			hits_left=saved_hits
 
 func _is_maturing_ore() -> bool:
 	return not regional_id.is_empty() and kind in ["stone","iron","coal","clay"]
@@ -162,7 +166,7 @@ func _update_maturity(force: bool = false) -> void:
 func _record_regional_break() -> void:
 	if regional_id.is_empty() or not is_instance_valid(regional_game): return
 	last_break=Time.get_unix_time_from_system()
-	regional_game.regional_resource_state[regional_id]={"last_break":last_break}
+	regional_game.regional_resource_state[regional_id]={"last_break":last_break,"hits_left":0}
 
 func _fell_tree() -> void:
 	# The existing root harvest action is the support-break proxy; a whole
@@ -391,10 +395,14 @@ func harvest() -> String:
 			_update_maturity(true)
 		elif not regional_id.is_empty() and kind=="wood":
 			if _harvest_tween!=null: _harvest_tween.kill()
+			for mesh in _mesh_scales:
+				if is_instance_valid(mesh): mesh.scale=_mesh_scales[mesh]
 			_fell_tree()
 		else:
 			visible = false
 		cooldown = recovery
+	elif not regional_id.is_empty() and is_instance_valid(regional_game):
+		regional_game.regional_resource_state[regional_id]={"last_break":last_break,"hits_left":hits_left}
 	return kind
 
 func _shrimp_pool() -> void:
