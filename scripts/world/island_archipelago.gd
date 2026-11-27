@@ -2,6 +2,8 @@ extends Node3D
 ## Feature-branch-only remote island streamer. Never mutates the original
 ## Outpost chunks or its coastline. The far-ocean horizon supplies the water.
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
+const SETTLEMENT_BUILDING = preload("res://scripts/world/default_settlement_building.gd")
+var settlement_nodes: Array[Node3D] = []
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
@@ -699,6 +701,9 @@ func _process(delta: float) -> void:
 		mine.visit(position)
 	_update_cutaway(game, position, delta)
 	_update_hero_visibility(game, hero)
+	if game.camera != null:
+		for building in settlement_nodes:
+			if is_instance_valid(building): building.update_view(position,game.camera.global_position)
 
 func _is_below_terrain(position: Vector3) -> bool:
 	# Actual tunnel cells are definitive. A steep drop with high walls on
@@ -973,6 +978,7 @@ func _unload(key: Vector2i) -> void:
 		if node != null and is_instance_valid(node):
 			if node is MeshInstance3D:
 				_roof_nodes.erase(node)
+			if node in settlement_nodes: settlement_nodes.erase(node)
 			node.queue_free()
 	_loaded.erase(key)
 
@@ -1132,6 +1138,18 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 		chest.setup(game, "island_cave_%d_%d" % [terrain.seed, index],
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
+	if terrain.near_settlement(key.x,key.y,float(CHUNK)):
+		var plan = terrain.settlement_plan()
+		if plan != null:
+			for item in plan.buildings:
+				var rect: Rect2i = item["rect"]
+				if _cell_at(Vector3(rect.position.x,0,rect.position.y)) != key: continue
+				var building := SETTLEMENT_BUILDING.new()
+				building.name = str(item["id"])
+				add_child(building)
+				building.build(item,terrain)
+				members.append(building)
+				settlement_nodes.append(building)
 	_loaded[key] = members
 	if natural_population != null:
 		natural_population.populate(self,game,key,members)
