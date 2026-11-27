@@ -3,6 +3,7 @@ extends Node3D
 const PICKER = preload("res://scripts/interaction/world_picker.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 const COUNT := 8
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 var game: Node
 var rank := 0
 var points: Array[Vector2] = []
@@ -55,6 +56,7 @@ func configure(ref: Node, seed_value: int, rarity: int) -> void:
 func _process(delta: float) -> void:
 	if game==null or game.hero==null: return
 	if global_position.distance_squared_to(game.hero.global_position)>30.0*30.0: return
+	ring.position.y=OCEAN.surface_y(global_position)-global_position.y+0.065
 	elapsed+=minf(delta,0.1)
 	cooldown=maxf(0.0,cooldown-delta)
 	if bite_at>=0 and elapsed>bite_at+1.1:
@@ -89,7 +91,9 @@ func _process(delta: float) -> void:
 		points[i]=(points[i]+next[i]*delta).limit_length(1.6)
 		var p: Vector2 = points[i]
 		var v: Vector2 = velocities[i]
-		school.set_instance_transform(i,Transform3D(Basis(Vector3.UP,atan2(v.x,v.y)+PI),Vector3(p.x,-0.4+sin(elapsed*2.0+i)*0.08,p.y)))
+		var at := global_position+Vector3(p.x,0,p.y)
+		var depth := OCEAN.surface_y(at)-global_position.y-0.4+sin(elapsed*2.0+i)*0.08
+		school.set_instance_transform(i,Transform3D(Basis(Vector3.UP,atan2(v.x,v.y)+PI),Vector3(p.x,depth,p.y)))
 
 func interact(_hero: Node3D) -> void:
 	if not game.target_in_range(self): return
