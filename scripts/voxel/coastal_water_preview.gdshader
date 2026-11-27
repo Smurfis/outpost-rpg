@@ -18,7 +18,31 @@ uniform float shallow_opacity : hint_range(0.0,1.0) = 0.52;
 uniform bool island_land_mask_enabled = false;
 uniform sampler2D island_land_mask : filter_nearest, repeat_disable;
 uniform float island_mask_half_extent = 384.0;
+// CPU and GPU share the exact same coefficient arrays and explicit clock.
+uniform vec4 wave_coefficients[6];
+uniform vec2 wave_dynamics[6];
+uniform float ocean_time = 0.0;
+uniform vec2 wave_center = vec2(0.0);
+uniform float wave_home_half = 96.0;
+// 0 = streamed home tiles; 1 = flat horizon; 2 = local ocean patch.
+uniform int wave_surface_mode = 0;
 varying vec2 surface_world;
+varying float swell_height;
+
+float shared_wave(vec2 p) {
+	vec2 warp = vec2(0.0);
+	float height = 0.0;
+	for (int i = 0; i < 6; i++) {
+		vec4 c = wave_coefficients[i];
+		vec2 d = wave_dynamics[i];
+		float phase = dot(p+warp,c.xy)*c.z+ocean_time*d.y+c.w;
+		float swell = exp(1.2*(sin(phase)-1.0));
+		height += (swell-0.4197820789351331)*d.x;
+		warp += c.xy*(swell*1.2*cos(phase)*d.x);
+	}
+	vec2 distance_from_center = abs(p-wave_center);
+	return height*(1.0-smoothstep(40.0,48.0,max(distance_from_center.x,distance_from_center.y)));
+}
 
 float cell_hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -26,9 +50,16 @@ float cell_hash(vec2 p) {
 
 void vertex() {
 	surface_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+	swell_height = wave_surface_mode == 1 ? 0.0 : shared_wave(surface_world);
+	VERTEX.y += swell_height;
 }
 
 void fragment() {
+	vec2 patch_distance = abs(surface_world-wave_center);
+	bool in_patch = max(patch_distance.x,patch_distance.y)<48.0;
+	bool outside_home = max(abs(surface_world.x),abs(surface_world.y))>=wave_home_half;
+	if (wave_surface_mode==1 && in_patch) discard;
+	if (wave_surface_mode==2 && (!outside_home || !in_patch)) discard;
 	// The distant ocean spans the remote islands. Never draw it inside land:
 	// terrain cutaways can otherwise expose the ocean from below a mountain.
 	if (island_land_mask_enabled) {
@@ -40,13 +71,13 @@ void fragment() {
 	// Quantisation prevents subpixel glitter and seams between terrain chunks.
 	vec2 cell = floor(surface_world * pixel_density);
 	vec2 p = (cell + 0.5) / pixel_density;
-	float t = TIME * wave_speed;
+	float t = ocean_time * wave_speed;
 
 	// Broad, slowly travelling blue patches instead of uniform stripes.
 	float ripples = sin(p.x * 0.78 + p.y * 0.37 + t * 0.70);
 	ripples += 0.60 * sin(p.y * 1.14 - p.x * 0.48 - t * 0.56);
 	ripples += 0.25 * sin((p.x + p.y) * 2.05 + t * 0.32);
-	float water_band = smoothstep(-0.95,0.95,ripples);
+	float water_band = smoothstep(-0.95,0.95,ripples+swell_height*2.0);
 	vec3 pigment = mix(ocean_deep.rgb, ocean_swell.rgb, water_band * 0.82);
 	// Shallow tint is constant across both triangles of each streamed water cell.
 	// Bright water has depth and remains opaque (Android Compatibility-safe).
