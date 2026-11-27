@@ -6,6 +6,8 @@ const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
 const Edits = preload("res://scripts/world/city_lab_edits.gd")
 const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
 const Pack = preload("res://scripts/world/city_lab_dungeon_pack.gd")
+const Site = preload("res://scripts/world/city_lab_site.gd")
+var linked_site := false
 var pack_codec := Pack.new()
 var sector := Sector.new()
 var mesher := Mesher.new()
@@ -58,6 +60,10 @@ func _ready() -> void:
 	skin.albedo_color = Color("#eab45d")
 	player.material_override = skin
 	add_child(player)
+	linked_site = get_tree().has_meta(Site.META)
+	if linked_site:
+		var context: Dictionary = get_tree().get_meta(Site.META)
+		seed_value = context["dungeon_seed"]
 	_ui()
 	_build(Vector2i(37,37))
 
@@ -74,7 +80,7 @@ func _ui() -> void:
 	var row := HBoxContainer.new()
 	column.add_child(row)
 	_button(row,"City Lab",func(): get_tree().change_scene_to_file("res://scenes/terrain_city_lab.tscn"))
-	_button(row,"New seed",_new_seed)
+	if not linked_site: _button(row,"New seed",_new_seed)
 	_button(row,"Import module",_import_module)
 	_button(row,"Import pack",_import_pack)
 	_button(row,"Default pack",_default_pack)
@@ -87,6 +93,7 @@ func _ui() -> void:
 		_button(gates,["North gate","East gate","South gate","West gate"][d],_go_gate.bind(d))
 	var help := Label.new()
 	help.text = "Click/tap floor to walk. Reach a gateway to enter the adjacent sector."
+	if linked_site: help.text += " | Linked to city keep"
 	column.add_child(help)
 
 func _button(row: HBoxContainer, title: String, action: Callable) -> void:
