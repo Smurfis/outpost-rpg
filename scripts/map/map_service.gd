@@ -17,7 +17,7 @@ var scenery: Dictionary = {}
 var chunk_versions: Dictionary = {}
 var creatures: Array[Dictionary] = []
 var resources: Array[Dictionary] = []
-var preferences: Dictionary = {"mobs": true, "stations": true, "portals": true, "zones": true, "resources": false, "resource_type": "all"}
+var preferences: Dictionary = {"mobs": true, "stations": true, "portals": true, "zones": true, "resources": false, "special_resources": true, "resource_type": "all"}
 var revision: int = 0
 var clock: float = 0.0
 var save_clock: float = 0.0
@@ -152,6 +152,9 @@ func refresh_entities() -> void:
 		if visibility_at(at) != 2:
 			continue
 		var id: String = "%s:%d:%d" % [resource.kind, roundi(at.x * 10), roundi(at.z * 10)]
+		if resource.get_meta("special_resource_node",false):
+			remember("special:"+str(resource.get_meta("regional_resource_id",id)),"Rare "+str(resource.kind).capitalize()+" Deposit","special_resources",at,{"kind":resource.kind,"special":true})
+		if resource.get_meta("cave_ore_block",false): continue # Do not project underground wall voxels as surface scenery.
 		if not resource.active:
 			if scenery.erase(id):
 				_touch_chunk(at)
