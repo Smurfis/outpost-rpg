@@ -836,6 +836,10 @@ func _make_boat_art() -> void:
 func _update_boat(delta: float = 0.0) -> void:
 	var wants_boat: bool = swimming and str(game.equipment.get("trinket",""))=="rowboat"
 	if not wants_boat:
+		if boating or boat_launch_age>=0.0:
+			left_arm.rotation.z=0.0
+			right_arm.rotation.z=0.12
+			visual.rotation.z=0.0
 		boating=false
 		boat_launch_age=-1.0
 		boat_contact=false
@@ -848,6 +852,7 @@ func _update_boat(delta: float = 0.0) -> void:
 		boat_launch_age=0.0
 		boat_contact=false
 		boat_impact_age=0.0
+		boat_row_phase=0.0
 	if boat_launch_age>=0.0:
 		boat_launch_age+=delta
 		if boat_launch_age>=0.48 and not boat_contact:
