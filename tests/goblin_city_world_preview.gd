@@ -121,6 +121,7 @@ func _run() -> void:
 		game.hero.swimming=false
 		game.hero._update_boat()
 		check(game.hero.boat_launch_age<0.0,"Leaving water did not cancel launch")
+	await _test_live_skeletal(game)
 	game.queue_free()
 	await process_frame
 	print("WORLD PREVIEW RESULT: %d failures" % failures)
@@ -158,3 +159,52 @@ func _test_skeletal(data) -> void:
 	check(data.skeletal_city.cycle==1,"Skeletal cycle unchanged")
 	for p: Vector2i in old:
 		if not city.contains(p): check(data.caves.floors.get(p)==old[p],"Skeletal regeneration altered unrelated cave")
+
+func _test_live_skeletal(game) -> void:
+	var remote = game.terrain_surface.archipelago
+	var city = remote.terrain.skeletal_city
+	if city==null:
+		check(false,"Live skeletal city missing")
+		return
+	game.hero.set_physics_process(false)
+	var hub: Vector2i = city.hub
+	var at := Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	game.hero.global_position=at
+	remote._queue_near(at)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	await physics_frame
+	check(not remote.regenerate_skeletal_city_for_preview(game.hero),"Skeletal reset allowed beneath player")
+	var entry: Vector2i = city.entrance
+	var inner := entry-Vector2i(3,0)
+	var inside := Vector3(inner.x+0.5,float(city.floors[inner])+0.08,inner.y+0.5)
+	game.hero.global_position=inside
+	game._camera(1.0)
+	remote._update_cutaway(game,inside,1.0)
+	check(remote.section_active or remote._cave_mode,"Skeletal entrance camera reveal missing")
+	var query := PhysicsRayQueryParameters3D.create(inside+Vector3.UP,inside-Vector3.UP*0.5,1,[game.hero.get_rid()])
+	var hit: Dictionary = game.hero.get_world_3d().direct_space_state.intersect_ray(query)
+	check(not hit.is_empty(),"Skeletal stair floor has no collision")
+	var heart: Vector2i = city.heart
+	var hall := Vector3(heart.x+0.5,float(city.floors[heart])+0.08,heart.y+0.5)
+	game.hero.global_position=hall
+	remote._queue_near(hall)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	await physics_frame
+	game._camera(1.0)
+	remote._update_cutaway(game,hall,1.0)
+	check(remote.section_active or remote._cave_mode,"Skeletal hall camera reveal missing")
+	var scenery_count := 0
+	for members in remote._loaded.values():
+		for member in members:
+			if str(member.name).begins_with("SkeletalCavern_"): scenery_count+=1
+	check(scenery_count>0,"Skeletal cavern decoration absent")
+	game.hero.global_position=Vector3(0,0.35,0)
+	await process_frame
+	check(remote.regenerate_skeletal_city_for_preview(game.hero),"Live isolated skeletal reset failed")
+	print("SKELETAL STREAM: %d decorated chunks" % scenery_count)
