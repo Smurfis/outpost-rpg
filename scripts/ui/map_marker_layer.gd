@@ -67,7 +67,9 @@ func _draw() -> void:
 			glyph(self, at, record.disposition)
 		else:
 			var tint := Color("65cde0") if record.category == "resources" else Color("e5bb71")
-			if record.category == "portals":
+			if record.category == "special_resources":
+				draw_colored_polygon(PackedVector2Array([at+Vector2(0,-8),at+Vector2(7,0),at+Vector2(0,8),at+Vector2(-7,0)]),Color("d4abed"))
+			elif record.category == "portals":
 				tint = service.RARITY.color(int(record.get("quality", 0)))
 				draw_arc(at, 7, 0, TAU, 8, tint, 2)
 			else:
