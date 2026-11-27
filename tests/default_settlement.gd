@@ -74,5 +74,44 @@ func _run() -> void:
 			for part in building.parts.values():
 				check(part["mesh"].visible and not part["body"].get_meta("building_cutaway_hidden",false),"Exterior restoration failed")
 			building.queue_free()
+	_test_regional_plans()
 	print("DEFAULT SETTLEMENT RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
+
+func _test_regional_plans() -> void:
+	for seed_value in [64012,64013,42]:
+		var source := DATA.new(seed_value)
+		check(source._settlements.is_empty(),"Regional planning not lazy")
+		check(source.settlement_plan(0)==null,"Mine island received settlement")
+		var west = source.settlement_plan(1)
+		var south = source.settlement_plan(2)
+		if west==null or south==null:
+			check(false,"Missing regional settlement seed %d" % seed_value)
+			continue
+		var reverse := DATA.new(seed_value)
+		var south_again = reverse.settlement_plan(2)
+		var west_again = reverse.settlement_plan(1)
+		check(south_again!=null and west_again!=null,"Reverse generation lost site")
+		if south_again==null or west_again==null: continue
+		check(west.buildings==west_again.buildings and west.roads==west_again.roads and west.landmarks==west_again.landmarks,"Western site changes with visit order")
+		check(south.buildings==south_again.buildings and south.roads==south_again.roads and south.landmarks==south_again.landmarks,"Southern site changes with visit order")
+		check(west.profile=="frontier_waystation" and south.profile=="market_town","Regional identities lost")
+		check(west.buildings.size()==3 and south.buildings.size()==6,"Default regional kit incomplete")
+		var ids: Dictionary = {}
+		for plan in [west,south]:
+			check(not plan.west_route.is_empty(),"Missing western route")
+			check(not plan.eastern_route.is_empty(),"Missing eastern approach")
+			check(not plan.cave_route.is_empty(),"Missing cave approach")
+			check(plan._validate_network(source),"Published road network disconnected")
+			for record in plan.landmarks:
+				check(not ids.has(record["id"]),"Duplicate regional landmark ID")
+				ids[record["id"]]=true
+				var cell: Vector2i = record["cell"]
+				check(plan.roads.has(cell) and source.settlement_index_at(cell.x,cell.y)==plan.island_index,"Landmark not on local road")
+			for item in plan.buildings:
+				var rect: Rect2i = item["rect"]
+				check(source.settlement_at(rect.position.x,rect.position.y)==item,"Building lookup resolves wrong island")
+			for cell: Vector2i in plan.roads:
+				check(not source.caves.has_cave(cell.x,cell.y) and not plan.reserved.has(cell),"Regional route intersects protected geometry")
+				check(source.top_tile(cell.x,cell.y)==(6 if plan.plaza.has(cell) else 5),"Regional terrain map differs from road plan")
+			print("REGION SEED %d | %s | %d buildings | %d road cells | %d landmarks" % [seed_value,plan.profile,plan.buildings.size(),plan.roads.size(),plan.landmarks.size()])
