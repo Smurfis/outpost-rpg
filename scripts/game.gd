@@ -124,6 +124,9 @@ func _ready() -> void:
 	_register_keys()
 	inventory.merge({"shrimp": 0, "cooked_shrimp": 0, "shrimp_net": 0})
 	equipment["tool_fishing"] = ""
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+		equipment["trinket"]=""
+		inventory["rowboat"]=0
 	gathering_skill_xp["fishing"] = 0
 	for point in station_positions.values():
 		prop_placement.reserve(point, 1.7)
@@ -1085,6 +1088,8 @@ func _load_recipes() -> void:
 	file.close()
 	if parsed is Array:
 		recipes = parsed
+		if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+			recipes.append({"id":"rowboat","name":"Wooden Rowboat","result":"rowboat","amount":1,"station":"workbench","seconds":4.0,"strokes":6,"category":"Tools","desc":"Equip in the trinket slot to launch automatically in open water.","ingredients":{"wood":30,"fiber":10}})
 
 func craft() -> void:
 	show_crafting()
@@ -1112,6 +1117,8 @@ func _recipe_by_id(id: String) -> Dictionary:
 	return {}
 
 func equipment_slot(item_id: String) -> String:
+	if item_id == "rowboat":
+		return "trinket" if equipment.has("trinket") else ""
 	if item_id == "shrimp_net":
 		return "tool_fishing"
 	if item_id in ["spear", "iron_blade"]:
@@ -1391,7 +1398,7 @@ func _apply_equipment() -> void:
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "rowboat"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)
