@@ -136,7 +136,7 @@ func generate(source) -> bool:
 			var side := Vector2i(-d.y,d.x)
 			var wide := true
 			for offset in [-1,1]:
-				var q := outside+side*offset
+				var q: Vector2i = outside+side*int(offset)
 				if not _heights.has(q) or reserved.has(q) or absi(floor_y-int(_heights[q]))>1: wide = false
 			if not wide: continue
 			var route := _route(hub,outside)
