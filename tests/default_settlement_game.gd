@@ -73,12 +73,18 @@ func _run() -> void:
 		var hit := PICKER.resolve(game,game.camera.unproject_position(floor_target))
 		print("SETTLEMENT PICK angle=",i," camera=",game.camera.global_position," hero=",center," target=",floor_target," mask=",building.view_mask," hit=",hit)
 		check(not hit.is_empty() and hit.get("target")==null and Vector3(hit.get("position",Vector3.INF)).distance_to(floor_target)<0.25,"Visible floor pick failed at angle %d" % i)
+		for tree in remote.regional_trees:
+			if tree.tree_cutaway_hidden:
+				check(not tree.tree_mesh.visible and tree.resource_body.collision_layer==1,"Tree cutaway changed movement collision")
+				check(tree.get_node("WorldPickGeometry").get_meta("building_cutaway_hidden",false),"Hidden tree still intercepts picking")
 		# Hidden walls must not disappear from the gameplay collision mask.
 		for group in building.parts:
 			check(building.parts[group]["body"].collision_layer==1,"Cutaway changed movement collision")
 	game.hero.global_position = start
 	remote.update_settlement_views(start,game.camera)
 	check(building.parts[5]["mesh"].visible,"Roof did not restore outside")
+	for tree in remote.regional_trees:
+		check(not tree.tree_cutaway_hidden and tree.tree_mesh.visible,"Tree cutaway not restored outside")
 	for node in remote.settlement_nodes:
 		check(node.view_mask==0,"Adjacent structure did not restore outside")
 	game.hero.global_position = Vector3(0,0.35,0)
