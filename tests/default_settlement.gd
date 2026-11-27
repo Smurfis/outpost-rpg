@@ -83,6 +83,7 @@ func _run() -> void:
 	_test_adventure_policy()
 	_test_maturity()
 	_test_rooted_tree()
+	_test_preview_fixes()
 	print("DEFAULT SETTLEMENT RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
 
@@ -280,3 +281,35 @@ func _test_rooted_tree() -> void:
 			mesh.free()
 	check(shapes.size()>=14,"Seeded tree diversity too low")
 	print("ROOTED TREE SHAPES: %d distinct layouts" % shapes.size())
+
+func _test_preview_fixes() -> void:
+	for seed_value in [42,64012,64013]:
+		var source := DATA.new(seed_value)
+		var repeated := DATA.new(seed_value)
+		check(source.ore_slots==repeated.ore_slots,"Cave ore addresses nondeterministic")
+		for index in [1,2]:
+			var route: Array = source.caves.routes[index]
+			for i in range(5,route.size()):
+				var step: Vector3i = route[i]
+				for dz in range(2):
+					var z := step.z+dz
+					var floor_y: int = source.caves.floor_at(step.x,z)
+					var ceiling: int = source.caves.ceiling_at(step.x,z,floor_y)
+					check(source.is_solid(step.x,ceiling,z) and source.is_solid(step.x,ceiling+1,z),"Cave interior lacks two solid roof layers")
+			var count := 0
+			for cell: Vector3i in source.ore_slots:
+				if source.ore_slots[cell]["island"]!=index: continue
+				count+=1
+				check(not source.is_solid(cell.x,cell.y,cell.z),"Ore socket still occupied by static rock")
+				check((source.solid_column(cell.x,cell.z) & (1 << (cell.y-DATA.BEDROCK)))==0,"Chunk occupancy disagrees with ore socket")
+				check(source.is_solid(cell.x,cell.y+1,cell.z),"Ore socket undermines ceiling")
+				check(source.is_solid(cell.x,cell.y-1,cell.z),"Ore socket undermines floor")
+			check(count>=3,"Not enough individual cave ore blocks")
+			var plan = source.settlement_plan(index)
+			if plan==null: continue
+			for p: Vector2i in plan.road_steps:
+				var spec: Dictionary = plan.road_steps[p]
+				var d: Vector2i = spec["direction"]
+				check(plan.roads.has(p) and not plan.reserved.has(p) and not plan.plaza.has(p),"Half step outside legal road")
+				check(d.length_squared()==1 and spec["height"]==source.height_at(p.x,p.y),"Invalid half step geometry")
+			print("PREVIEW FIXES | %d | island %d | %d cave blocks | %d road steps" % [seed_value,index,count,plan.road_steps.size()])
