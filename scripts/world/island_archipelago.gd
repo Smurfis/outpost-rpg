@@ -4,6 +4,8 @@ extends Node3D
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const SETTLEMENT_BUILDING = preload("res://scripts/world/default_settlement_building.gd")
 const SETTLEMENT_SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
+const REGIONAL_RESOURCE = preload("res://scripts/resource_node.gd")
+const RESOURCE_PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 var settlement_nodes: Array[Node3D] = []
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
@@ -1165,6 +1167,7 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 			if scenery != null:
 				add_child(scenery)
 				members.append(scenery)
+			_install_gathering(plan,key,game,members)
 	_loaded[key] = members
 	if natural_population != null:
 		natural_population.populate(self,game,key,members)
@@ -1176,3 +1179,22 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 			var manager := game.get_node_or_null("Dungeons") if game != null else null
 			if manager != null and manager.has_method("register_world_site"):
 				manager.register_world_site(MINE_SITE_ID, terrain.seed, Vector3i(floori(mine.x), floori(mine.y), floori(mine.z)), "island_%d_%d" % [key.x, key.y])
+
+func _install_gathering(plan,key: Vector2i,game: Node,members: Array) -> void:
+	if game==null or not game.has_method("gather"): return
+	for spec in plan.gathering.nodes:
+		var at: Vector3 = spec["position"]
+		if _cell_at(at)!=key: continue
+		var cell: Vector2i = spec["cell"]
+		if spec["habitat"]=="cavern":
+			if terrain.caves.floor_at(cell.x,cell.y)!=floori(at.y): continue
+		elif terrain.caves.has_cave(cell.x,cell.y): continue
+		var radius := RESOURCE_PLACEMENT.radius_for(spec["kind"])
+		if not game.prop_placement.available(at,radius): continue
+		var resource := REGIONAL_RESOURCE.new()
+		add_child(resource)
+		resource.global_position=at
+		resource.setup(spec["kind"],1)
+		resource.configure_regional(str(terrain.seed)+":"+str(spec["id"]),int(spec["tier"]),str(spec["habitat"]),game)
+		game.prop_placement.reserve(at,radius,resource)
+		members.append(resource)
