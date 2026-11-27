@@ -3,6 +3,7 @@ const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const BUILDING = preload("res://scripts/world/default_settlement_building.gd")
 const SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
 const ADVENTURE = preload("res://scripts/world/regional_adventure_policy.gd")
+const TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
 const MATURITY = preload("res://scripts/world/ore_maturity.gd")
 const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 var failures := 0
@@ -81,6 +82,7 @@ func _run() -> void:
 	_test_regional_plans()
 	_test_adventure_policy()
 	_test_maturity()
+	_test_rooted_tree()
 	print("DEFAULT SETTLEMENT RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
 
@@ -240,3 +242,41 @@ func _test_maturity() -> void:
 	a.seed=64012
 	b.seed=64012
 	check(QUALITY.roll_item("iron_blade",a)==QUALITY.roll_item("iron_blade",b,1),"Baseline crafting RNG changed")
+
+func _test_rooted_tree() -> void:
+	var shapes: Dictionary = {}
+	for species in range(7):
+		for seed_value in [42,64012,64013]:
+			var terrain: Dictionary = {}
+			for z in range(-3,4):
+				for x in range(-3,4):
+					terrain[Vector2i(x,z)]=2 if x>=2 else (-2 if z<=-2 else 0)
+			var spec := {"seed":seed_value,"species":species,"ground":terrain}
+			var shape := TREE.generate(spec)
+			check(shape==TREE.generate(spec),"Rooted tree changed on regeneration")
+			var cells: Dictionary = shape["cells"]
+			check(cells.size()<4000 and cells.has(Vector3i.ZERO),"Invalid tree occupancy")
+			check(shape["roots"].size()>=8,"Tree has no spreading roots")
+			var visited: Dictionary = {}
+			visited[Vector3i.ZERO]=true
+			var queue: Array[Vector3i] = [Vector3i.ZERO]
+			var cursor := 0
+			while cursor<queue.size():
+				var p: Vector3i = queue[cursor]
+				cursor+=1
+				for d in TREE.DIRS:
+					var q := p+d
+					if cells.has(q) and not visited.has(q):
+						visited[q]=true
+						queue.append(q)
+			check(visited.size()==cells.size(),"Tree has disconnected voxels")
+			for root_cell: Vector3i in shape["roots"]:
+				check(cells[root_cell]==shape["bark"],"Nonwood root")
+			var mesh := TREE.mesh_for(shape)
+			check(mesh.mesh.get_surface_count()==1,"Tree not a single mesh surface")
+			check(mesh.get_meta("tree_quads")<mesh.get_meta("tree_exposed_faces"),"Tree did not greedily merge faces")
+			check(mesh.get_aabb().size.y>=4.0,"Tree silhouette too short")
+			shapes[str(cells.hash())]=true
+			mesh.free()
+	check(shapes.size()>=14,"Seeded tree diversity too low")
+	print("ROOTED TREE SHAPES: %d distinct layouts" % shapes.size())
