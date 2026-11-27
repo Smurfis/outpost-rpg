@@ -16,6 +16,7 @@ var islands: Array[Dictionary] = [
 	{"center": Vector2i(-200, -58), "radius": 44.0, "strength": 1.15,"biome":"temperate_woodland","name":"Frontier Waystation","sea":"kelp_coast"},
 	{"center": Vector2i(18, 232), "radius": 46.0, "strength": 1.4,"biome":"warm_meadow","name":"Market Town","sea":"sandbanks"},
 ]
+var expanded_preview := false
 var seed: int
 var caves
 var _fuzz: FastNoiseLite
@@ -51,6 +52,12 @@ func _init(world_seed: int = 64012) -> void:
 	_ridges.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	_ridges.fractal_octaves = 4
 	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" or OS.get_environment("OUTPOST_TEST_GOBLIN_CITY")=="1":
+		expanded_preview=true
+		# Keep original cave placement radii while extending settlement land.
+		islands[1]["cave_radius"]=44.0
+		islands[2]["cave_radius"]=46.0
+		islands[1]["radius"]=56.0
+		islands[2]["radius"]=64.0
 		goblin_city=GOBLIN_CITY.new()
 		goblin_city.generate(seed,0)
 		islands.append({"center":GOBLIN_CITY.CENTER,"radius":GOBLIN_CITY.RADIUS,"strength":1.4,"biome":"goblin_badlands","name":"Goblin Territory","sea":"cold_reef"})
@@ -229,6 +236,18 @@ func height_at(x: int, z: int) -> int:
 	var accessible_shore: float = -3.0 + coastal_steps
 	var blend: float = smoothstep(11.0, 25.0, margin)
 	var height: int = roundi(lerpf(accessible_shore, raw_height, blend))
+	# Broad continuous town terraces, with a gradual one-block transition
+	# into the surrounding hills. Road surfaces are actual terrain, not props.
+	if expanded_preview:
+		for index in [1,2]:
+			var center: Vector2i = islands[index]["center"]
+			var town := center+Vector2i(-12,-15)
+			var distance := Vector2(key-town).length()
+			var flat := 21.0 if index==2 else 15.0
+			if margin>8.0 and distance<flat+12.0:
+				var weight := (1.0-smoothstep(flat,flat+12.0,distance))*smoothstep(8.0,15.0,margin)
+				height=roundi(lerpf(float(height),5.0,weight))
+				break
 	# A broad eastward access route guarantees a traversable walk from
 	# the ocean to each island's small cave entrance and its inland slopes.
 	# Pure coastline terraces remain in this corridor; no random ridge
@@ -271,7 +290,8 @@ func solid_column(x: int, z: int) -> int:
 func settlement_index_at(x: float,z: float,padding: float = 0.0) -> int:
 	for index in [1,2]:
 		var c: Vector2i = islands[index]["center"]
-		if absf(x-c.x)<=44.0+padding and absf(z-c.y)<=44.0+padding: return index
+		var extent: float = float(islands[index]["radius"]) if expanded_preview else 44.0
+		if absf(x-c.x)<=extent+padding and absf(z-c.y)<=extent+padding: return index
 	return -1
 
 func near_settlement(x: float,z: float,padding: float = 0.0) -> bool:
