@@ -4,6 +4,8 @@ extends RefCounted
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const SETTLEMENT = preload("res://scripts/world/default_settlement_plan.gd")
 const GOBLIN_CITY = preload("res://scripts/world/goblin_city_plan.gd")
+const SKELETAL_CITY = preload("res://scripts/world/skeletal_city_plan.gd")
+var skeletal_city: RefCounted
 var goblin_city: RefCounted
 var _settlements: Dictionary = {}
 var _settlement_attempted: Dictionary = {}
@@ -56,14 +58,24 @@ func _init(world_seed: int = 64012) -> void:
 		# Keep original cave placement radii while extending settlement land.
 		islands[1]["cave_radius"]=44.0
 		islands[2]["cave_radius"]=46.0
-		islands[1]["radius"]=56.0
-		islands[2]["radius"]=64.0
 		goblin_city=GOBLIN_CITY.new()
 		goblin_city.generate(seed,0)
 		islands.append({"center":GOBLIN_CITY.CENTER,"radius":GOBLIN_CITY.RADIUS,"strength":1.4,"biome":"goblin_badlands","name":"Goblin Territory","sea":"cold_reef"})
+		# Compute original routes before applying any settlement terrain edits.
+		expanded_preview=false
 	caves = CAVES.new()
 	caves.configure(self)
-	if goblin_city!=null: _install_city_caves()
+	if goblin_city!=null:
+		expanded_preview=true
+		islands[1]["radius"]=56.0
+		islands[2]["radius"]=64.0
+		_height_cache.clear()
+		_margin_cache.clear()
+		_install_city_caves()
+		skeletal_city=SKELETAL_CITY.new()
+		skeletal_city.generate(seed,0)
+		islands.append({"center":SKELETAL_CITY.CENTER,"radius":SKELETAL_CITY.RADIUS,"strength":1.6,"biome":"dwarven_mountain","name":"Skeletal City","sea":"cold_reef"})
+		_install_skeletal_caves()
 	_cover_remote_caves()
 	_plan_cave_ore()
 
@@ -176,10 +188,38 @@ func regenerate_goblin_city() -> bool:
 	for p: Vector2i in goblin_city.floors:
 		caves.floors.erase(p)
 		caves.extra_ceilings.erase(p)
-	caves.routes.pop_back()
-	caves.entrances.pop_back()
 	goblin_city=next
-	_install_city_caves()
+	for p: Vector2i in next.floors:
+		caves.floors[p]=next.floors[p]
+		caves.extra_ceilings[p]=next.ceilings[p]
+	caves.routes[GOBLIN_CITY.INDEX]=next.route
+	var entry: Vector3i = next.route.front()
+	caves.entrances[GOBLIN_CITY.INDEX]=Vector3(entry)+Vector3(0.5,0,0.5)
+	return true
+
+func _install_skeletal_caves() -> void:
+	for p: Vector2i in skeletal_city.floors:
+		caves.floors[p]=skeletal_city.floors[p]
+		caves.extra_ceilings[p]=skeletal_city.ceilings[p]
+	caves.routes.append(skeletal_city.route)
+	var entry: Vector3i = skeletal_city.route.front()
+	caves.entrances.append(Vector3(entry)+Vector3(0.5,0,0.5))
+
+func regenerate_skeletal_city() -> bool:
+	if skeletal_city==null: return false
+	var next := SKELETAL_CITY.new()
+	next.generate(seed,skeletal_city.cycle+1)
+	if not next.validate(): return false
+	for p: Vector2i in skeletal_city.floors:
+		caves.floors.erase(p)
+		caves.extra_ceilings.erase(p)
+	skeletal_city=next
+	for p: Vector2i in next.floors:
+		caves.floors[p]=next.floors[p]
+		caves.extra_ceilings[p]=next.ceilings[p]
+	caves.routes[SKELETAL_CITY.INDEX]=next.route
+	var entry: Vector3i = next.route.front()
+	caves.entrances[SKELETAL_CITY.INDEX]=Vector3(entry)+Vector3(0.5,0,0.5)
 	return true
 
 func margin_at(x: float, z: float) -> float:
@@ -203,6 +243,9 @@ func is_land_at(x: float, z: float) -> bool:
 func height_at(x: int, z: int) -> int:
 	var key := Vector2i(x, z)
 	if _cove_apron.has(key): return int(_cove_apron[key])
+	if skeletal_city!=null:
+		var skeletal_height: int = skeletal_city.height_override(key)
+		if skeletal_height!=-99999: return skeletal_height
 	if goblin_city!=null:
 		var override: int = goblin_city.height_override(key)
 		if override!=-99999: return override
@@ -347,6 +390,7 @@ func top_tile(x: int, z: int) -> int:
 			"rocky_highlands": return 7 if height_at(x,z)<7 else 4
 			"temperate_woodland": return 2
 			"warm_meadow": return 1
+			"dwarven_mountain": return 4
 	return 0 # Grass
 
 func chunk_near_land(chunk_x: int, chunk_z: int, chunk_size: int) -> bool:
