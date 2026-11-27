@@ -22,9 +22,10 @@ func build(item: Dictionary, source) -> void:
 	var floor_y: int = item["floor"]
 	var door: Vector2i = item["door"]
 	var direction: Vector2i = item["direction"]
-	var wall_h := 5 if item["kind"]=="watchtower" else 3
-	var wall_tile := 12 if item["kind"] in ["watchtower","smithy"] else 11
-	var roof_tile := 4 if item["kind"] in ["watchtower","smithy"] else 8
+	var kind: String = item["kind"]
+	var wall_h := 5 if kind=="watchtower" else (4 if kind=="inn" else 3)
+	var wall_tile := 12 if kind in ["watchtower","smithy","guardhouse"] else 11
+	var roof_tile := 4 if kind in ["watchtower","smithy","guardhouse"] else 8
 	position = Vector3(rect.position.x,floor_y,rect.position.y)
 	for z in range(rect.size.y):
 		for x in range(rect.size.x):
@@ -34,26 +35,35 @@ func build(item: Dictionary, source) -> void:
 			var wall_group := 0
 			if x==0: wall_group=1
 			elif x==rect.size.x-1: wall_group=2
-			elif z==0: wall_group=3
-			elif z==rect.size.y-1: wall_group=4
+			if z==0: wall_group=3 if wall_group==0 else (6 if wall_group==1 else 7)
+			elif z==rect.size.y-1: wall_group=4 if wall_group==0 else (8 if wall_group==1 else 9)
 			if wall_group>0:
 				var is_door: bool = (cell.x-door.x)*direction.x+(cell.y-door.y)*direction.y==0 and cell.distance_squared_to(door)<=1
 				for y in range(wall_h):
 					if is_door and y<3: continue
-					_put(Vector3i(x,y,z),wall_tile,wall_group)
+					var tile := wall_tile
+					# Masonry plinths, contrasting timber framing and inset window accents.
+					if y==0: tile=12
+					elif wall_group>=6 or y==wall_h-1: tile=8 if wall_tile==11 else 4
+					elif y==1 and (x+z)%3==0 and cell.distance_squared_to(door)>4: tile=15
+					elif kind=="watchtower" and y==wall_h-2: tile=6
+					_put(Vector3i(x,y,z),tile,wall_group)
 			# Roof is a distinct visual group; collision remains solid.
 			_put(Vector3i(x,wall_h,z),roof_tile,5)
 	# Raised parapet on the watchtower; simple pitched stepped roofs on homes.
-	if item["kind"]=="watchtower":
-		for x in range(7):
-			for z in range(7):
-				if (x in [0,6] or z in [0,6]) and (x+z)%2==0:
+	if kind in ["watchtower","guardhouse"]:
+		for x in range(rect.size.x):
+			for z in range(rect.size.y):
+				if (x in [0,rect.size.x-1] or z in [0,rect.size.y-1]) and (x+z)%2==0:
 					_put(Vector3i(x,wall_h+1,z),12,5)
 	else:
-		for inset in range(1,3):
-			for z in range(7):
-				for x in range(inset,7-inset):
+		for inset in range(1,mini(3,(rect.size.x+1)/2)):
+			for z in range(rect.size.y):
+				for x in range(inset,rect.size.x-inset):
 					_put(Vector3i(x,wall_h+inset,z),roof_tile,5)
+		if kind in ["smithy","inn"]:
+			for y in range(wall_h+1,wall_h+4):
+				_put(Vector3i(1,y,1),12,5)
 	_build_groups()
 
 func _plane(p: Vector3i, face: int) -> int:
@@ -150,6 +160,11 @@ func update_view(hero: Vector3, eye: Vector3) -> void:
 		if toward.x > 0.25: hidden |= 1<<2
 		if toward.y < -0.25: hidden |= 1<<3
 		if toward.y > 0.25: hidden |= 1<<4
+		# Corner pillars belong to both adjoining walls, never just one.
+		if hidden & ((1<<1)|(1<<3)): hidden |= 1<<6
+		if hidden & ((1<<2)|(1<<3)): hidden |= 1<<7
+		if hidden & ((1<<1)|(1<<4)): hidden |= 1<<8
+		if hidden & ((1<<2)|(1<<4)): hidden |= 1<<9
 	if hidden==view_mask: return
 	view_mask=hidden
 	for group in parts:
