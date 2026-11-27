@@ -3,6 +3,7 @@ extends Node3D
 ## Outpost chunks or its coastline. The far-ocean horizon supplies the water.
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const SETTLEMENT_BUILDING = preload("res://scripts/world/default_settlement_building.gd")
+const SETTLEMENT_SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
 var settlement_nodes: Array[Node3D] = []
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
@@ -1160,6 +1161,10 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				building.build(item,terrain)
 				members.append(building)
 				settlement_nodes.append(building)
+			var scenery := SETTLEMENT_SCENERY.build(plan,key,CHUNK)
+			if scenery != null:
+				add_child(scenery)
+				members.append(scenery)
 	_loaded[key] = members
 	if natural_population != null:
 		natural_population.populate(self,game,key,members)
