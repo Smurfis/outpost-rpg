@@ -42,6 +42,7 @@ var _reveal_texture: ImageTexture
 var _reveal_strength: float = 0.0
 
 const SECTION = preload("res://scripts/world/island_section_mesh.gd")
+const SKELETAL_SCENERY = preload("res://scripts/world/skeletal_city_scenery.gd")
 const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
 const OCEAN_SHOAL = preload("res://scripts/world/ocean_fishing_shoal.gd")
 var ocean_shoals: Dictionary = {}
@@ -87,6 +88,9 @@ func _identify_regions(center: Vector2i) -> void:
 			_add_region(region.cells, region.anchor)
 	if terrain.goblin_city!=null:
 		for region in terrain.goblin_city.regions:
+			_add_region(region.cells,region.anchor)
+	if terrain.skeletal_city!=null:
+		for region in terrain.skeletal_city.regions:
 			_add_region(region.cells,region.anchor)
 
 func _add_cache_cave_regions(route: Array) -> void:
@@ -177,6 +181,8 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		nearby = terrain.caves.natural.mouth
 	if terrain.goblin_city!=null and terrain.goblin_city.contains(cell):
 		nearby=terrain.goblin_city.throne
+	if terrain.skeletal_city!=null and terrain.skeletal_city.contains(cell):
+		nearby=terrain.skeletal_city.heart
 	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
 		_identify_regions(center)
 	var next_region: int = _owners.get(cell,-1)
@@ -730,11 +736,14 @@ func update_settlement_views(position: Vector3,camera: Camera3D) -> void:
 			revealed = building.spec
 			break
 	var toward := camera.global_transform.basis.z.normalized()
-	var below_city: bool = terrain.goblin_city!=null and terrain.goblin_city.floors.has(Vector2i(floori(position.x),floori(position.z))) and position.y<7.0
+	var player_cell := Vector2i(floori(position.x),floori(position.z))
+	var cave_floor: int = terrain.caves.floor_at(player_cell.x,player_cell.y)
+	var below_city: bool = cave_floor!=CAVES.INVALID_FLOOR and absf(position.y-cave_floor)<2.1 and position.y<terrain.height_at(player_cell.x,player_cell.y)-1.0
 	for building in settlement_nodes:
 		if not is_instance_valid(building): continue
-		if str(building.spec["id"]).begins_with("goblin_city_"):
-			building.visible=not below_city
+		var rect: Rect2i = building.spec["rect"]
+		var floor_y: int = building.spec["floor"]
+		building.visible=not (below_city and floor_y>position.y+1.0 and Vector2(rect.get_center()-player_cell).length()<80.0)
 		building.update_view(position,camera.global_position,revealed,toward)
 		if not building.visible:
 			for part in building.parts.values(): part["body"].set_meta("building_cutaway_hidden",true)
@@ -1069,6 +1078,8 @@ func _build_chunk_geometry(key: Vector2i, source) -> Array:
 				var zf: float = float(z)
 				var tile: int = source.top_tile(x, z) if y == top - 1 else 4
 				if up & bit:
+					if source.skeletal_city!=null and source.skeletal_city.floors.has(Vector2i(x,z)) and y+1==source.skeletal_city.floors[Vector2i(x,z)]:
+						tile=12 if posmod(x+z,4)!=0 else 13
 					var cutaway: bool = cave_here and y + 1 == top and source.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
@@ -1196,6 +1207,11 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				members.append(scenery)
 			_install_gathering(plan,key,game,members)
 	_install_goblin_city(key,game,members)
+	if terrain.skeletal_city!=null:
+		var decoration := SKELETAL_SCENERY.build(terrain.skeletal_city,key,CHUNK)
+		if decoration!=null:
+			add_child(decoration)
+			members.append(decoration)
 	_install_cave_ore(key,game,members)
 	_loaded[key] = members
 	if natural_population != null:
@@ -1310,3 +1326,13 @@ func _update_ocean_shoals(game: Node,hero_at: Vector3) -> void:
 		if not wanted.has(id):
 			if is_instance_valid(ocean_shoals[id]): ocean_shoals[id].queue_free()
 			ocean_shoals.erase(id)
+
+func regenerate_skeletal_city_for_preview(hero: Node3D) -> bool:
+	if terrain==null or terrain.skeletal_city==null or mine_pending or mine_load_failed: return false
+	if terrain.skeletal_city.contains(Vector2i(floori(hero.global_position.x),floori(hero.global_position.z))): return false
+	if not terrain.regenerate_skeletal_city(): return false
+	invalidate_section_geometry()
+	for key: Vector2i in _loaded.keys():
+		if terrain.skeletal_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
+	_center=Vector2i(99999,99999)
+	return true
