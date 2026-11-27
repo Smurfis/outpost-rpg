@@ -102,11 +102,11 @@ func contains(p: Vector2i) -> bool:
 func height_override(p: Vector2i) -> int:
 	var local := p-CENTER
 	var distance := Vector2(local).length()
-	if distance>54.0: return -99999
 	# East-facing entrance carved through a solid facade, with a broad
-	# external landing. No open roof cells above the staircase.
-	if local.x>=39 and local.x<=48 and absi(local.y)<=5:
-		return ENTRY_Y-maxi(0,floori(float(local.x-43)/2.0))
+	# external landing and continuous terraced approach from the sea.
+	if local.x>=39 and local.x<=65 and absi(local.y)<=5:
+		return maxi(-3,ENTRY_Y-floori(float(maxi(0,local.x-42))*0.58))
+	if distance>54.0: return -99999
 	var mountain := roundi(3.0+19.0*(1.0-smoothstep(14.0,53.0,distance)))
 	if floors.has(p):
 		mountain=maxi(mountain,int(ceilings[p])+4)
