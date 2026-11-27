@@ -22,6 +22,7 @@ var eastern_landing := Vector2i.MAX
 var eastern_route: Array[Vector2i] = []
 var plaza: Dictionary = {}
 var roads: Dictionary = {}
+var road_steps: Dictionary = {}
 var buildings: Array[Dictionary] = []
 var reserved: Dictionary = {}
 var hub := Vector2i.ZERO
@@ -89,6 +90,7 @@ func generate(source, index: int = 2) -> bool:
 	eastern_landing = Vector2i.MAX
 	eastern_route.clear()
 	roads.clear()
+	road_steps.clear()
 	plaza.clear()
 	cave_approach = Vector2i.MAX
 	cave_route.clear()
@@ -205,6 +207,7 @@ func generate(source, index: int = 2) -> bool:
 			var q := p+d
 			if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
 				roads[q] = true
+	_plan_half_steps()
 	_plan_countryside(source)
 	_build_landmarks(source)
 	_plan_quest_anchors(source)
@@ -329,6 +332,26 @@ func _plan_countryside(source) -> void:
 			var kind := "waystone" if posmod(q.x*19+q.y*23+source.seed,5)==0 else "flowers"
 			scenery[q]={"kind":kind,"height":int(_heights[q]),"variant":posmod(q.x*13+q.y*7+source.seed,3)}
 			break
+
+func _plan_half_steps() -> void:
+	# At a lower road tile facing a higher one, add a half-height tread
+	# to the uphill half. Leave junctions and square surfaces unmodified.
+	for p: Vector2i in roads:
+		if plaza.has(p) or not _heights.has(p): continue
+		var up: Array[Vector2i] = []
+		for d: Vector2i in DIRS:
+			var q := p+d
+			if roads.has(q) and _heights.has(q) and int(_heights[q])-int(_heights[p])==1:
+				up.append(d)
+		if up.size()==1:
+			road_steps[p]={"direction":up[0],"height":int(_heights[p])}
+	# Split a one-block building doorstep as well.
+	for item in buildings:
+		var door: Vector2i = item["door"]
+		var d: Vector2i = item["direction"]
+		var outside := door+d
+		if _heights.has(outside) and int(item["floor"])-int(_heights[outside])==1 and not plaza.has(outside):
+			road_steps[outside]={"direction":-d,"height":int(_heights[outside])}
 
 func _add_landmark(source, suffix: String, label: String, role: String, p: Vector2i) -> void:
 	landmarks.append({"id":"%s:%s" % [site_id,suffix],"label":label,"role":role,
