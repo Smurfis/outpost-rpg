@@ -24,6 +24,7 @@ func _run() -> void:
 		if repeat != null:
 			check(repeat.roads==plan.roads and repeat.buildings==plan.buildings,"Settlement is nondeterministic")
 		check(plan.buildings.size()>=2,"Missing built-in structures")
+		check(plan.plaza.has(plan.hub),"Missing public square")
 		check(plan.roads.has(plan.hub) and plan.roads.has(plan.landing),"Missing coastal approach")
 		check(plan._graph.get_point_count()==0 and plan._ids.is_empty() and plan._heights.is_empty(),"Planning graph retained after generation")
 		if not plan.cave_route.is_empty():
@@ -36,7 +37,7 @@ func _run() -> void:
 		print("SETTLEMENT SEED %d: %d buildings, %d road cells, %d cave approach cells" % [seed_value,plan.buildings.size(),plan.roads.size(),plan.cave_route.size()])
 		for p: Vector2i in plan.roads:
 			check(not source.caves.has_cave(p.x,p.y),"Road intersects cave")
-			check(source.top_tile(p.x,p.y)==5,"Terrain sampler disagrees with planned path")
+			check(source.top_tile(p.x,p.y)==(6 if plan.plaza.has(p) else 5),"Terrain sampler disagrees with planned path")
 			check(not plan.reserved.has(p),"Road intersects building footprint")
 		for item in plan.buildings:
 			var route: Array = item["route"]
@@ -58,6 +59,8 @@ func _run() -> void:
 			building.build(item,source)
 			check(building.quad_count<building.exposed_count,"Greedy merge did not reduce quads")
 			check(building.parts.has(0) and building.parts.has(5),"Missing floor or roof")
+			for v: Vector3i in building.voxels:
+				check(v.x>=0 and v.z>=0 and v.x<rect.size.x and v.z<rect.size.y,"Prefab geometry exceeds its reserved footprint")
 			var hero := Vector3(rect.position.x+3.5,floor_y,rect.position.y+3.5)
 			for d in [Vector3.RIGHT,Vector3.LEFT,Vector3.BACK,Vector3.FORWARD,Vector3(1,0,1),Vector3(-1,0,-1),Vector3(1,0,-1),Vector3(-1,0,1)]:
 				building.update_view(hero,hero+d*20+Vector3.UP*20)
