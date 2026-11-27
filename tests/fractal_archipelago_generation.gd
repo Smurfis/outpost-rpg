@@ -32,7 +32,8 @@ func _run() -> void:
 				"Generation is repeatable for fixed seed at %d,%d" % [x, z])
 	# The old Y=-2 shore was >1.5 metres above a swimmer's feet. Require
 	# a shallow landing step and a walking-height route towards cave access.
-	for island in world.islands:
+	for island_index in range(world.islands.size()):
+		var island: Dictionary = world.islands[island_index]
 		var centre: Vector2i = island["center"]
 		var radius: int = ceili(float(island["radius"]))
 		var z: int = centre.y
@@ -42,7 +43,11 @@ func _run() -> void:
 		for x in range(centre.x + radius + 6, centre.x + roundi(radius * 0.50), -1):
 			if not world.is_land_at(float(x) + 0.5, float(z) + 0.5):
 				continue
-			var y: int = world.height_at(x, z)
+			# A side-facing roofed cave is entered through its floor, not by
+			# climbing onto the mountain roof in the middle of the doorway.
+			var entrance: Vector3 = world.caves.entrances[island_index]
+			var at_mouth := island_index==2 and x==floori(entrance.x)
+			var y: int = int(entrance.y) if at_mouth else world.height_at(x, z)
 			if not was_land:
 				check(y <= -3, "Island shore starts within swimming auto-step reach")
 				was_land = true
@@ -50,6 +55,9 @@ func _run() -> void:
 				check(absi(y - last_y) <= 1, "One-block maximum along island landing route")
 			last_y = y
 			max_y = maxi(max_y, y)
+			if at_mouth:
+				check(world.is_solid(x,world.caves.ceiling_at(x,z,y),z),"Side-facing entrance retains its roof")
+				break
 		check(was_land and max_y >= 1, "Landing route rises from ocean to explorable terrain")
 	check(world.caves.routes.size() == world.islands.size(), "One connected cave route per exploration island")
 	check(world.caves.chests.size() == world.islands.size(), "One persistent chest position per cave")
