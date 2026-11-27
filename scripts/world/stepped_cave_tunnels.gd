@@ -6,6 +6,7 @@ const INVALID_FLOOR: int = -99999
 const CORRIDOR_WIDTH: int = 2
 const CORRIDOR_HEIGHT: int = 3
 const DESCENT_SPACING: int = 4
+var extra_ceilings: Dictionary = {}
 var floors: Dictionary = {} # Vector2i -> absolute walkable y
 var natural
 
@@ -19,6 +20,7 @@ func install_natural(terrain, protected: Dictionary, placement = null) -> bool:
 	return true
 
 func ceiling_at(x: int, z: int, floor_y: int) -> int:
+	if extra_ceilings.has(Vector2i(x,z)): return int(extra_ceilings[Vector2i(x,z)])
 	if natural != null:
 		return natural.ceilings.get(Vector2i(x,z), floor_y + CORRIDOR_HEIGHT)
 	return floor_y + CORRIDOR_HEIGHT
@@ -33,10 +35,11 @@ func configure(terrain) -> void:
 	mine_end_room.clear()
 	branches.clear()
 	floors.clear()
+	extra_ceilings.clear()
 	routes.clear()
 	entrances.clear()
 	chests.clear()
-	for island in terrain.islands:
+	for island in terrain.islands.slice(0,3):
 		var center: Vector2i = island["center"]
 		var radius: float = island["radius"]
 		# Put the entrance on the inland shoulder, NOT the beach. The old
