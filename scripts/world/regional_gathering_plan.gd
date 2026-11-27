@@ -1,5 +1,6 @@
 extends RefCounted
 ## Deterministic gathering pockets on existing connected terrain.
+const TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
 const PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 const DIRS: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
 var nodes: Array[Dictionary] = []
@@ -11,8 +12,11 @@ func _free(plan,p: Vector2i) -> bool:
 		if anchor["cell"]==p: return false
 	return true
 
+func _radius(kind: String) -> float:
+	return 1.85 if kind=="wood" else PLACEMENT.radius_for(kind)
+
 func _fits(plan,p: Vector2i,kind: String) -> bool:
-	var radius := PLACEMENT.radius_for(kind)
+	var radius := _radius(kind)
 	for dz in range(-3,4):
 		for dx in range(-3,4):
 			var q := p+Vector2i(dx,dz)
@@ -21,7 +25,7 @@ func _fits(plan,p: Vector2i,kind: String) -> bool:
 			if absi(int(plan._heights[p])-int(plan._heights[q]))>1: return false
 	for node in nodes:
 		var old: Vector2i = node["cell"]
-		if p.distance_to(old)<radius+PLACEMENT.radius_for(node["kind"])+0.5: return false
+		if p.distance_to(old)<radius+_radius(node["kind"])+0.5: return false
 	return true
 
 func _clear_walk(plan,p: Vector2i) -> bool:
@@ -32,7 +36,7 @@ func _clear_walk(plan,p: Vector2i) -> bool:
 	return true
 
 func _approach(plan,p: Vector2i,kind: String) -> Array[Vector2i]:
-	var distance := 2 if kind in ["wood","stone","coal","iron","clay"] else 1
+	var distance := 3 if kind=="wood" else (2 if kind in ["stone","coal","iron","clay"] else 1)
 	for d in DIRS:
 		var stand := p+d*distance
 		if not _clear_walk(plan,stand): continue
@@ -53,7 +57,7 @@ func _approach(plan,p: Vector2i,kind: String) -> Array[Vector2i]:
 			for step in DIRS:
 				var q := at+step
 				if paths.has(q) or not _clear_walk(plan,q): continue
-				if q.distance_to(p)<PLACEMENT.radius_for(kind)+0.2: continue
+				if q.distance_to(p)<_radius(kind)+0.2: continue
 				if absi(int(plan._heights[at])-int(plan._heights[q]))>1: continue
 				var next := path.duplicate()
 				next.append(q)
@@ -83,8 +87,10 @@ func generate(source,plan) -> void:
 				if route.is_empty(): continue
 				if center==Vector2i.MAX: center=p
 				for q in route: access[q]=true
-				nodes.append({"id":"%s:%s:%d:%d" % [plan.site_id,kind,p.x,p.y],"site":plan.site_id+":"+habitat,
-					"habitat":habitat,"tier":tier,"kind":kind,"cell":p,"position":Vector3(p.x+0.5,source.height_at(p.x,p.y)+0.055,p.y+0.5),"approach":route})
+				var record := {"id":"%s:%s:%d:%d" % [plan.site_id,kind,p.x,p.y],"site":plan.site_id+":"+habitat,
+					"habitat":habitat,"tier":tier,"kind":kind,"cell":p,"position":Vector3(p.x+0.5,source.height_at(p.x,p.y)+0.055,p.y+0.5),"approach":route,"radius":_radius(kind)}
+				if kind=="wood": record["tree"]=TREE.describe(source,p)
+				nodes.append(record)
 				break
 	# Nonblocking cave fungi at the edge of the existing end chamber.
 	# Do not insert solid ore into narrow passages or the chest interaction lane.
