@@ -61,6 +61,9 @@ var whirlwind_grip_pose: Vector3 = Vector3.ZERO
 const WHIRLWIND_SPIN_DURATION: float = 0.90
 var walking_phase: float = 0.0
 var swimming: bool = false
+var boat_art: MeshInstance3D
+var boating := false
+const BOAT_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 var swim_stroke_phase: float = 0.0
 var swim_splash_elapsed: float = 0.0
 var swim_preview_seconds: float = 0.0
@@ -505,6 +508,7 @@ func _physics_process(delta: float) -> void:
 	if modal_open or str(game.equipment.get("offhand", "")) != "shield":
 		blocking = false
 	swimming = _detect_surface_swimming()
+	_update_boat()
 	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
@@ -549,6 +553,7 @@ func _physics_process(delta: float) -> void:
 		speed *= 0.48
 	if gather_phase > 0.0:
 		speed *= 0.42
+	if boating: speed*=1.8
 	speed *= gm_speed_multiplier
 	# Separate short hit impulse from player steering. It decays rapidly,
 	# feels like voxel-sandbox combat, and cannot keep moving the character.
@@ -634,7 +639,7 @@ func _physics_process(delta: float) -> void:
 	if combat_phase <= 0.0:
 		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
-	if swimming or swim_preview_seconds > 0.0:
+	if (swimming and not boating) or swim_preview_seconds > 0.0:
 		# Readable alternating swim strokes and flutter kick on the same
 		# joint rig used by walking, so tools and equipment remain attached.
 		swim_stroke_phase += delta * (8.4 if direction.length() > 0.05 else 4.3)
@@ -789,3 +794,19 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 		global_position = Vector3(0, 0.35, 0)
 		visual.visible = true
 
+
+func _update_boat() -> void:
+	boating=swimming and str(game.equipment.get("trinket",""))=="rowboat"
+	if boating and boat_art==null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		BOAT_PALETTE.box(st,Vector3(0,0.05,0),Vector3(1.65,0.24,2.5),11,8)
+		for side in [-1.0,1.0]:
+			BOAT_PALETTE.box(st,Vector3(side*0.77,0.33,0),Vector3(0.2,0.48,2.6),11,8)
+			BOAT_PALETTE.box(st,Vector3(0,0.31,side*1.15),Vector3(1.35,0.44,0.25),11,8)
+		boat_art=BOAT_PALETTE.as_instance(st,"PreviewRowboat")
+		add_child(boat_art)
+	if boat_art!=null:
+		boat_art.visible=boating
+		boat_art.position=Vector3(0,WATER_SURFACE_Y-global_position.y-0.12,0)
+		boat_art.rotation.y=visual.rotation.y
