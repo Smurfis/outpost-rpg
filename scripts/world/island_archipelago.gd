@@ -1173,6 +1173,7 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				add_child(scenery)
 				members.append(scenery)
 			_install_gathering(plan,key,game,members)
+	_install_cave_ore(key,game,members)
 	_loaded[key] = members
 	if natural_population != null:
 		natural_population.populate(self,game,key,members)
@@ -1202,5 +1203,19 @@ func _install_gathering(plan,key: Vector2i,game: Node,members: Array) -> void:
 		resource.setup(spec["kind"],1,spec.get("tree",{}))
 		if not resource.rooted_tree.is_empty(): regional_trees.append(resource)
 		resource.configure_regional(str(terrain.seed)+":"+str(spec["id"]),int(spec["tier"]),str(spec["habitat"]),game)
+		if spec["habitat"]=="rocky_outcrop": resource.set_meta("special_resource_node",true)
 		game.prop_placement.reserve(at,radius,resource)
+		members.append(resource)
+
+func _install_cave_ore(key: Vector2i,game: Node,members: Array) -> void:
+	if game==null or not game.has_method("gather"): return
+	for cell: Vector3i in terrain.ore_slots:
+		var at := Vector3(cell)+Vector3(0.5,0,0.5)
+		if _cell_at(at)!=key: continue
+		var record: Dictionary = terrain.ore_slots[cell]
+		var resource := REGIONAL_RESOURCE.new()
+		add_child(resource)
+		resource.global_position=at
+		resource.setup(record["kind"],1,{},true)
+		resource.configure_regional("%d:wall_ore:%d:%d:%d" % [terrain.seed,cell.x,cell.y,cell.z],int(record["tier"]),"cave_wall",game)
 		members.append(resource)
