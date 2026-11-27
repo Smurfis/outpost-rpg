@@ -233,6 +233,12 @@ func _test_resource_lifecycle(game,remote) -> void:
 	var tree = _find_resource(remote,str(remote.terrain.seed)+":"+str(wood_spec["id"]))
 	check(is_instance_valid(tree),"Regional tree not streamed")
 	if not is_instance_valid(tree): return
+	check(not tree.rooted_tree.is_empty(),"Regional tree is not procedural")
+	var root_shapes := 0
+	for child in tree.resource_body.get_children():
+		if child.name.begins_with("TreeRoot"): root_shapes+=1
+	check(root_shapes>=8,"Spreading roots have no physical collision")
+	check(tree.max_hits>=4,"Large tree has starter-sized harvest budget")
 	for i in range(tree.max_hits): tree.harvest()
 	check(tree.falling and not tree.active,"Tree did not enter whole-tree felling state")
 	await create_timer(0.6).timeout
