@@ -2,6 +2,8 @@ extends RefCounted
 ## Built-in settlement blueprint for a bounded exploration island.
 ## Terrain heights are authoritative; no cave or terrain columns are edited.
 const DIRS: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
+const GATHERING = preload("res://scripts/world/regional_gathering_plan.gd")
+var gathering := GATHERING.new()
 const MAX_BUILDINGS := 6
 const KINDS := ["watchtower","smithy","storehouse","house","inn","guardhouse"]
 const FOOTPRINTS: Array[Vector2i] = [Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5)]
@@ -206,6 +208,7 @@ func generate(source, index: int = 2) -> bool:
 	_plan_countryside(source)
 	_build_landmarks(source)
 	_plan_quest_anchors(source)
+	gathering.generate(source,self)
 	var valid: bool = buildings.size()>=2 and _validate_network(source)
 	# The immutable result is enough for streamed terrain, map and buildings;
 	# discard the temporary search graph and per-cell planning tables.
