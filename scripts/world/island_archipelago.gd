@@ -7,6 +7,7 @@ const SETTLEMENT_SCENERY = preload("res://scripts/world/default_settlement_scene
 const REGIONAL_RESOURCE = preload("res://scripts/resource_node.gd")
 const RESOURCE_PLACEMENT = preload("res://scripts/world/prop_placement.gd")
 var settlement_nodes: Array[Node3D] = []
+var regional_trees: Array[Node3D] = []
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
@@ -716,6 +717,8 @@ func update_settlement_views(position: Vector3,camera: Camera3D) -> void:
 	var toward := camera.global_transform.basis.z.normalized()
 	for building in settlement_nodes:
 		if is_instance_valid(building): building.update_view(position,camera.global_position,revealed,toward)
+	for tree in regional_trees:
+		if is_instance_valid(tree): tree.update_tree_cutaway(revealed,toward)
 
 func _is_below_terrain(position: Vector3) -> bool:
 	# Actual tunnel cells are definitive. A steep drop with high walls on
@@ -991,6 +994,7 @@ func _unload(key: Vector2i) -> void:
 			if node is MeshInstance3D:
 				_roof_nodes.erase(node)
 			if node in settlement_nodes: settlement_nodes.erase(node)
+			if node in regional_trees: regional_trees.erase(node)
 			node.queue_free()
 	_loaded.erase(key)
 
@@ -1195,6 +1199,7 @@ func _install_gathering(plan,key: Vector2i,game: Node,members: Array) -> void:
 		add_child(resource)
 		resource.global_position=at
 		resource.setup(spec["kind"],1,spec.get("tree",{}))
+		if not resource.rooted_tree.is_empty(): regional_trees.append(resource)
 		resource.configure_regional(str(terrain.seed)+":"+str(spec["id"]),int(spec["tier"]),str(spec["habitat"]),game)
 		game.prop_placement.reserve(at,radius,resource)
 		members.append(resource)
