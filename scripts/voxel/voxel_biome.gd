@@ -7,6 +7,7 @@ const VOXEL_PROPS = preload("res://scripts/voxel/voxel_props.gd")
 const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const HARVESTABLE = preload("res://scripts/resource_node.gd")
 const WILD_BOAR = preload("res://scripts/enemy.gd")
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 const WATER_SHADER = preload("res://scripts/voxel/coastal_water.gdshader")
 const ARCHIPELAGO = preload("res://scripts/world/island_archipelago.gd")
 const SEA_LEVEL: float = -2.82
@@ -44,6 +45,9 @@ var chunk_meshes: Array[MeshInstance3D] = []
 var _shared_water_material: ShaderMaterial
 var _island_ocean_mask: ImageTexture
 var _distant_ocean: MeshInstance3D
+var _wave_patch: MeshInstance3D
+var _horizon_material: ShaderMaterial
+var _patch_material: ShaderMaterial
 var stream_enabled: bool = false
 var _stream_center: Vector2i = Vector2i(99999, 99999)
 var _loaded: Dictionary = {} # Vector2i cell -> [mesh, collider, decoration]
@@ -123,6 +127,13 @@ func _process(_delta: float) -> void:
 		return
 	var point: Vector3 = player.global_position
 	_update_water_horizon(point)
+	if _wave_patch!=null:
+		OCEAN.update(point)
+		_wave_patch.position=Vector3(OCEAN.center.x,SEA_LEVEL,OCEAN.center.y)
+		_wave_patch.visible=_distant_ocean.visible
+		OCEAN.sync(_shared_water_material)
+		OCEAN.sync(_horizon_material)
+		OCEAN.sync(_patch_material)
 	# Entering a private dungeon teleports far beyond the overworld. Do not
 	# unload the entire Fields map merely because the player entered an instance.
 	if absf(point.x) > float(map_half) or absf(point.z) > float(map_half):
@@ -670,7 +681,11 @@ func _water_material() -> ShaderMaterial:
 	if _shared_water_material == null:
 		_shared_water_material = ShaderMaterial.new()
 		_shared_water_material.shader = preload("res://scripts/voxel/coastal_water_preview.gdshader") if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" else WATER_SHADER
+		if _preview_waves(): OCEAN.configure(_shared_water_material,0,float(map_half))
 	return _shared_water_material
+
+func _preview_waves() -> bool:
+	return str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview"
 
 func _configure_island_ocean_mask() -> void:
 	if archipelago == null or archipelago.terrain == null:
@@ -692,6 +707,11 @@ func _configure_island_ocean_mask() -> void:
 	water.set_shader_parameter("island_land_mask", _island_ocean_mask)
 	water.set_shader_parameter("island_mask_half_extent", float(half))
 	water.set_shader_parameter("island_land_mask_enabled", true)
+	for material in [_horizon_material,_patch_material]:
+		if material==null: continue
+		material.set_shader_parameter("island_land_mask",_island_ocean_mask)
+		material.set_shader_parameter("island_mask_half_extent",float(half))
+		material.set_shader_parameter("island_land_mask_enabled",true)
 
 
 func _append_pixel_water_vertex(st: SurfaceTool, at: Vector3, shallow_amount: float) -> void:
@@ -770,6 +790,24 @@ func _make_water_horizon() -> void:
 	sea.visible = false
 	add_child(sea)
 	_distant_ocean = sea
+	if _preview_waves():
+		_horizon_material=_water_material().duplicate() as ShaderMaterial
+		OCEAN.configure(_horizon_material,1,float(map_half))
+		sea.material_override=_horizon_material
+		_patch_material=_water_material().duplicate() as ShaderMaterial
+		OCEAN.configure(_patch_material,2,float(map_half))
+		var plane := PlaneMesh.new()
+		plane.size=Vector2.ONE*OCEAN.HALF_EXTENT*2.0
+		plane.subdivide_width=95
+		plane.subdivide_depth=95
+		_wave_patch=MeshInstance3D.new()
+		_wave_patch.name="LocalWavePatch"
+		_wave_patch.mesh=plane
+		_wave_patch.material_override=_patch_material
+		_wave_patch.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_wave_patch.extra_cull_margin=1.0
+		_wave_patch.visible=false
+		add_child(_wave_patch)
 
 
 func _update_water_horizon(point: Vector3) -> void:
