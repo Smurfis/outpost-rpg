@@ -23,6 +23,10 @@ jobs:
           grep -q 'CITY LAB RESULT: 0 failures' test.log
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . --script res://tests/city_lab_dungeon_connectors.gd 2>&1 | tee connectors.log
           grep -q 'CONNECTOR LAB RESULT: 0 failures' connectors.log
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . --script res://tests/city_lab_dungeon_sector.gd 2>&1 | tee sectors.log
+          grep -q 'SECTOR LAB RESULT: 0 failures' sectors.log
           ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . --quit-after 10 2>&1 | tee launch.log
           grep -q 'CITY LAB READY:' launch.log
-          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' test.log connectors.log launch.log; then exit 1; fi
+          ./Godot_v4.7.2-stable_linux.x86_64 --headless --path . res://scenes/city_lab_dungeon_preview.tscn --quit-after 10 2>&1 | tee dungeon.log
+          grep -q 'DUNGEON LAB READY:' dungeon.log
+          if grep -Ei 'SCRIPT ERROR|Parse Error|Failed to load script|Invalid call|Invalid access' test.log connectors.log sectors.log launch.log dungeon.log; then exit 1; fi
