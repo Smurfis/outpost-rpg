@@ -37,7 +37,7 @@ func build(item: Dictionary, source) -> void:
 			elif z==0: wall_group=3
 			elif z==rect.size.y-1: wall_group=4
 			if wall_group>0:
-				var is_door: bool = (cell-door).dot(direction)==0 and cell.distance_squared_to(door)<=1
+				var is_door: bool = (cell.x-door.x)*direction.x+(cell.y-door.y)*direction.y==0 and cell.distance_squared_to(door)<=1
 				for y in range(wall_h):
 					if is_door and y<3: continue
 					_put(Vector3i(x,y,z),wall_tile,wall_group)
