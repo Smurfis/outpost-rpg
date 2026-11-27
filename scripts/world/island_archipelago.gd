@@ -44,6 +44,9 @@ var _reveal_strength: float = 0.0
 
 const SECTION = preload("res://scripts/world/island_section_mesh.gd")
 const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
+const OCEAN_SHOAL = preload("res://scripts/world/ocean_fishing_shoal.gd")
+var ocean_shoals: Dictionary = {}
+var ocean_tick := 0.0
 const CHAMBER = preload("res://scripts/world/chamber_visibility.gd")
 const SECTION_PICK := 1 << 18
 var section_active := false
@@ -693,6 +696,11 @@ func _process(delta: float) -> void:
 	# It only checks the mine once per second and uses the existing journal.
 	mine_auto.tick(self, game, delta)
 	var position: Vector3 = hero.global_position
+	if terrain.goblin_city!=null:
+		ocean_tick+=delta
+		if ocean_tick>=0.5:
+			ocean_tick=0.0
+			_update_ocean_shoals(game,position)
 	if not terrain.near_island(position):
 		if section_active:
 			_restore_section()
@@ -1277,3 +1285,32 @@ func regenerate_city_for_preview(hero: Node3D) -> bool:
 		if terrain.goblin_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
 	_center=Vector2i(99999,99999)
 	return true
+
+func _update_ocean_shoals(game: Node,hero_at: Vector3) -> void:
+	var wanted: Dictionary = {}
+	for index in range(terrain.islands.size()):
+		var island: Dictionary = terrain.islands[index]
+		var center: Vector2i = island["center"]
+		for sector in range(12):
+			var angle := TAU*float(sector)/12.0+float(posmod(terrain.seed+index*17,100))*0.005
+			var offset := Vector2.from_angle(angle)*(float(island["radius"])+8.0)
+			var at := Vector3(center.x+offset.x,DATA.SEA_LEVEL+0.055,center.y+offset.y)
+			if at.distance_squared_to(hero_at)>32.0*32.0: continue
+			var clear_water := true
+			for d in [Vector2.ZERO,Vector2(2,0),Vector2(-2,0),Vector2(0,2),Vector2(0,-2)]:
+				if terrain.is_land_at(at.x+d.x,at.z+d.y): clear_water=false
+			if not clear_water: continue
+			var id := Vector2i(index,sector)
+			wanted[id]=true
+			if ocean_shoals.has(id): continue
+			var value := posmod(terrain.seed+index*371+sector*193,100)
+			var rank := 4 if value>=98 else 3 if value>=90 else 2 if value>=75 else 1 if value>=50 else 0
+			var shoal := OCEAN_SHOAL.new()
+			add_child(shoal)
+			shoal.global_position=at
+			shoal.configure(game,terrain.seed+index*371+sector*193,rank)
+			ocean_shoals[id]=shoal
+	for id in ocean_shoals.keys():
+		if not wanted.has(id):
+			if is_instance_valid(ocean_shoals[id]): ocean_shoals[id].queue_free()
+			ocean_shoals.erase(id)
