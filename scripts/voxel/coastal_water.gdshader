@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_opaque;
+render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
 
 // Illustrated opaque pixel water for Android Compatibility.
 // Keeps the existing 3D water mesh and Jess Hammer-inspired pixel grid.
@@ -13,6 +13,8 @@ uniform vec4 ocean_shallow : source_color = vec4(0.080, 0.670, 0.790, 1.0);
 uniform float wave_speed : hint_range(0.0, 3.0) = 0.72;
 uniform float pixel_density : hint_range(1.0, 16.0, 1.0) = 3.0;
 uniform float highlight_strength : hint_range(0.0, 1.0) = 0.72;
+uniform float deep_opacity : hint_range(0.0,1.0) = 0.88;
+uniform float shallow_opacity : hint_range(0.0,1.0) = 0.52;
 uniform bool island_land_mask_enabled = false;
 uniform sampler2D island_land_mask : filter_nearest, repeat_disable;
 uniform float island_mask_half_extent = 384.0;
@@ -44,7 +46,7 @@ void fragment() {
 	float ripples = sin(p.x * 0.78 + p.y * 0.37 + t * 0.70);
 	ripples += 0.60 * sin(p.y * 1.14 - p.x * 0.48 - t * 0.56);
 	ripples += 0.25 * sin((p.x + p.y) * 2.05 + t * 0.32);
-	float water_band = step(-0.20, ripples);
+	float water_band = smoothstep(-0.95,0.95,ripples);
 	vec3 pigment = mix(ocean_deep.rgb, ocean_swell.rgb, water_band * 0.82);
 	// Shallow tint is constant across both triangles of each streamed water cell.
 	// Bright water has depth and remains opaque (Android Compatibility-safe).
@@ -57,7 +59,7 @@ void fragment() {
 	float cross_flow = sin(p.y * 0.87 + p.x * 0.32 + t * 0.45);
 	float streak = step(0.70, flow + cross_flow * 0.34);
 	float gap = step(0.28, cell_hash(floor((cell + vec2(floor(t * 1.3), 0.0)) / 3.0)));
-	float cyan = streak * gap * highlight_strength;
+	float cyan = streak * gap * highlight_strength * (0.65+0.35*sin(t*1.7+p.x*0.2));
 	pigment = mix(pigment, ocean_glint.rgb, cyan * 0.80);
 
 	// Sparse glimmer pixels use discrete time so highlights pulse instead
@@ -69,6 +71,6 @@ void fragment() {
 	ALBEDO = pigment;
 	EMISSION = ocean_glint.rgb * cyan * 0.045;
 	ROUGHNESS = 1.0;
-	// Deliberately do not write ALPHA: the mobile terrain/water depth
-	// ordering depends on the opaque pipeline.
+	// Surface tint remains animated; reveal actual seabed in shallow water.
+	ALPHA = clamp(mix(deep_opacity,shallow_opacity,shallow)+cyan*0.10+foam_mask*0.08,0.0,1.0);
 }
