@@ -702,8 +702,17 @@ func _process(delta: float) -> void:
 	_update_cutaway(game, position, delta)
 	_update_hero_visibility(game, hero)
 	if game.camera != null:
-		for building in settlement_nodes:
-			if is_instance_valid(building): building.update_view(position,game.camera.global_position)
+		update_settlement_views(position,game.camera)
+
+func update_settlement_views(position: Vector3,camera: Camera3D) -> void:
+	var revealed: Dictionary = {}
+	for building in settlement_nodes:
+		if is_instance_valid(building) and building.contains_hero(position):
+			revealed = building.spec
+			break
+	var toward := camera.global_transform.basis.z.normalized()
+	for building in settlement_nodes:
+		if is_instance_valid(building): building.update_view(position,camera.global_position,revealed,toward)
 
 func _is_below_terrain(position: Vector3) -> bool:
 	# Actual tunnel cells are definitive. A steep drop with high walls on
