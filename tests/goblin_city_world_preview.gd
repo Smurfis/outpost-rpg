@@ -96,7 +96,26 @@ func _run() -> void:
 		check(game.equip_item("rowboat") and game.equipment["trinket"]=="rowboat","Boat trinket equip failed")
 		game.hero.swimming=true
 		game.hero._update_boat()
-		check(game.hero.boating and game.hero.boat_art.visible,"Equipped boat failed deployment")
+		game.hero._update_boat_pose(0.0,Vector3.ZERO)
+		check(not game.hero.boating and game.hero.boat_launch_age>=0.0 and game.hero.boat_art.visible,"Boat skipped overhead launch")
+		check(game.hero.boat_art.position.y>=2.0,"Boat not overhead at start")
+		game.hero._update_boat(0.50)
+		game.hero._update_boat_pose(0.0,Vector3.ZERO)
+		check(game.hero.boat_contact and not game.hero.boating,"Boat failed contact phase")
+		game.hero._update_boat(0.30)
+		game.hero._update_boat_pose(0.23,Vector3.FORWARD)
+		check(game.hero.boating and game.hero.boat_art.visible and game.hero.boat_launch_age<0.0,"Equipped boat failed deployment")
+		check(game.hero.boat_oars.size()==2 and game.hero.boat_oars[0].visible and game.hero.boat_row_phase>0.0,"Rowing pose or oars missing")
+		check(game.hero.boat_wake_age==0.0,"Moving boat failed wake emission")
+		game.hero.swimming=false
+		game.hero._update_boat()
+		check(not game.hero.boating and not game.hero.boat_art.visible,"Boat persisted on dry land")
+		game.hero.swimming=true
+		game.hero._update_boat()
+		check(game.hero.boat_launch_age==0.0 and not game.hero.boat_contact,"Re-entry failed fresh launch")
+		game.hero.swimming=false
+		game.hero._update_boat()
+		check(game.hero.boat_launch_age<0.0,"Leaving water did not cancel launch")
 	game.queue_free()
 	await process_frame
 	print("WORLD PREVIEW RESULT: %d failures" % failures)
