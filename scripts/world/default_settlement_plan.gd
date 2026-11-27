@@ -2,9 +2,10 @@ extends RefCounted
 ## Built-in settlement blueprint for the third exploration island.
 ## Terrain heights are authoritative; no cave or terrain columns are edited.
 const DIRS: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
-const LOT := 7
-const MAX_BUILDINGS := 4
-const KINDS := ["watchtower","smithy","storehouse","house"]
+const MAX_BUILDINGS := 6
+const KINDS := ["watchtower","smithy","storehouse","house","inn","guardhouse"]
+const FOOTPRINTS: Array[Vector2i] = [Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5)]
+var plaza: Dictionary = {}
 var roads: Dictionary = {}
 var buildings: Array[Dictionary] = []
 var reserved: Dictionary = {}
@@ -53,6 +54,7 @@ func _record_road(route: Array[Vector2i]) -> void:
 
 func generate(source) -> bool:
 	roads.clear()
+	plaza.clear()
 	cave_approach = Vector2i.MAX
 	cave_route.clear()
 	buildings.clear()
@@ -101,8 +103,8 @@ func generate(source) -> bool:
 		break
 	if not found: return false
 	var candidates: Array[Vector2i] = []
-	for z in range(hub.y-20,hub.y+21,2):
-		for x in range(hub.x-20,hub.x+21,2):
+	for z in range(hub.y-28,hub.y+29,2):
+		for x in range(hub.x-28,hub.x+29,2):
 			candidates.append(Vector2i(x,z))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = source.seed ^ 0x51c17
@@ -111,53 +113,19 @@ func generate(source) -> bool:
 	for p in candidates: tie[p] = rng.randf()
 	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
 		return float(a.distance_squared_to(hub))+float(tie[a])*30.0 < float(b.distance_squared_to(hub))+float(tie[b])*30.0)
-	for at in candidates:
-		if buildings.size()>=MAX_BUILDINGS: break
-		var rect := Rect2i(at,Vector2i(LOT,LOT))
-		var hi := -999
-		var lo := 999
-		var valid := true
-		for z in range(at.y,at.y+LOT):
-			for x in range(at.x,at.x+LOT):
-				var p := Vector2i(x,z)
-				if not _heights.has(p) or reserved.has(p) or roads.has(p) or p==hub:
-					valid = false
-					continue
-				hi = maxi(hi,_heights[p])
-				lo = mini(lo,_heights[p])
-		if not valid or hi-lo>2: continue
-		# Building floor is a single flat, accessible layer on a shallow
-		# foundation. Door must meet the outside terrain by <= one step.
-		var floor_y := hi+1
-		_disable(rect,true)
-		var best: Array[Vector2i] = []
-		var door := Vector2i.ZERO
-		var direction := Vector2i.ZERO
-		for d in DIRS:
-			var edge := at+Vector2i(3,3)+d*3
-			var outside := edge+d
-			if not _heights.has(outside) or reserved.has(outside) or absi(floor_y-int(_heights[outside]))>1: continue
-			var side := Vector2i(-d.y,d.x)
-			var wide := true
-			for offset in [-1,1]:
-				var q: Vector2i = outside+side*int(offset)
-				if not _heights.has(q) or reserved.has(q) or absi(floor_y-int(_heights[q]))>1: wide = false
-			if not wide: continue
-			var route := _route(hub,outside)
-			if route.is_empty(): continue
-			if best.is_empty() or route.size()<best.size():
-				best = route
-				door = edge
-				direction = d
-		if best.is_empty():
-			_disable(rect,false)
-			continue
-		_record_road(best)
-		var side := Vector2i(-direction.y,direction.x)
-		for offset in range(-1,2): roads[door+direction+side*offset] = true
-		for z in range(at.y,at.y+LOT):
-			for x in range(at.x,at.x+LOT): reserved[Vector2i(x,z)] = true
-		buildings.append({"id":"settlement_%s" % KINDS[buildings.size()],"kind":KINDS[buildings.size()],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+	for index in range(MAX_BUILDINGS):
+		if not _place_building(candidates,index): break
+
+	# Reserve a modest public square around the hub without altering slopes.
+	for dz in range(-2,3):
+		for dx in range(-2,3):
+			var p := hub+Vector2i(dx,dz)
+			if not _heights.has(p) or reserved.has(p): continue
+			if absf(float(_heights[p]-_heights[hub]))>1.0: continue
+			var route := _route(hub,p)
+			if route.is_empty() or route.size()>7: continue
+			plaza[p] = true
+			_record_road(route)
 	# Connect another existing POI without modifying the cave's own cells.
 	# The endpoint is a safe exterior staging tile, not a tunnel floor.
 	if source.caves.entrances.size()>2:
@@ -192,6 +160,58 @@ func generate(source) -> bool:
 	_ids.clear()
 	_heights.clear()
 	return buildings.size()>=2
+
+func _place_building(candidates: Array[Vector2i],index: int) -> bool:
+	for at in candidates:
+		var size: Vector2i = FOOTPRINTS[index]
+		var rect := Rect2i(at,size)
+		var hi := -999
+		var lo := 999
+		var valid := true
+		for z in range(at.y,rect.end.y):
+			for x in range(at.x,rect.end.x):
+				var p := Vector2i(x,z)
+				if not _heights.has(p) or reserved.has(p) or roads.has(p) or p==hub:
+					valid = false
+					continue
+				hi = maxi(hi,_heights[p])
+				lo = mini(lo,_heights[p])
+		if not valid or hi-lo>2: continue
+		# Building floor is a single flat, accessible layer on a shallow
+		# foundation. Door must meet the outside terrain by <= one step.
+		var floor_y := hi+1
+		_disable(rect,true)
+		var best: Array[Vector2i] = []
+		var door := Vector2i.ZERO
+		var direction := Vector2i.ZERO
+		for d in DIRS:
+			var half := Vector2i((size.x-1)/2,(size.y-1)/2)
+			var edge := at+half+Vector2i(d.x*half.x,d.y*half.y)
+			var outside := edge+d
+			if not _heights.has(outside) or reserved.has(outside) or absi(floor_y-int(_heights[outside]))>1: continue
+			var side := Vector2i(-d.y,d.x)
+			var wide := true
+			for offset in [-1,1]:
+				var q: Vector2i = outside+side*int(offset)
+				if not _heights.has(q) or reserved.has(q) or absi(floor_y-int(_heights[q]))>1: wide = false
+			if not wide: continue
+			var route := _route(hub,outside)
+			if route.is_empty(): continue
+			if best.is_empty() or route.size()<best.size():
+				best = route
+				door = edge
+				direction = d
+		if best.is_empty():
+			_disable(rect,false)
+			continue
+		_record_road(best)
+		var side := Vector2i(-direction.y,direction.x)
+		for offset in range(-1,2): roads[door+direction+side*offset] = true
+		for z in range(at.y,rect.end.y):
+			for x in range(at.x,rect.end.x): reserved[Vector2i(x,z)] = true
+		buildings.append({"id":"settlement_%s" % KINDS[index],"kind":KINDS[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+		return true
+	return false
 
 func is_road(x: int,z: int) -> bool:
 	return roads.has(Vector2i(x,z))
