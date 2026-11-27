@@ -22,6 +22,10 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 		return {"applicable": false}
 	var from := Vector2i(floori(start.x), floori(start.z))
 	var to := Vector2i(floori(target.x), floori(target.z))
+	if remote.terrain.goblin_city!=null and (remote.terrain.goblin_city.floors.has(from) or remote.terrain.goblin_city.floors.has(to)):
+		if absf(start.y-cave.floor_at(from.x,from.y))>1.25 or absf(target.y-cave.floor_at(to.x,to.y))>1.25:
+			return {"applicable":false}
+		return {"applicable":true,"path":_branch_path(cave,from,to,target)}
 	if cave.natural != null and (cave.natural.floors.has(from) or cave.natural.floors.has(to)):
 		if absf(start.y-cave.floor_at(from.x,from.y)) > 1.25 or absf(target.y-cave.floor_at(to.x,to.y)) > 1.25:
 			return {"applicable":false}
