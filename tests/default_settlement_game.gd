@@ -71,6 +71,7 @@ func _run() -> void:
 		await physics_frame
 		check(not building.parts[5]["mesh"].visible,"Roof visible at angle %d" % i)
 		var hit := PICKER.resolve(game,game.camera.unproject_position(floor_target))
+		print("SETTLEMENT PICK angle=",i," camera=",game.camera.global_position," hero=",center," target=",floor_target," mask=",building.view_mask," hit=",hit)
 		check(not hit.is_empty() and hit.get("target")==null and Vector3(hit.get("position",Vector3.INF)).distance_to(floor_target)<0.25,"Visible floor pick failed at angle %d" % i)
 		# Hidden walls must not disappear from the gameplay collision mask.
 		for group in building.parts:
