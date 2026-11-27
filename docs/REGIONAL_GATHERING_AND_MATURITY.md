@@ -1,0 +1,20 @@
+# Regional gathering and resource maturity
+
+The default settlement blueprint now includes deterministic regional resource node records. Woodland pockets use existing wood, fibre, berries and herb resource types (tier 1); rocky outcrops use stone, coal and iron (tier 2); a suitable existing cave chamber can contain a non-solid mushroom resource (tier 3). These are habitat tiers, not new items or requirements. Candidate land nodes avoid road lanes, foundation/field footprints, scenery, quest contact reservations, cave columns and other nodes. A bounded standing-to-road route is retained per surface node. Solid nodes use standing cells two blocks from their center. Cave fungi are optional: actual cave floor is checked again at stream time, and no solid resource is placed in the corridor. No full subterranean route validation or cave-wall mining yet.
+
+Resources stream through the actual archipelago chunk owner, using existing ResourceNode art, pickers, collision and gathering calls. Direct authoritative terrain/cave Y is used instead of the starter-island spawn helper's height calculation. Existing prop placement may reject a node if another object occupies its footprint; no arbitrary relocation. Starter resources remain unchanged. Regional node IDs include world seed and stable position. Player save data includes bounded depletion/partial-hit state, so leaving a chunk or saving does not reset a node. This uses a local wall clock and is not yet a multiplayer-authoritative clock.
+
+## Experimental ore regeneration
+- Fresh veins start mature. The last successful harvest action depletes the vein; weakened art remains, harvesting and collision are disabled.
+- 0–30 seconds: recovering; 30s: 1 star; 120s: 2 stars; 210s: 3 stars; 300s: 4 stars; 390s: 5 stars. Times are provisional balance defaults.
+- Maturity is reflected in art scale, world-space stars and increasingly numerous particles at 3–5 stars. Harvesting the recovered deposit before maximum maturity is allowed.
+- Whole-tree felling is a short root-pivot visual tween triggered by exhausting the regional wood resource. The whole tree loses collision and disappears, then regrows via the existing recovery contract. This is a support-break proxy, not a general connected-voxel structural physics solver.
+- Ore is currently a harvestable voxel-art deposit, not an editable individual terrain block. Mining actual blocks requires a persistent voxel-delta and safe collision/remesh contract.
+
+## Crafting connection
+Equipment quality accepts an optional material_maturity argument. One-star material preserves the original odds (60/27/10/2.5/0.5 percent); five-star material uses the experimental 40/35/17/6/2 percent curve. Intermediate stars interpolate. This is a pure roll capability, NOT a live inventory bonus. Current inventory counts mix material quality and smelting transforms ore into ingots. Next implement quality-bearing stacks, deterministic ingredient selection, smelting inheritance, transfer/death/save preservation and an explicit preview of the consumed quality. No free-standing player buff, no bonus for simply visiting a mature node.
+
+## Quests and remaining tests
+Gathering quest offers must be based on material actually present at an accessible site, not just biome tags or planned nodes that failed placement. Retain stable source IDs, required quantities, tier, actual collection receipts and accepted reward; distinguish gathering from buying materials. Local gathering quests and expeditions use the existing 1x/2.5x policy. Do not count decorative crops as harvestable. NPC dialogue, quest assignment, high-tier materials, ore quality provenance and payouts remain future implementation.
+
+Added deterministic placement, tier, route, probability and time-boundary regressions plus a real-game resource lifecycle test. Existing settlement tests passed on an earlier resource revision; latest specific tests and Android graphical/performance verification are pending. No Alpha merge or APK. The existing updater/changelog failure remains a release blocker.
