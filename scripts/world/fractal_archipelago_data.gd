@@ -2,6 +2,9 @@ extends RefCounted
 ## Oasis-inspired deterministic archipelago. Deliberately separate from the
 ## starter island so Outpost's existing terrain, camp and coastline stay intact.
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
+const SETTLEMENT = preload("res://scripts/world/default_settlement_plan.gd")
+var _settlement
+var _settlement_attempted := false
 const SEA_LEVEL: float = -2.82
 const BEDROCK: int = -7
 const OCEAN_PLAY_HALF: int = 384
@@ -129,7 +132,28 @@ func solid_column(x: int, z: int) -> int:
 		solid &= ~(((1 << clearance)-1) << (floor_y-BEDROCK))
 	return solid
 
+func near_settlement(x: float,z: float,padding: float = 0.0) -> bool:
+	var c: Vector2i = islands[2]["center"]
+	return absf(x-c.x)<=44.0+padding and absf(z-c.y)<=44.0+padding
+
+func settlement_plan():
+	# Lazy and deterministic for each source, including mine staging snapshots.
+	# The first island never pays the settlement planning cost.
+	if not _settlement_attempted:
+		_settlement_attempted = true
+		var proposal := SETTLEMENT.new()
+		if proposal.generate(self): _settlement = proposal
+	return _settlement
+
+func settlement_at(x: int,z: int) -> Dictionary:
+	if not near_settlement(x,z): return {}
+	var plan = settlement_plan()
+	return plan.building_at(Vector2i(x,z)) if plan != null else {}
+
 func top_tile(x: int, z: int) -> int:
+	if near_settlement(x,z):
+		var plan = settlement_plan()
+		if plan != null and plan.is_road(x,z): return 5
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin < 2.0:
 		return 17 # Wet sand
