@@ -67,7 +67,7 @@ func _run() -> void:
 		game.camera_angle_target = float(i)*PI/4.0
 		game.camera_angle = game.camera_angle_target
 		game._camera(1.0)
-		building.update_view(center,game.camera.global_position)
+		remote.update_settlement_views(center,game.camera)
 		await physics_frame
 		check(not building.parts[5]["mesh"].visible,"Roof visible at angle %d" % i)
 		var hit := PICKER.resolve(game,game.camera.unproject_position(floor_target))
@@ -77,8 +77,10 @@ func _run() -> void:
 		for group in building.parts:
 			check(building.parts[group]["body"].collision_layer==1,"Cutaway changed movement collision")
 	game.hero.global_position = start
-	building.update_view(start,game.camera.global_position)
+	remote.update_settlement_views(start,game.camera)
 	check(building.parts[5]["mesh"].visible,"Roof did not restore outside")
+	for node in remote.settlement_nodes:
+		check(node.view_mask==0,"Adjacent structure did not restore outside")
 	game.hero.global_position = Vector3(0,0.35,0)
 	await process_frame
 	await process_frame
