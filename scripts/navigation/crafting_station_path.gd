@@ -85,6 +85,10 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 	var settlement_grid: bool = remote != null and remote.terrain != null and (remote.terrain.near_settlement(start.x,start.z,8.0) or remote.terrain.near_settlement(target.x,target.z,8.0))
 	var first := Vector2i(floori(start.x),floori(start.z)) if settlement_grid else Vector2i(roundi(start.x), roundi(start.z))
 	var last := Vector2i(floori(target.x),floori(target.z)) if settlement_grid else Vector2i(roundi(target.x), roundi(target.z))
+	if settlement_grid and reach <= 0.0:
+		var destination_building: Dictionary = remote.terrain.settlement_at(last.x,last.y)
+		if not destination_building.is_empty() and target.y > float(destination_building["floor"])+0.3:
+			return result # Roofs are visual architecture, not ground destinations.
 	var minimum := Vector2i(mini(first.x, last.x) - WORLD_PADDING, mini(first.y, last.y) - WORLD_PADDING)
 	var maximum := Vector2i(maxi(first.x, last.x) + WORLD_PADDING, maxi(first.y, last.y) + WORLD_PADDING)
 	if maximum.x - minimum.x > 70 or maximum.y - minimum.y > 70:
