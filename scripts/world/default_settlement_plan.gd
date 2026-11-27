@@ -7,6 +7,7 @@ var gathering := GATHERING.new()
 const MAX_BUILDINGS := 6
 const KINDS := ["watchtower","smithy","storehouse","house","inn","guardhouse"]
 const FOOTPRINTS: Array[Vector2i] = [Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5)]
+var expanded := false
 var island_index := 2
 var site_id := "settlement"
 var profile := "market_town"
@@ -70,6 +71,7 @@ func _record_road(route: Array[Vector2i]) -> void:
 
 func generate(source, index: int = 2) -> bool:
 	if index not in [1,2]: return false
+	expanded=source.expanded_preview
 	island_index = index
 	site_id = "settlement" if index==2 else "waystation"
 	profile = "market_town" if index==2 else "frontier_waystation"
@@ -101,7 +103,7 @@ func generate(source, index: int = 2) -> bool:
 	_graph.clear()
 	var center: Vector2i = source.islands[island_index]["center"]
 	# Restrict planning to one bounded island, and preserve its cave corridor.
-	var extent := ceili(float(source.islands[island_index]["radius"])) if source.expanded_preview else 44
+	var extent := ceili(float(source.islands[island_index]["radius"])) if expanded else 44
 	for z in range(center.y-extent,center.y+extent+1):
 		for x in range(center.x-extent,center.x+extent+1):
 			var p := Vector2i(x,z)
@@ -115,7 +117,7 @@ func generate(source, index: int = 2) -> bool:
 		var roughness := 0.0
 		for d in DIRS:
 			if _heights.has(p+d): roughness += absf(float(_heights[p]-_heights[p+d]))
-		_graph.set_point_weight_scale(_ids[p],1.0+roughness*(1.2 if source.expanded_preview else 0.35))
+		_graph.set_point_weight_scale(_ids[p],1.0+roughness*(1.2 if expanded else 0.35))
 		for d in [Vector2i.RIGHT,Vector2i.DOWN]:
 			var q: Vector2i = p+d
 			if _ids.has(q) and absi(int(_heights[p]) - int(_heights[q]))<=1:
@@ -142,7 +144,7 @@ func generate(source, index: int = 2) -> bool:
 		break
 	if not found: return false
 	var candidates: Array[Vector2i] = []
-	var plot_extent := 34 if source.expanded_preview else 28
+	var plot_extent := 34 if expanded else 28
 	for z in range(hub.y-plot_extent,hub.y+plot_extent+1,2):
 		for x in range(hub.x-plot_extent,hub.x+plot_extent+1,2):
 			candidates.append(Vector2i(x,z))
@@ -203,7 +205,7 @@ func generate(source, index: int = 2) -> bool:
 		break
 	# Expand narrow centerlines on gentle slopes. The road remains
 	# a terrain material, not another set of mesh nodes or colliders.
-	for pass_index in range(2 if source.expanded_preview else 1):
+	for pass_index in range(2 if expanded else 1):
 		var centerlines: Array = roads.keys()
 		for p: Vector2i in centerlines:
 			for d in DIRS:
@@ -238,7 +240,7 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 				hi = maxi(hi,_heights[p])
 				lo = mini(lo,_heights[p])
 		if not valid or hi-lo>2: continue
-		if source.expanded_preview:
+		if expanded:
 			var spacing_ok := true
 			for old in buildings:
 				var footprint: Rect2i = old["rect"]
