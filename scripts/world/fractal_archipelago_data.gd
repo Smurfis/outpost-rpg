@@ -176,6 +176,10 @@ func height_at(x: int, z: int) -> int:
 		return maxi(int(_height_cache[key]),int(_cave_cover.get(key,BEDROCK)))
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin <= 0.0:
+		# A submerged shelf gives each preview island a visible sea front.
+		# It stays below sea level and does not change the dry land mask.
+		if goblin_city!=null and margin>-9.0:
+			return -4-floori(-margin/3.0)
 		return BEDROCK
 	var strength: float = 1.0
 	for island in islands:
@@ -316,8 +320,8 @@ func near_island(point: Vector3, padding: float = 70.0) -> bool:
 
 func map_cell_at(x: int, z: int) -> Dictionary:
 	var height: int = height_at(x, z)
-	var land: bool = height > BEDROCK
+	var land: bool = height > BEDROCK and (goblin_city==null or is_land_at(x+0.5,z+0.5))
 	return {"height": float(height) if land else SEA_LEVEL,
-		"ground_height": float(height) if land else -5.0,
+		"ground_height": float(height) if land or (goblin_city!=null and height>BEDROCK) else -5.0,
 		"ground_tile": top_tile(x, z) if land else 4,
 		"zone": "inland" if land else "water","biome":biome_at(x+0.5,z+0.5)}
