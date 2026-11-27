@@ -36,7 +36,10 @@ func _run() -> void:
 		game.queue_free()
 		quit(1)
 		return
-	game.inventory["stone"] = 54 # 35.1 of the starting 36 carry capacity.
+	game.inventory.clear()
+	game.inventory["stone"] = 998
+	game.inventory["iron"] = 999
+	game.inventory["wood"] = 4 # 1799.35 of 1800 carry capacity; room for one stone.
 	check(game.bag_load() < game.bag_capacity(), "Player starts below weight capacity")
 	manager._apply_reward({
 		"coins": 900,
