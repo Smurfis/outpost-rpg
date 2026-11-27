@@ -10,7 +10,7 @@ const EQUIP_DRAG = preload("res://scripts/ui/equipment_drag_button.gd")
 const EQUIPMENT_SLOTS: Array[String] = ["weapon", "offhand", "back", "bag", "tool_wood", "tool_mining", "tool_forage", "tool_fishing"]
 const SLOT_NAMES: Dictionary = {
 	"weapon":"MAIN HAND", "offhand":"OFF HAND", "back":"CLOAK", "bag":"BACKPACK",
-	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_fishing":"FISHING", "tool_forage":"FORAGING","trinket":"BOAT","trinket":"BOAT / TRINKET"
+	"tool_wood":"WOODCUTTING", "tool_mining":"MINING", "tool_fishing":"FISHING", "tool_forage":"FORAGING","trinket":"BOAT / TRINKET"
 }
 const CONSUMABLES: Array[String] = ["meal", "tonic", "stew", "cooked_shrimp"]
 var game
