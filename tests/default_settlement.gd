@@ -4,6 +4,7 @@ const BUILDING = preload("res://scripts/world/default_settlement_building.gd")
 const SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
 const ADVENTURE = preload("res://scripts/world/regional_adventure_policy.gd")
 const TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
+const TREE_SUPPORT = preload("res://scripts/voxel/tree_block_support.gd")
 const MATURITY = preload("res://scripts/world/ore_maturity.gd")
 const QUALITY = preload("res://scripts/crafting/equipment_quality.gd")
 var failures := 0
@@ -84,6 +85,7 @@ func _run() -> void:
 	_test_maturity()
 	_test_rooted_tree()
 	_test_preview_fixes()
+	_test_tree_support()
 	print("DEFAULT SETTLEMENT RESULT: %d failures" % failures)
 	quit(0 if failures==0 else 1)
 
@@ -313,3 +315,11 @@ func _test_preview_fixes() -> void:
 				check(plan.roads.has(p) and not plan.reserved.has(p) and not plan.plaza.has(p),"Half step outside legal road")
 				check(d.length_squared()==1 and spec["height"]==source.height_at(p.x,p.y),"Invalid half step geometry")
 			print("PREVIEW FIXES | %d | island %d | %d cave blocks | %d road steps" % [seed_value,index,count,plan.road_steps.size()])
+
+func _test_tree_support() -> void:
+	var shape := {"bark":0,"cells":{Vector3i(0,-1,0):0,Vector3i.ZERO:0,Vector3i(0,1,0):0,Vector3i(0,2,0):0,Vector3i(1,2,0):4,Vector3i(0,3,0):4}}
+	var cut := TREE_SUPPORT.cut(shape,{Vector2i.ZERO:0},Vector3i.ZERO)
+	check(cut["wood_units"]==3 and cut["detached_wood"].size()==2,"Trunk support break did not account for every timber voxel")
+	check(cut["detached_leaves"].size()==2 and cut["remaining"].size()==1,"Unsupported canopy not removed")
+	check(shape["cells"].size()==6,"Support preview mutated source before transaction")
+	check(TREE_SUPPORT.cut(shape,{},Vector3i(1,2,0)).is_empty(),"Nonwood cut granted timber")
