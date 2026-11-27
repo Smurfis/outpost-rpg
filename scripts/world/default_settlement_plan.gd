@@ -267,47 +267,49 @@ func _plan_countryside(source) -> void:
 	# Locate modest agricultural plots beside existing roads. No terraforming
 	# or path displacement: every accepted cell is on safe, gently sloped land.
 	var candidates: Array[Vector2i] = []
-	for z in range(hub.y-26,hub.y+27,2):
-		for x in range(hub.x-26,hub.x+27,2):
+	for z in range(hub.y-32,hub.y+33):
+		for x in range(hub.x-32,hub.x+33):
 			candidates.append(Vector2i(x,z))
 	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
 		var da := a.distance_squared_to(hub)
 		var db := b.distance_squared_to(hub)
 		return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
 	var limit := 2 if island_index==2 else 1
-	for at in candidates:
+	# Prefer large plots, but permit small stepped gardens on rugged islands.
+	# Individual cardinal steps are checked instead of requiring a flat field.
+	for size in [Vector2i(5,7),Vector2i(7,5),Vector2i(3,5),Vector2i(5,3),Vector2i(3,3)]:
+		for at in candidates:
+			if fields.size()>=limit: break
+			var rect := Rect2i(at,size)
+			var low := 999
+			var high := -999
+			var valid := true
+			var entry := Vector2i.MAX
+			for z in range(rect.position.y,rect.end.y):
+				for x in range(rect.position.x,rect.end.x):
+					var p := Vector2i(x,z)
+					if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p):
+						valid=false
+						continue
+					var h: int = _heights[p]
+					if h<0: valid=false
+					low=mini(low,h)
+					high=maxi(high,h)
+					for d in DIRS:
+						var q := p+d
+						if rect.has_point(q) and _heights.has(q) and absi(h-int(_heights[q]))>1: valid=false
+						if roads.has(q) and absi(h-int(_heights.get(q,h+99)))<=1:
+							if entry==Vector2i.MAX or q.distance_squared_to(hub)<entry.distance_squared_to(hub):
+								entry=q
+			if not valid or high-low>3 or entry==Vector2i.MAX: continue
+			fields.append({"id":"%s_field_%d" % [site_id,fields.size()],"kind":"crop_field","rect":rect,"entry":entry})
+			for z in range(rect.position.y,rect.end.y):
+				for x in range(rect.position.x,rect.end.x):
+					var p := Vector2i(x,z)
+					field_tiles[p]=true
+					if x>rect.position.x and x<rect.end.x-1 and z>rect.position.y and z<rect.end.y-1 and (x-rect.position.x)%2==1:
+						scenery[p]={"kind":"crop","height":int(_heights[p]),"variant":posmod(x*31+z*17+source.seed,3)}
 		if fields.size()>=limit: break
-		var size := Vector2i(5,7) if fields.size()%2==0 else Vector2i(7,5)
-		var rect := Rect2i(at,size)
-		var low := 999
-		var high := -999
-		var valid := true
-		var entry := Vector2i.MAX
-		for z in range(rect.position.y,rect.end.y):
-			for x in range(rect.position.x,rect.end.x):
-				var p := Vector2i(x,z)
-				if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p):
-					valid=false
-					continue
-				var h: int = _heights[p]
-				if h<0: valid=false
-				low=mini(low,h)
-				high=maxi(high,h)
-				for d in DIRS:
-					var q := p+d
-					if roads.has(q) and absi(h-int(_heights.get(q,h+99)))<=1:
-						if entry==Vector2i.MAX or q.distance_squared_to(hub)<entry.distance_squared_to(hub):
-							entry=q
-		if not valid or high-low>1 or entry==Vector2i.MAX: continue
-		var kind := "crop_field"
-		fields.append({"id":"%s_field_%d" % [site_id,fields.size()],"kind":kind,"rect":rect,"entry":entry})
-		for z in range(rect.position.y,rect.end.y):
-			for x in range(rect.position.x,rect.end.x):
-				var p := Vector2i(x,z)
-				field_tiles[p]=true
-				# Rows with a perimeter margin. Crops remain decorative and low.
-				if x>rect.position.x and x<rect.end.x-1 and z>rect.position.y and z<rect.end.y-1 and (x-rect.position.x)%2==1:
-					scenery[p]={"kind":"crop","height":int(_heights[p]),"variant":posmod(x*31+z*17+source.seed,3)}
 	# Sparse roadside flowers and low stone markers, kept outside roads,
 	# foundations, cave clearance and farm plots. Stable by world cell.
 	var cells: Array = roads.keys()
