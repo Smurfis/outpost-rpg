@@ -5,6 +5,10 @@ const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
 const Prefab = preload("res://scripts/world/city_lab_prefab.gd")
 const Edits = preload("res://scripts/world/city_lab_edits.gd")
 const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
+const Pack = preload("res://scripts/world/city_lab_dungeon_pack.gd")
+var pack_codec := Pack.new()
+var module_name: LineEdit
+var loop_density: SpinBox
 var socket_checks: Array[CheckBox] = []
 var module_weight: SpinBox
 var prefab := Prefab.new()
@@ -173,16 +177,63 @@ func _add_connector_ui(column: VBoxContainer) -> void:
 	row.add_child(module_weight)
 	_tool(row,"Export module",_export_module)
 	_tool(row,"Dungeon Lab",_open_dungeon)
+	var pack_row := HBoxContainer.new()
+	column.add_child(pack_row)
+	module_name = LineEdit.new()
+	module_name.placeholder_text = "module_name"
+	module_name.text = "custom_room"
+	module_name.custom_minimum_size = Vector2(150,0)
+	pack_row.add_child(module_name)
+	loop_density = SpinBox.new()
+	loop_density.min_value = 0
+	loop_density.max_value = 100
+	loop_density.value = 22
+	loop_density.prefix = "Loops % "
+	pack_row.add_child(loop_density)
+	_tool(pack_row,"Add to pack",_add_module_to_pack)
+	_tool(pack_row,"Update pack loops",_update_pack_loops)
+
+func _captured_module(id: String) -> Dictionary:
+	if copied.is_empty(): return {}
+	var sockets: Array = []
+	for d in range(4):
+		if socket_checks[d].button_pressed:
+			sockets.append({"direction":d,"type":"stone_corridor"})
+	return {"schema_version":1,"id":id,"weight":int(module_weight.value),"prefab":copied,"sockets":sockets}
+
+func _read_pack() -> Dictionary:
+	var path_name := "user://city_lab_dungeon_pack.json"
+	if not FileAccess.file_exists(path_name): return pack_codec.empty_pack()
+	return pack_codec.normalize(edits.read_json(path_name))
+
+func _add_module_to_pack() -> void:
+	var pack := _read_pack()
+	if pack.is_empty():
+		edit_status.text = "Existing pack invalid; it was not overwritten"
+		return
+	var asset := _captured_module("creator:"+module_name.text.strip_edges())
+	pack["loop_percent"] = int(loop_density.value)
+	var updated := pack_codec.with_asset(pack,asset)
+	if updated.is_empty():
+		edit_status.text = "Module rejected: name, duplicate ID, geometry, sockets or pack limit"
+		return
+	var ok := edits.write_json("user://city_lab_dungeon_pack.json",updated)
+	edit_status.text = "Pack saved: %d modules" % updated["modules"].size() if ok else "Pack write failed"
+
+func _update_pack_loops() -> void:
+	var pack := _read_pack()
+	if pack.is_empty():
+		edit_status.text = "Invalid pack; not overwritten"
+		return
+	pack["loop_percent"] = int(loop_density.value)
+	var ok := edits.write_json("user://city_lab_dungeon_pack.json",pack)
+	edit_status.text = "Pack loop density updated" if ok else "Pack write failed"
 
 func _export_module() -> void:
 	if copied.is_empty():
 		edit_status.text = "Capture a 15 x 5 x 15 module first"
 		return
-	var sockets: Array = []
-	for d in range(4):
-		if socket_checks[d].button_pressed:
-			sockets.append({"direction":d,"type":"stone_corridor"})
-	var asset := {"schema_version":1,"id":"creator:custom_module","weight":int(module_weight.value),"prefab":copied,"sockets":sockets}
+	var asset := _captured_module("creator:custom_module")
 	var validator := Dungeon.new()
 	if not validator.register_asset(asset):
 		edit_status.text = "Invalid module: check size, central 3x3 openings, floor and connectivity"
