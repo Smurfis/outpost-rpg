@@ -83,10 +83,26 @@ func observe_player() -> void:
 				added = true
 	var zone: String = ZONES.resolve(point, biome)
 	remember("zone:" + zone, zone, "zones", point)
+	_observe_regional_landmarks(point)
 	if added:
 		revision += 1
 		dirty = true
 		changed.emit()
+
+func _observe_regional_landmarks(point: Vector3) -> void:
+	var remote: Variant = biome.get("archipelago")
+	if remote == null or remote.terrain == null: return
+	var index: int = remote.terrain.settlement_index_at(point.x,point.z,REVEAL_RADIUS)
+	if index<0: return
+	var plan = remote.terrain.settlement_plan(index)
+	if plan == null: return
+	for record in plan.landmarks:
+		# Architecture labels are reserved for a future detailed town map;
+		# use the existing zones filter for named regional destinations.
+		if record["role"]=="architecture": continue
+		var at: Vector3 = record["position"]
+		if visibility_at(at)!=2: continue
+		remember("region:"+str(record["id"]),record["label"],"zones",at)
 
 func remember(id: String, label: String, category: String, point: Vector3, extra: Dictionary = {}) -> void:
 	if known.has(id) or visibility_at(point) == 0:
