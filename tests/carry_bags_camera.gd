@@ -18,14 +18,16 @@ func _initialize() -> void:
 	call_deferred("_verify")
 
 func _verify() -> void:
-	verify(is_equal_approx(CARRY.capacity(""), 36.0), "No bag starts with limited carry weight")
+	verify(is_equal_approx(CARRY.capacity(""), 1800.0), "No bag starts with limited carry weight")
 	verify(CARRY.capacity("backpack_t2", 2) > CARRY.capacity("backpack_t1", 2), "Tier 2 backpack carries more")
 	verify(CARRY.weight("wood", "wood_satchel_t1", 1) < CARRY.weight("wood", "ore_satchel_t1", 1), "Wood satchel saves wood weight only")
 	verify(CARRY.weight("iron", "ore_satchel_t2", 2) < CARRY.weight("iron", "wood_satchel_t2", 2), "Ore satchel saves ore weight")
 	verify(CARRY.weight("coins") == 0.0, "Silver/coins do not block resource harvesting")
+	verify(CARRY.max_fit({"wood":998},"wood",10)==1,"Resource stack never exceeds 999")
+	verify(CARRY.max_fit({"gold":999},"gold",10)==10,"Currency not subject to resource cap")
 	var preview: Dictionary = {"wood": 100, "iron": 20}
 	verify(CARRY.used(preview, "wood_satchel_t1", 1) < CARRY.used(preview), "Specialist bags reduce effective load")
-	verify(CARRY.max_fit({"wood": 80}, "stone", 3) == 0, "Cannot collect additional heavy items at capacity")
+	verify(CARRY.max_fit({"wood": 999,"iron":999,"stone":999}, "stone", 3) == 0, "Cannot collect additional heavy items at capacity")
 	root.set_meta("outpost_new_adventure", true)
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	verify(scene != null, "Playable world loads with new bag scripts")
@@ -74,15 +76,16 @@ func _verify() -> void:
 	game.inventory["fiber"] = 0
 	game.equipment["bag"] = ""
 	game.inventory["backpack_t1"] = 0
-	var fitting: int = game.grant_item("wood", 1000, true)
-	verify(fitting > 0 and fitting < 1000, "Pickup respects maximum carry")
-	verify(game.overflow_loot.get("wood", 0) == 1000 - fitting, "Excess rewards stored and never destroyed")
+	var fitting: int = game.grant_item("wood", 1200, true)
+	verify(fitting == 999, "Pickup respects maximum carry")
+	verify(game.overflow_loot.get("wood", 0) == 1200 - fitting, "Excess rewards stored and never destroyed")
 	game.inventory["backpack_t1"] = 1
 	game.bag_quality["backpack_t1"] = 3
 	verify(game.equip_item("backpack_t1"), "Owned backpack equips through existing API")
+	game.inventory["wood"] -= 10 # Free stack space, not just weight.
 	var before: int = int(game.inventory["wood"])
 	var claimed: int = game.claim_overflow()
-	verify(claimed > 0 and int(game.inventory["wood"]) > before, "Larger bag lets player recover stored loot")
+	verify(claimed > 0 and int(game.inventory["wood"]) > before, "Freed stack space lets player recover stored loot")
 	verify(game.overflow_loot.has("wood"), "Unclaimed loot remains recoverable")
 	verify(game.bag_load() <= game.bag_capacity() + 0.0001, "Load never exceeds equipped bag allowance from pickup")
 	game.hero.global_position = Vector3(0.0, 0.35, 0.0)
