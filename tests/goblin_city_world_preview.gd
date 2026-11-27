@@ -1,6 +1,7 @@
 extends SceneTree
 const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
+const SKELETAL = preload("res://scripts/world/skeletal_city_plan.gd")
 const PLAN = preload("res://scripts/world/goblin_city_plan.gd")
 const MAIN = preload("res://scenes/main.tscn")
 const PATH = preload("res://scripts/navigation/fractal_cave_path.gd")
@@ -18,8 +19,9 @@ func _run() -> void:
 	ProjectSettings.set_setting("application/config/build_channel","world-preview")
 	for seed_value in [42,64012,64013]:
 		var data := DATA.new(seed_value)
+		_test_skeletal(data)
 		var city = data.goblin_city
-		check(data.islands.size()==4 and city!=null,"Fourth island missing")
+		check(data.islands.size()==5 and city!=null,"Preview island set missing")
 		if city==null: continue
 		check(city.validate(),"Disconnected city or overlapping buildings")
 		check(city.buildings.size()==11 and city.guards.size()==9,"Incomplete stronghold")
@@ -134,3 +136,25 @@ func _test_wave_field(at: Vector3) -> void:
 	var pose := OCEAN.hull_pose(at,0.4)
 	check(pose.is_finite() and absf(pose.y)<=0.20 and absf(pose.z)<=0.20,"Invalid six-point hull pose")
 	check(OCEAN.coefficients.size()==6 and OCEAN.dynamics.size()==6,"Shared wave parameters missing")
+
+func _test_skeletal(data) -> void:
+	var city = data.skeletal_city
+	check(city!=null,"Skeletal island missing")
+	if city==null: return
+	check(city.validate() and city.floors.size()>700,"Skeletal city disconnected or undersized")
+	check(data.islands[2]["radius"]==64.0 and data.islands[1]["radius"]==56.0,"Preview islands not widened")
+	var entry: Vector2i = city.entrance
+	for lane in range(-4,5):
+		var p := entry+Vector2i(0,lane)
+		check(data.is_solid(p.x,city.ceilings[p],p.y),"Dwarven entrance open to sky")
+		check(not data.is_solid(p.x,SKELETAL.ENTRY_Y+2,p.y),"Dwarven entrance blocked")
+	var path := PATH._branch_path(data.caves,entry,city.heart,Vector3(city.heart.x+0.5,SKELETAL.CITY_Y+0.1,city.heart.y+0.5))
+	check(not path.is_empty(),"Skeletal heart unreachable")
+	var south: Vector3i = data.caves.routes[2].front()
+	check(data.is_solid(south.x,data.caves.ceiling_at(south.x,south.z,south.y),south.z),"Southern mouth still a ravine")
+	check(data.height_at(south.x+1,south.z)==south.y,"Southern cave apron obstructed")
+	var old: Dictionary = data.caves.floors.duplicate()
+	check(data.regenerate_skeletal_city(),"Skeletal regeneration failed")
+	check(data.skeletal_city.cycle==1,"Skeletal cycle unchanged")
+	for p: Vector2i in old:
+		if not city.contains(p): check(data.caves.floors.get(p)==old[p],"Skeletal regeneration altered unrelated cave")
