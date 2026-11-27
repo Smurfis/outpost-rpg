@@ -5,6 +5,8 @@ const Sector = preload("res://scripts/world/city_lab_dungeon_sector.gd")
 const Mesher = preload("res://scripts/world/city_lab_mesher.gd")
 const Edits = preload("res://scripts/world/city_lab_edits.gd")
 const Dungeon = preload("res://scripts/world/city_lab_dungeon_connectors.gd")
+const Pack = preload("res://scripts/world/city_lab_dungeon_pack.gd")
+var pack_codec := Pack.new()
 var sector := Sector.new()
 var mesher := Mesher.new()
 var files := Edits.new()
@@ -74,6 +76,7 @@ func _ui() -> void:
 	_button(row,"City Lab",func(): get_tree().change_scene_to_file("res://scenes/terrain_city_lab.tscn"))
 	_button(row,"New seed",_new_seed)
 	_button(row,"Import module",_import_module)
+	_button(row,"Import pack",_import_pack)
 	_button(row,"Default pack",_default_pack)
 	_button(row,"Rotate",func(): yaw+=PI/4)
 	_button(row,"Zoom +",func(): zoom=maxf(15.0,zoom-8.0))
@@ -99,6 +102,14 @@ func _new_seed() -> void:
 
 func _default_pack() -> void:
 	custom = null
+	_build(Vector2i(37,37))
+
+func _import_pack() -> void:
+	var pack := pack_codec.normalize(files.read_json("user://city_lab_dungeon_pack.json"))
+	if pack.is_empty():
+		label.text = "Pack missing or invalid; current generation unchanged"
+		return
+	custom = pack
 	_build(Vector2i(37,37))
 
 func _import_module() -> void:
@@ -152,8 +163,8 @@ func _build(spawn: Vector2i) -> void:
 	var custom_count := 0
 	if custom != null:
 		for p in sector.solver.modules:
-			if sector.solver.modules[p]["id"] == custom["id"]: custom_count+=1
-	label.text = "DUNGEON | Seed %d | Sector %d,%d | 25 modules | Custom: %d | %d meshes" % [seed_value,sx,sz,custom_count,geometry.get_child_count()]
+			if str(sector.solver.modules[p]["id"]).contains(":"): custom_count+=1
+	label.text = "DUNGEON | %d | %d,%d | %s | Custom rooms: %d | %d meshes" % [seed_value,sx,sz,sector.pack_id,custom_count,geometry.get_child_count()]
 	print("DUNGEON LAB READY: ",label.text)
 
 func _standing(p: Vector2i) -> Vector3:
