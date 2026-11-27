@@ -1024,7 +1024,7 @@ func gather(selected: Node3D = null) -> void:
 		return
 	var expected_item: String = str(resource.kind)
 	var tool: String = "axe" if expected_item == "wood" else "pickaxe" if expected_item in ["stone", "iron", "coal"] else "shrimp_net" if expected_item == "shrimp" else "satchel"
-	if selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
+	if not equipment.has("trinket") and selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
 		equip_item(tool)
 	if expected_item == "shrimp" and (str(equipment.get("tool_fishing", "")) != "shrimp_net" or int(inventory.get("shrimp_net", 0)) < 1):
 		hud.toast("Craft a Shrimp net from 6 fibre at the Workbench first.")
@@ -1138,6 +1138,12 @@ func equipment_slot(item_id: String) -> String:
 	return ""
 
 func available_quick_tools() -> Array[String]:
+	if equipment.has("trinket"):
+		var equipped_tools: Array[String] = [str(equipment.get("weapon","training_blade"))]
+		for id in QUICK_TOOL_IDS:
+			if id not in equipped_tools and is_equipped(id): equipped_tools.append(id)
+		if is_equipped("shrimp_net"): equipped_tools.append("shrimp_net")
+		return equipped_tools
 	var candidates: Array[String] = ["training_blade"]
 	for item in QUICK_TOOL_IDS:
 		if item != "training_blade" and int(inventory.get(item, 0)) > 0:
@@ -1151,6 +1157,12 @@ func select_quick_tool(item_id: String) -> bool:
 		return false
 	if item_id != "training_blade" and int(inventory.get(item_id, 0)) <= 0:
 		return false
+	if equipment.has("trinket"):
+		if item_id not in available_quick_tools(): return false
+		active_quick_tool=item_id
+		if hero!=null: hero.set_held_tool(item_id)
+		_save()
+		return true
 	# Equip in its actual owned slot. Don't toggle OFF an already-equipped
 	# tool just because the player chose it again in the quick selector.
 	if item_id == "training_blade":
@@ -1374,6 +1386,8 @@ func equip_item(item_id: String) -> bool:
 		equipment[slot] = "training_blade" if slot == "weapon" else ""
 	else:
 		equipment[slot] = item_id
+	if equipment.has("trinket") and slot=="weapon" and active_quick_tool in ["training_blade","spear","iron_blade"]:
+		active_quick_tool=str(equipment["weapon"])
 	# Equipping an axe/pickaxe from Gear should actually put it in the hand.
 	# Removing it should put away the model, without deleting inventory.
 	if item_id in ["axe", "pickaxe"]:
@@ -1508,9 +1522,9 @@ func _try_finish_craft() -> void:
 		hud.record_loot(result, 1 if is_bag or QUALITY.is_gear(result) else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
-	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
+	# Preview crafting leaves gear in the bag until explicitly equipped.
 	var slot: String = equipment_slot(result)
-	if slot != "":
+	if slot != "" and not equipment.has("trinket"):
 		equipment[slot] = result
 		_apply_equipment()
 	gain_experience(8)
