@@ -90,6 +90,10 @@ func generate(world_seed: int,iteration: int) -> void:
 			var p := CENTER+Vector2i(x,z)
 			if absi(x)<=2 or absi(z-5)<=2 or absi(z+10)<=1 or x in [-24,25]:
 				if building_at(p).is_empty(): roads[p]=true
+	for x in range(28,43):
+		for z in range(4,7): roads[CENTER+Vector2i(x,z)]=true
+	for z in range(0,5): roads[CENTER+Vector2i(42,z)]=true
+	for x in range(36,43): roads[CENTER+Vector2i(x,0)]=true
 	for item in buildings:
 		var at: Vector2i = item["door"]+item["direction"]
 		var path := _surface_route(at)
@@ -113,16 +117,16 @@ func _surface_route(goal: Vector2i) -> Array[Vector2i]:
 			queue.append(q)
 	var route_cells: Array[Vector2i] = []
 	if not parents.has(goal): return route_cells
-	var p := goal
-	while p!=hub:
-		route_cells.append(p)
-		p=parents[p]
+	var cursor_cell := goal
+	while cursor_cell!=hub:
+		route_cells.append(cursor_cell)
+		cursor_cell=parents[cursor_cell]
 	route_cells.append(hub)
 	route_cells.reverse()
 	return route_cells
 
 func _build(id: String,kind: String,rect: Rect2i,d: Vector2i) -> void:
-	var door := rect.get_center()+Vector2i(d.x*(rect.size.x/2),d.y*(rect.size.y/2))
+	var door := rect.get_center()+Vector2i(d.x*floori(rect.size.x/2.0),d.y*floori(rect.size.y/2.0))
 	buildings.append({"id":"goblin_city_"+id,"kind":kind,"rect":rect,"floor":11,"door":door,"direction":d,"route":[]})
 
 func _carve(p: Vector2i,y: int,clearance: int) -> void:
@@ -149,10 +153,11 @@ func height_override(p: Vector2i) -> int:
 	# Deliberate broad stone terrace, then one-block shoulders. Tunnel mouth
 	# opens on the eastern side; subsequent cells have a thick roof.
 	if local.x>=31 and local.x<=40 and absi(local.y)<=2:
-		if local.x>=36: return 3-maxi(0,local.x-36)/2
+		if local.x>=36: return 3-floori(float(maxi(0,local.x-36))/2.0)
 		return maxi(8,int(ceilings.get(p,7))+2)
-	if local.x>=34 and local.x<=43 and absi(local.y)<=5 and absi(local.y)>=3:
-		return 3+mini(2,absi(local.y)-3)
+	if local.x>=28 and local.x<=43 and local.y>=3 and local.y<=7:
+		return maxi(2,10-floori(float(local.x-28)*0.6))
+	if Vector2(local).length()>51.0: return -99999
 	if edge<=28: return 10
 	if edge<=44: return 10-ceili(float(edge-28)/2.0)
 	return -99999
