@@ -49,15 +49,15 @@ static func generate(spec: Dictionary) -> Dictionary:
 	_fill(cells,Vector3i(-half,0,-half),Vector3i(half*2+1,h-3,half*2+1),bark)
 	_fill(cells,Vector3i(0,h-3,0),Vector3i(1,4,1),bark)
 	var terrain: Dictionary = spec["ground"]
-	for direction in ROOT_DIRS:
+	for direction: Vector2i in ROOT_DIRS:
 		var length := rng.randi_range(2,3)
 		var previous := 1
 		for step in range(1,length+1):
 			var p := direction*step
 			var grade: int = terrain.get(p,0)
 			var top := maxi(grade+1,previous-1)
-			if step==length: top=grade+1
-			for y in range(grade-1,top+1):
+			var bottom := mini(grade-1,previous-1)
+			for y in range(bottom,top+1):
 				var v := Vector3i(p.x,y,p.y)
 				cells[v]=bark
 				roots.append(v)
@@ -70,7 +70,7 @@ static func generate(spec: Dictionary) -> Dictionary:
 			_lobe(cells,Vector3i(0,y,0),Vector3i(radius,2,radius),leaf)
 		_lobe(cells,Vector3i(0,h+5,0),Vector3i(1,2,1),leaf)
 	else:
-		for d in ROOT_DIRS:
+		for d: Vector2i in ROOT_DIRS:
 			var length := rng.randi_range(2,3)
 			var y := h-3+rng.randi_range(0,2)
 			for step in range(1,length+1):
