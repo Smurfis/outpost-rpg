@@ -21,6 +21,7 @@ var _fractal: FastNoiseLite
 var _ridges: FastNoiseLite
 var _height_cache: Dictionary = {}
 var _margin_cache: Dictionary = {}
+var _cave_cover: Dictionary = {}
 
 func _init(world_seed: int = 64012) -> void:
 	seed = world_seed
@@ -46,6 +47,36 @@ func _init(world_seed: int = 64012) -> void:
 	_ridges.fractal_octaves = 4
 	caves = CAVES.new()
 	caves.configure(self)
+	_cover_remote_caves()
+
+# Keep a short exposed mouth, then a real roof above the tunnel.
+# Never change the first island / physical mine save contract.
+func _cover_remote_caves() -> void:
+	for index in [1,2]:
+		var route: Array = caves.routes[index]
+		if route.is_empty(): continue
+		var mouth: Vector3i = route[0]
+		for i in range(5,route.size()):
+			var step: Vector3i = route[i]
+			for width in range(CAVES.CORRIDOR_WIDTH):
+				var cell := Vector2i(step.x,step.z+width)
+				_cover_column(cell,mouth)
+		var end: Vector3i = route.back()
+		for dz in range(-2,3):
+			for dx in range(-2,3):
+				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth)
+
+func _cover_column(cell: Vector2i,mouth: Vector3i) -> void:
+	var floor_y: int = caves.floor_at(cell.x,cell.y)
+	if floor_y==CAVES.INVALID_FLOOR: return
+	var roof: int = caves.ceiling_at(cell.x,cell.y,floor_y)+2
+	for dz in range(-3,4):
+		for dx in range(-3,4):
+			var q := cell+Vector2i(dx,dz)
+			if q.x>mouth.x-5 and caves.has_cave(q.x,q.y): continue
+			if margin_at(q.x+0.5,q.y+0.5)<=0: continue
+			var required := roof-maxi(absi(dx),absi(dz))
+			_cave_cover[q]=maxi(int(_cave_cover.get(q,BEDROCK)),required)
 
 func margin_at(x: float, z: float) -> float:
 	var key := Vector2i(floori(x), floori(z))
@@ -68,7 +99,7 @@ func is_land_at(x: float, z: float) -> bool:
 func height_at(x: int, z: int) -> int:
 	var key := Vector2i(x, z)
 	if _height_cache.has(key):
-		return int(_height_cache[key])
+		return maxi(int(_height_cache[key]),int(_cave_cover.get(key,BEDROCK)))
 	var margin: float = margin_at(float(x) + 0.5, float(z) + 0.5)
 	if margin <= 0.0:
 		return BEDROCK
@@ -105,7 +136,7 @@ func height_at(x: int, z: int) -> int:
 			height = roundi(accessible_shore)
 			break
 	_height_cache[key] = height
-	return height
+	return maxi(height,int(_cave_cover.get(key,BEDROCK)))
 
 func is_solid(x: int, y: int, z: int) -> bool:
 	if y < BEDROCK:
