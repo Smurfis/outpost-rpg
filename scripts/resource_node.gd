@@ -7,6 +7,8 @@ const PICKER = preload("res://scripts/interaction/world_picker.gd")
 const SOLID = preload("res://scripts/interaction/resource_collision.gd")
 const ROOTED_TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
 var rooted_tree: Dictionary = {}
+var tree_mesh: MeshInstance3D
+var tree_cutaway_hidden := false
 const MATURITY = preload("res://scripts/world/ore_maturity.gd")
 var regional_id := ""
 var regional_tier := 0
@@ -48,7 +50,8 @@ func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}) ->
 				_pine()
 			else:
 				rooted_tree=ROOTED_TREE.generate(tree_spec)
-				add_child(ROOTED_TREE.mesh_for(rooted_tree))
+				tree_mesh=ROOTED_TREE.mesh_for(rooted_tree)
+				add_child(tree_mesh)
 		"stone":
 			_rock()
 		"fiber":
@@ -146,6 +149,32 @@ func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void
 			if resource_body!=null: resource_body.set_deferred("collision_layer",0)
 		elif saved_hits>0:
 			hits_left=saved_hits
+
+func update_tree_cutaway(room: Dictionary,toward_camera: Vector3) -> void:
+	if tree_mesh==null: return
+	var hidden := false
+	if active and not room.is_empty():
+		var bounds: AABB = tree_mesh.global_transform * tree_mesh.get_aabb()
+		var rect: Rect2i = room["rect"]
+		var floor_y: int = room["floor"]
+		var center := Vector3(rect.get_center().x+0.5,floor_y+0.1,rect.get_center().y+0.5)
+		if bounds.get_center().distance_to(center)<48.0:
+			var inner := rect.grow(-1)
+			for z in range(inner.position.y,inner.end.y):
+				for x in range(inner.position.x,inner.end.x):
+					var at := Vector3(x+0.5,floor_y+0.1,z+0.5)
+					if bounds.intersects_segment(at,at+toward_camera*48.0)!=null:
+						hidden=true
+						break
+				if hidden: break
+	if hidden==tree_cutaway_hidden: return
+	tree_cutaway_hidden=hidden
+	tree_mesh.visible=not hidden
+	if hidden:
+		set_targeted(false)
+	if resource_body!=null: resource_body.set_meta("building_cutaway_hidden",hidden)
+	var area := get_node_or_null("WorldPickGeometry")
+	if area!=null: area.set_meta("building_cutaway_hidden",hidden)
 
 func _is_maturing_ore() -> bool:
 	return not regional_id.is_empty() and kind in ["stone","iron","coal","clay"]
@@ -249,11 +278,11 @@ func _setup_target_marker() -> void:
 
 func set_targeted(selected: bool) -> void:
 	if target_label != null:
-		target_label.visible = selected and active
+		target_label.visible = selected and active and not tree_cutaway_hidden
 		target_label.text = "%s%s · %d actions" % ["Shrimp pool" if kind == "shrimp" else kind.capitalize(), " ×%d" % bundle_count if bundle_count > 1 else "", hits_left]
 		if not regional_id.is_empty(): target_label.text += " · T%d" % regional_tier
 	if target_ring != null:
-		target_ring.visible = selected and active
+		target_ring.visible = selected and active and not tree_cutaway_hidden
 
 func _material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
