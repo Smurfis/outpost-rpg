@@ -67,14 +67,19 @@ func generate(world_seed: int,iteration: int) -> void:
 		# Three-wide doorway from the room into the reserved north/south street.
 		var mid := rect.get_center()
 		var end_x := CENTER.x-2 if left else CENTER.x+2
+		var connector: Dictionary = {}
 		for px in range(mini(mid.x,end_x),maxi(mid.x,end_x)+1):
-			for dz in range(-1,2): _carve(Vector2i(px,mid.y+dz),CITY_Y,4)
+			for dz in range(-1,2):
+				var p := Vector2i(px,mid.y+dz)
+				_carve(p,CITY_Y,4)
+				connector[p]=true
+		regions.append({"cells":connector,"anchor":Vector2i(end_x,mid.y),"label":"District gate"})
 		guards.append({"id":"district_%d" % i,"cell":mid,"underground":true})
 	guards.append({"id":"throne","cell":throne,"underground":true})
 	# Surface stronghold with ten roofed stone/timber structures and a keep.
 	# All footprints fit the level terrace, streets stay free.
-	var slots: Array[Vector2i] = [Vector2i(-21,-20),Vector2i(-11,-20),Vector2i(8,-20),Vector2i(18,-20),
-		Vector2i(-21,-8),Vector2i(18,-8),Vector2i(-21,10),Vector2i(-11,10),Vector2i(8,10),Vector2i(18,10)]
+	var slots: Array[Vector2i] = [Vector2i(-21,-20),Vector2i(-13,-20),Vector2i(8,-20),Vector2i(18,-20),
+		Vector2i(-21,-8),Vector2i(18,-8),Vector2i(-21,10),Vector2i(-13,10),Vector2i(8,10),Vector2i(18,10)]
 	for i in range(slots.size()):
 		var kind: String = ["watchtower","guardhouse","smithy","storehouse","house","guardhouse"][rng.randi_range(0,5)]
 		if i in [0,3,6,9]: kind="watchtower"
@@ -87,12 +92,34 @@ func generate(world_seed: int,iteration: int) -> void:
 				if building_at(p).is_empty(): roads[p]=true
 	for item in buildings:
 		var at: Vector2i = item["door"]+item["direction"]
-		# Connect to the central avenue without painting building interiors.
-		while at.x!=CENTER.x:
-			if building_at(at).is_empty(): roads[at]=true
-			at.x+=1 if at.x<CENTER.x else -1
+		var path := _surface_route(at)
+		item["route"]=path
+		for p in path: roads[p]=true
 	for offset in [Vector2i(-9,5),Vector2i(9,5),Vector2i(0,-4),Vector2i(0,18)]:
 		guards.append({"id":"surface_%d_%d" % [offset.x,offset.y],"cell":CENTER+offset,"underground":false})
+
+func _surface_route(goal: Vector2i) -> Array[Vector2i]:
+	var queue: Array[Vector2i] = [hub]
+	var parents: Dictionary = {hub:hub}
+	var cursor := 0
+	while cursor<queue.size() and not parents.has(goal):
+		var p: Vector2i = queue[cursor]
+		cursor+=1
+		for d: Vector2i in [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]:
+			var q := p+d
+			var local := q-CENTER
+			if parents.has(q) or absi(local.x)>27 or absi(local.y)>24 or not building_at(q).is_empty(): continue
+			parents[q]=p
+			queue.append(q)
+	var route_cells: Array[Vector2i] = []
+	if not parents.has(goal): return route_cells
+	var p := goal
+	while p!=hub:
+		route_cells.append(p)
+		p=parents[p]
+	route_cells.append(hub)
+	route_cells.reverse()
+	return route_cells
 
 func _build(id: String,kind: String,rect: Rect2i,d: Vector2i) -> void:
 	var door := rect.get_center()+Vector2i(d.x*(rect.size.x/2),d.y*(rect.size.y/2))
@@ -124,6 +151,8 @@ func height_override(p: Vector2i) -> int:
 	if local.x>=31 and local.x<=40 and absi(local.y)<=2:
 		if local.x>=36: return 3-maxi(0,local.x-36)/2
 		return maxi(8,int(ceilings.get(p,7))+2)
+	if local.x>=34 and local.x<=43 and absi(local.y)<=5 and absi(local.y)>=3:
+		return 3+mini(2,absi(local.y)-3)
 	if edge<=28: return 10
 	if edge<=44: return 10-ceili(float(edge-28)/2.0)
 	return -99999
@@ -133,6 +162,12 @@ func contains(p: Vector2i) -> bool:
 
 func validate() -> bool:
 	if floors.is_empty() or not floors.has(throne): return false
+	for i in range(buildings.size()):
+		var a: Rect2i = buildings[i]["rect"]
+		if buildings[i]["route"].is_empty(): return false
+		for j in range(i+1,buildings.size()):
+			var b: Rect2i = buildings[j]["rect"]
+			if a.intersects(b): return false
 	var start := entrance
 	var visited := {start:true}
 	var queue: Array[Vector2i] = [start]
