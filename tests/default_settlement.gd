@@ -131,6 +131,10 @@ func _test_countryside(source,plan) -> void:
 				var p := Vector2i(x,z)
 				check(plan.field_tiles.has(p) and not plan.roads.has(p) and not plan.reserved.has(p),"Farm overlaps protected land")
 				check(not source.caves.has_cave(x,z) and source.top_tile(x,z)==3,"Farm sampler or cave clearance mismatch")
+				for d in [Vector2i.RIGHT,Vector2i.DOWN]:
+					var q: Vector2i = p+d
+					if rect.has_point(q):
+						check(absi(source.height_at(p.x,p.y)-source.height_at(q.x,q.y))<=1,"Unsafe farm terrace step")
 	for p: Vector2i in plan.scenery:
 		var spec: Dictionary = plan.scenery[p]
 		check(not plan.roads.has(p) and not plan.reserved.has(p) and not source.caves.has_cave(p.x,p.y),"Scenery obstructs reserved route or cave")
