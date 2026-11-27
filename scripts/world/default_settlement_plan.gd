@@ -11,6 +11,7 @@ var profile := "market_town"
 var roles: Array = KINDS.duplicate()
 var footprints: Array[Vector2i] = FOOTPRINTS.duplicate()
 var landmarks: Array[Dictionary] = []
+var quest_anchors: Array[Dictionary] = []
 var fields: Array[Dictionary] = []
 var field_tiles: Dictionary = {}
 var scenery: Dictionary = {}
@@ -78,6 +79,7 @@ func generate(source, index: int = 2) -> bool:
 		footprints.append(Vector2i(5,7))
 		footprints.append(Vector2i(5,5))
 	landmarks.clear()
+	quest_anchors.clear()
 	fields.clear()
 	field_tiles.clear()
 	scenery.clear()
@@ -203,6 +205,7 @@ func generate(source, index: int = 2) -> bool:
 				roads[q] = true
 	_plan_countryside(source)
 	_build_landmarks(source)
+	_plan_quest_anchors(source)
 	var valid: bool = buildings.size()>=2 and _validate_network(source)
 	# The immutable result is enough for streamed terrain, map and buildings;
 	# discard the temporary search graph and per-cell planning tables.
@@ -341,6 +344,50 @@ func _build_landmarks(source) -> void:
 		var p: Vector2i = item["door"]+item["direction"]
 		_add_landmark(source,str(item["kind"]),str(item["kind"]).capitalize(),"architecture",p)
 
+func _plan_quest_anchors(source) -> void:
+	# Authoring reservations only: NPC spawning and quest progression are separate.
+	# Every candidate stands beside a connected road, not on the travel lane.
+	var occupied: Dictionary = {}
+	for record in landmarks:
+		var role: String = record["role"]
+		if role not in ["settlement","cave_approach","farm","landing","architecture"]: continue
+		var objective: Vector2i = record["cell"]
+		var best := Vector2i.MAX
+		var approach := Vector2i.MAX
+		var best_cost := 999999
+		for dz in range(-3,4):
+			for dx in range(-3,4):
+				var p := objective+Vector2i(dx,dz)
+				if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p) or scenery.has(p) or occupied.has(p): continue
+				if int(_heights[p])<0: continue
+				for d in DIRS:
+					var q := p+d
+					if not roads.has(q) or absi(int(_heights[p])-int(_heights.get(q,999)))>1: continue
+					var cost := p.distance_squared_to(objective)*10+q.distance_squared_to(objective)
+					if cost<best_cost:
+						best_cost=cost
+						best=p
+						approach=q
+		if best==Vector2i.MAX: continue
+		occupied[best]=true
+		var giver_role := "local_contact"
+		match role:
+			"settlement": giver_role="expedition_coordinator"
+			"cave_approach": giver_role="explorer"
+			"farm": giver_role="farmer"
+			"landing": giver_role="coastal_contact"
+			"architecture":
+				match str(record["label"]).to_lower():
+					"smithy": giver_role="blacksmith"
+					"guardhouse","watchtower": giver_role="guard"
+					"inn": giver_role="innkeeper"
+					"storehouse": giver_role="quartermaster"
+					_: giver_role="resident"
+		quest_anchors.append({"id":str(record["id"])+":giver","landmark_id":record["id"],"role":giver_role,
+			"cell":best,"approach":approach,"objective_hint":objective,
+			"position":Vector3(best.x+0.5,source.height_at(best.x,best.y),best.y+0.5),
+			"allows_expeditions":role=="settlement"})
+
 func _validate_network(source) -> bool:
 	# A road is not merely a material: every published destination must be
 	# connected by safe cardinal steps from the settlement hub.
@@ -360,6 +407,8 @@ func _validate_network(source) -> bool:
 			queue.append(q)
 	for item in landmarks:
 		if not visited.has(item["cell"]): return false
+	for item in quest_anchors:
+		if not visited.has(item["approach"]): return false
 	return true
 
 func is_road(x: int,z: int) -> bool:
