@@ -77,6 +77,8 @@ func _run() -> void:
 		game.hero.global_position=Vector3(0,0.35,0)
 		await process_frame
 		check(remote.regenerate_city_for_preview(game.hero),"Isolated reset failed away from city")
+		var shelf := Vector2i(PLAN.CENTER.x+roundi(PLAN.RADIUS)+4,PLAN.CENTER.y)
+		check(not remote.terrain.is_land_at(shelf.x+0.5,shelf.y+0.5) and remote.terrain.height_at(shelf.x,shelf.y)<DATA.SEA_LEVEL,"Shelf alters dry shore")
 		var coast := Vector3(PLAN.CENTER.x+PLAN.RADIUS+8,DATA.SEA_LEVEL,PLAN.CENTER.y)
 		game.hero.global_position=coast
 		remote._update_ocean_shoals(game,coast)
@@ -84,6 +86,12 @@ func _run() -> void:
 		for shoal in remote.ocean_shoals.values():
 			check(shoal.school.instance_count==8 and shoal.rank>=0 and shoal.rank<=4,"Invalid fish school")
 		check(not game._recipe_by_id("rowboat").is_empty(),"Boat recipe missing")
+		game.inventory["axe"]=1
+		check(not game.select_quick_tool("axe"),"Quick tool secretly equipped bag item")
+		check(game.equip_item("axe") and game.select_quick_tool("axe"),"Equipped quick tool unusable")
+		var bag = game.menu.inventory_window
+		check(bag._bag_quantity("axe")==0,"Worn gear duplicated in preview bag")
+		check(game.equip_item("axe") and bag._bag_quantity("axe")==1,"Unequipped gear not returned to displayed bag")
 		game.inventory["rowboat"]=1
 		check(game.equip_item("rowboat") and game.equipment["trinket"]=="rowboat","Boat trinket equip failed")
 		game.hero.swimming=true
