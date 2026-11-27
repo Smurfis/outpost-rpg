@@ -10,6 +10,8 @@ var site_id := "settlement"
 var profile := "market_town"
 var roles: Array = KINDS.duplicate()
 var footprints: Array[Vector2i] = FOOTPRINTS.duplicate()
+var landmarks: Array[Dictionary] = []
+var west_route: Array[Vector2i] = []
 var eastern_landing := Vector2i.MAX
 var eastern_route: Array[Vector2i] = []
 var plaza: Dictionary = {}
@@ -65,7 +67,15 @@ func generate(source, index: int = 2) -> bool:
 	site_id = "settlement" if index==2 else "waystation"
 	profile = "market_town" if index==2 else "frontier_waystation"
 	roles = KINDS.duplicate() if index==2 else ["guardhouse","storehouse","house"]
-	footprints = FOOTPRINTS.duplicate() if index==2 else [Vector2i(5,5),Vector2i(5,7),Vector2i(5,5)]
+	footprints.clear()
+	if index==2:
+		footprints.append_array(FOOTPRINTS)
+	else:
+		footprints.append(Vector2i(5,5))
+		footprints.append(Vector2i(5,7))
+		footprints.append(Vector2i(5,5))
+	landmarks.clear()
+	west_route.clear()
 	eastern_landing = Vector2i.MAX
 	eastern_route.clear()
 	roads.clear()
@@ -113,6 +123,7 @@ func generate(source, index: int = 2) -> bool:
 		var route := _route(hub,p)
 		if route.is_empty(): continue
 		landing = p
+		west_route = route
 		_record_road(route)
 		found = true
 		break
@@ -184,12 +195,14 @@ func generate(source, index: int = 2) -> bool:
 			var q := p+d
 			if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
 				roads[q] = true
+	_build_landmarks(source)
+	var valid: bool = buildings.size()>=2 and _validate_network(source)
 	# The immutable result is enough for streamed terrain, map and buildings;
 	# discard the temporary search graph and per-cell planning tables.
 	_graph.clear()
 	_ids.clear()
 	_heights.clear()
-	return buildings.size()>=2
+	return valid
 
 func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 	for at in candidates:
@@ -242,6 +255,42 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 		buildings.append({"id":"%s_%s" % [site_id,roles[index]],"kind":roles[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
 		return true
 	return false
+
+func _add_landmark(source, suffix: String, label: String, role: String, p: Vector2i) -> void:
+	landmarks.append({"id":"%s:%s" % [site_id,suffix],"label":label,"role":role,
+		"position":Vector3(p.x+0.5,source.height_at(p.x,p.y),p.y+0.5),"cell":p})
+
+func _build_landmarks(source) -> void:
+	_add_landmark(source,"hub","Market Town" if island_index==2 else "Frontier Waystation","settlement",hub)
+	_add_landmark(source,"west","Western Landing","landing",landing)
+	if not eastern_route.is_empty():
+		_add_landmark(source,"east","Eastern Landing","landing",eastern_landing)
+	if not cave_route.is_empty():
+		_add_landmark(source,"cave","Cavern Approach","cave_approach",cave_approach)
+	for item in buildings:
+		var p: Vector2i = item["door"]+item["direction"]
+		_add_landmark(source,str(item["kind"]),str(item["kind"]).capitalize(),"architecture",p)
+
+func _validate_network(source) -> bool:
+	# A road is not merely a material: every published destination must be
+	# connected by safe cardinal steps from the settlement hub.
+	if not roads.has(hub): return false
+	var visited: Dictionary = {}
+	visited[hub]=true
+	var queue: Array[Vector2i] = [hub]
+	var cursor := 0
+	while cursor<queue.size():
+		var p: Vector2i = queue[cursor]
+		cursor+=1
+		for d in DIRS:
+			var q := p+d
+			if visited.has(q) or not roads.has(q) or reserved.has(q): continue
+			if absi(source.height_at(p.x,p.y)-source.height_at(q.x,q.y))>1: continue
+			visited[q]=true
+			queue.append(q)
+	for item in landmarks:
+		if not visited.has(item["cell"]): return false
+	return true
 
 func is_road(x: int,z: int) -> bool:
 	return roads.has(Vector2i(x,z))
