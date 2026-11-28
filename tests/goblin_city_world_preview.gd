@@ -22,6 +22,7 @@ func _run() -> void:
 	for seed_value in [42,64012,64013]:
 		var data := DATA.new(seed_value)
 		_test_skeletal(data)
+		_test_town_and_coves(data)
 		var city = data.goblin_city
 		check(data.islands.size()==5 and city!=null,"Preview island set missing")
 		if city==null: continue
@@ -375,3 +376,38 @@ func _test_nameplates(game) -> void:
 	game.hud.enemy_target_frame.configure_boss_style(4)
 	check(game.hud.enemy_target_frame.boss_stars==5,"Five-star boss frame missing")
 	print("NAMEPLATES: input pass-through, friendly identity, distance/floor culling and boss stars checked")
+
+func _test_town_and_coves(data) -> void:
+	for index in [1,2]:
+		var plan=data.settlement_plan(index)
+		check(plan!=null,"Expanded settlement failed generation")
+		if plan!=null:
+			check(plan.buildings.size()>=(8 if index==2 else 4),"Expanded settlement lacks sufficient buildings")
+			check(plan.plaza.size()>25,"Civic square too small")
+			check(plan.road_steps.is_empty(),"Old half-road tread returned")
+			var ids: Dictionary={}
+			for item in plan.buildings:
+				check(not ids.has(item["id"]),"Duplicate building identity")
+				ids[item["id"]]=true
+				var path: Array=item["route"]
+				for n in range(1,path.size()):
+					var a: Vector2i=path[n-1]
+					var q: Vector2i=path[n]
+					check(a.distance_squared_to(q)==1 and absi(data.height_at(a.x,a.y)-data.height_at(q.x,q.y))<=1,"Unsafe district road")
+			print("CIVIC PLAN: island %d, %d buildings, %d plaza cells, %d contacts" % [index,plan.buildings.size(),plan.plaza.size(),plan.quest_anchors.size()])
+		var route: Array=data.caves.routes[index]
+		var mouth: Vector3i=route[0]
+		for lane in range(-2,4):
+			var z:=mouth.z+lane
+			var floor_y: int=data.caves.floor_at(mouth.x,z)
+			var ceiling: int=data.caves.ceiling_at(mouth.x,z,floor_y)
+			check(floor_y==mouth.y and not data.is_solid(mouth.x,floor_y+1,z),"Wide cave opening obstructed")
+			check(data.is_solid(mouth.x,ceiling,z) and data.is_solid(mouth.x,ceiling+1,z),"Mouth open to sky")
+			check(absi(data.height_at(mouth.x+1,z)-floor_y)<=1,"Exterior landing misses cave floor")
+		for n in range(route.size()):
+			var step: Vector3i=route[n]
+			for lane in range(2):
+				var z:=step.z+lane
+				var floor_y: int=data.caves.floor_at(step.x,z)
+				check(data.is_solid(step.x,data.caves.ceiling_at(step.x,z,floor_y)+1,z),"Tunnel reopened as ravine")
+		print("COVE PLAN: island %d, widened roofed entrance and preserved %d route cells" % [index,route.size()])
