@@ -1226,6 +1226,7 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				add_child(scenery)
 				members.append(scenery)
 			_install_gathering(plan,key,game,members)
+			if terrain.expanded_preview: _install_civilians(plan,key,game,members)
 	_install_goblin_city(key,game,members)
 	_install_skeletal_inhabitants(key,game,members)
 	if terrain.skeletal_city!=null:
@@ -1507,3 +1508,35 @@ func _spawn_retinue(game: Node,leader,group: Node3D,city) -> void:
 		follower.setup(game.hero,null,0,at,leader.rival_kind)
 		follower.display_name="Retinue of "+leader.display_name
 		count-=1
+
+func _install_civilians(plan,key: Vector2i,game: Node,members: Array) -> void:
+	if game==null: return
+	var roles: Dictionary = {
+		"expedition_coordinator":["Expedition coordinator","Ask me about the islands and their caverns."],
+		"farmer":["Farmer","We grow supplies for the settlement."],
+		"merchant":["Merchant","This market is where the town gathers to trade."],
+		"banker":["Banker","The town vault will offer secure storage."],
+		"guild_contact":["Guild representative","Adventurers gather here before expeditions."],
+		"blacksmith":["Blacksmith","Bring ore to a forge to craft equipment."],
+		"innkeeper":["Innkeeper","Rest here before your next expedition."],
+		"quartermaster":["Quartermaster","Our stores support the settlement."],
+		"guard":["Town guard","Stay on the roads when travelling outside town."],
+		"explorer":["Cave explorer","The cave entrance lies beneath the rocky hillside."],
+		"coastal_contact":["Harbour contact","The coastal trail connects to the main square."],
+		"resident":["Resident","Welcome to our settlement."]
+	}
+	var variants: Array[String] = ["human_male_1","human_female_1","human_male_2","human_female_2"]
+	for spec in plan.quest_anchors:
+		var at: Vector3 = spec["position"]
+		if _cell_at(at)!=key: continue
+		var actor=preload("res://scripts/world/animated_camp_guide.gd").new()
+		var info: Array = roles.get(spec["role"],["Resident","Welcome, traveller."])
+		var kind: String = variants[posmod(hash(str(spec["id"])),variants.size())]
+		actor.name="Civilian_"+str(spec["id"]).replace(":","_")
+		add_child(actor)
+		actor.position=at+Vector3.UP*0.04
+		if not actor.configure_civilian(game,str(spec["id"]),str(info[0]),kind):
+			actor.queue_free()
+			continue
+		actor.message=str(info[1])
+		members.append(actor)
