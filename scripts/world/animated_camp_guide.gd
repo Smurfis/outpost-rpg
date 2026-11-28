@@ -1,0 +1,48 @@
+extends "res://scripts/interaction/world_object.gd"
+## Stationary, animated civilian. Stable interaction volume; no expensive
+## navigation or combat simulation for this first guide replacement.
+const HUMANOID = preload("res://scripts/creatures/cube_world_visual.gd")
+var avatar: Node3D
+var greeted := false
+var attention := 0.0
+
+func configure_guide(ref: Node) -> bool:
+	var rig := HUMANOID.new()
+	rig.name="AnimatedGuide"
+	if not rig.configure("human_male_2",0.72):
+		rig.free()
+		return false
+	avatar=rig
+	set_meta("animated_npc",true)
+	set_meta("nameplate_height",2.15)
+	setup(ref,"camp_guide","Outpost guide","npc",rig)
+	return true
+
+func _process(delta: float) -> void:
+	if not is_instance_valid(avatar) or not is_instance_valid(game) or not is_instance_valid(game.hero): return
+	var offset: Vector3=game.hero.global_position-global_position
+	var distance:=offset.length()
+	var active:=distance<18.0
+	# Animation overhead is only incurred close to the player.
+	if avatar.animator!=null:
+		avatar.animator.active=active
+	if not active:
+		greeted=false
+		return
+	attention=maxf(0.0,attention-delta)
+	if distance>7.0: greeted=false
+	if distance<4.5 and absf(offset.y)<1.5 and not greeted:
+		greeted=true
+		attention=2.0
+		avatar.play_event("Wave","Yes")
+	if (distance<4.5 or attention>0.0) and Vector2(offset.x,offset.z).length()>0.1:
+		avatar.rotation.y=lerp_angle(avatar.rotation.y,atan2(-offset.x,-offset.z),1.0-exp(-8.0*delta))
+	avatar.play_motion(0.0)
+
+func interact(hero: Node3D) -> void:
+	if not game.target_in_range(self): return
+	attention=3.0
+	greeted=true
+	if is_instance_valid(avatar):
+		avatar.play_event("Yes","Wave")
+	super.interact(hero)
