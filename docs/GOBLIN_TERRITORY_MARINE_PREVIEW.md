@@ -65,3 +65,10 @@ Market Town targets fourteen buildings and Frontier Waystation eight; placement 
 - Blockbench Workshop: https://blockbenchworkshop.com/browse?tags=%5B%22animated%22%5D&status=free&sort=likes — candidate source for animated models. Check individual asset licence, commercial redistribution permissions, dependencies, rig and Godot export compatibility before importing. Free price does not establish usage rights. No Workshop assets imported in this change.
 
 The prior animated guide/nameplate preview regression passed with zero reported failures (v1085 build published); unrelated updater regression failed. Latest town/cove tests and device appearance are not yet verified.
+
+
+## District streets, civilian walking and interior caverns
+
+The v1092 baseline passed the dedicated Preview regression on seeds 42, 64012 and 64013: west 8 buildings and 49 plaza cells in all three; south 13/14/14 buildings and 81 plaza cells. Contacts varied by terrain. The unrelated legacy southern shore traversal and updater checks failed.
+
+The subsequent iteration reserves linked outer district routes before building placement and prefers reusing street frontage when choosing door orientation. Local guard, resident and coastal contact patrols use short adjacent walkable cells within their owning chunk, pause for conversation and reverse at the end; they are visual local schedules, not collision-driven citywide AI. West/south preview caves gain seed-dependent tall interior pockets with their own camera regions and carved-floor pathfinding. Original route and chest IDs stay fixed. The non-preview cave policy is restored separately, with the non-preview test using its actual original exposed approach rather than imposing the Preview facade contract. Preview roof and access checks remain explicit. Actual mobile movement, visuals and newest CI remain unverified.
