@@ -16,6 +16,7 @@ var route: Array[Vector3i] = []
 var regions: Array[Dictionary] = []
 var scenery: Dictionary = {}
 var inhabitants: Array[Dictionary] = []
+var caches: Array[Dictionary] = []
 
 func generate(world_seed: int,iteration: int) -> void:
 	cycle=iteration
@@ -27,6 +28,7 @@ func generate(world_seed: int,iteration: int) -> void:
 	regions.clear()
 	scenery.clear()
 	inhabitants.clear()
+	caches.clear()
 	var passage: Dictionary = {}
 	for i in range(40):
 		var cell := entrance-Vector2i(i,0)
@@ -66,6 +68,7 @@ func generate(world_seed: int,iteration: int) -> void:
 		var mid := rect.get_center()
 		inhabitants.append({"id":"crypt_%d" % i,"cell":mid,"tier":1,"name":"Crypt Skeleton"})
 		inhabitants.append({"id":"crypt_guard_%d" % i,"cell":mid+Vector2i(1,1),"tier":0,"name":"Skeletal Sentinel"})
+		caches.append({"id":"crypt_%d" % i,"cell":rect.position+Vector2i(2,1),"height":CITY_Y,"loot":{"iron_ingot":rng.randi_range(1,3),"silver":rng.randi_range(2,6),"coal":rng.randi_range(2,5)}})
 		var gate_x := CENTER.x-10
 		var gate := Rect2i(Vector2i(mini(mid.x,gate_x),mid.y-2),Vector2i(absi(mid.x-gate_x)+1,5))
 		_room(gate,"Crypt gate",5)
