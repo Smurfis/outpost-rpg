@@ -185,6 +185,7 @@ func generate(source, index: int = 2) -> bool:
 		var anchor := Vector2i(floori(entrance.x),floori(entrance.z))
 		var approaches: Array[Vector2i] = []
 		for p: Vector2i in _ids:
+			if expanded and (p.x<anchor.x+2 or p.x>anchor.x+7 or absi(p.y-anchor.y)>1): continue
 			if p.distance_squared_to(anchor)<=64 and absf(float(_heights[p])-entrance.y)<=2.0:
 				approaches.append(p)
 		approaches.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
