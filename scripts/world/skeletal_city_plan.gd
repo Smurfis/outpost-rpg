@@ -15,6 +15,7 @@ var ceilings: Dictionary = {}
 var route: Array[Vector3i] = []
 var regions: Array[Dictionary] = []
 var scenery: Dictionary = {}
+var inhabitants: Array[Dictionary] = []
 
 func generate(world_seed: int,iteration: int) -> void:
 	cycle=iteration
@@ -25,6 +26,7 @@ func generate(world_seed: int,iteration: int) -> void:
 	route.clear()
 	regions.clear()
 	scenery.clear()
+	inhabitants.clear()
 	var passage: Dictionary = {}
 	for i in range(40):
 		var cell := entrance-Vector2i(i,0)
@@ -62,11 +64,15 @@ func generate(world_seed: int,iteration: int) -> void:
 		var rect := Rect2i(CENTER+Vector2i(-15-w if left else -4,-10-h if north else 11),Vector2i(w,h))
 		_room(rect,labels[i],rng.randi_range(6,8))
 		var mid := rect.get_center()
+		inhabitants.append({"id":"crypt_%d" % i,"cell":mid,"tier":1,"name":"Crypt Skeleton"})
+		inhabitants.append({"id":"crypt_guard_%d" % i,"cell":mid+Vector2i(1,1),"tier":0,"name":"Skeletal Sentinel"})
 		var gate_x := CENTER.x-10
 		var gate := Rect2i(Vector2i(mini(mid.x,gate_x),mid.y-2),Vector2i(absi(mid.x-gate_x)+1,5))
 		_room(gate,"Crypt gate",5)
 		for corner in [rect.position+Vector2i(1,1),rect.end-Vector2i(2,2)]:
 			scenery[corner]={"kind":"bones","height":CITY_Y}
+	for offset in [Vector2i(-18,0),Vector2i(-5,0),Vector2i(-10,-8),Vector2i(-10,8)]:
+		inhabitants.append({"id":"hall_%d_%d" % [offset.x,offset.y],"cell":CENTER+offset,"tier":1,"name":"Dwarven Skeleton"})
 	# Paired carved bone ribs and crystal clusters at the great hall edges.
 	for x in range(-20,-2,4):
 		for z in [-7,7]:
