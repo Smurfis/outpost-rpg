@@ -22,6 +22,8 @@ var west_route: Array[Vector2i] = []
 var eastern_landing := Vector2i.MAX
 var eastern_route: Array[Vector2i] = []
 var plaza: Dictionary = {}
+var district_junctions: Array[Vector2i] = []
+var ring_routes: Array[Array] = []
 var roads: Dictionary = {}
 var road_steps: Dictionary = {}
 var buildings: Array[Dictionary] = []
@@ -103,6 +105,8 @@ func generate(source, index: int = 2) -> bool:
 	roads.clear()
 	road_steps.clear()
 	plaza.clear()
+	district_junctions.clear()
+	ring_routes.clear()
 	cave_approach = Vector2i.MAX
 	cave_route.clear()
 	buildings.clear()
@@ -247,16 +251,34 @@ func _reserve_civic_core(source) -> void:
 			if route.is_empty() or route.size()>absi(dx)+absi(dz)+3: continue
 			plaza[p]=true
 			_record_road(route)
-	for d in DIRS:
+	var spokes: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.DOWN,Vector2i.LEFT,Vector2i.UP]
+	for d in spokes:
 		var endpoint := _nearest(hub+d*(16 if island_index==2 else 12))
 		if endpoint==Vector2i.MAX: continue
 		var route := _route(hub,endpoint)
 		if route.is_empty(): continue
+		district_junctions.append(endpoint)
 		_record_road(route)
 		for p in route:
 			var side := Vector2i(-d.y,d.x)
 			for q in [p+side,p-side]:
 				if _heights.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1: roads[q]=true
+
+	# Join neighbouring avenues around the central square. Temporarily
+	# disable the core so the AStar shortcut cannot simply retrace a spoke.
+	for p: Vector2i in plaza:
+		if _ids.has(p): _graph.set_point_disabled(_ids[p],true)
+	for n in range(district_junctions.size()):
+		var a: Vector2i = district_junctions[n]
+		var b: Vector2i = district_junctions[(n+1)%district_junctions.size()]
+		if a==b: continue
+		var route := _route(a,b)
+		if route.is_empty() or route.size()>64: continue
+		ring_routes.append(route)
+		_record_road(route)
+	for p: Vector2i in plaza:
+		if _ids.has(p): _graph.set_point_disabled(_ids[p],false)
+
 
 func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 	for at in candidates:
@@ -285,6 +307,7 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 		var floor_y := hi+1
 		_disable(rect,true)
 		var best: Array[Vector2i] = []
+		var best_cost := INF
 		var door := Vector2i.ZERO
 		var direction := Vector2i.ZERO
 		for d in DIRS:
@@ -300,7 +323,12 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 			if not wide: continue
 			var route := _route(hub,outside)
 			if route.is_empty(): continue
-			if best.is_empty() or route.size()<best.size():
+			var new_cells := 0
+			for p in route:
+				if not roads.has(p): new_cells+=1
+			var cost := float(route.size())+float(new_cells)*2.0 if expanded else float(route.size())
+			if cost<best_cost:
+				best_cost=cost
 				best = route
 				door = edge
 				direction = d
