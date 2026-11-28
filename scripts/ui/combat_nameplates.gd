@@ -141,7 +141,8 @@ func _draw() -> void:
 		var ally := not own and friendly(actor)
 		if not own and (not ally and not game.target_available(actor)): continue
 		if not own and (actor.global_position.distance_to(player.global_position)>(BOSS_RANGE if is_boss(actor) else RANGE) or not same_floor(actor)): continue
-		var at := actor.global_position+Vector3.UP*(2.85 if ally else 2.35 if own or actor.is_in_group("dungeon_guardians") else 1.6)
+		var default_height := 2.85 if ally else 2.35 if own or actor.is_in_group("dungeon_guardians") else 1.6
+		var at := actor.global_position+Vector3.UP*float(actor.get_meta("nameplate_height",default_height))
 		if game.camera.is_position_behind(at): continue
 		var p: Vector2 = game.camera.unproject_position(at)
 		if not Rect2(Vector2.ZERO,get_viewport_rect().size).grow(-8).has_point(p): continue
