@@ -46,7 +46,7 @@ func _run() -> void:
 			# A side-facing roofed cave is entered through its floor, not by
 			# climbing onto the mountain roof in the middle of the doorway.
 			var entrance: Vector3 = world.caves.entrances[island_index]
-			var at_mouth := island_index==2 and x==floori(entrance.x)
+			var at_mouth := world.expanded_preview and island_index==2 and x==floori(entrance.x)
 			var y: int = int(entrance.y) if at_mouth else world.height_at(x, z)
 			if not was_land:
 				check(y <= -3, "Island shore starts within swimming auto-step reach")
