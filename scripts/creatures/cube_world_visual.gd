@@ -3,6 +3,10 @@ extends Node3D
 ## Native Godot 4.7 glTF imports; all model credits in kit/LICENSE_AND_CREDITS.md.
 const ROOT: String = "res://assets/third_party/quaternius_cube_world/"
 const MODEL_PATHS: Dictionary = {
+	"human_male_1": "Characters/glTF/Character_Male_1.gltf",
+	"human_male_2": "Characters/glTF/Character_Male_2.gltf",
+	"human_female_1": "Characters/glTF/Character_Female_1.gltf",
+	"human_female_2": "Characters/glTF/Character_Female_2.gltf",
 	"pig": "Animals/glTF/Pig.gltf",
 	"raccoon": "Animals/glTF/Raccoon.gltf",
 	"wolf": "Animals/glTF/Wolf.gltf",
