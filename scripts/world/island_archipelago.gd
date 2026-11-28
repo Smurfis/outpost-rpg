@@ -49,6 +49,7 @@ const GATHERER = preload("res://scripts/world/goblin_gatherer.gd")
 var village_workers: Dictionary = {}
 var village_chests: Dictionary = {}
 var village_tick := 0.0
+const REGIONAL_RIVAL = preload("res://scripts/world/regional_rival.gd")
 const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
 const OCEAN_SHOAL = preload("res://scripts/world/ocean_fishing_shoal.gd")
 var ocean_shoals: Dictionary = {}
@@ -1322,7 +1323,8 @@ func _install_goblin_city(key: Vector2i,game: Node,members: Array) -> void:
 		guard.home=at
 		group.add_child(guard)
 		guard.setup(game.hero,null,1,at,"goblin")
-		guard.display_name="Goblin city guard"
+		guard.bind_rival(game,"rival:%d:goblin:%s" % [terrain.seed,record["id"]],"goblin","Goblin city guard",1)
+		_spawn_retinue(game,guard,group,city)
 
 func regenerate_city_for_preview(hero: Node3D) -> bool:
 	if terrain==null or terrain.goblin_city==null or mine_pending or mine_load_failed: return false
@@ -1403,7 +1405,8 @@ func _install_skeletal_inhabitants(key: Vector2i,game: Node,members: Array) -> v
 		guard.home=at
 		group.add_child(guard)
 		guard.setup(game.hero,null,int(record["tier"]),at,"skeleton")
-		guard.display_name=str(record["name"])
+		guard.bind_rival(game,"rival:%d:skeleton:%s" % [terrain.seed,record["id"]],"skeleton",str(record["name"]),int(record["tier"]))
+		_spawn_retinue(game,guard,group,city)
 
 func _spawn_village_chest(game: Node,id: String,label: String,at: Vector3,stock: Dictionary,work_id: String,members: Array) -> Node3D:
 	var chest := VILLAGE_CHEST.new()
@@ -1450,7 +1453,8 @@ func _update_village(game: Node,seconds: float) -> void:
 			worker.route=spec["path"]
 			group.add_child(worker)
 			worker.setup(game.hero,null,0,at,"goblin")
-			worker.display_name="Goblin Gatherer"
+			worker.bind_rival(game,"rival:%d:goblin:%s" % [terrain.seed,spec["id"]],"goblin","Goblin Gatherer",0)
+			_spawn_retinue(game,worker,group,city)
 			worker.slain.connect(_worker_slain.bind(game,id))
 			worker.tree_exited.connect(group.queue_free,CONNECT_ONE_SHOT)
 			village_workers[id]=worker
@@ -1466,3 +1470,39 @@ func _worker_slain(game: Node,id: String) -> void:
 	if not game.village_work.has(id): return
 	VILLAGE_WORK.defeat(game.village_work[id])
 	game._save()
+
+func _spawn_retinue(game: Node,leader,group: Node3D,city) -> void:
+	var count: int = REGIONAL_RIVAL.follower_count(int(leader.rival_record["rank"]))
+	if count==0: return
+	var start := Vector2i(floori(leader.global_position.x),floori(leader.global_position.z))
+	var y: int = floori(leader.global_position.y)
+	var candidates: Array[Vector2i] = []
+	# Prefer nearby same-elevation floor cells; reject intact walls,
+	# building footprints, cliffs and positions outside loaded terrain.
+	for radius in range(2,6):
+		for dz in range(-radius,radius+1):
+			for dx in range(-radius,radius+1):
+				if maxi(absi(dx),absi(dz))!=radius: continue
+				var p := start+Vector2i(dx,dz)
+				if leader.underground_guard:
+					if int(city.floors.get(p,-99999))!=y: continue
+					if terrain.is_solid(p.x,y,p.y) or terrain.is_solid(p.x,y+1,p.y): continue
+				else:
+					if terrain.height_at(p.x,p.y)!=y or not city.building_at(p).is_empty(): continue
+				candidates.append(p)
+	for p in candidates:
+		if count<=0: break
+		var at := Vector3(p.x+0.5,y+0.08,p.y+0.5)
+		# A nearby adjacent chunk will be built by the same stream queue.
+		# Keep followers within the leader's streamed chunk to avoid falling.
+		if _cell_at(at)!=_cell_at(leader.global_position): continue
+		var follower := CITY_GUARD.new()
+		follower.terrain=terrain
+		follower.skeletal_guard=leader.skeletal_guard
+		follower.underground_guard=leader.underground_guard
+		follower.home=at
+		follower.rival_follower=true
+		group.add_child(follower)
+		follower.setup(game.hero,null,0,at,leader.rival_kind)
+		follower.display_name="Retinue of "+leader.display_name
+		count-=1
