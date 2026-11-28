@@ -765,7 +765,7 @@ func apply_knockback(source: Vector3, force: float = 6.0) -> void:
 	knockback_velocity = (push.normalized() * clampf(force, 0.0, 9.5))
 	stop_interaction_move()
 
-func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
+func take_hit(amount: float, source: Vector3 = Vector3.ZERO, attacker: Node = null) -> void:
 	if source != Vector3.ZERO:
 		apply_knockback(source, 6.3)
 	var protection: float = 1.0
@@ -801,7 +801,10 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 		CRUMBLE.spawn(game, self, visual)
 		visual.visible = false
 		knockback_velocity = Vector3.ZERO
-		game.on_player_defeated(global_position)
+		if is_instance_valid(attacker) and attacker.has_method("credit_player_defeat"):
+			game.on_player_defeated(global_position,attacker)
+		else:
+			game.on_player_defeated(global_position)
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		visual.visible = true
