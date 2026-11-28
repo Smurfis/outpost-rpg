@@ -1,4 +1,5 @@
 extends SceneTree
+const WORK = preload("res://scripts/world/goblin_village_work.gd")
 const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
 const SKELETAL = preload("res://scripts/world/skeletal_city_plan.gd")
@@ -24,7 +25,7 @@ func _run() -> void:
 		check(data.islands.size()==5 and city!=null,"Preview island set missing")
 		if city==null: continue
 		check(city.validate(),"Disconnected city or overlapping buildings")
-		check(city.buildings.size()==11 and city.guards.size()==9,"Incomplete stronghold")
+		check(city.buildings.size()==17 and city.guards.size()==11 and city.gatherers.size()==2 and city.caches.size()==7,"Incomplete stronghold")
 		check(city.floors.size()>400,"Dungeon too small")
 		check(data.biome_at(PLAN.CENTER.x,PLAN.CENTER.y)=="goblin_badlands","City biome missing")
 		var original: Dictionary = data.caves.floors.duplicate()
@@ -121,6 +122,7 @@ func _run() -> void:
 		game.hero.swimming=false
 		game.hero._update_boat()
 		check(game.hero.boat_launch_age<0.0,"Leaving water did not cancel launch")
+	await _test_village(game)
 	await _test_live_skeletal(game)
 	game.queue_free()
 	await process_frame
@@ -204,7 +206,63 @@ func _test_live_skeletal(game) -> void:
 		for member in members:
 			if str(member.name).begins_with("SkeletalCavern_"): scenery_count+=1
 	check(scenery_count>0,"Skeletal cavern decoration absent")
+	var skeletons := 0
+	for enemy in get_nodes_in_group("enemies"):
+		if enemy.get("appearance")=="skeleton" and city.contains(Vector2i(floori(enemy.global_position.x),floori(enemy.global_position.z))): skeletons+=1
+	check(skeletons>0,"No actual skeletons in streamed city")
 	game.hero.global_position=Vector3(0,0.35,0)
 	await process_frame
 	check(remote.regenerate_skeletal_city_for_preview(game.hero),"Live isolated skeletal reset failed")
 	print("SKELETAL STREAM: %d decorated chunks" % scenery_count)
+
+func _test_village(game) -> void:
+	var record := WORK.sanitize({})
+	check(not WORK.advance(record,74.0,42,0) and record["stock"].is_empty(),"Worker generated chest before round trip")
+	check(WORK.advance(record,1.0,42,0) and not record["stock"].is_empty(),"Worker failed to deposit")
+	WORK.defeat(record)
+	var round_before: int = record["round"]
+	WORK.advance(record,75.0,42,0)
+	check(record["round"]==round_before and record["rest"]>0.0,"Defeated worker continued gathering")
+	var remote = game.terrain_surface.archipelago
+	var city = remote.terrain.goblin_city
+	var spec: Dictionary = city.gatherers[0]
+	var yard: Vector2i = spec["yard"]
+	var at := Vector3(yard.x+0.5,10.08,yard.y+0.5)
+	game.hero.global_position=at
+	remote._queue_near(at)
+	for i in range(60):
+		if remote._pending.is_empty(): break
+		remote._build_pending()
+		await process_frame
+	await physics_frame
+	var id := "goblin_work:%d:%s" % [remote.terrain.seed,spec["id"]]
+	remote._update_village(game,0.5)
+	check(remote.village_workers.has(id),"Live gatherer missing")
+	var live: Dictionary = game.village_work[id]
+	live["stock"]={"wood":4}
+	remote._update_village(game,0.5)
+	var chest = remote.village_chests.get(id)
+	check(is_instance_valid(chest),"Gatherer did not build chest")
+	if is_instance_valid(chest):
+		game.hero.global_position=chest.global_position+Vector3(0,0,1)
+		game.inventory.clear()
+		game.inventory["wood"]=998
+		chest.interact(game.hero)
+		check(int(game.inventory["wood"])==999 and chest.remaining().get("wood")==3 and not chest.is_queued_for_deletion(),"Partial pickup lost stored loot")
+		game.inventory["wood"]=0
+		chest.interact(game.hero)
+		check(int(game.inventory["wood"])==3 and chest.is_queued_for_deletion() and live["stock"].is_empty(),"Fully looted chest not destroyed")
+		await process_frame
+		remote._update_village(game,0.5)
+		check(not is_instance_valid(remote.village_chests.get(id)),"Empty stockpile respawned")
+		live["work"]=WORK.ROUND_SECONDS-0.25
+		remote._update_village(game,0.5)
+		# A worker near the hero may pause for combat. Advance the pure
+		# work clock in isolation, then require streamed stock to reappear.
+		if live["stock"].is_empty(): WORK.advance(live,1.0,remote.terrain.seed,0)
+		remote._update_village(game,0.5)
+		check(is_instance_valid(remote.village_chests.get(id)),"Renewed stock did not rebuild chest")
+	game._save()
+	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(game.save_path))
+	check(saved is Dictionary and saved.get("village_work",{}).has(id),"Gatherer stock not saved")
+	print("VILLAGE WORK: streamed gatherer, partial pickup, chest destruction and renewal checked")
