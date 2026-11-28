@@ -1290,6 +1290,17 @@ func _install_goblin_city(key: Vector2i,game: Node,members: Array) -> void:
 		building.build(item,terrain)
 		members.append(building)
 		settlement_nodes.append(building)
+	for spec in city.gatherers:
+		var source: Vector2i = spec["source"]
+		var side := -1 if source.x<city.hub.x else 1
+		var cell := source+Vector2i(side,0)
+		var at := Vector3(cell.x+0.5,terrain.height_at(cell.x,cell.y)+0.05,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var pile := PROPS.rock("stone") if side>0 else PROPS.crate()
+		pile.name="GoblinCollectionPile"
+		pile.position=at
+		add_child(pile)
+		members.append(pile)
 	for cache in city.caches:
 		var cell: Vector2i = cache["cell"]
 		var at := Vector3(cell.x+0.5,float(cache["height"])+0.08,cell.y+0.5)
@@ -1414,7 +1425,11 @@ func _update_village(game: Node,seconds: float) -> void:
 		var record: Dictionary = game.village_work[id]
 		var worker = village_workers.get(id)
 		if not is_instance_valid(worker) or worker.is_queued_for_deletion(): worker=null
-		if worker==null or worker.working or not worker.alive:
+		var scheduled := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
+		var near_route: bool = worker!=null and Vector2(worker.global_position.x,worker.global_position.z).distance_to(scheduled)<1.15
+		# Visible workers must catch up to their assigned route before the
+		# work clock progresses; unloaded workers use bounded simulation.
+		if worker==null or not worker.alive or (worker.working and near_route):
 			if VILLAGE_WORK.advance(record,minf(seconds,1.0),terrain.seed,i): save_needed=true
 		var yard: Vector2i = spec["yard"]
 		var point := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
