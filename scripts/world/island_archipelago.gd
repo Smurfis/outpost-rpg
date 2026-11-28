@@ -1020,6 +1020,10 @@ func invalidate_section_geometry() -> void:
 	_region = 0
 
 func _clear_stream() -> void:
+	for worker in village_workers.values():
+		if is_instance_valid(worker): worker.get_parent().queue_free()
+	village_workers.clear()
+	village_chests.clear()
 	invalidate_section_geometry()
 	_pending.clear()
 	for key in _loaded.keys():
@@ -1314,6 +1318,10 @@ func regenerate_city_for_preview(hero: Node3D) -> bool:
 	# Never replace geometry around the player or another island's dungeon.
 	if terrain.goblin_city.contains(Vector2i(floori(hero.global_position.x),floori(hero.global_position.z))): return false
 	if not terrain.regenerate_goblin_city(): return false
+	for worker in village_workers.values():
+		if is_instance_valid(worker): worker.get_parent().queue_free()
+	village_workers.clear()
+	village_chests.clear()
 	invalidate_section_geometry()
 	for key: Vector2i in _loaded.keys():
 		if terrain.goblin_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
@@ -1402,13 +1410,16 @@ func _update_village(game: Node,seconds: float) -> void:
 		if worker==null or worker.working or not worker.alive:
 			if VILLAGE_WORK.advance(record,minf(seconds,1.0),terrain.seed,i): save_needed=true
 		var yard: Vector2i = spec["yard"]
-		var anchor := _cell_at(Vector3(yard.x,0,yard.y))
-		if worker==null and float(record["rest"])<=0.0 and _loaded.has(anchor):
-			var point := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
-			var at := Vector3(point.x,terrain.height_at(floori(point.x),floori(point.y))+0.08,point.y)
+		var point := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
+		var at := Vector3(point.x,terrain.height_at(floori(point.x),floori(point.y))+0.08,point.y)
+		var active_chunk := _cell_at(at)
+		if worker!=null and (not _loaded.has(_cell_at(worker.global_position)) or not _loaded.has(active_chunk)):
+			worker.get_parent().queue_free()
+			village_workers.erase(id)
+			worker=null
+		if worker==null and float(record["rest"])<=0.0 and _loaded.has(active_chunk):
 			var group := Node3D.new()
 			add_child(group)
-			_loaded[anchor].append(group)
 			worker=GATHERER.new()
 			worker.terrain=terrain
 			worker.underground_guard=false
