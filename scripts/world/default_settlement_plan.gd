@@ -83,6 +83,15 @@ func generate(source, index: int = 2) -> bool:
 		footprints.append(Vector2i(5,5))
 		footprints.append(Vector2i(5,7))
 		footprints.append(Vector2i(5,5))
+	if expanded:
+		# Reserve the civic and commercial core first, then fill residential
+		# blocks rather than scattering six buildings around an arbitrary hub.
+		if index==2:
+			roles=["watchtower","smithy","storehouse","house","inn","guardhouse","market","bank","guildhall","house","house","storehouse","house","house"]
+			footprints=[Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5),Vector2i(9,7),Vector2i(7,7),Vector2i(9,9),Vector2i(5,5),Vector2i(5,5),Vector2i(5,7),Vector2i(5,5),Vector2i(5,5)]
+		else:
+			roles.append_array(["inn","smithy","house","house","watchtower"])
+			footprints.append_array([Vector2i(7,5),Vector2i(7,7),Vector2i(5,5),Vector2i(5,5),Vector2i(7,7)])
 	landmarks.clear()
 	quest_anchors.clear()
 	fields.clear()
@@ -143,6 +152,7 @@ func generate(source, index: int = 2) -> bool:
 		found = true
 		break
 	if not found: return false
+	if expanded: _reserve_civic_core(source)
 	var candidates: Array[Vector2i] = []
 	var plot_extent := 34 if expanded else 28
 	for z in range(hub.y-plot_extent,hub.y+plot_extent+1,2):
@@ -156,7 +166,7 @@ func generate(source, index: int = 2) -> bool:
 	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
 		return float(a.distance_squared_to(hub))+float(tie[a])*30.0 < float(b.distance_squared_to(hub))+float(tie[b])*30.0)
 	for role_index in range(roles.size()):
-		if not _place_building(candidates,role_index): break
+		if not _place_building(candidates,role_index) and not expanded: break
 
 	# Reserve a modest public square around the hub without altering slopes.
 	for dz in range(-2,3):
@@ -224,6 +234,29 @@ func generate(source, index: int = 2) -> bool:
 	_heights.clear()
 	return valid
 
+func _reserve_civic_core(source) -> void:
+	# Reserve a nine-wide civic plaza before plot placement; radiating
+	# avenues terminate in connected district intersections, not dead ends.
+	var radius := 4 if island_index==2 else 3
+	for dz in range(-radius,radius+1):
+		for dx in range(-radius,radius+1):
+			var p := hub+Vector2i(dx,dz)
+			if not _heights.has(p) or absi(int(_heights[p])-int(_heights[hub]))>1: continue
+			var route := _route(hub,p)
+			if route.is_empty() or route.size()>absi(dx)+absi(dz)+3: continue
+			plaza[p]=true
+			_record_road(route)
+	for d in DIRS:
+		var endpoint := _nearest(hub+d*(16 if island_index==2 else 12))
+		if endpoint==Vector2i.MAX: continue
+		var route := _route(hub,endpoint)
+		if route.is_empty(): continue
+		_record_road(route)
+		for p in route:
+			var side := Vector2i(-d.y,d.x)
+			for q in [p+side,p-side]:
+				if _heights.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1: roads[q]=true
+
 func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 	for at in candidates:
 		var size: Vector2i = footprints[index]
@@ -278,7 +311,9 @@ func _place_building(candidates: Array[Vector2i],index: int) -> bool:
 		for offset in range(-1,2): roads[door+direction+side*offset] = true
 		for z in range(at.y,rect.end.y):
 			for x in range(at.x,rect.end.x): reserved[Vector2i(x,z)] = true
-		buildings.append({"id":"%s_%s" % [site_id,roles[index]],"kind":roles[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+		var suffix: String = str(roles[index])
+		if expanded and roles.find(roles[index])!=index: suffix += "_%d" % index
+		buildings.append({"id":"%s_%s" % [site_id,suffix],"kind":roles[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
 		return true
 	return false
 
@@ -293,7 +328,7 @@ func _plan_countryside(source) -> void:
 		var da := a.distance_squared_to(hub)
 		var db := b.distance_squared_to(hub)
 		return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
-	var limit := 2 if island_index==2 else 1
+	var limit := (4 if island_index==2 else 2) if expanded else (2 if island_index==2 else 1)
 	# Prefer large plots, but permit small stepped gardens on rugged islands.
 	# Individual cardinal steps are checked instead of requiring a flat field.
 	for size in [Vector2i(5,7),Vector2i(7,5),Vector2i(3,5),Vector2i(5,3),Vector2i(3,3)]:
@@ -378,7 +413,8 @@ func _build_landmarks(source) -> void:
 		_add_landmark(source,str(field["id"]),"Cultivated Fields","farm",field["entry"])
 	for item in buildings:
 		var p: Vector2i = item["door"]+item["direction"]
-		_add_landmark(source,str(item["kind"]),str(item["kind"]).capitalize(),"architecture",p)
+		var suffix: String = str(item["id"]).trim_prefix(site_id+"_") if expanded else str(item["kind"])
+		_add_landmark(source,suffix,str(item["kind"]).capitalize(),"architecture",p)
 
 func _plan_quest_anchors(source) -> void:
 	# Authoring reservations only: NPC spawning and quest progression are separate.
@@ -417,6 +453,9 @@ func _plan_quest_anchors(source) -> void:
 					"smithy": giver_role="blacksmith"
 					"guardhouse","watchtower": giver_role="guard"
 					"inn": giver_role="innkeeper"
+					"market": giver_role="merchant"
+					"bank": giver_role="banker"
+					"guildhall": giver_role="guild_contact"
 					"storehouse": giver_role="quartermaster"
 					_: giver_role="resident"
 		quest_anchors.append({"id":str(record["id"])+":giver","landmark_id":record["id"],"role":giver_role,
