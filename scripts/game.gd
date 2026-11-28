@@ -533,6 +533,7 @@ func _world() -> void:
 	guide_name.pixel_size = 0.006
 	guide_name.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	guide_art.add_child(guide_name)
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview": guide_name.hide()
 	guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
 	guide.message = "Gather fibre, craft a Shrimp net at the Workbench, then fish coastal pools. Cook shrimp at the Campfire."
 	prop_placement.reserve(guide.position, 0.6, guide)
