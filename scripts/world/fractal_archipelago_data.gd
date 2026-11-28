@@ -76,7 +76,10 @@ func _init(world_seed: int = 64012) -> void:
 		skeletal_city.generate(seed,0)
 		islands.append({"center":SKELETAL_CITY.CENTER,"radius":SKELETAL_CITY.RADIUS,"strength":1.6,"biome":"dwarven_mountain","name":"Skeletal City","sea":"cold_reef"})
 		_install_skeletal_caves()
-	_cover_remote_caves()
+	if expanded_preview:
+		_shape_preview_coves()
+	else:
+		_cover_remote_caves()
 	_plan_cave_ore()
 
 # West retains the original entrance; south gets a fully roofed lateral
@@ -103,6 +106,58 @@ func _cover_remote_caves() -> void:
 			for dx in range(-2,3):
 				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,index==2,false)
 		if index==2: _plan_cove_apron(mouth)
+
+# Sculpt a real mountain facade into the existing Perlin terrain. Both
+# remote cave routes retain their original floor/chest coordinates. Widen
+# the mouth sideways; taper ceiling and width as the player walks inside.
+func _shape_preview_coves() -> void:
+	for index in [1,2]:
+		var route: Array = caves.routes[index]
+		if route.is_empty(): continue
+		var mouth: Vector3i = route.front()
+		for i in range(mini(9,route.size())):
+			var step: Vector3i = route[i]
+			var width := 2 if i<3 else 1 if i<6 else 0
+			for lane in range(-width,CAVES.CORRIDOR_WIDTH+width):
+				var cell := Vector2i(step.x,step.z+lane)
+				var floor_y: int = mini(int(caves.floors.get(cell,step.y)),step.y)
+				caves.floors[cell]=floor_y
+				# Raised central arch, lower shoulders; irregular taper.
+				var edge: bool = lane==-width or lane==CAVES.CORRIDOR_WIDTH+width-1
+				caves.extra_ceilings[cell]=floor_y+(6 if i<3 and not edge else 4 if i<6 else 3)
+		for step: Vector3i in route:
+			for lane in range(-2,4):
+				var cell := Vector2i(step.x,step.z+lane)
+				if caves.has_cave(cell.x,cell.y):
+					_cover_column(cell,mouth,true,step.x>=mouth.x-8)
+		var end: Vector3i = route.back()
+		for dz in range(-2,3):
+			for dx in range(-2,3):
+				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,true,false)
+		_grade_preview_approach(mouth,index)
+
+func _grade_preview_approach(mouth: Vector3i,index: int) -> void:
+	# A six-wide exterior landing connects to the actual shore, not a
+	# global straight trench that continues through the entire island.
+	var center: Vector2i = islands[index]["center"]
+	var limit := center.x+ceili(float(islands[index]["radius"]))+8
+	var last_land := mouth.x+1
+	for x in range(mouth.x+1,limit):
+		if margin_at(x+0.5,mouth.z+0.5)<=0.0: break
+		last_land=x
+	var length := maxi(1,last_land-mouth.x)
+	for step in range(1,length+1):
+		var x := mouth.x+step
+		var travel := float(step-1)/float(maxi(1,length-1))
+		var target := roundi(lerpf(float(mouth.y),-3.0,travel))
+		for lane in range(-7,9):
+			var z := mouth.z+lane
+			if margin_at(x+0.5,z+0.5)<=0.0: continue
+			var cell := Vector2i(x,z)
+			var side := maxf(0.0,absf(float(lane)-0.5)-2.5)
+			var weight := 1.0-smoothstep(0.0,5.0,side)
+			var original := height_at(x,z)
+			_cove_apron[cell]=roundi(lerpf(float(original),float(target),weight))
 
 func _cover_column(cell: Vector2i,mouth: Vector3i,cove: bool,entrance: bool) -> void:
 	var floor_y: int = caves.floor_at(cell.x,cell.y)
@@ -299,6 +354,8 @@ func height_at(x: int, z: int) -> int:
 		var center: Vector2i = island["center"]
 		var dx: float = float(x) + 0.5 - float(center.x)
 		var dz: float = float(z) + 0.5 - float(center.y)
+		# Preview west/south use their local graded mouth approach instead.
+		if expanded_preview and islands.find(island) in [1,2]: continue
 		if dx >= -3.0 and absf(dz) <= 2.5 and dx <= float(island["radius"]) + 5.0:
 			height = roundi(accessible_shore)
 			break
