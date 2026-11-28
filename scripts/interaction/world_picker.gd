@@ -12,7 +12,18 @@ static func attach(target: Node3D, kind: String) -> void:
 	area.input_ray_pickable = false # The shared input router owns click/tap ordering.
 	area.set_meta("world_target", target)
 	target.add_child(area)
-	_add_shapes(target, target, area)
+	if target.get_meta("animated_npc",false):
+		# Animated meshes change pose; a stable capsule is cheaper and more
+		# accurate for interaction than a rest-pose skinned trimesh.
+		var collider := CollisionShape3D.new()
+		var capsule := CapsuleShape3D.new()
+		capsule.radius=0.48
+		capsule.height=1.95
+		collider.shape=capsule
+		collider.position.y=0.975
+		area.add_child(collider)
+	else:
+		_add_shapes(target, target, area)
 
 static func _add_shapes(node: Node3D, target: Node3D, area: Area3D) -> void:
 	if node is MeshInstance3D and node.mesh != null:
