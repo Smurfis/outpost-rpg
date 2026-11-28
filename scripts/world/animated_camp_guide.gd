@@ -5,6 +5,10 @@ const HUMANOID = preload("res://scripts/creatures/cube_world_visual.gd")
 var avatar: Node3D
 var greeted := false
 var attention := 0.0
+var patrol: Array[Vector3] = []
+var patrol_index := 0
+var patrol_direction := 1
+var dwell := 2.0
 
 func configure_guide(ref: Node) -> bool:
 	return configure_civilian(ref,"camp_guide","Outpost guide","human_male_2")
@@ -40,6 +44,21 @@ func _process(delta: float) -> void:
 		avatar.play_event("Wave","Yes")
 	if (distance<4.5 or attention>0.0) and Vector2(offset.x,offset.z).length()>0.1:
 		avatar.rotation.y=lerp_angle(avatar.rotation.y,atan2(-offset.x,-offset.z),1.0-exp(-8.0*delta))
+	if attention<=0.0 and distance>4.5 and patrol.size()>1:
+		dwell=maxf(0.0,dwell-delta)
+		if dwell<=0.0:
+			var goal: Vector3=patrol[patrol_index]
+			var offset_to_goal:=goal-global_position
+			if offset_to_goal.length()<0.06:
+				if patrol_index==patrol.size()-1: patrol_direction=-1
+				elif patrol_index==0: patrol_direction=1
+				patrol_index+=patrol_direction
+				dwell=1.5 if patrol_index==0 or patrol_index==patrol.size()-1 else 0.0
+			else:
+				global_position=global_position.move_toward(goal,delta*1.5)
+				avatar.rotation.y=lerp_angle(avatar.rotation.y,atan2(-offset_to_goal.x,-offset_to_goal.z),1.0-exp(-8.0*delta))
+				avatar.play_motion(1.5)
+				return
 	avatar.play_motion(0.0)
 
 func interact(hero: Node3D) -> void:
