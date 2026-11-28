@@ -87,6 +87,8 @@ var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+const VILLAGE_WORK = preload("res://scripts/world/goblin_village_work.gd")
+var village_work: Dictionary = {}
 var regional_resource_state: Dictionary = {} # Stable regional node depletion and partial harvest state.
 var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
 var last_trained_skill: String = "training_blade"
@@ -2050,6 +2052,7 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if not village_work.is_empty(): data["village_work"]=village_work
 	if not regional_resource_state.is_empty():
 		data["regional_resource_state"] = regional_resource_state
 	if not natural_cave_encounters.is_empty():
@@ -2087,6 +2090,12 @@ func _load() -> void:
 				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
 					player_save_valid_for_mine = false
 					break
+	village_work.clear()
+	var saved_work: Variant = data.get("village_work",{})
+	if saved_work is Dictionary and saved_work.size()<=128:
+		for id in saved_work:
+			if id is String and id.length()<=96:
+				village_work[id]=VILLAGE_WORK.sanitize(saved_work[id])
 	regional_resource_state.clear()
 	var stored_resources: Variant = data.get("regional_resource_state",{})
 	if stored_resources is Dictionary and stored_resources.size()<=4096:
