@@ -1,14 +1,16 @@
 extends "res://scripts/world/mine_goblin.gd"
 ## Preview-only encounter. No persistent loot, dungeon clear or quest credit.
 var underground_guard := true
+var skeletal_guard := false
 var home := Vector3.ZERO
 
 func _same_level() -> bool:
 	if hero==null: return false
 	var p: Vector3 = hero.global_position
-	var city = terrain.goblin_city
+	var city = terrain.skeletal_city if skeletal_guard else terrain.goblin_city
 	if city==null or not city.contains(Vector2i(floori(p.x),floori(p.z))): return false
-	var in_cave: bool = city.floors.has(Vector2i(floori(p.x),floori(p.z))) and p.y<7.0
+	var cell := Vector2i(floori(p.x),floori(p.z))
+	var in_cave: bool = city.floors.has(cell) and absf(p.y-float(city.floors.get(cell,-99999)))<1.75 and p.y<terrain.height_at(cell.x,cell.y)-1.0
 	return in_cave==underground_guard and absf(p.y-global_position.y)<2.0
 
 func melee_visible() -> bool:
