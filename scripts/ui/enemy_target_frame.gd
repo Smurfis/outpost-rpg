@@ -145,7 +145,7 @@ func show_target(target_id: int, caption: String, hp: float, max_hp: float, rank
 	_set_coloured_name(caption, rarity_name_color, affixes)
 	rank_label.text = rank
 	rank_label.visible = not rank.is_empty()
-	name_label.anchor_right = 0.78 if rank_label.visible else 0.94
+	name_label.anchor_right = 0.78 if rank_label.visible or boss_style else 0.94
 	if accent != _accent:
 		_accent = accent
 		accent_rule.color = accent
@@ -172,8 +172,10 @@ func _process(delta: float) -> void:
 		damage_trail.value = move_toward(damage_trail.value, bar.value, delta * 24.0)
 
 func configure_boss_style(rank: int) -> void:
+	var stars:=clampi(rank,0,4)+1
+	if boss_style and boss_stars==stars: return
 	boss_style=true
-	boss_stars=clampi(rank,0,4)+1
+	boss_stars=stars
 	var shell := StyleBoxFlat.new()
 	shell.bg_color=Color("#241e21")
 	shell.border_color=Color("#857260")
