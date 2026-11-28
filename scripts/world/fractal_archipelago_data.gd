@@ -28,6 +28,7 @@ var _height_cache: Dictionary = {}
 var _margin_cache: Dictionary = {}
 var _cave_cover: Dictionary = {}
 var _cove_apron: Dictionary = {}
+var preview_cave_chambers: Array[Dictionary] = []
 var ore_slots: Dictionary = {} # Exact wall voxel -> regenerating material
 var _ore_column_masks: Dictionary = {}
 
@@ -116,6 +117,7 @@ func _shape_preview_coves() -> void:
 				# Raised central arch, lower shoulders; irregular taper.
 				var edge: bool = lane==-width or lane==CAVES.CORRIDOR_WIDTH+width-1
 				caves.extra_ceilings[cell]=floor_y+(6 if i<3 and not edge else 4 if i<6 else 3)
+		_add_preview_cavern(route,index)
 		for step: Vector3i in route:
 			for lane in range(-2,4):
 				var cell := Vector2i(step.x,step.z+lane)
@@ -126,6 +128,32 @@ func _shape_preview_coves() -> void:
 			for dx in range(-2,3):
 				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,true,false)
 		_grade_preview_approach(mouth,index)
+
+func _add_preview_cavern(route: Array,index: int) -> void:
+	# An irregular interior pocket opens after the narrow entrance passage.
+	# Existing centreline floors remain authoritative; the pocket is an
+	# extension of the same walkable layer, never a competing elevation.
+	if route.size()<22: return
+	var rng := RandomNumberGenerator.new()
+	rng.seed=seed ^ (index*196613)
+	var middle := rng.randi_range(13,17)
+	var anchor: Vector3i = route[middle]
+	var cells: Dictionary={}
+	for n in range(middle-4,middle+5):
+		var step: Vector3i=route[n]
+		var half:=maxi(1,4-absi(n-middle))
+		for lane in range(-half,2+half):
+			var p:=Vector2i(step.x,step.z+lane)
+			if margin_at(p.x+0.5,p.y+0.5)<9.0: continue
+			var y: int=int(caves.floors.get(p,step.y))
+			caves.floors[p]=y
+			var clearance:=4 if lane==-half or lane==half+1 else 6
+			caves.extra_ceilings[p]=maxi(int(caves.extra_ceilings.get(p,y+3)),y+clearance)
+			cells[p]=true
+			_cover_column(p,route.front(),true,false)
+	if not cells.is_empty():
+		preview_cave_chambers.append({"island":index,"anchor":Vector2i(anchor.x,anchor.z),"cells":cells})
+
 
 func _grade_preview_approach(mouth: Vector3i,index: int) -> void:
 	# A six-wide exterior landing connects to the actual shore, not a
