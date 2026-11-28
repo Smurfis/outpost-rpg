@@ -126,6 +126,7 @@ func _run() -> void:
 	await _test_village(game)
 	await _test_live_skeletal(game)
 	await _test_rivals(game)
+	await _test_nameplates(game)
 	game.queue_free()
 	await process_frame
 	print("WORLD PREVIEW RESULT: %d failures" % failures)
@@ -333,3 +334,33 @@ func _test_rivals(game) -> void:
 		game.hero.global_position=Vector3(0,0.35,0)
 		await process_frame
 	print("REGIONAL RIVALS: exact lethal credit, both species, persistent rank and retirement checked")
+
+func _test_nameplates(game) -> void:
+	var plates = game.hud.combat_nameplates
+	check(is_instance_valid(plates),"Preview combat nameplate canvas missing")
+	if not is_instance_valid(plates): return
+	check(plates.mouse_filter==Control.MOUSE_FILTER_IGNORE,"Nameplates intercept gameplay")
+	game.hero.global_position=Vector3(0,0.35,0)
+	game._camera(1.0)
+	var guide: Node3D
+	for actor in get_nodes_in_group("world_interactables"):
+		if actor.get_meta("world_kind","")=="npc":
+			guide=actor
+			break
+	check(is_instance_valid(guide) and plates.friendly(guide),"Friendly NPC nameplate classification missing")
+	if is_instance_valid(guide):
+		game.hero.global_position=guide.global_position+Vector3(1,0,0)
+		game._camera(1.0)
+		await physics_frame
+		check(plates.same_floor(guide),"Nearby guide failed floor check")
+		game.hero.global_position=guide.global_position+Vector3(30,0,0)
+		check(not plates.visible_actor(guide,plates.RANGE),"Distant NPC nameplate leaked")
+		game.hero.global_position=guide.global_position+Vector3(0,8,0)
+		check(not plates.same_floor(guide),"Nameplate leaked across floors")
+	game.hero.global_position=Vector3(0,0.35,0)
+	game._camera(1.0)
+	plates.refresh()
+	check(plates.actors.size()<=plates.LIMIT,"Nameplate cap exceeded")
+	game.hud.enemy_target_frame.configure_boss_style(4)
+	check(game.hud.enemy_target_frame.boss_stars==5,"Five-star boss frame missing")
+	print("NAMEPLATES: input pass-through, friendly identity, distance/floor culling and boss stars checked")
