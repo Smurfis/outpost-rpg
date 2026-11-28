@@ -22,6 +22,13 @@ static func try_plan(game: Node3D, start: Vector3, target: Vector3, reach: float
 		return {"applicable": false}
 	var from := Vector2i(floori(start.x), floori(start.z))
 	var to := Vector2i(floori(target.x), floori(target.z))
+	if remote.terrain.expanded_preview:
+		for index in [1,2]:
+			var entry: Vector3=cave.entrances[index]
+			var anchor:=Vector2i(floori(entry.x),floori(entry.z))
+			if from.distance_squared_to(anchor)<48*48 and to.distance_squared_to(anchor)<48*48:
+				if absf(start.y-cave.floor_at(from.x,from.y))>1.25 or absf(target.y-cave.floor_at(to.x,to.y))>1.25: return {"applicable":false}
+				return {"applicable":true,"path":_branch_path(cave,from,to,target)}
 	if remote.terrain.skeletal_city!=null and (remote.terrain.skeletal_city.floors.has(from) or remote.terrain.skeletal_city.floors.has(to)):
 		if absf(start.y-cave.floor_at(from.x,from.y))>1.25 or absf(target.y-cave.floor_at(to.x,to.y))>1.25:
 			return {"applicable":false}
