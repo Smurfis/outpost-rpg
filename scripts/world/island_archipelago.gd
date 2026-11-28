@@ -43,6 +43,12 @@ var _reveal_strength: float = 0.0
 
 const SECTION = preload("res://scripts/world/island_section_mesh.gd")
 const SKELETAL_SCENERY = preload("res://scripts/world/skeletal_city_scenery.gd")
+const VILLAGE_WORK = preload("res://scripts/world/goblin_village_work.gd")
+const VILLAGE_CHEST = preload("res://scripts/world/village_loot_chest.gd")
+const GATHERER = preload("res://scripts/world/goblin_gatherer.gd")
+var village_workers: Dictionary = {}
+var village_chests: Dictionary = {}
+var village_tick := 0.0
 const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
 const OCEAN_SHOAL = preload("res://scripts/world/ocean_fishing_shoal.gd")
 var ocean_shoals: Dictionary = {}
@@ -706,6 +712,10 @@ func _process(delta: float) -> void:
 	mine_auto.tick(self, game, delta)
 	var position: Vector3 = hero.global_position
 	if terrain.goblin_city!=null:
+		village_tick+=delta
+		if village_tick>=0.5:
+			_update_village(game,village_tick)
+			village_tick=0.0
 		ocean_tick+=delta
 		if ocean_tick>=0.5:
 			ocean_tick=0.0
@@ -1211,6 +1221,7 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 				members.append(scenery)
 			_install_gathering(plan,key,game,members)
 	_install_goblin_city(key,game,members)
+	_install_skeletal_inhabitants(key,game,members)
 	if terrain.skeletal_city!=null:
 		var decoration := SKELETAL_SCENERY.build(terrain.skeletal_city,key,CHUNK)
 		if decoration!=null:
@@ -1275,6 +1286,13 @@ func _install_goblin_city(key: Vector2i,game: Node,members: Array) -> void:
 		building.build(item,terrain)
 		members.append(building)
 		settlement_nodes.append(building)
+	for cache in city.caches:
+		var cell: Vector2i = cache["cell"]
+		var at := Vector3(cell.x+0.5,float(cache["height"])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var id := "goblin_cache:%d:%s" % [terrain.seed,cache["id"]]
+		if game.opened_world_objects.get(id,cache["loot"]).is_empty(): continue
+		_spawn_village_chest(game,id,"Goblin stash",at,cache["loot"],"",members)
 	for record in city.guards:
 		var cell: Vector2i = record["cell"]
 		var y: int = city.floors[cell] if record["underground"] else terrain.height_at(cell.x,cell.y)
@@ -1340,3 +1358,77 @@ func regenerate_skeletal_city_for_preview(hero: Node3D) -> bool:
 		if terrain.skeletal_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
 	_center=Vector2i(99999,99999)
 	return true
+
+func _install_skeletal_inhabitants(key: Vector2i,game: Node,members: Array) -> void:
+	var city = terrain.skeletal_city
+	if city==null or game==null: return
+	for record in city.inhabitants:
+		var cell: Vector2i = record["cell"]
+		if not city.floors.has(cell): continue
+		var at := Vector3(cell.x+0.5,float(city.floors[cell])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var group := Node3D.new()
+		add_child(group)
+		members.append(group)
+		var guard := CITY_GUARD.new()
+		guard.terrain=terrain
+		guard.skeletal_guard=true
+		guard.underground_guard=true
+		guard.home=at
+		group.add_child(guard)
+		guard.setup(game.hero,null,int(record["tier"]),at,"skeleton")
+		guard.display_name=str(record["name"])
+
+func _spawn_village_chest(game: Node,id: String,label: String,at: Vector3,stock: Dictionary,work_id: String,members: Array) -> Node3D:
+	var chest := VILLAGE_CHEST.new()
+	chest.work_id=work_id
+	chest.position=at
+	add_child(chest)
+	chest.setup(game,id,label,"chest",PROPS.crate(),stock)
+	members.append(chest)
+	return chest
+
+func _update_village(game: Node,seconds: float) -> void:
+	var city = terrain.goblin_city
+	if city==null or game.hero==null: return
+	var save_needed := false
+	for i in range(city.gatherers.size()):
+		var spec: Dictionary = city.gatherers[i]
+		var id := "goblin_work:%d:%s" % [terrain.seed,spec["id"]]
+		if not game.village_work.has(id): game.village_work[id]=VILLAGE_WORK.sanitize({})
+		var record: Dictionary = game.village_work[id]
+		var worker = village_workers.get(id)
+		if not is_instance_valid(worker) or worker.is_queued_for_deletion(): worker=null
+		if worker==null or worker.working or not worker.alive:
+			if VILLAGE_WORK.advance(record,minf(seconds,1.0),terrain.seed,i): save_needed=true
+		var yard: Vector2i = spec["yard"]
+		var anchor := _cell_at(Vector3(yard.x,0,yard.y))
+		if worker==null and float(record["rest"])<=0.0 and _loaded.has(anchor):
+			var point := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
+			var at := Vector3(point.x,terrain.height_at(floori(point.x),floori(point.y))+0.08,point.y)
+			var group := Node3D.new()
+			add_child(group)
+			_loaded[anchor].append(group)
+			worker=GATHERER.new()
+			worker.terrain=terrain
+			worker.underground_guard=false
+			worker.home=Vector3(yard.x+0.5,10.08,yard.y+0.5)
+			worker.record=record
+			worker.route=spec["path"]
+			group.add_child(worker)
+			worker.setup(game.hero,null,0,at,"goblin")
+			worker.display_name="Goblin Gatherer"
+			worker.slain.connect(_worker_slain.bind(game,id))
+			village_workers[id]=worker
+		var chest_cell: Vector2i = spec["chest"]
+		var chest_at := Vector3(chest_cell.x+0.5,terrain.height_at(chest_cell.x,chest_cell.y)+0.08,chest_cell.y+0.5)
+		var chest_key := _cell_at(chest_at)
+		var chest = village_chests.get(id)
+		if not record["stock"].is_empty() and _loaded.has(chest_key) and (not is_instance_valid(chest) or chest.is_queued_for_deletion()):
+			village_chests[id]=_spawn_village_chest(game,id,"Gatherer's stockpile",chest_at,record["stock"],id,_loaded[chest_key])
+	if save_needed: game._save()
+
+func _worker_slain(game: Node,id: String) -> void:
+	if not game.village_work.has(id): return
+	VILLAGE_WORK.defeat(game.village_work[id])
+	game._save()
