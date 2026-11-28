@@ -1,0 +1,546 @@
+extends RefCounted
+## Built-in settlement blueprint for a bounded exploration island.
+## Terrain heights are authoritative; no cave or terrain columns are edited.
+const DIRS: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.LEFT,Vector2i.DOWN,Vector2i.UP]
+const GATHERING = preload("res://scripts/world/regional_gathering_plan.gd")
+var gathering := GATHERING.new()
+const MAX_BUILDINGS := 6
+const KINDS := ["watchtower","smithy","storehouse","house","inn","guardhouse"]
+const FOOTPRINTS: Array[Vector2i] = [Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5)]
+var expanded := false
+var island_index := 2
+var site_id := "settlement"
+var profile := "market_town"
+var roles: Array = KINDS.duplicate()
+var footprints: Array[Vector2i] = FOOTPRINTS.duplicate()
+var landmarks: Array[Dictionary] = []
+var quest_anchors: Array[Dictionary] = []
+var fields: Array[Dictionary] = []
+var field_tiles: Dictionary = {}
+var scenery: Dictionary = {}
+var west_route: Array[Vector2i] = []
+var eastern_landing := Vector2i.MAX
+var eastern_route: Array[Vector2i] = []
+var plaza: Dictionary = {}
+var district_junctions: Array[Vector2i] = []
+var ring_routes: Array[Array] = []
+var roads: Dictionary = {}
+var road_steps: Dictionary = {}
+var buildings: Array[Dictionary] = []
+var reserved: Dictionary = {}
+var hub := Vector2i.ZERO
+var landing := Vector2i.ZERO
+var cave_approach := Vector2i.MAX
+var cave_route: Array[Vector2i] = []
+var _heights: Dictionary = {}
+var _ids: Dictionary = {}
+var _graph := AStar2D.new()
+
+func _safe(source, p: Vector2i) -> bool:
+	if source.margin_at(p.x+0.5,p.y+0.5)<2.0: return false
+	if source.height_at(p.x,p.y)<-2: return false
+	for dz in range(-1,2):
+		for dx in range(-1,2):
+			if source.caves.has_cave(p.x+dx,p.y+dz): return false
+	return true
+
+func _nearest(anchor: Vector2i) -> Vector2i:
+	var result := Vector2i.MAX
+	var best := INF
+	for p: Vector2i in _ids:
+		if _graph.is_point_disabled(_ids[p]): continue
+		var cost := float(p.distance_squared_to(anchor))
+		if cost<best:
+			best = cost
+			result = p
+	return result
+
+func _route(a: Vector2i,b: Vector2i) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if not _ids.has(a) or not _ids.has(b): return result
+	for id in _graph.get_id_path(_ids[a],_ids[b]):
+		result.append(Vector2i(_graph.get_point_position(id)))
+	return result
+
+func _disable(rect: Rect2i, disabled: bool) -> void:
+	for z in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x):
+			var p := Vector2i(x,z)
+			if _ids.has(p): _graph.set_point_disabled(_ids[p],disabled)
+
+func _record_road(route: Array[Vector2i]) -> void:
+	for p in route: roads[p] = true
+
+func generate(source, index: int = 2) -> bool:
+	if index not in [1,2]: return false
+	expanded=source.expanded_preview
+	island_index = index
+	site_id = "settlement" if index==2 else "waystation"
+	profile = "market_town" if index==2 else "frontier_waystation"
+	roles = KINDS.duplicate() if index==2 else ["guardhouse","storehouse","house"]
+	footprints.clear()
+	if index==2:
+		footprints.append_array(FOOTPRINTS)
+	else:
+		footprints.append(Vector2i(5,5))
+		footprints.append(Vector2i(5,7))
+		footprints.append(Vector2i(5,5))
+	if expanded:
+		# Reserve the civic and commercial core first, then fill residential
+		# blocks rather than scattering six buildings around an arbitrary hub.
+		if index==2:
+			roles=["watchtower","smithy","storehouse","house","inn","guardhouse","market","bank","guildhall","house","house","storehouse","house","house"]
+			footprints=[Vector2i(7,7),Vector2i(7,7),Vector2i(5,7),Vector2i(5,5),Vector2i(7,5),Vector2i(5,5),Vector2i(9,7),Vector2i(7,7),Vector2i(9,9),Vector2i(5,5),Vector2i(5,5),Vector2i(5,7),Vector2i(5,5),Vector2i(5,5)]
+		else:
+			roles.append_array(["inn","smithy","house","house","watchtower"])
+			footprints.append_array([Vector2i(7,5),Vector2i(7,7),Vector2i(5,5),Vector2i(5,5),Vector2i(7,7)])
+	landmarks.clear()
+	quest_anchors.clear()
+	fields.clear()
+	field_tiles.clear()
+	scenery.clear()
+	west_route.clear()
+	eastern_landing = Vector2i.MAX
+	eastern_route.clear()
+	roads.clear()
+	road_steps.clear()
+	plaza.clear()
+	district_junctions.clear()
+	ring_routes.clear()
+	cave_approach = Vector2i.MAX
+	cave_route.clear()
+	buildings.clear()
+	reserved.clear()
+	_heights.clear()
+	_ids.clear()
+	_graph.clear()
+	var center: Vector2i = source.islands[island_index]["center"]
+	# Restrict planning to one bounded island, and preserve its cave corridor.
+	var extent := ceili(float(source.islands[island_index]["radius"])) if expanded else 44
+	for z in range(center.y-extent,center.y+extent+1):
+		for x in range(center.x-extent,center.x+extent+1):
+			var p := Vector2i(x,z)
+			if not _safe(source,p): continue
+			var h: int = source.height_at(x,z)
+			_heights[p] = h
+			var id := _graph.get_available_point_id()
+			_ids[p] = id
+			_graph.add_point(id,Vector2(p))
+	for p: Vector2i in _ids:
+		var roughness := 0.0
+		for d in DIRS:
+			if _heights.has(p+d): roughness += absf(float(_heights[p]-_heights[p+d]))
+		_graph.set_point_weight_scale(_ids[p],1.0+roughness*(1.2 if expanded else 0.35))
+		for d in [Vector2i.RIGHT,Vector2i.DOWN]:
+			var q: Vector2i = p+d
+			if _ids.has(q) and absi(int(_heights[p]) - int(_heights[q]))<=1:
+				_graph.connect_points(_ids[p],_ids[q])
+	hub = _nearest(center+Vector2i(-12,-15))
+	if hub==Vector2i.MAX: return false
+	# Prefer the nearest reachable shallow western coast, not an arbitrary
+	# straight line across the hills. Retain the existing island cave route.
+	var shore: Array[Vector2i] = []
+	for p: Vector2i in _ids:
+		if p.x<center.x and source.margin_at(p.x+0.5,p.y+0.5)<5.0: shore.append(p)
+	shore.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		var da := a.distance_squared_to(hub)
+		var db := b.distance_squared_to(hub)
+		return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
+	var found := false
+	for p in shore:
+		var route := _route(hub,p)
+		if route.is_empty(): continue
+		landing = p
+		west_route = route
+		_record_road(route)
+		found = true
+		break
+	if not found: return false
+	if expanded: _reserve_civic_core(source)
+	var candidates: Array[Vector2i] = []
+	var plot_extent := 34 if expanded else 28
+	for z in range(hub.y-plot_extent,hub.y+plot_extent+1,2):
+		for x in range(hub.x-plot_extent,hub.x+plot_extent+1,2):
+			candidates.append(Vector2i(x,z))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = source.seed ^ 0x51c17 ^ (0 if island_index==2 else 0x192a)
+	# Stable per-seed tie breaks without relying on dictionary iteration.
+	var tie: Dictionary = {}
+	for p in candidates: tie[p] = rng.randf()
+	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		return float(a.distance_squared_to(hub))+float(tie[a])*30.0 < float(b.distance_squared_to(hub))+float(tie[b])*30.0)
+	for role_index in range(roles.size()):
+		if not _place_building(candidates,role_index) and not expanded: break
+
+	# Reserve a modest public square around the hub without altering slopes.
+	for dz in range(-2,3):
+		for dx in range(-2,3):
+			var p := hub+Vector2i(dx,dz)
+			if not _heights.has(p) or reserved.has(p): continue
+			if absf(float(_heights[p]-_heights[hub]))>1.0: continue
+			var route := _route(hub,p)
+			if route.is_empty() or route.size()>7: continue
+			plaza[p] = true
+			_record_road(route)
+	# Connect another existing POI without modifying the cave's own cells.
+	# The endpoint is a safe exterior staging tile, not a tunnel floor.
+	if source.caves.entrances.size()>island_index:
+		var entrance: Vector3 = source.caves.entrances[island_index]
+		var anchor := Vector2i(floori(entrance.x),floori(entrance.z))
+		var approaches: Array[Vector2i] = []
+		for p: Vector2i in _ids:
+			if expanded and (p.x<anchor.x+2 or p.x>anchor.x+7 or absi(p.y-anchor.y)>1): continue
+			if p.distance_squared_to(anchor)<=64 and absf(float(_heights[p])-entrance.y)<=2.0:
+				approaches.append(p)
+		approaches.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+			var da := a.distance_squared_to(anchor)
+			var db := b.distance_squared_to(anchor)
+			return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
+		for p in approaches:
+			var route := _route(hub,p)
+			if route.is_empty(): continue
+			cave_approach = p
+			cave_route = route
+			_record_road(route)
+			break
+	# Connect the existing eastern coastal access corridor after mandatory
+	# building reservations. This is a real safe dry approach, not a dock.
+	var east: Array[Vector2i] = []
+	for p: Vector2i in _ids:
+		if p.x>center.x and absi(p.y-center.y)<=2 and source.margin_at(p.x+0.5,p.y+0.5)<5.0:
+			east.append(p)
+	east.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		return a.x>b.x if a.x!=b.x else a.y<b.y)
+	for p in east:
+		var route := _route(hub,p)
+		if route.is_empty(): continue
+		eastern_landing = p
+		eastern_route = route
+		_record_road(route)
+		break
+	# Expand narrow centerlines on gentle slopes. The road remains
+	# a terrain material, not another set of mesh nodes or colliders.
+	for pass_index in range(2 if expanded else 1):
+		var centerlines: Array = roads.keys()
+		for p: Vector2i in centerlines:
+			for d in DIRS:
+				var q := p+d
+				if _heights.has(q) and not reserved.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1:
+					roads[q] = true
+	_plan_countryside(source)
+	_build_landmarks(source)
+	_plan_quest_anchors(source)
+	gathering.generate(source,self)
+	var valid: bool = buildings.size()>=2 and _validate_network(source)
+	# The immutable result is enough for streamed terrain, map and buildings;
+	# discard the temporary search graph and per-cell planning tables.
+	_graph.clear()
+	_ids.clear()
+	_heights.clear()
+	return valid
+
+func _reserve_civic_core(source) -> void:
+	# Reserve a nine-wide civic plaza before plot placement; radiating
+	# avenues terminate in connected district intersections, not dead ends.
+	var radius := 4 if island_index==2 else 3
+	for dz in range(-radius,radius+1):
+		for dx in range(-radius,radius+1):
+			var p := hub+Vector2i(dx,dz)
+			if not _heights.has(p) or absi(int(_heights[p])-int(_heights[hub]))>1: continue
+			var route := _route(hub,p)
+			if route.is_empty() or route.size()>absi(dx)+absi(dz)+3: continue
+			plaza[p]=true
+			_record_road(route)
+	var spokes: Array[Vector2i] = [Vector2i.RIGHT,Vector2i.DOWN,Vector2i.LEFT,Vector2i.UP]
+	for d in spokes:
+		var endpoint := _nearest(hub+d*(16 if island_index==2 else 12))
+		if endpoint==Vector2i.MAX: continue
+		var route := _route(hub,endpoint)
+		if route.is_empty(): continue
+		district_junctions.append(endpoint)
+		_record_road(route)
+		for p in route:
+			var side := Vector2i(-d.y,d.x)
+			for q in [p+side,p-side]:
+				if _heights.has(q) and absi(int(_heights[p])-int(_heights[q]))<=1: roads[q]=true
+
+	# Join neighbouring avenues around the central square. Temporarily
+	# disable the core so the AStar shortcut cannot simply retrace a spoke.
+	for p: Vector2i in plaza:
+		if _ids.has(p): _graph.set_point_disabled(_ids[p],true)
+	for n in range(district_junctions.size()):
+		var a: Vector2i = district_junctions[n]
+		var b: Vector2i = district_junctions[(n+1)%district_junctions.size()]
+		if a==b: continue
+		var route := _route(a,b)
+		if route.is_empty() or route.size()>64: continue
+		ring_routes.append(route)
+		_record_road(route)
+	for p: Vector2i in plaza:
+		if _ids.has(p): _graph.set_point_disabled(_ids[p],false)
+
+
+func _place_building(candidates: Array[Vector2i],index: int) -> bool:
+	for at in candidates:
+		var size: Vector2i = footprints[index]
+		var rect := Rect2i(at,size)
+		var hi := -999
+		var lo := 999
+		var valid := true
+		for z in range(at.y,rect.end.y):
+			for x in range(at.x,rect.end.x):
+				var p := Vector2i(x,z)
+				if not _heights.has(p) or reserved.has(p) or roads.has(p) or p==hub:
+					valid = false
+					continue
+				hi = maxi(hi,_heights[p])
+				lo = mini(lo,_heights[p])
+		if not valid or hi-lo>2: continue
+		if expanded:
+			var spacing_ok := true
+			for old in buildings:
+				var footprint: Rect2i = old["rect"]
+				if rect.grow(2).intersects(footprint): spacing_ok=false
+			if not spacing_ok: continue
+		# Building floor is a single flat, accessible layer on a shallow
+		# foundation. Door must meet the outside terrain by <= one step.
+		var floor_y := hi+1
+		_disable(rect,true)
+		var best: Array[Vector2i] = []
+		var best_cost := INF
+		var door := Vector2i.ZERO
+		var direction := Vector2i.ZERO
+		for d in DIRS:
+			var half := Vector2i((size.x-1)/2,(size.y-1)/2)
+			var edge := at+half+Vector2i(d.x*half.x,d.y*half.y)
+			var outside := edge+d
+			if not _heights.has(outside) or reserved.has(outside) or absi(floor_y-int(_heights[outside]))>1: continue
+			var side := Vector2i(-d.y,d.x)
+			var wide := true
+			for offset in [-1,1]:
+				var q: Vector2i = outside+side*int(offset)
+				if not _heights.has(q) or reserved.has(q) or absi(floor_y-int(_heights[q]))>1: wide = false
+			if not wide: continue
+			var route := _route(hub,outside)
+			if route.is_empty(): continue
+			var new_cells := 0
+			for p in route:
+				if not roads.has(p): new_cells+=1
+			var cost := float(route.size())+float(new_cells)*2.0 if expanded else float(route.size())
+			if cost<best_cost:
+				best_cost=cost
+				best = route
+				door = edge
+				direction = d
+		if best.is_empty():
+			_disable(rect,false)
+			continue
+		_record_road(best)
+		var side := Vector2i(-direction.y,direction.x)
+		for offset in range(-1,2): roads[door+direction+side*offset] = true
+		for z in range(at.y,rect.end.y):
+			for x in range(at.x,rect.end.x): reserved[Vector2i(x,z)] = true
+		var suffix: String = str(roles[index])
+		if expanded and roles.find(roles[index])!=index: suffix += "_%d" % index
+		buildings.append({"id":"%s_%s" % [site_id,suffix],"kind":roles[index],"rect":rect,"floor":floor_y,"door":door,"direction":direction,"route":best})
+		return true
+	return false
+
+func _plan_countryside(source) -> void:
+	# Locate modest agricultural plots beside existing roads. No terraforming
+	# or path displacement: every accepted cell is on safe, gently sloped land.
+	var candidates: Array[Vector2i] = []
+	for z in range(hub.y-32,hub.y+33):
+		for x in range(hub.x-32,hub.x+33):
+			candidates.append(Vector2i(x,z))
+	candidates.sort_custom(func(a: Vector2i,b: Vector2i) -> bool:
+		var da := a.distance_squared_to(hub)
+		var db := b.distance_squared_to(hub)
+		return da<db if da!=db else (a.x<b.x if a.x!=b.x else a.y<b.y))
+	var limit := (4 if island_index==2 else 2) if expanded else (2 if island_index==2 else 1)
+	# Prefer large plots, but permit small stepped gardens on rugged islands.
+	# Individual cardinal steps are checked instead of requiring a flat field.
+	for size in [Vector2i(5,7),Vector2i(7,5),Vector2i(3,5),Vector2i(5,3),Vector2i(3,3)]:
+		for at in candidates:
+			if fields.size()>=limit: break
+			var rect := Rect2i(at,size)
+			var low := 999
+			var high := -999
+			var valid := true
+			var entry := Vector2i.MAX
+			for z in range(rect.position.y,rect.end.y):
+				for x in range(rect.position.x,rect.end.x):
+					var p := Vector2i(x,z)
+					if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p):
+						valid=false
+						continue
+					var h: int = _heights[p]
+					if h<0: valid=false
+					low=mini(low,h)
+					high=maxi(high,h)
+					for d in DIRS:
+						var q := p+d
+						if rect.has_point(q) and _heights.has(q) and absi(h-int(_heights[q]))>1: valid=false
+						if roads.has(q) and absi(h-int(_heights.get(q,h+99)))<=1:
+							if entry==Vector2i.MAX or q.distance_squared_to(hub)<entry.distance_squared_to(hub):
+								entry=q
+			if not valid or high-low>3 or entry==Vector2i.MAX: continue
+			fields.append({"id":"%s_field_%d" % [site_id,fields.size()],"kind":"crop_field","rect":rect,"entry":entry})
+			for z in range(rect.position.y,rect.end.y):
+				for x in range(rect.position.x,rect.end.x):
+					var p := Vector2i(x,z)
+					field_tiles[p]=true
+					if x>rect.position.x and x<rect.end.x-1 and z>rect.position.y and z<rect.end.y-1 and (x-rect.position.x)%2==1:
+						scenery[p]={"kind":"crop","height":int(_heights[p]),"variant":posmod(x*31+z*17+source.seed,3)}
+		if fields.size()>=limit: break
+	# Sparse roadside flowers and low stone markers, kept outside roads,
+	# foundations, cave clearance and farm plots. Stable by world cell.
+	var cells: Array = roads.keys()
+	cells.sort_custom(func(a: Vector2i,b: Vector2i) -> bool: return a.x<b.x if a.x!=b.x else a.y<b.y)
+	for p: Vector2i in cells:
+		if plaza.has(p) or posmod(p.x*31+p.y*17+source.seed,11)!=0: continue
+		for d in DIRS:
+			var q := p+d
+			if not _heights.has(q) or roads.has(q) or reserved.has(q) or field_tiles.has(q) or scenery.has(q): continue
+			if int(_heights[q])<0 or absi(int(_heights[q])-int(_heights[p]))>1: continue
+			var kind := "waystone" if posmod(q.x*19+q.y*23+source.seed,5)==0 else "flowers"
+			scenery[q]={"kind":kind,"height":int(_heights[q]),"variant":posmod(q.x*13+q.y*7+source.seed,3)}
+			break
+
+func _plan_half_steps() -> void:
+	# At a lower road tile facing a higher one, add a half-height tread
+	# to the uphill half. Leave junctions and square surfaces unmodified.
+	for p: Vector2i in roads:
+		if plaza.has(p) or not _heights.has(p): continue
+		var up: Array[Vector2i] = []
+		for d: Vector2i in DIRS:
+			var q := p+d
+			if roads.has(q) and _heights.has(q) and int(_heights[q])-int(_heights[p])==1:
+				up.append(d)
+		if up.size()==1:
+			road_steps[p]={"direction":up[0],"height":int(_heights[p])}
+	# Split a one-block building doorstep as well.
+	for item in buildings:
+		var door: Vector2i = item["door"]
+		var d: Vector2i = item["direction"]
+		var outside := door+d
+		if _heights.has(outside) and int(item["floor"])-int(_heights[outside])==1 and not plaza.has(outside):
+			road_steps[outside]={"direction":-d,"height":int(_heights[outside])}
+
+func _add_landmark(source, suffix: String, label: String, role: String, p: Vector2i) -> void:
+	landmarks.append({"id":"%s:%s" % [site_id,suffix],"label":label,"role":role,
+		"position":Vector3(p.x+0.5,source.height_at(p.x,p.y),p.y+0.5),"cell":p})
+
+func _build_landmarks(source) -> void:
+	_add_landmark(source,"hub","Market Town" if island_index==2 else "Frontier Waystation","settlement",hub)
+	_add_landmark(source,"west","Western Landing","landing",landing)
+	if not eastern_route.is_empty():
+		_add_landmark(source,"east","Eastern Landing","landing",eastern_landing)
+	if not cave_route.is_empty():
+		_add_landmark(source,"cave","Cavern Approach","cave_approach",cave_approach)
+	for field in fields:
+		_add_landmark(source,str(field["id"]),"Cultivated Fields","farm",field["entry"])
+	for item in buildings:
+		var p: Vector2i = item["door"]+item["direction"]
+		var suffix: String = str(item["id"]).trim_prefix(site_id+"_") if expanded else str(item["kind"])
+		_add_landmark(source,suffix,str(item["kind"]).capitalize(),"architecture",p)
+
+func _plan_quest_anchors(source) -> void:
+	# Authoring reservations only: NPC spawning and quest progression are separate.
+	# Every candidate stands beside a connected road, not on the travel lane.
+	var occupied: Dictionary = {}
+	for record in landmarks:
+		var role: String = record["role"]
+		if role not in ["settlement","cave_approach","farm","landing","architecture"]: continue
+		var objective: Vector2i = record["cell"]
+		var best := Vector2i.MAX
+		var approach := Vector2i.MAX
+		var best_cost := 999999
+		for dz in range(-3,4):
+			for dx in range(-3,4):
+				var p := objective+Vector2i(dx,dz)
+				if not _heights.has(p) or roads.has(p) or reserved.has(p) or field_tiles.has(p) or scenery.has(p) or occupied.has(p): continue
+				if int(_heights[p])<0: continue
+				for d in DIRS:
+					var q := p+d
+					if not roads.has(q) or absi(int(_heights[p])-int(_heights.get(q,999)))>1: continue
+					var cost := p.distance_squared_to(objective)*10+q.distance_squared_to(objective)
+					if cost<best_cost:
+						best_cost=cost
+						best=p
+						approach=q
+		if best==Vector2i.MAX: continue
+		occupied[best]=true
+		var giver_role := "local_contact"
+		match role:
+			"settlement": giver_role="expedition_coordinator"
+			"cave_approach": giver_role="explorer"
+			"farm": giver_role="farmer"
+			"landing": giver_role="coastal_contact"
+			"architecture":
+				match str(record["label"]).to_lower():
+					"smithy": giver_role="blacksmith"
+					"guardhouse","watchtower": giver_role="guard"
+					"inn": giver_role="innkeeper"
+					"market": giver_role="merchant"
+					"bank": giver_role="banker"
+					"guildhall": giver_role="guild_contact"
+					"storehouse": giver_role="quartermaster"
+					_: giver_role="resident"
+		var patrol: Array[Vector3] = []
+		if expanded and giver_role in ["guard","resident","coastal_contact"]:
+			# Short local loops remain in the owning stream chunk; no actors
+			# can wander into unloaded land or block the primary street.
+			var chunk := Vector2i(floori(float(best.x)/12.0),floori(float(best.y)/12.0))
+			var current := approach
+			var used: Dictionary = {best:true,approach:true}
+			if Vector2i(floori(float(approach.x)/12.0),floori(float(approach.y)/12.0))==chunk:
+				patrol.append(Vector3(best.x+0.5,float(_heights[best])+0.04,best.y+0.5))
+				patrol.append(Vector3(approach.x+0.5,float(_heights[approach])+0.04,approach.y+0.5))
+				for n in range(4):
+					var next := Vector2i.MAX
+					for d in DIRS:
+						var q := current+d
+						if used.has(q) or not roads.has(q) or absi(int(_heights[current])-int(_heights[q]))>1: continue
+						if Vector2i(floori(float(q.x)/12.0),floori(float(q.y)/12.0))!=chunk: continue
+						next=q
+						break
+					if next==Vector2i.MAX: break
+					used[next]=true
+					patrol.append(Vector3(next.x+0.5,float(_heights[next])+0.04,next.y+0.5))
+					current=next
+		quest_anchors.append({"id":str(record["id"])+":giver","landmark_id":record["id"],"role":giver_role,
+			"cell":best,"approach":approach,"objective_hint":objective,
+			"position":Vector3(best.x+0.5,source.height_at(best.x,best.y),best.y+0.5),
+			"allows_expeditions":role=="settlement","patrol":patrol})
+
+func _validate_network(source) -> bool:
+	# A road is not merely a material: every published destination must be
+	# connected by safe cardinal steps from the settlement hub.
+	if not roads.has(hub): return false
+	var visited: Dictionary = {}
+	visited[hub]=true
+	var queue: Array[Vector2i] = [hub]
+	var cursor := 0
+	while cursor<queue.size():
+		var p: Vector2i = queue[cursor]
+		cursor+=1
+		for d in DIRS:
+			var q := p+d
+			if visited.has(q) or not roads.has(q) or reserved.has(q): continue
+			if absi(source.height_at(p.x,p.y)-source.height_at(q.x,q.y))>1: continue
+			visited[q]=true
+			queue.append(q)
+	for item in landmarks:
+		if not visited.has(item["cell"]): return false
+	for item in quest_anchors:
+		if not visited.has(item["approach"]): return false
+	return true
+
+func is_road(x: int,z: int) -> bool:
+	return roads.has(Vector2i(x,z))
+
+func building_at(cell: Vector2i) -> Dictionary:
+	for item in buildings:
+		if item["rect"].has_point(cell): return item
+	return {}

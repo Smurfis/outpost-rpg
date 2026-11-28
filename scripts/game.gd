@@ -87,6 +87,11 @@ var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+const REGIONAL_RIVAL = preload("res://scripts/world/regional_rival.gd")
+var regional_rivals: Dictionary = {}
+const VILLAGE_WORK = preload("res://scripts/world/goblin_village_work.gd")
+var village_work: Dictionary = {}
+var regional_resource_state: Dictionary = {} # Stable regional node depletion and partial harvest state.
 var gathering_skill_xp: Dictionary = {"woodcutting": 0, "mining": 0, "foraging": 0}
 var last_trained_skill: String = "training_blade"
 var skill_cooldowns: Dictionary = {} # Runtime only.
@@ -123,6 +128,9 @@ func _ready() -> void:
 	_register_keys()
 	inventory.merge({"shrimp": 0, "cooked_shrimp": 0, "shrimp_net": 0})
 	equipment["tool_fishing"] = ""
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+		equipment["trinket"]=""
+		inventory["rowboat"]=0
 	gathering_skill_xp["fishing"] = 0
 	for point in station_positions.values():
 		prop_placement.reserve(point, 1.7)
@@ -485,47 +493,58 @@ func _world() -> void:
 	# Deliberate counted timber/stone bundles replace untracked overlapping props.
 	spawn_resource(self, "wood", Vector3(-10, 0, 7), 3, true)
 	spawn_resource(self, "stone", Vector3(3, 0, 11), 2, true)
-	# The camp guide is a stationary NPC, NOT a second player. A unique
-	# outfit, hat, and permanent nameplate prevent confusing it with a ghost
-	# avatar when returning via Leave Game > Continue.
-	var guide = WORLD_OBJECT.new()
-	guide.name = "CampGuideNPC"
-	add_child(guide)
-	guide.position = Vector3(0, 0, 4.5)
-	var guide_art := Node3D.new()
-	guide_art.name = "GuideOutfit"
-	for part_id in ["adventurer_torso", "adventurer_head"]:
-		var piece: MeshInstance3D = preload("res://scripts/voxel/voxel_character.gd").create_part(part_id)
-		if piece != null:
-			if part_id == "adventurer_head":
-				piece.position.y = 1.89
-			var dye := StandardMaterial3D.new()
-			dye.albedo_color = Color("#e7be87") if part_id == "adventurer_head" else Color("#447c55")
-			dye.roughness = 1.0
-			piece.material_override = dye
-			guide_art.add_child(piece)
-	var guide_hat := MeshInstance3D.new()
-	guide_hat.name = "GuideWideBrimHat"
-	var hat_mesh := CylinderMesh.new()
-	hat_mesh.top_radius = 0.49
-	hat_mesh.bottom_radius = 0.49
-	hat_mesh.height = 0.16
-	guide_hat.mesh = hat_mesh
-	guide_hat.position = Vector3(0.0, 2.28, 0.0)
-	var hat_material := StandardMaterial3D.new()
-	hat_material.albedo_color = Color("#775a36")
-	hat_material.roughness = 1.0
-	guide_hat.material_override = hat_material
-	guide_art.add_child(guide_hat)
-	var guide_name := Label3D.new()
-	guide_name.name = "NPCNameplate"
-	guide_name.text = "OUTPOST GUIDE"
-	guide_name.position = Vector3(0.0, 2.65, 0.0)
-	guide_name.font_size = 36
-	guide_name.pixel_size = 0.006
-	guide_name.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	guide_art.add_child(guide_name)
-	guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
+	# Preview uses the existing fully rigged humanoid asset and animation clips.
+	# Keep the legacy art as a safe fallback and leave normal Alpha unchanged.
+	var guide
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+		guide=preload("res://scripts/world/animated_camp_guide.gd").new()
+		guide.name="CampGuideNPC"
+		add_child(guide)
+		guide.position=Vector3(0,0,4.5)
+		if not guide.configure_guide(self):
+			remove_child(guide)
+			guide.queue_free()
+			guide=null
+	if guide==null:
+		guide = WORLD_OBJECT.new()
+		guide.name = "CampGuideNPC"
+		add_child(guide)
+		guide.position = Vector3(0, 0, 4.5)
+		var guide_art := Node3D.new()
+		guide_art.name = "GuideOutfit"
+		for part_id in ["adventurer_torso", "adventurer_head"]:
+			var piece: MeshInstance3D = preload("res://scripts/voxel/voxel_character.gd").create_part(part_id)
+			if piece != null:
+				if part_id == "adventurer_head":
+					piece.position.y = 1.89
+				var dye := StandardMaterial3D.new()
+				dye.albedo_color = Color("#e7be87") if part_id == "adventurer_head" else Color("#447c55")
+				dye.roughness = 1.0
+				piece.material_override = dye
+				guide_art.add_child(piece)
+		var guide_hat := MeshInstance3D.new()
+		guide_hat.name = "GuideWideBrimHat"
+		var hat_mesh := CylinderMesh.new()
+		hat_mesh.top_radius = 0.49
+		hat_mesh.bottom_radius = 0.49
+		hat_mesh.height = 0.16
+		guide_hat.mesh = hat_mesh
+		guide_hat.position = Vector3(0.0, 2.28, 0.0)
+		var hat_material := StandardMaterial3D.new()
+		hat_material.albedo_color = Color("#775a36")
+		hat_material.roughness = 1.0
+		guide_hat.material_override = hat_material
+		guide_art.add_child(guide_hat)
+		var guide_name := Label3D.new()
+		guide_name.name = "NPCNameplate"
+		guide_name.text = "OUTPOST GUIDE"
+		guide_name.position = Vector3(0.0, 2.65, 0.0)
+		guide_name.font_size = 36
+		guide_name.pixel_size = 0.006
+		guide_name.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		guide_art.add_child(guide_name)
+		if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview": guide_name.hide()
+		guide.setup(self, "camp_guide", "Outpost guide", "npc", guide_art)
 	guide.message = "Gather fibre, craft a Shrimp net at the Workbench, then fish coastal pools. Cook shrimp at the Campfire."
 	prop_placement.reserve(guide.position, 0.6, guide)
 	# Make the Fields truly walkable. Keep the original small camp collision
@@ -1020,7 +1039,7 @@ func gather(selected: Node3D = null) -> void:
 		return
 	var expected_item: String = str(resource.kind)
 	var tool: String = "axe" if expected_item == "wood" else "pickaxe" if expected_item in ["stone", "iron", "coal"] else "shrimp_net" if expected_item == "shrimp" else "satchel"
-	if selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
+	if not equipment.has("trinket") and selected != null and int(inventory.get(tool, 0)) > 0 and not is_equipped(tool):
 		equip_item(tool)
 	if expected_item == "shrimp" and (str(equipment.get("tool_fishing", "")) != "shrimp_net" or int(inventory.get("shrimp_net", 0)) < 1):
 		hud.toast("Craft a Shrimp net from 6 fibre at the Workbench first.")
@@ -1084,6 +1103,8 @@ func _load_recipes() -> void:
 	file.close()
 	if parsed is Array:
 		recipes = parsed
+		if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+			recipes.append({"id":"rowboat","name":"Wooden Rowboat","result":"rowboat","amount":1,"station":"workbench","seconds":4.0,"strokes":6,"category":"Tools","desc":"Equip in the trinket slot to launch automatically in open water.","ingredients":{"wood":30,"fiber":10}})
 
 func craft() -> void:
 	show_crafting()
@@ -1111,6 +1132,8 @@ func _recipe_by_id(id: String) -> Dictionary:
 	return {}
 
 func equipment_slot(item_id: String) -> String:
+	if item_id == "rowboat":
+		return "trinket" if equipment.has("trinket") else ""
 	if item_id == "shrimp_net":
 		return "tool_fishing"
 	if item_id in ["spear", "iron_blade"]:
@@ -1130,6 +1153,12 @@ func equipment_slot(item_id: String) -> String:
 	return ""
 
 func available_quick_tools() -> Array[String]:
+	if equipment.has("trinket"):
+		var equipped_tools: Array[String] = [str(equipment.get("weapon","training_blade"))]
+		for id in QUICK_TOOL_IDS:
+			if id not in equipped_tools and is_equipped(id): equipped_tools.append(id)
+		if is_equipped("shrimp_net"): equipped_tools.append("shrimp_net")
+		return equipped_tools
 	var candidates: Array[String] = ["training_blade"]
 	for item in QUICK_TOOL_IDS:
 		if item != "training_blade" and int(inventory.get(item, 0)) > 0:
@@ -1143,6 +1172,12 @@ func select_quick_tool(item_id: String) -> bool:
 		return false
 	if item_id != "training_blade" and int(inventory.get(item_id, 0)) <= 0:
 		return false
+	if equipment.has("trinket"):
+		if item_id not in available_quick_tools(): return false
+		active_quick_tool=item_id
+		if hero!=null: hero.set_held_tool(item_id)
+		_save()
+		return true
 	# Equip in its actual owned slot. Don't toggle OFF an already-equipped
 	# tool just because the player chose it again in the quick selector.
 	if item_id == "training_blade":
@@ -1157,7 +1192,29 @@ func select_quick_tool(item_id: String) -> bool:
 	_refresh_menu()
 	return true
 
+func _nearby_world_interaction() -> Node3D:
+	if hero==null: return null
+	var best: Node3D
+	var distance := INF
+	for candidate in get_tree().get_nodes_in_group("world_interactables"):
+		if not target_available(candidate) or not target_in_range(candidate): continue
+		var kind: String = str(candidate.get_meta("world_kind",""))
+		if kind not in ["chest","loot","tombstone","npc","portal","exit","inspect"] and not candidate.has_meta("dungeon_bonus") and not candidate.has_meta("dungeon_exit"): continue
+		if candidate.has_method("remaining") and kind in ["chest","loot","tombstone"] and candidate.remaining().is_empty(): continue
+		# Range alone must not permit collecting through intact cave walls.
+		var ray := PhysicsRayQueryParameters3D.create(hero.global_position+Vector3.UP*0.7,candidate.global_position+Vector3.UP*0.35,1,[hero.get_rid()])
+		var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+		if not hit.is_empty() and hit.position.distance_to(candidate.global_position+Vector3.UP*0.35)>0.4: continue
+		var gap: float = hero.global_position.distance_to(candidate.global_position)
+		if gap<distance:
+			distance=gap
+			best=candidate
+	return best
+
 func smart_context() -> Dictionary:
+	var object := _nearby_world_interaction()
+	if object!=null:
+		return {"kind":"world_object","label":str(object.get_meta("world_action","Interact")).to_upper(),"icon":"hand"}
 	if valid_focus():
 		return {"kind": "attack", "label": "ATTACK", "icon": "sword"}
 	# One smart action, showing its REAL current intent; never a redundant
@@ -1184,6 +1241,10 @@ func smart_context() -> Dictionary:
 
 func smart_interact() -> void:
 	if menu != null and menu.visible:
+		return
+	var object := _nearby_world_interaction()
+	if object!=null:
+		interact_target(object)
 		return
 	if valid_focus():
 		if target_in_range(focus_target):
@@ -1340,6 +1401,8 @@ func equip_item(item_id: String) -> bool:
 		equipment[slot] = "training_blade" if slot == "weapon" else ""
 	else:
 		equipment[slot] = item_id
+	if equipment.has("trinket") and slot=="weapon" and active_quick_tool in ["training_blade","spear","iron_blade"]:
+		active_quick_tool=str(equipment["weapon"])
 	# Equipping an axe/pickaxe from Gear should actually put it in the hand.
 	# Removing it should put away the model, without deleting inventory.
 	if item_id in ["axe", "pickaxe"]:
@@ -1364,7 +1427,7 @@ func _apply_equipment() -> void:
 	hero.set_cloak(str(equipment.get("back", "")) == "cloak")
 
 func owns_unique(item_id: String) -> bool:
-	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak"] and int(inventory.get(item_id, 0)) > 0
+	return item_id in ["spear", "axe", "pickaxe", "shield", "torch", "satchel", "iron_blade", "cloak", "rowboat"] and int(inventory.get(item_id, 0)) > 0
 
 func can_craft(id: String) -> bool:
 	var recipe: Dictionary = _recipe_by_id(id)
@@ -1474,9 +1537,9 @@ func _try_finish_craft() -> void:
 		hud.record_loot(result, 1 if is_bag or QUALITY.is_gear(result) else maxi(1, int(recipe.get("amount", 1))))
 	if result == "spear":
 		spear_crafted = true
-	# Newly crafted equipment is immediately equipped, but can be swapped/removed.
+	# Preview crafting leaves gear in the bag until explicitly equipped.
 	var slot: String = equipment_slot(result)
-	if slot != "":
+	if slot != "" and not equipment.has("trinket"):
 		equipment[slot] = result
 		_apply_equipment()
 	gain_experience(8)
@@ -1903,7 +1966,10 @@ func _spawn_tombstone_node(tombstone_id: String) -> void:
 	grave.setup(self, tombstone_id, "Your Tombstone", "tombstone", art, record.get("contents", {}))
 	tombstone_nodes[tombstone_id] = grave
 
-func on_player_defeated(at: Vector3) -> void:
+func on_player_defeated(at: Vector3, attacker: Node = null) -> void:
+	var promotion: String = ""
+	if is_instance_valid(attacker) and attacker.has_method("credit_player_defeat"):
+		promotion=attacker.credit_player_defeat()
 	# Transfer once, before teleporting. No starter weapon is an inventory
 	# item. Currency and all carried equipment/resources are included.
 	var carried: Dictionary = {}
@@ -1936,7 +2002,11 @@ func on_player_defeated(at: Vector3) -> void:
 	_apply_equipment()
 	_save()
 	if hud != null:
-		hud.toast("Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost.")
+		var notice := "Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost."
+		if not promotion.is_empty():
+			hud.record_combat_event(promotion)
+			notice += " "+promotion
+		hud.toast(notice)
 
 func tombstone_contents(tombstone_id: String) -> Dictionary:
 	if not death_tombstones.has(tombstone_id):
@@ -2002,6 +2072,10 @@ func save_and_return_to_title() -> void:
 func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
+	if not village_work.is_empty(): data["village_work"]=village_work
+	if not regional_rivals.is_empty(): data["regional_rivals"]=regional_rivals
+	if not regional_resource_state.is_empty():
+		data["regional_resource_state"] = regional_resource_state
 	if not natural_cave_encounters.is_empty():
 		data["natural_cave_encounters"] = natural_cave_encounters
 	data["placed_blocks"] = building.serialize() if building != null else saved_blocks
@@ -2037,6 +2111,29 @@ func _load() -> void:
 				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
 					player_save_valid_for_mine = false
 					break
+	regional_rivals.clear()
+	var stored_rivals: Variant = data.get("regional_rivals",{})
+	if stored_rivals is Dictionary and stored_rivals.size()<=256:
+		for id in stored_rivals:
+			if id is String and id.length()<=120:
+				regional_rivals[id]=REGIONAL_RIVAL.sanitize(stored_rivals[id])
+	village_work.clear()
+	var saved_work: Variant = data.get("village_work",{})
+	if saved_work is Dictionary and saved_work.size()<=128:
+		for id in saved_work:
+			if id is String and id.length()<=96:
+				village_work[id]=VILLAGE_WORK.sanitize(saved_work[id])
+	regional_resource_state.clear()
+	var stored_resources: Variant = data.get("regional_resource_state",{})
+	if stored_resources is Dictionary and stored_resources.size()<=4096:
+		for key in stored_resources:
+			var record: Variant = stored_resources[key]
+			if not key is String or key.length()>180 or not record is Dictionary: continue
+			var stamp: Variant = record.get("last_break",0)
+			var hits: Variant = record.get("hits_left",0)
+			if typeof(stamp) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(stamp)) or float(stamp)<0: continue
+			if typeof(hits) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(hits)): continue
+			regional_resource_state[key]={"last_break":minf(float(stamp),Time.get_unix_time_from_system()),"hits_left":clampi(int(hits),0,9)}
 	if data.get("natural_cave_encounters") is Dictionary:
 		natural_cave_encounters = data.natural_cave_encounters.duplicate()
 	if data.get("placed_blocks") is Array:

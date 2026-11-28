@@ -2,6 +2,12 @@ extends Node3D
 ## Feature-branch-only remote island streamer. Never mutates the original
 ## Outpost chunks or its coastline. The far-ocean horizon supplies the water.
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
+const SETTLEMENT_BUILDING = preload("res://scripts/world/default_settlement_building.gd")
+const SETTLEMENT_SCENERY = preload("res://scripts/world/default_settlement_scenery.gd")
+const REGIONAL_RESOURCE = preload("res://scripts/resource_node.gd")
+const RESOURCE_PLACEMENT = preload("res://scripts/world/prop_placement.gd")
+var settlement_nodes: Array[Node3D] = []
+var regional_trees: Array[Node3D] = []
 const CAVES = preload("res://scripts/world/stepped_cave_tunnels.gd")
 const GREEDY = preload("res://scripts/voxel/greedy_mesher.gd")
 const PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
@@ -36,6 +42,18 @@ var _reveal_texture: ImageTexture
 var _reveal_strength: float = 0.0
 
 const SECTION = preload("res://scripts/world/island_section_mesh.gd")
+const SKELETAL_SCENERY = preload("res://scripts/world/skeletal_city_scenery.gd")
+const VILLAGE_WORK = preload("res://scripts/world/goblin_village_work.gd")
+const VILLAGE_CHEST = preload("res://scripts/world/village_loot_chest.gd")
+const GATHERER = preload("res://scripts/world/goblin_gatherer.gd")
+var village_workers: Dictionary = {}
+var village_chests: Dictionary = {}
+var village_tick := 0.0
+const REGIONAL_RIVAL = preload("res://scripts/world/regional_rival.gd")
+const CITY_GUARD = preload("res://scripts/world/goblin_city_guard.gd")
+const OCEAN_SHOAL = preload("res://scripts/world/ocean_fishing_shoal.gd")
+var ocean_shoals: Dictionary = {}
+var ocean_tick := 0.0
 const CHAMBER = preload("res://scripts/world/chamber_visibility.gd")
 const SECTION_PICK := 1 << 18
 var section_active := false
@@ -69,12 +87,18 @@ func _add_region(cells: Dictionary, anchor: Vector2i) -> void:
 func _identify_regions(center: Vector2i) -> void:
 	_identify_mine_regions(center)
 	if mine != null:
-		for index in range(1, terrain.caves.routes.size()):
+		for index in range(1, mini(3,terrain.caves.routes.size())):
 			_add_cache_cave_regions(terrain.caves.routes[index])
 	var cave = terrain.caves.natural
 	if cave != null:
 		for region in cave.regions:
 			_add_region(region.cells, region.anchor)
+	if terrain.goblin_city!=null:
+		for region in terrain.goblin_city.regions:
+			_add_region(region.cells,region.anchor)
+	if terrain.skeletal_city!=null:
+		for region in terrain.skeletal_city.regions:
+			_add_region(region.cells,region.anchor)
 
 func _add_cache_cave_regions(route: Array) -> void:
 	var end: Vector3i = route.back()
@@ -86,12 +110,19 @@ func _add_cache_cave_regions(route: Array) -> void:
 			if terrain.caves.floors.has(cell):
 				room[cell] = true
 	_add_region(room, center)
+	if terrain.expanded_preview:
+		var mouth: Vector3i=route.front()
+		for cavern in terrain.preview_cave_chambers:
+			var anchor: Vector2i=cavern["anchor"]
+			if anchor.distance_squared_to(Vector2i(mouth.x,mouth.z))<25*25:
+				_add_region(cavern["cells"],anchor)
 	var passage := {}
 	for i in range(route.size()-1,-1,-1):
 		var at: Vector3i = route[i]
-		for lane in terrain.caves.CORRIDOR_WIDTH:
+		var width := 2 if terrain.expanded_preview and i<3 else 1 if terrain.expanded_preview and i<6 else 0
+		for lane in range(-width,terrain.caves.CORRIDOR_WIDTH+width):
 			var cell := Vector2i(at.x,at.z+lane)
-			if not _owners.has(cell):
+			if terrain.caves.has_cave(cell.x,cell.y) and not _owners.has(cell):
 				passage[cell] = true
 		if passage.size() >= 18 or (i == 0 and not passage.is_empty()):
 			_add_region(passage,Vector2i(at.x,at.z))
@@ -162,6 +193,10 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 				nearby = anchor
 	if terrain.caves.natural != null and cell.distance_squared_to(terrain.caves.natural.mouth) < 64*64:
 		nearby = terrain.caves.natural.mouth
+	if terrain.goblin_city!=null and terrain.goblin_city.contains(cell):
+		nearby=terrain.goblin_city.throne
+	if terrain.skeletal_city!=null and terrain.skeletal_city.contains(cell):
+		nearby=terrain.skeletal_city.heart
 	if _regions.is_empty() and cell.distance_squared_to(nearby) < 64 * 64:
 		_identify_regions(center)
 	var next_region: int = _owners.get(cell,-1)
@@ -190,6 +225,10 @@ func _section_update(pos: Vector3, eye: Vector3) -> bool:
 		_chamber_light.omni_range = 8.0
 		add_child(_chamber_light)
 	_chamber_light.position = _lights[_region]
+	var skeletal: bool = terrain.skeletal_city!=null and terrain.skeletal_city.contains(cell)
+	_chamber_light.light_color=Color("#9fcaff") if skeletal else Color("ffd8a3")
+	_chamber_light.omni_range=13.0 if skeletal else 8.0
+	_chamber_light.light_energy=3.0 if skeletal else 2.0
 	_chamber_light.show()
 	var variant := _variant(_region,sector)
 	for key: Vector2i in variant.chunks:
@@ -555,6 +594,7 @@ func setup(world_seed: int, physical_mineshaft := true) -> void:
 	# Never mutate GREEDY's global material: other Fields chunks must not cut
 	# holes when the remote island camera enters a tunnel or a deep ravine.
 	_cutaway_material = GREEDY.material().duplicate() as ShaderMaterial
+	_cutaway_material.set_shader_parameter("terrain_gradient_enabled",true)
 	_cutaway_material.set_shader_parameter("island_cutaway_enabled", false)
 	_outline_material = ShaderMaterial.new()
 	_outline_material.shader = HERO_OUTLINE
@@ -679,6 +719,15 @@ func _process(delta: float) -> void:
 	# It only checks the mine once per second and uses the existing journal.
 	mine_auto.tick(self, game, delta)
 	var position: Vector3 = hero.global_position
+	if terrain.goblin_city!=null:
+		village_tick+=delta
+		if village_tick>=0.5:
+			_update_village(game,village_tick)
+			village_tick=0.0
+		ocean_tick+=delta
+		if ocean_tick>=0.5:
+			ocean_tick=0.0
+			_update_ocean_shoals(game,position)
 	if not terrain.near_island(position):
 		if section_active:
 			_restore_section()
@@ -699,6 +748,31 @@ func _process(delta: float) -> void:
 		mine.visit(position)
 	_update_cutaway(game, position, delta)
 	_update_hero_visibility(game, hero)
+	if game.camera != null:
+		update_settlement_views(position,game.camera)
+
+func update_settlement_views(position: Vector3,camera: Camera3D) -> void:
+	var revealed: Dictionary = {}
+	for building in settlement_nodes:
+		if is_instance_valid(building) and building.contains_hero(position):
+			revealed = building.spec
+			break
+	var toward := camera.global_transform.basis.z.normalized()
+	var player_cell := Vector2i(floori(position.x),floori(position.z))
+	var cave_floor: int = terrain.caves.floor_at(player_cell.x,player_cell.y)
+	var below_city: bool = cave_floor!=CAVES.INVALID_FLOOR and absf(position.y-cave_floor)<2.1 and position.y<terrain.height_at(player_cell.x,player_cell.y)-1.0
+	for building in settlement_nodes:
+		if not is_instance_valid(building): continue
+		var rect: Rect2i = building.spec["rect"]
+		var floor_y: int = building.spec["floor"]
+		building.visible=not (below_city and floor_y>position.y+1.0 and Vector2(rect.get_center()-player_cell).length()<80.0)
+		building.update_view(position,camera.global_position,revealed,toward)
+		if not building.visible:
+			for part in building.parts.values(): part["body"].set_meta("building_cutaway_hidden",true)
+		else:
+			for part in building.parts.values(): part["body"].set_meta("building_cutaway_hidden",not part["mesh"].visible)
+	for tree in regional_trees:
+		if is_instance_valid(tree): tree.update_tree_cutaway(revealed,toward)
 
 func _is_below_terrain(position: Vector3) -> bool:
 	# Actual tunnel cells are definitive. A steep drop with high walls on
@@ -954,6 +1028,10 @@ func invalidate_section_geometry() -> void:
 	_region = 0
 
 func _clear_stream() -> void:
+	for worker in village_workers.values():
+		if is_instance_valid(worker): worker.get_parent().queue_free()
+	village_workers.clear()
+	village_chests.clear()
 	invalidate_section_geometry()
 	_pending.clear()
 	for key in _loaded.keys():
@@ -973,6 +1051,8 @@ func _unload(key: Vector2i) -> void:
 		if node != null and is_instance_valid(node):
 			if node is MeshInstance3D:
 				_roof_nodes.erase(node)
+			if node in settlement_nodes: settlement_nodes.erase(node)
+			if node in regional_trees: regional_trees.erase(node)
 			node.queue_free()
 	_loaded.erase(key)
 
@@ -1024,6 +1104,8 @@ func _build_chunk_geometry(key: Vector2i, source) -> Array:
 				var zf: float = float(z)
 				var tile: int = source.top_tile(x, z) if y == top - 1 else 4
 				if up & bit:
+					if source.skeletal_city!=null and source.skeletal_city.floors.has(Vector2i(x,z)) and y+1==source.skeletal_city.floors[Vector2i(x,z)]:
+						tile=12 if posmod(x+z,4)!=0 else 13
 					var cutaway: bool = cave_here and y + 1 == top and source.caves.floor_at(x, z) < top - 1
 					var st: SurfaceTool = roof if cutaway else surface
 					_emit_face(st, Vector3(xf, yf + 1, zf), Vector3(xf, yf + 1, zf + 1),
@@ -1132,6 +1214,33 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 		chest.setup(game, "island_cave_%d_%d" % [terrain.seed, index],
 			"Cavern cache", "chest", PROPS.crate(), {"stone": 3, "iron": 1})
 		members.append(chest)
+	var settlement_index: int = terrain.settlement_index_at(key.x,key.y,float(CHUNK))
+	if settlement_index>=0:
+		var plan = terrain.settlement_plan(settlement_index)
+		if plan != null:
+			for item in plan.buildings:
+				var rect: Rect2i = item["rect"]
+				if _cell_at(Vector3(rect.position.x,0,rect.position.y)) != key: continue
+				var building := SETTLEMENT_BUILDING.new()
+				building.name = str(item["id"])
+				add_child(building)
+				building.build(item,terrain)
+				members.append(building)
+				settlement_nodes.append(building)
+			var scenery := SETTLEMENT_SCENERY.build(plan,key,CHUNK)
+			if scenery != null:
+				add_child(scenery)
+				members.append(scenery)
+			_install_gathering(plan,key,game,members)
+			if terrain.expanded_preview: _install_civilians(plan,key,game,members)
+	_install_goblin_city(key,game,members)
+	_install_skeletal_inhabitants(key,game,members)
+	if terrain.skeletal_city!=null:
+		var decoration := SKELETAL_SCENERY.build(terrain.skeletal_city,key,CHUNK)
+		if decoration!=null:
+			add_child(decoration)
+			members.append(decoration)
+	_install_cave_ore(key,game,members)
 	_loaded[key] = members
 	if natural_population != null:
 		natural_population.populate(self,game,key,members)
@@ -1143,3 +1252,298 @@ func _install_chunk(key: Vector2i, members: Array) -> void:
 			var manager := game.get_node_or_null("Dungeons") if game != null else null
 			if manager != null and manager.has_method("register_world_site"):
 				manager.register_world_site(MINE_SITE_ID, terrain.seed, Vector3i(floori(mine.x), floori(mine.y), floori(mine.z)), "island_%d_%d" % [key.x, key.y])
+
+func _install_gathering(plan,key: Vector2i,game: Node,members: Array) -> void:
+	if game==null or not game.has_method("gather"): return
+	for spec in plan.gathering.nodes:
+		var at: Vector3 = spec["position"]
+		if _cell_at(at)!=key: continue
+		var cell: Vector2i = spec["cell"]
+		if spec["habitat"]=="cavern":
+			if terrain.caves.floor_at(cell.x,cell.y)!=floori(at.y): continue
+		elif terrain.caves.has_cave(cell.x,cell.y): continue
+		var radius := float(spec.get("radius",RESOURCE_PLACEMENT.radius_for(spec["kind"])))
+		if not game.prop_placement.available(at,radius): continue
+		var resource := REGIONAL_RESOURCE.new()
+		add_child(resource)
+		resource.global_position=at
+		resource.setup(spec["kind"],1,spec.get("tree",{}))
+		if not resource.rooted_tree.is_empty(): regional_trees.append(resource)
+		resource.configure_regional(str(terrain.seed)+":"+str(spec["id"]),int(spec["tier"]),str(spec["habitat"]),game)
+		if spec["habitat"]=="rocky_outcrop": resource.set_meta("special_resource_node",true)
+		game.prop_placement.reserve(at,radius,resource)
+		members.append(resource)
+
+func _install_cave_ore(key: Vector2i,game: Node,members: Array) -> void:
+	if game==null or not game.has_method("gather"): return
+	for cell: Vector3i in terrain.ore_slots:
+		var at := Vector3(cell)+Vector3(0.5,0,0.5)
+		if _cell_at(at)!=key: continue
+		var record: Dictionary = terrain.ore_slots[cell]
+		var resource := REGIONAL_RESOURCE.new()
+		add_child(resource)
+		resource.global_position=at
+		resource.setup(record["kind"],1,{},true)
+		resource.configure_regional("%d:wall_ore:%d:%d:%d" % [terrain.seed,cell.x,cell.y,cell.z],int(record["tier"]),"cave_wall",game)
+		members.append(resource)
+
+func _install_goblin_city(key: Vector2i,game: Node,members: Array) -> void:
+	var city = terrain.goblin_city
+	if city==null or game==null: return
+	for item in city.buildings:
+		var rect: Rect2i = item["rect"]
+		if _cell_at(Vector3(rect.position.x,0,rect.position.y))!=key: continue
+		var building := SETTLEMENT_BUILDING.new()
+		building.name=str(item["id"])
+		add_child(building)
+		building.build(item,terrain)
+		members.append(building)
+		settlement_nodes.append(building)
+	for spec in city.gatherers:
+		var source: Vector2i = spec["source"]
+		var side := -1 if source.x<city.hub.x else 1
+		var cell := source+Vector2i(side,0)
+		var at := Vector3(cell.x+0.5,terrain.height_at(cell.x,cell.y)+0.05,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var pile := PROPS.rock("stone") if side>0 else PROPS.crate()
+		pile.name="GoblinCollectionPile"
+		pile.position=at
+		add_child(pile)
+		members.append(pile)
+	for cache in city.caches:
+		var cell: Vector2i = cache["cell"]
+		var at := Vector3(cell.x+0.5,float(cache["height"])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var id := "goblin_cache:%d:%s" % [terrain.seed,cache["id"]]
+		if game.opened_world_objects.get(id,cache["loot"]).is_empty(): continue
+		_spawn_village_chest(game,id,"Goblin stash",at,cache["loot"],"",members)
+	for record in city.guards:
+		var cell: Vector2i = record["cell"]
+		var y: int = city.floors[cell] if record["underground"] else terrain.height_at(cell.x,cell.y)
+		var at := Vector3(cell.x+0.5,y+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var group := Node3D.new()
+		add_child(group)
+		members.append(group)
+		var guard := CITY_GUARD.new()
+		guard.terrain=terrain
+		guard.underground_guard=record["underground"]
+		guard.home=at
+		group.add_child(guard)
+		guard.setup(game.hero,null,1,at,"goblin")
+		guard.bind_rival(game,"rival:%d:goblin:%s" % [terrain.seed,record["id"]],"goblin","Goblin city guard",1)
+		_spawn_retinue(game,guard,group,city)
+
+func regenerate_city_for_preview(hero: Node3D) -> bool:
+	if terrain==null or terrain.goblin_city==null or mine_pending or mine_load_failed: return false
+	# Never replace geometry around the player or another island's dungeon.
+	if terrain.goblin_city.contains(Vector2i(floori(hero.global_position.x),floori(hero.global_position.z))): return false
+	if not terrain.regenerate_goblin_city(): return false
+	for worker in village_workers.values():
+		if is_instance_valid(worker): worker.get_parent().queue_free()
+	village_workers.clear()
+	village_chests.clear()
+	invalidate_section_geometry()
+	for key: Vector2i in _loaded.keys():
+		if terrain.goblin_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
+	_center=Vector2i(99999,99999)
+	return true
+
+func _update_ocean_shoals(game: Node,hero_at: Vector3) -> void:
+	var wanted: Dictionary = {}
+	for index in range(terrain.islands.size()):
+		var island: Dictionary = terrain.islands[index]
+		var center: Vector2i = island["center"]
+		for sector in range(12):
+			var angle := TAU*float(sector)/12.0+float(posmod(terrain.seed+index*17,100))*0.005
+			var offset := Vector2.from_angle(angle)*(float(island["radius"])+8.0)
+			var at := Vector3(center.x+offset.x,DATA.SEA_LEVEL+0.055,center.y+offset.y)
+			if at.distance_squared_to(hero_at)>32.0*32.0: continue
+			var clear_water := true
+			for d in [Vector2.ZERO,Vector2(2,0),Vector2(-2,0),Vector2(0,2),Vector2(0,-2)]:
+				if terrain.is_land_at(at.x+d.x,at.z+d.y): clear_water=false
+			if not clear_water: continue
+			var id := Vector2i(index,sector)
+			wanted[id]=true
+			if ocean_shoals.has(id): continue
+			var value := posmod(terrain.seed+index*371+sector*193,100)
+			var rank := 4 if value>=98 else 3 if value>=90 else 2 if value>=75 else 1 if value>=50 else 0
+			var shoal := OCEAN_SHOAL.new()
+			add_child(shoal)
+			shoal.global_position=at
+			shoal.configure(game,terrain.seed+index*371+sector*193,rank)
+			ocean_shoals[id]=shoal
+	for id in ocean_shoals.keys():
+		if not wanted.has(id):
+			if is_instance_valid(ocean_shoals[id]): ocean_shoals[id].queue_free()
+			ocean_shoals.erase(id)
+
+func regenerate_skeletal_city_for_preview(hero: Node3D) -> bool:
+	if terrain==null or terrain.skeletal_city==null or mine_pending or mine_load_failed: return false
+	if terrain.skeletal_city.contains(Vector2i(floori(hero.global_position.x),floori(hero.global_position.z))): return false
+	if not terrain.regenerate_skeletal_city(): return false
+	invalidate_section_geometry()
+	for key: Vector2i in _loaded.keys():
+		if terrain.skeletal_city.contains(key+Vector2i(CHUNK/2,CHUNK/2)): _unload(key)
+	_center=Vector2i(99999,99999)
+	return true
+
+func _install_skeletal_inhabitants(key: Vector2i,game: Node,members: Array) -> void:
+	var city = terrain.skeletal_city
+	if city==null or game==null: return
+	for cache in city.caches:
+		var cell: Vector2i = cache["cell"]
+		var at := Vector3(cell.x+0.5,float(cache["height"])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var id := "skeletal_cache:%d:%s" % [terrain.seed,cache["id"]]
+		if game.opened_world_objects.get(id,cache["loot"]).is_empty(): continue
+		_spawn_village_chest(game,id,"Ancient crypt cache",at,cache["loot"],"",members)
+	for record in city.inhabitants:
+		var cell: Vector2i = record["cell"]
+		if not city.floors.has(cell): continue
+		var at := Vector3(cell.x+0.5,float(city.floors[cell])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var group := Node3D.new()
+		add_child(group)
+		members.append(group)
+		var guard := CITY_GUARD.new()
+		guard.terrain=terrain
+		guard.skeletal_guard=true
+		guard.underground_guard=true
+		guard.home=at
+		group.add_child(guard)
+		guard.setup(game.hero,null,int(record["tier"]),at,"skeleton")
+		guard.bind_rival(game,"rival:%d:skeleton:%s" % [terrain.seed,record["id"]],"skeleton",str(record["name"]),int(record["tier"]))
+		_spawn_retinue(game,guard,group,city)
+
+func _spawn_village_chest(game: Node,id: String,label: String,at: Vector3,stock: Dictionary,work_id: String,members: Array) -> Node3D:
+	var chest := VILLAGE_CHEST.new()
+	chest.work_id=work_id
+	chest.position=at
+	add_child(chest)
+	chest.setup(game,id,label,"chest",PROPS.crate(),stock)
+	members.append(chest)
+	return chest
+
+func _update_village(game: Node,seconds: float) -> void:
+	var city = terrain.goblin_city
+	if city==null or game.hero==null: return
+	var save_needed := false
+	for i in range(city.gatherers.size()):
+		var spec: Dictionary = city.gatherers[i]
+		var id := "goblin_work:%d:%s" % [terrain.seed,spec["id"]]
+		if not game.village_work.has(id): game.village_work[id]=VILLAGE_WORK.sanitize({})
+		var record: Dictionary = game.village_work[id]
+		var worker = village_workers.get(id)
+		if not is_instance_valid(worker) or worker.is_queued_for_deletion(): worker=null
+		var scheduled := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
+		var near_route: bool = worker!=null and Vector2(worker.global_position.x,worker.global_position.z).distance_to(scheduled)<1.15
+		# Visible workers must catch up to their assigned route before the
+		# work clock progresses; unloaded workers use bounded simulation.
+		if worker==null or not worker.alive or (worker.working and near_route):
+			if VILLAGE_WORK.advance(record,minf(seconds,1.0),terrain.seed,i): save_needed=true
+		var yard: Vector2i = spec["yard"]
+		var point := VILLAGE_WORK.route_point(spec["path"],float(record["work"]))
+		var at := Vector3(point.x,terrain.height_at(floori(point.x),floori(point.y))+0.08,point.y)
+		var active_chunk := _cell_at(at)
+		if worker!=null and (not _loaded.has(_cell_at(worker.global_position)) or not _loaded.has(active_chunk)):
+			worker.get_parent().queue_free()
+			village_workers.erase(id)
+			worker=null
+		if worker==null and float(record["rest"])<=0.0 and _loaded.has(active_chunk):
+			var group := Node3D.new()
+			add_child(group)
+			worker=GATHERER.new()
+			worker.terrain=terrain
+			worker.underground_guard=false
+			worker.home=Vector3(yard.x+0.5,10.08,yard.y+0.5)
+			worker.record=record
+			worker.route=spec["path"]
+			group.add_child(worker)
+			worker.setup(game.hero,null,0,at,"goblin")
+			worker.bind_rival(game,"rival:%d:goblin:%s" % [terrain.seed,spec["id"]],"goblin","Goblin Gatherer",0)
+			_spawn_retinue(game,worker,group,city)
+			worker.slain.connect(_worker_slain.bind(game,id))
+			worker.tree_exited.connect(group.queue_free,CONNECT_ONE_SHOT)
+			village_workers[id]=worker
+		var chest_cell: Vector2i = spec["chest"]
+		var chest_at := Vector3(chest_cell.x+0.5,terrain.height_at(chest_cell.x,chest_cell.y)+0.08,chest_cell.y+0.5)
+		var chest_key := _cell_at(chest_at)
+		var chest = village_chests.get(id)
+		if not record["stock"].is_empty() and _loaded.has(chest_key) and (not is_instance_valid(chest) or chest.is_queued_for_deletion()):
+			village_chests[id]=_spawn_village_chest(game,id,"Gatherer's stockpile",chest_at,record["stock"],id,_loaded[chest_key])
+	if save_needed: game._save()
+
+func _worker_slain(game: Node,id: String) -> void:
+	if not game.village_work.has(id): return
+	VILLAGE_WORK.defeat(game.village_work[id])
+	game._save()
+
+func _spawn_retinue(game: Node,leader,group: Node3D,city) -> void:
+	var count: int = REGIONAL_RIVAL.follower_count(int(leader.rival_record["rank"]))
+	if count==0: return
+	var start := Vector2i(floori(leader.global_position.x),floori(leader.global_position.z))
+	var y: int = floori(leader.global_position.y)
+	var candidates: Array[Vector2i] = []
+	# Prefer nearby same-elevation floor cells; reject intact walls,
+	# building footprints, cliffs and positions outside loaded terrain.
+	for radius in range(2,6):
+		for dz in range(-radius,radius+1):
+			for dx in range(-radius,radius+1):
+				if maxi(absi(dx),absi(dz))!=radius: continue
+				var p := start+Vector2i(dx,dz)
+				if leader.underground_guard:
+					if int(city.floors.get(p,-99999))!=y: continue
+					if terrain.is_solid(p.x,y,p.y) or terrain.is_solid(p.x,y+1,p.y): continue
+				else:
+					if terrain.height_at(p.x,p.y)!=y or not city.building_at(p).is_empty(): continue
+				candidates.append(p)
+	for p in candidates:
+		if count<=0: break
+		var at := Vector3(p.x+0.5,y+0.08,p.y+0.5)
+		# A nearby adjacent chunk will be built by the same stream queue.
+		# Keep followers within the leader's streamed chunk to avoid falling.
+		if _cell_at(at)!=_cell_at(leader.global_position): continue
+		var follower := CITY_GUARD.new()
+		follower.terrain=terrain
+		follower.skeletal_guard=leader.skeletal_guard
+		follower.underground_guard=leader.underground_guard
+		follower.home=at
+		follower.rival_follower=true
+		group.add_child(follower)
+		follower.setup(game.hero,null,0,at,leader.rival_kind)
+		follower.display_name="Retinue of "+leader.display_name
+		count-=1
+
+func _install_civilians(plan,key: Vector2i,game: Node,members: Array) -> void:
+	if game==null: return
+	var roles: Dictionary = {
+		"expedition_coordinator":["Expedition coordinator","Ask me about the islands and their caverns."],
+		"farmer":["Farmer","We grow supplies for the settlement."],
+		"merchant":["Merchant","This market is where the town gathers to trade."],
+		"banker":["Banker","The town vault will offer secure storage."],
+		"guild_contact":["Guild representative","Adventurers gather here before expeditions."],
+		"blacksmith":["Blacksmith","Bring ore to a forge to craft equipment."],
+		"innkeeper":["Innkeeper","Rest here before your next expedition."],
+		"quartermaster":["Quartermaster","Our stores support the settlement."],
+		"guard":["Town guard","Stay on the roads when travelling outside town."],
+		"explorer":["Cave explorer","The cave entrance lies beneath the rocky hillside."],
+		"coastal_contact":["Harbour contact","The coastal trail connects to the main square."],
+		"resident":["Resident","Welcome to our settlement."]
+	}
+	var variants: Array[String] = ["human_male_1","human_female_1","human_male_2","human_female_2"]
+	for spec in plan.quest_anchors:
+		var at: Vector3 = spec["position"]
+		if _cell_at(at)!=key: continue
+		var actor=preload("res://scripts/world/animated_camp_guide.gd").new()
+		var info: Array = roles.get(spec["role"],["Resident","Welcome, traveller."])
+		var kind: String = variants[posmod(hash(str(spec["id"])),variants.size())]
+		actor.name="Civilian_"+str(spec["id"]).replace(":","_")
+		add_child(actor)
+		actor.position=at+Vector3.UP*0.04
+		if not actor.configure_civilian(game,str(spec["id"]),str(info[0]),kind):
+			actor.queue_free()
+			continue
+		actor.message=str(info[1])
+		for point: Vector3 in spec.get("patrol",[]): actor.patrol.append(point)
+		members.append(actor)

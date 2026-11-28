@@ -13,6 +13,8 @@ const ZONE_NAMES = preload("res://scripts/world/outpost_zone_names.gd")
 const RADIAL_LEVEL = preload("res://scripts/ui/radial_level_frame.gd")
 const XP_DIVISIONS = preload("res://scripts/ui/xp_bar_divisions.gd")
 const SKILL_XP_ORB = preload("res://scripts/ui/skill_xp_orb.gd")
+const COMBAT_NAMEPLATES = preload("res://scripts/ui/combat_nameplates.gd")
+var combat_nameplates: Control
 const TARGET_FRAME = preload("res://scripts/ui/enemy_target_frame.gd")
 const CONTROL_PREFS := "user://outpost_controls.cfg"
 var game
@@ -338,6 +340,11 @@ func _ready() -> void:
 	root.add_child(shield_block_button)
 	_anchors(shield_block_button, 0.58, 0.71, 0.70, 0.79)
 	shield_block_button.hide()
+	if str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview":
+		combat_nameplates=COMBAT_NAMEPLATES.new()
+		root.add_child(combat_nameplates)
+		combat_nameplates.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		combat_nameplates.configure(game)
 	# A single fixed nameplate, shown only for a valid target/nearby creature.
 	enemy_target_frame = TARGET_FRAME.new()
 	root.add_child(enemy_target_frame)
@@ -2445,7 +2452,7 @@ func _layout_touch_hud() -> void:
 	# Fixed top-centre target plate remains below the currency strip and
 	# above quest prompts, independent of minimap/joystick aspect ratio.
 	if enemy_target_frame != null:
-		var target_width: float = minf(396.0 * scale, screen.x * 0.40)
+		var target_width: float = minf(620.0 * scale, screen.x * 0.52) if combat_nameplates!=null else minf(396.0 * scale, screen.x * 0.40)
 		_place_px(enemy_target_frame, screen, Rect2(
 			(screen.x - target_width) * 0.5, 68.0 * scale, target_width, 58.0 * scale))
 	_layout_shared_actions()
@@ -3342,6 +3349,9 @@ func _update_enemy_target_frame() -> void:
 	if enemy_target_frame == null or game == null:
 		return
 	var creature: Node3D = game.target_for_hud()
+	if combat_nameplates!=null:
+		creature=combat_nameplates.boss
+		if combat_nameplates._blocked_ui() or not is_instance_valid(creature): creature=null
 	if creature == null:
 		enemy_target_frame.clear_target()
 	else:
@@ -3352,6 +3362,11 @@ func _update_enemy_target_frame() -> void:
 			enemy_target_frame.show_target(int(data["id"]), str(data["name"]),
 			float(data["hp"]), float(data["max_hp"]), str(data["rank"]),
 			data["accent"] as Color, data["name_color"] as Color, data["affixes"] as Array)
+			if combat_nameplates!=null:
+				enemy_target_frame.rank_label.text="BOSS"
+				enemy_target_frame.rank_label.visible=true
+				var rank: int = int(creature.get("quality")) if creature.is_in_group("dungeon_guardians") else 4
+				enemy_target_frame.configure_boss_style(rank)
 	# Notifications can coexist with the fixed bar, without floating over it.
 	var screen: Vector2 = get_viewport().get_visible_rect().size
 	if screen.x > 0.0 and screen.y > 0.0 and toast_panel != null and toast_label != null:

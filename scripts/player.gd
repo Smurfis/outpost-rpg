@@ -61,6 +61,19 @@ var whirlwind_grip_pose: Vector3 = Vector3.ZERO
 const WHIRLWIND_SPIN_DURATION: float = 0.90
 var walking_phase: float = 0.0
 var swimming: bool = false
+var boat_art: MeshInstance3D
+var boating := false
+const BOAT_LAUNCH_TIME := 0.76
+const OCEAN = preload("res://scripts/world/ocean_surface.gd")
+var boat_wave_pose := Vector3.ZERO
+const BOAT_WAKE = preload("res://scripts/vfx/rowboat_wake.gd")
+var boat_launch_age := -1.0
+var boat_impact_age := 0.0
+var boat_contact := false
+var boat_row_phase := 0.0
+var boat_wake_age := 0.0
+var boat_oars: Array[Node3D] = []
+const BOAT_PALETTE = preload("res://scripts/voxel/voxel_palette.gd")
 var swim_stroke_phase: float = 0.0
 var swim_splash_elapsed: float = 0.0
 var swim_preview_seconds: float = 0.0
@@ -505,6 +518,7 @@ func _physics_process(delta: float) -> void:
 	if modal_open or str(game.equipment.get("offhand", "")) != "shield":
 		blocking = false
 	swimming = _detect_surface_swimming()
+	_update_boat(delta)
 	swim_preview_seconds = maxf(0.0, swim_preview_seconds - delta)
 	var control: Vector2 = Input.get_vector("outpost_left", "outpost_right", "outpost_up", "outpost_down")
 	if modal_open:
@@ -542,6 +556,7 @@ func _physics_process(delta: float) -> void:
 				direction = Vector3.ZERO
 			else:
 				direction = towards.normalized()
+	if boat_launch_age>=0.0: direction=Vector3.ZERO
 	var speed: float = 6.0 if str(game.equipment.get("back", "")) == "cloak" else 5.1
 	# Changing to a smaller bag can leave legacy inventories temporarily
 	# overloaded. Slow the character, but never silently destroy saved items.
@@ -549,6 +564,7 @@ func _physics_process(delta: float) -> void:
 		speed *= 0.48
 	if gather_phase > 0.0:
 		speed *= 0.42
+	if boating: speed*=1.8
 	speed *= gm_speed_multiplier
 	# Separate short hit impulse from player steering. It decays rapidly,
 	# feels like voxel-sandbox combat, and cannot keep moving the character.
@@ -634,7 +650,7 @@ func _physics_process(delta: float) -> void:
 	if combat_phase <= 0.0:
 		right_arm.rotation.z = lerpf(right_arm.rotation.z, 0.12, minf(1.0, delta * 11.0))
 	cloak_pivot.rotation.x = 0.07 * sin(walking_phase * 0.6) * walk_amount
-	if swimming or swim_preview_seconds > 0.0:
+	if (swimming and not boating and boat_launch_age<0.0) or swim_preview_seconds > 0.0:
 		# Readable alternating swim strokes and flutter kick on the same
 		# joint rig used by walking, so tools and equipment remain attached.
 		swim_stroke_phase += delta * (8.4 if direction.length() > 0.05 else 4.3)
@@ -662,6 +678,7 @@ func _physics_process(delta: float) -> void:
 		left_arm.rotation.z = 0.30
 		if whirlwind_remaining <= 0.0 and weapon_grip != null:
 			weapon_grip.rotation = whirlwind_grip_pose
+	_update_boat_pose(delta,direction)
 	# In LAN dungeons only the host owns health; local auto-healing must
 	# never revive knocked-out characters or desync peer health snapshots.
 	if elapsed - last_hit > 6.0 and not (game.coop != null and game.coop.in_party_dungeon()):
@@ -748,7 +765,7 @@ func apply_knockback(source: Vector3, force: float = 6.0) -> void:
 	knockback_velocity = (push.normalized() * clampf(force, 0.0, 9.5))
 	stop_interaction_move()
 
-func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
+func take_hit(amount: float, source: Vector3 = Vector3.ZERO, attacker: Node = null) -> void:
 	if source != Vector3.ZERO:
 		apply_knockback(source, 6.3)
 	var protection: float = 1.0
@@ -784,8 +801,125 @@ func take_hit(amount: float, source: Vector3 = Vector3.ZERO) -> void:
 		CRUMBLE.spawn(game, self, visual)
 		visual.visible = false
 		knockback_velocity = Vector3.ZERO
-		game.on_player_defeated(global_position)
+		if is_instance_valid(attacker) and attacker.has_method("credit_player_defeat"):
+			game.on_player_defeated(global_position,attacker)
+		else:
+			game.on_player_defeated(global_position)
 		health = 100.0
 		global_position = Vector3(0, 0.35, 0)
 		visual.visible = true
 
+
+func _make_boat_art() -> void:
+	if boat_art!=null: return
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Narrow stepped bow and stern, open hull, a pair of bench seats.
+	BOAT_PALETTE.box(st,Vector3(0,0.05,0),Vector3(1.50,0.24,1.80),11,8)
+	for sign_value in [-1.0,1.0]:
+		var side: float = sign_value
+		BOAT_PALETTE.box(st,Vector3(0,0.09,side*1.08),Vector3(1.06,0.24,0.42),11,8)
+		BOAT_PALETTE.box(st,Vector3(0,0.31,side*1.22),Vector3(0.82,0.44,0.20),11,8)
+		BOAT_PALETTE.box(st,Vector3(side*0.70,0.33,0),Vector3(0.18,0.46,1.85),11,8)
+		for end in [-1.0,1.0]:
+			BOAT_PALETTE.box(st,Vector3(side*0.48,0.33,float(end)*1.05),Vector3(0.18,0.46,0.42),11,8)
+	for z in [-0.45,0.42]:
+		BOAT_PALETTE.box(st,Vector3(0,0.36,float(z)),Vector3(1.20,0.12,0.26),11,8)
+	boat_art=BOAT_PALETTE.as_instance(st,"PreviewRowboat")
+	add_child(boat_art)
+	for side in [-1.0,1.0]:
+		var pivot := Node3D.new()
+		pivot.position=Vector3(float(side)*0.68,0.47,0.05)
+		boat_art.add_child(pivot)
+		var paddle := SurfaceTool.new()
+		paddle.begin(Mesh.PRIMITIVE_TRIANGLES)
+		BOAT_PALETTE.box(paddle,Vector3(float(side)*0.22,0,0),Vector3(1.30,0.065,0.065),8,8)
+		BOAT_PALETTE.box(paddle,Vector3(float(side)*0.95,0,0),Vector3(0.34,0.08,0.26),11,8)
+		pivot.add_child(BOAT_PALETTE.as_instance(paddle,"WoodenOar"))
+		boat_oars.append(pivot)
+
+func _update_boat(delta: float = 0.0) -> void:
+	var wants_boat: bool = swimming and str(game.equipment.get("trinket",""))=="rowboat"
+	if not wants_boat:
+		if boating or boat_launch_age>=0.0:
+			left_arm.rotation.z=0.0
+			right_arm.rotation.z=0.12
+			visual.rotation.z=0.0
+		boating=false
+		boat_launch_age=-1.0
+		boat_contact=false
+		boat_wake_age=0.0
+		if boat_art!=null: boat_art.visible=false
+		return
+	_make_boat_art()
+	boat_art.visible=true
+	if not boating and boat_launch_age<0.0:
+		boat_launch_age=0.0
+		boat_contact=false
+		boat_impact_age=0.0
+		boat_row_phase=0.0
+		boat_wave_pose=OCEAN.hull_pose(global_position,visual.rotation.y)
+	if boat_launch_age>=0.0:
+		boat_launch_age+=delta
+		if boat_launch_age>=0.48 and not boat_contact:
+			boat_contact=true
+			boat_impact_age=0.0
+			_emit_swim_splash()
+			BOAT_WAKE.spawn(get_parent() as Node3D,Vector3(global_position.x,OCEAN.surface_y(global_position)+0.075,global_position.z),visual.rotation.y,true)
+		if boat_launch_age>=BOAT_LAUNCH_TIME:
+			boat_launch_age=-1.0
+			boating=true
+	if boat_contact: boat_impact_age+=delta
+
+func _update_boat_pose(delta: float,direction: Vector3) -> void:
+	if boat_art==null or not boat_art.visible: return
+	var desired_pose := OCEAN.hull_pose(global_position,visual.rotation.y)
+	boat_wave_pose=boat_wave_pose.lerp(desired_pose,1.0-exp(-12.0*maxf(delta,0.0)))
+	var water_y := WATER_SURFACE_Y-global_position.y-0.12+boat_wave_pose.x
+	boat_art.rotation.y=visual.rotation.y
+	var bob := 0.0
+	if boat_contact:
+		bob-=sin(boat_impact_age*14.0)*0.16*exp(-boat_impact_age*5.0)
+	boat_art.rotation.x=boat_wave_pose.y
+	boat_art.rotation.z=boat_wave_pose.z
+	if boat_launch_age>=0.0:
+		var progress := clampf(boat_launch_age/BOAT_LAUNCH_TIME,0.0,1.0)
+		var release := smoothstep(0.22,0.63,progress)
+		# Presentation-only hop: the swimming capsule never jumps through terrain.
+		boat_art.position=Vector3(0,lerpf(2.08,water_y+bob,release),0)
+		boat_art.rotation.x=sin(release*PI)*0.34+boat_wave_pose.y*release
+		visual.position.y=lerpf(0.0,water_y+0.37,release)+sin(progress*PI)*0.66
+		left_arm.rotation.x=lerpf(PI*0.93,0.80,release)
+		right_arm.rotation.x=left_arm.rotation.x
+		left_leg.rotation.x=0.6*sin(progress*PI)
+		right_leg.rotation.x=-0.45*sin(progress*PI)
+		for oar in boat_oars: oar.visible=false
+		return
+	if not boating: return
+	var moving := direction.length_squared()>0.025
+	if moving: boat_row_phase+=delta*7.0
+	var stroke := sin(boat_row_phase) if moving else 0.0
+	boat_art.position=Vector3(0,water_y+bob,0)
+	visual.position=Vector3(0,water_y+0.37+bob,0)
+	left_leg.rotation.x=1.1
+	right_leg.rotation.x=1.1
+	left_arm.rotation.x=0.83+stroke*0.45
+	right_arm.rotation.x=0.83+stroke*0.45
+	left_arm.rotation.z=-0.34
+	right_arm.rotation.z=0.34
+	visual.rotation.z=boat_art.rotation.z
+	for index in range(boat_oars.size()):
+		var oar: Node3D = boat_oars[index]
+		var side := -1.0 if index==0 else 1.0
+		oar.visible=true
+		oar.rotation.y=side*(0.18+stroke*0.43)
+		oar.rotation.z=side*(-0.15+cos(boat_row_phase)*0.14 if moving else -0.08)
+	if moving:
+		boat_wake_age+=delta
+		if boat_wake_age>=0.22:
+			boat_wake_age=0.0
+			var stern := Vector3(sin(visual.rotation.y),0,cos(visual.rotation.y))*1.28
+			var at := global_position+stern
+			at.y=OCEAN.surface_y(at)+0.065
+			BOAT_WAKE.spawn(get_parent() as Node3D,at,visual.rotation.y)
+	else: boat_wake_age=0.0

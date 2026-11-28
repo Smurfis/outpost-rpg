@@ -17,7 +17,7 @@ var scenery: Dictionary = {}
 var chunk_versions: Dictionary = {}
 var creatures: Array[Dictionary] = []
 var resources: Array[Dictionary] = []
-var preferences: Dictionary = {"mobs": true, "stations": true, "portals": true, "zones": true, "resources": false, "resource_type": "all"}
+var preferences: Dictionary = {"mobs": true, "stations": true, "portals": true, "zones": true, "resources": false, "special_resources": true, "resource_type": "all"}
 var revision: int = 0
 var clock: float = 0.0
 var save_clock: float = 0.0
@@ -83,10 +83,26 @@ func observe_player() -> void:
 				added = true
 	var zone: String = ZONES.resolve(point, biome)
 	remember("zone:" + zone, zone, "zones", point)
+	_observe_regional_landmarks(point)
 	if added:
 		revision += 1
 		dirty = true
 		changed.emit()
+
+func _observe_regional_landmarks(point: Vector3) -> void:
+	var remote: Variant = biome.get("archipelago")
+	if remote == null or remote.terrain == null: return
+	var index: int = remote.terrain.settlement_index_at(point.x,point.z,REVEAL_RADIUS)
+	if index<0: return
+	var plan = remote.terrain.settlement_plan(index)
+	if plan == null: return
+	for record in plan.landmarks:
+		# Architecture labels are reserved for a future detailed town map;
+		# use the existing zones filter for named regional destinations.
+		if record["role"]=="architecture": continue
+		var at: Vector3 = record["position"]
+		if visibility_at(at)!=2: continue
+		remember("region:"+str(record["id"]),record["label"],"zones",at)
 
 func remember(id: String, label: String, category: String, point: Vector3, extra: Dictionary = {}) -> void:
 	if known.has(id) or visibility_at(point) == 0:
@@ -136,6 +152,9 @@ func refresh_entities() -> void:
 		if visibility_at(at) != 2:
 			continue
 		var id: String = "%s:%d:%d" % [resource.kind, roundi(at.x * 10), roundi(at.z * 10)]
+		if resource.get_meta("special_resource_node",false):
+			remember("special:"+str(resource.get_meta("regional_resource_id",id)),"Rare "+str(resource.kind).capitalize()+" Deposit","special_resources",at,{"kind":resource.kind,"special":true})
+		if resource.get_meta("cave_ore_block",false): continue # Do not project underground wall voxels as surface scenery.
 		if not resource.active:
 			if scenery.erase(id):
 				_touch_chunk(at)
@@ -225,7 +244,7 @@ func import_state(data: Variant) -> void:
 			record.position = Vector3(float(entry.position[0]), float(entry.position[1]), float(entry.position[2]))
 			if visibility_at(record.position) == 0:
 				continue
-			if list_id == "known" and record.get("category", "") in ["zones", "stations", "portals"] and record.get("label") is String:
+			if list_id == "known" and record.get("category", "") in ["zones", "stations", "portals", "special_resources"] and record.get("label") is String:
 				known[str(record.get("id", ""))] = record
 			elif list_id == "scenery" and record.get("size") is Array and record.size.size() == 3 and record.get("kind", "") in ["wood", "stone", "iron", "coal", "clay"]:
 				record.size = Vector3(float(record.size[0]), float(record.size[1]), float(record.size[2])).clamp(Vector3.ONE * 0.1, Vector3.ONE * 20)

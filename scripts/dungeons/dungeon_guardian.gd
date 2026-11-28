@@ -152,6 +152,9 @@ func _piece(at: Vector3, size: Vector3, tint: Color) -> void:
 func pursuit_direction(to_player: Vector3) -> Vector3:
 	return to_player.normalized()
 
+func strike_player(amount: float) -> void:
+	hero.take_hit(amount,global_position)
+
 func melee_visible() -> bool:
 	return true
 
@@ -216,7 +219,7 @@ func _physics_process(delta: float) -> void:
 		cooldown = 1.7
 		if avatar != null:
 			avatar.play_event("Attack")
-		hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier, global_position)
+		strike_player((6.0 + float(quality) * 2.1) * damage_multiplier)
 
 ## Goblins sweep a broad cone; skeletons thrust in a line. Higher-tier
 ## original guardians use a cone. The red ground mesh is the real hit area.
@@ -252,7 +255,7 @@ func _finish_heavy_attack() -> void:
 		avatar.play_event("Attack")
 	if hero != null and is_instance_valid(hero) and is_instance_valid(heavy_telegraph):
 		if heavy_telegraph.contains_position(hero.global_position) and melee_visible():
-			hero.take_hit((6.0 + float(quality) * 2.1) * damage_multiplier * 1.65, global_position)
+			strike_player((6.0 + float(quality) * 2.1) * damage_multiplier * 1.65)
 	_cancel_heavy_attack()
 
 func _cancel_heavy_attack() -> void:

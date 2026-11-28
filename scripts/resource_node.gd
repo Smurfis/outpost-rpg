@@ -5,6 +5,22 @@ const FOLIAGE = preload("res://scripts/voxel/foliage_renderer.gd")
 const PIXEL_FEEDBACK = preload("res://scripts/vfx/pixel_feedback.gd")
 const PICKER = preload("res://scripts/interaction/world_picker.gd")
 const SOLID = preload("res://scripts/interaction/resource_collision.gd")
+const ROOTED_TREE = preload("res://scripts/voxel/procedural_rooted_tree.gd")
+var rooted_tree: Dictionary = {}
+var cave_ore_block := false
+var tree_mesh: MeshInstance3D
+var tree_cutaway_hidden := false
+const MATURITY = preload("res://scripts/world/ore_maturity.gd")
+var regional_id := ""
+var regional_tier := 0
+var regional_habitat := ""
+var regional_game: Node
+var last_break := 0.0
+var maturity_stars := 0
+var maturity_label: Label3D
+var maturity_particles: GPUParticles3D
+var falling := false
+var fall_tween: Tween
 # Zero uses the model bounds (including bundles); positive values override
 # the local-space height or X/Z footprint for gameplay tuning.
 @export_range(0.0, 20.0, 0.05) var collision_height: float = 0.0
@@ -25,23 +41,32 @@ var initial_scale: Vector3 = Vector3.ONE
 var target_label: Label3D
 var target_ring: MeshInstance3D
 
-func setup(resource_type: String, count: int = 1) -> void:
+func setup(resource_type: String, count: int = 1, tree_spec: Dictionary = {}, wall_block: bool = false) -> void:
+	cave_ore_block=wall_block
 	kind = resource_type
 	bundle_count = clampi(count, 1, 3)
 	name = kind.capitalize() + "Node"
 	match kind:
 		"wood":
-			_pine()
+			if tree_spec.is_empty():
+				_pine()
+			else:
+				rooted_tree=ROOTED_TREE.generate(tree_spec)
+				tree_mesh=ROOTED_TREE.mesh_for(rooted_tree)
+				add_child(tree_mesh)
 		"stone":
-			_rock()
+			if cave_ore_block: _wall_ore()
+			else: _rock()
 		"fiber":
 			_bush(false)
 		"berries":
 			_bush(true)
 		"iron":
-			_ore(Color("717b86"), Color("dfe5e8"))
+			if cave_ore_block: _wall_ore()
+			else: _ore(Color("717b86"), Color("dfe5e8"))
 		"coal":
-			_ore(Color("303b44"), Color("63737e"))
+			if cave_ore_block: _wall_ore()
+			else: _ore(Color("303b44"), Color("63737e"))
 		"clay":
 			_clay()
 		"herbs":
@@ -62,6 +87,8 @@ func setup(resource_type: String, count: int = 1) -> void:
 					bundled.scale *= 0.72
 					add_child(bundled)
 	max_hits = (3 if kind in ["wood", "stone", "iron", "coal", "clay", "shrimp"] else 2) * bundle_count
+	if not rooted_tree.is_empty(): max_hits = clampi(roundi(float(rooted_tree["height"])),4,8)
+	if cave_ore_block: max_hits=1
 	hits_left = max_hits
 	recovery = 28.0 if kind in ["iron", "coal", "herbs"] else 18.0
 	initial_scale = scale
@@ -75,6 +102,139 @@ func setup(resource_type: String, count: int = 1) -> void:
 	PICKER.attach(self, "resource")
 	_setup_target_marker()
 	add_to_group("resources")
+
+func configure_regional(id: String,tier: int,habitat: String,game: Node) -> void:
+	regional_id=id
+	regional_tier=tier
+	regional_habitat=habitat
+	regional_game=game
+	set_meta("regional_resource_id",id)
+	set_meta("resource_tier",tier)
+	set_meta("resource_habitat",habitat)
+	if cave_ore_block: set_meta("cave_ore_block",true)
+	var saved: Dictionary = game.regional_resource_state.get(id,{})
+	last_break=float(saved.get("last_break",0.0))
+	var saved_hits := clampi(int(saved.get("hits_left",max_hits)),0,max_hits)
+	if _is_maturing_ore():
+		maturity_label=Label3D.new()
+		maturity_label.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+		maturity_label.font_size=28
+		maturity_label.pixel_size=0.008
+		maturity_label.position=Vector3(0,1.6,0)
+		maturity_label.no_depth_test=false
+		add_child(maturity_label)
+		maturity_particles=GPUParticles3D.new()
+		maturity_particles.position=Vector3(0,0.8,0)
+		maturity_particles.amount=5
+		maturity_particles.lifetime=1.6
+		var process := ParticleProcessMaterial.new()
+		process.direction=Vector3.UP
+		process.spread=65.0
+		process.initial_velocity_min=0.15
+		process.initial_velocity_max=0.5
+		process.gravity=Vector3.ZERO
+		process.emission_shape=ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		process.emission_sphere_radius=0.45
+		maturity_particles.process_material=process
+		var spark := BoxMesh.new()
+		spark.size=Vector3.ONE*0.045
+		var glow := StandardMaterial3D.new()
+		glow.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+		glow.albedo_color=Color("#efcb76")
+		spark.material=glow
+		maturity_particles.draw_pass_1=spark
+		add_child(maturity_particles)
+		_update_maturity(true)
+		if active and saved_hits>0: hits_left=saved_hits
+	else:
+		var elapsed := maxf(0.0,Time.get_unix_time_from_system()-last_break)
+		if last_break>0 and elapsed<recovery:
+			active=false
+			hits_left=0
+			cooldown=recovery-elapsed
+			visible=false
+			if resource_body!=null: resource_body.set_deferred("collision_layer",0)
+		elif saved_hits>0:
+			hits_left=saved_hits
+
+func update_tree_cutaway(room: Dictionary,toward_camera: Vector3) -> void:
+	if tree_mesh==null: return
+	var hidden := false
+	if active and not room.is_empty():
+		var bounds: AABB = tree_mesh.global_transform * tree_mesh.get_aabb()
+		var rect: Rect2i = room["rect"]
+		var floor_y: int = room["floor"]
+		var center := Vector3(rect.get_center().x+0.5,floor_y+0.1,rect.get_center().y+0.5)
+		if bounds.get_center().distance_to(center)<48.0:
+			var inner := rect.grow(-1)
+			for z in range(inner.position.y,inner.end.y):
+				for x in range(inner.position.x,inner.end.x):
+					var at := Vector3(x+0.5,floor_y+0.1,z+0.5)
+					if bounds.intersects_segment(at,at+toward_camera*48.0)!=null:
+						hidden=true
+						break
+				if hidden: break
+	if hidden==tree_cutaway_hidden: return
+	tree_cutaway_hidden=hidden
+	tree_mesh.visible=not hidden
+	if hidden:
+		set_targeted(false)
+	if resource_body!=null: resource_body.set_meta("building_cutaway_hidden",hidden)
+	var area := get_node_or_null("WorldPickGeometry")
+	if area!=null: area.set_meta("building_cutaway_hidden",hidden)
+
+func _is_maturing_ore() -> bool:
+	return not regional_id.is_empty() and kind in ["stone","iron","coal","clay"]
+
+func _update_maturity(force: bool = false) -> void:
+	var stars := MATURITY.stars(MATURITY.age(last_break,Time.get_unix_time_from_system()))
+	# A depleted wall voxel is a small accessible recess. Never regenerate
+	# a physical cube while the player overlaps that recess.
+	if cave_ore_block and stars>0 and not active and is_instance_valid(regional_game) and regional_game.hero!=null:
+		var offset: Vector3 = regional_game.hero.global_position-global_position
+		if absf(offset.x)<0.95 and absf(offset.z)<0.95 and offset.y<1.0 and offset.y>-2.0: stars=0
+	if not force and stars==maturity_stars: return
+	var was_active := active
+	maturity_stars=stars
+	active=stars>0
+	if active and (force or not was_active): hits_left=max_hits
+	if not active: hits_left=0
+	if resource_body!=null:
+		resource_body.set_deferred("collision_layer",1 if active else 0)
+	visible=true
+	var visual_scale := (1.0 if stars>0 else 0.22) if cave_ore_block else 0.55+float(stars)*0.09
+	for mesh in _mesh_scales:
+		if is_instance_valid(mesh):
+			mesh.scale=Vector3(_mesh_scales[mesh])*visual_scale
+	maturity_label.text="Recovering" if stars==0 else "★".repeat(stars)+"☆".repeat(5-stars)
+	maturity_label.modulate=Color("#9b9690") if stars==0 else Color("#efcb76")
+	maturity_particles.emitting=stars>=3
+	if stars>=3: maturity_particles.amount=stars
+
+func _record_regional_break() -> void:
+	if regional_id.is_empty() or not is_instance_valid(regional_game): return
+	last_break=Time.get_unix_time_from_system()
+	regional_game.regional_resource_state[regional_id]={"last_break":last_break,"hits_left":0}
+
+func _fell_tree() -> void:
+	# The existing root harvest action is the support-break proxy; a whole
+	# tree is one authored resource, so no floating canopy remains.
+	falling=true
+	var direction := Vector3.RIGHT
+	if is_instance_valid(regional_game) and regional_game.hero!=null:
+		direction=(global_position-regional_game.hero.global_position)
+		direction.y=0
+		if direction.length_squared()<0.01: direction=Vector3.RIGHT
+		direction=direction.normalized()
+	var axis := Vector3.UP.cross(direction).normalized()
+	var target := Quaternion(axis,PI*0.48)
+	fall_tween=create_tween().set_parallel(true)
+	fall_tween.tween_property(self,"quaternion",target,0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fall_tween.chain().tween_callback(func():
+		visible=false
+		quaternion=Quaternion.IDENTITY
+		falling=false
+	)
 
 func _is_voxel_skin() -> bool:
 	var node: Node = get_parent()
@@ -108,7 +268,7 @@ func _setup_target_marker() -> void:
 	target_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	target_label.font_size = 43
 	target_label.pixel_size = 0.006
-	target_label.position = Vector3(0, 1.85, 0)
+	target_label.position = Vector3(0, 2.2 if not rooted_tree.is_empty() else 1.85, 0)
 	target_label.modulate = Color("fff0c4")
 	target_label.visible = false
 	add_child(target_label)
@@ -130,10 +290,11 @@ func _setup_target_marker() -> void:
 
 func set_targeted(selected: bool) -> void:
 	if target_label != null:
-		target_label.visible = selected and active
+		target_label.visible = selected and active and not tree_cutaway_hidden
 		target_label.text = "%s%s · %d actions" % ["Shrimp pool" if kind == "shrimp" else kind.capitalize(), " ×%d" % bundle_count if bundle_count > 1 else "", hits_left]
+		if not regional_id.is_empty(): target_label.text += " · T%d" % regional_tier
 	if target_ring != null:
-		target_ring.visible = selected and active
+		target_ring.visible = selected and active and not tree_cutaway_hidden
 
 func _material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -170,6 +331,18 @@ func _block(size: Vector3, at: Vector3, color: Color) -> void:
 	var m := BoxMesh.new()
 	m.size = size
 	_part(m, at, Vector3.ONE, color)
+
+func _wall_ore() -> void:
+	var base := Color("747e85") if kind=="stone" else Color("58626a") if kind=="coal" else Color("838b90")
+	var vein := Color("9ba5ac") if kind=="stone" else Color("242b32") if kind=="coal" else Color("cf9b70")
+	_block(Vector3.ONE,Vector3(0,0.5,0),base)
+	# Flat inset-looking flecks on the four exposed-capable sides.
+	for i in range(3):
+		var a := -0.27+float(i)*0.25
+		var y := 0.24+float((i*2)%3)*0.23
+		for sign_value in [-1.0,1.0]:
+			_block(Vector3(0.14,0.17,0.008),Vector3(a,y,sign_value*0.5),vein)
+			_block(Vector3(0.008,0.17,0.14),Vector3(sign_value*0.5,y,a),vein)
 
 func _pine() -> void:
 	# Original OBJ, with a twisted trunk and layered low-poly foliage.
@@ -238,6 +411,9 @@ func _reeds() -> void:
 		_orb(Vector3(x + 0.16, height * 0.60, z), Vector3(0.46, 0.14, 0.20), Color("74a88a"))
 
 func _process(delta: float) -> void:
+	if _is_maturing_ore():
+		_update_maturity()
+		return
 	if not active:
 		cooldown -= delta
 		if cooldown <= 0.0:
@@ -273,8 +449,20 @@ func harvest() -> String:
 		active = false
 		if resource_body != null:
 			resource_body.set_deferred("collision_layer", 0)
-		visible = false
+		_record_regional_break()
+		if _is_maturing_ore():
+			if _harvest_tween!=null: _harvest_tween.kill()
+			_update_maturity(true)
+		elif not regional_id.is_empty() and kind=="wood":
+			if _harvest_tween!=null: _harvest_tween.kill()
+			for mesh in _mesh_scales:
+				if is_instance_valid(mesh): mesh.scale=_mesh_scales[mesh]
+			_fell_tree()
+		else:
+			visible = false
 		cooldown = recovery
+	elif not regional_id.is_empty() and is_instance_valid(regional_game):
+		regional_game.regional_resource_state[regional_id]={"last_break":last_break,"hits_left":hits_left}
 	return kind
 
 func _shrimp_pool() -> void:

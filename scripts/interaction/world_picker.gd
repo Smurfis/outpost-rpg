@@ -12,7 +12,18 @@ static func attach(target: Node3D, kind: String) -> void:
 	area.input_ray_pickable = false # The shared input router owns click/tap ordering.
 	area.set_meta("world_target", target)
 	target.add_child(area)
-	_add_shapes(target, target, area)
+	if target.get_meta("animated_npc",false):
+		# Animated meshes change pose; a stable capsule is cheaper and more
+		# accurate for interaction than a rest-pose skinned trimesh.
+		var collider := CollisionShape3D.new()
+		var capsule := CapsuleShape3D.new()
+		capsule.radius=0.48
+		capsule.height=1.95
+		collider.shape=capsule
+		collider.position.y=0.975
+		area.add_child(collider)
+	else:
+		_add_shapes(target, target, area)
 
 static func _add_shapes(node: Node3D, target: Node3D, area: Area3D) -> void:
 	if node is MeshInstance3D and node.mesh != null:
@@ -51,7 +62,7 @@ static func _cave_screen_pick(game: Node3D, screen: Vector2, remote: Variant,
 			var object: Variant = collider.get_meta("world_target", null)
 			if object is Node3D and is_instance_valid(object) and object.is_visible_in_tree():
 				var at: Vector3 = object.global_position
-				if at.distance_to(hero) < 12.0 and cave.has_cave(floori(at.x), floori(at.z)):
+				if at.distance_to(hero) < 12.0 and (cave.has_cave(floori(at.x), floori(at.z)) or object.get_meta("cave_ore_block",false)) and game.target_available(object):
 					picked["target"] = object
 					return picked
 	# A cave mesh may block the ray to a physically reachable chest even
@@ -64,7 +75,7 @@ static func _cave_screen_pick(game: Node3D, screen: Vector2, remote: Variant,
 		if not entity is Node3D or not entity.is_inside_tree() or not entity.is_visible_in_tree():
 			continue
 		var location: Vector3 = entity.global_position
-		if location.distance_to(hero) > 12.0 or not cave.has_cave(floori(location.x), floori(location.z)):
+		if location.distance_to(hero) > 12.0 or (not cave.has_cave(floori(location.x), floori(location.z)) and not entity.get_meta("cave_ore_block",false)):
 			continue
 		for vertical_offset in [0.35, 0.70, 1.0]:
 			var projected: Vector3 = location + Vector3.UP * vertical_offset

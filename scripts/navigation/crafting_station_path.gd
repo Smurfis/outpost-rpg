@@ -81,8 +81,14 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 	# Reuse the station grid/perimeter model, but validate each edge against
 	# actual loaded voxel/dungeon colliders (including cliffs and walls).
 	var result := PackedVector3Array()
-	var first := Vector2i(roundi(start.x), roundi(start.z))
-	var last := Vector2i(roundi(target.x), roundi(target.z))
+	var remote: Variant = game.terrain_surface.get("archipelago") if game.terrain_surface != null else null
+	var settlement_grid: bool = remote != null and remote.terrain != null and (remote.terrain.near_settlement(start.x,start.z,8.0) or remote.terrain.near_settlement(target.x,target.z,8.0))
+	var first := Vector2i(floori(start.x),floori(start.z)) if settlement_grid else Vector2i(roundi(start.x), roundi(start.z))
+	var last := Vector2i(floori(target.x),floori(target.z)) if settlement_grid else Vector2i(roundi(target.x), roundi(target.z))
+	if settlement_grid and reach <= 0.0:
+		var destination_building: Dictionary = remote.terrain.settlement_at(last.x,last.y)
+		if not destination_building.is_empty() and target.y > float(destination_building["floor"])+0.3:
+			return result # Roofs are visual architecture, not ground destinations.
 	var minimum := Vector2i(mini(first.x, last.x) - WORLD_PADDING, mini(first.y, last.y) - WORLD_PADDING)
 	var maximum := Vector2i(maxi(first.x, last.x) + WORLD_PADDING, maxi(first.y, last.y) + WORLD_PADDING)
 	if maximum.x - minimum.x > 70 or maximum.y - minimum.y > 70:
@@ -104,6 +110,8 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 			var cell := Vector2i(x, z)
 			var ray_top: float = top
 			var ray_bottom: float = minf(start.y, target.y) - 6.0
+			var sample_x: float = float(x)+0.5 if settlement_grid else float(x)
+			var sample_z: float = float(z)+0.5 if settlement_grid else float(z)
 			# Inside a roofed fractal cave the highest solid surface is the
 			# mountain roof. A ray from above will select that roof as a
 			# walking node, making clicks in the tunnel impossible to route.
@@ -113,7 +121,20 @@ static func plan_world(game: Node3D, start: Vector3, target: Vector3, reach: flo
 				if floor_y != -99999 and (closed_access == null or not closed_access.roofed.has(cell)):
 					ray_top = float(floor_y) + 1.60
 					ray_bottom = float(floor_y) - 2.0
-			var query := PhysicsRayQueryParameters3D.create(Vector3(x, ray_top, z), Vector3(x, ray_bottom, z), 1, excluded)
+			if settlement_grid:
+				var building: Dictionary = remote.terrain.settlement_at(x,z)
+				if not building.is_empty():
+					var rect: Rect2i = building["rect"]
+					var direction: Vector2i = building["direction"]
+					var door: Vector2i = building["door"]
+					var inner := rect.grow(-1)
+					var offset := cell-door
+					var is_door: bool = offset.x*direction.x+offset.y*direction.y==0 and offset.length_squared()<=1
+					if not inner.has_point(cell) and not is_door: continue
+					# Ray starts below the roof, inside the true building interior.
+					ray_top = float(building["floor"])+1.6
+					ray_bottom = float(building["floor"])-2.0
+			var query := PhysicsRayQueryParameters3D.create(Vector3(sample_x, ray_top, sample_z), Vector3(sample_x, ray_bottom, sample_z), 1, excluded)
 			var hit: Dictionary = space.intersect_ray(query)
 			if hit.is_empty() or (hit.normal as Vector3).y < 0.7:
 				continue

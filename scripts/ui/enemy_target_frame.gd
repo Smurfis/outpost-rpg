@@ -9,6 +9,8 @@ var rank_label: Label
 var accent_rule: ColorRect
 var bar: ProgressBar
 var damage_trail: ProgressBar
+var boss_style := false
+var boss_stars := 0
 var _target_id: int = -1
 var _wanted_percent: float = 100.0
 var _accent: Color = Color("#987b60")
@@ -143,7 +145,7 @@ func show_target(target_id: int, caption: String, hp: float, max_hp: float, rank
 	_set_coloured_name(caption, rarity_name_color, affixes)
 	rank_label.text = rank
 	rank_label.visible = not rank.is_empty()
-	name_label.anchor_right = 0.78 if rank_label.visible else 0.94
+	name_label.anchor_right = 0.78 if rank_label.visible or boss_style else 0.94
 	if accent != _accent:
 		_accent = accent
 		accent_rule.color = accent
@@ -168,3 +170,35 @@ func _process(delta: float) -> void:
 		damage_trail.value = bar.value
 	else:
 		damage_trail.value = move_toward(damage_trail.value, bar.value, delta * 24.0)
+
+func configure_boss_style(rank: int) -> void:
+	var stars:=clampi(rank,0,4)+1
+	if boss_style and boss_stars==stars: return
+	boss_style=true
+	boss_stars=stars
+	var shell := StyleBoxFlat.new()
+	shell.bg_color=Color("#241e21")
+	shell.border_color=Color("#857260")
+	shell.set_border_width_all(2)
+	shell.set_corner_radius_all(2)
+	damage_trail.add_theme_stylebox_override("background",shell)
+	_rect(name_label,0.04,0.0,0.96,0.36)
+	_rect(rank_label,0.82,0.0,0.96,0.36)
+	_rect(damage_trail,0.035,0.60,0.965,0.87)
+	_rect(bar,0.042,0.63,0.958,0.84)
+	queue_redraw()
+
+func _draw() -> void:
+	if not boss_style: return
+	var font: Font=ThemeDB.fallback_font
+	var px:=12
+	var y:=size.y*0.52
+	for i in range(5):
+		var origin:=Vector2(size.x*0.5+(i-2)*15.0-5.0,y)
+		draw_string_outline(font,origin,"★",HORIZONTAL_ALIGNMENT_LEFT,-1,px,3,Color("#171218"))
+		draw_string(font,origin,"★",HORIZONTAL_ALIGNMENT_LEFT,-1,px,_accent if i<boss_stars else Color("#5e5652"))
+	var box:=Rect2(Vector2(size.x*0.027,size.y*0.57),Vector2(size.x*0.946,size.y*0.33))
+	draw_rect(box,Color("#b49a72"),false,1.0)
+	for x in [box.position.x,box.end.x]:
+		var center:=Vector2(x,box.get_center().y)
+		draw_colored_polygon(PackedVector2Array([center+Vector2(-5,0),center+Vector2(0,-5),center+Vector2(5,0),center+Vector2(0,5)]),Color("#a58a64"))

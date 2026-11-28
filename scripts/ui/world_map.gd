@@ -7,6 +7,9 @@ const PITCH: float = deg_to_rad(50.0)
 var game: Node
 var service: Node
 var has_remote_islands: bool = false
+var dev_travel := false
+var dev_travel_busy := false
+var dev_travel_button: Button
 var show_island_circles: bool = false # Temporary GM-only debug overlay, off by default.
 var screen: Control
 var map_art: TextureRect
@@ -126,10 +129,18 @@ func _build_ui() -> void:
 	top.add_child(title)
 	_button(top, "Player", centre_player)
 	_button(top, "Islands" if has_remote_islands else "Island", overview)
+	if _dev_travel_allowed():
+		dev_travel_button = _button(top,"Dev travel: OFF",_toggle_dev_travel)
 	_button(top, "Close", close_map)
 	var left := VBoxContainer.new()
 	left.position = Vector2(12, 68)
 	screen.add_child(left)
+	if _dev_travel_allowed() and service.biome.archipelago!=null and service.biome.archipelago.terrain.goblin_city!=null:
+		_button(left,"Goblin City (DEV)",_travel_goblin_city)
+		_button(left,"Regenerate city (DEV)",_regenerate_goblin_city)
+		if service.biome.archipelago.terrain.skeletal_city!=null:
+			_button(left,"Skeletal City (DEV)",_travel_skeletal_city)
+			_button(left,"Regenerate skeletal (DEV)",_regenerate_skeletal_city)
 	search_box = LineEdit.new()
 	search_box.placeholder_text = "Search discovered places"
 	search_box.custom_minimum_size = Vector2(235, 44)
@@ -146,7 +157,7 @@ func _build_ui() -> void:
 	left.add_child(filters)
 	filters.hide()
 	_button(left, "Layers", func(): filters.visible = not filters.visible)
-	for key in ["mobs", "stations", "portals", "zones", "resources"]:
+	for key in ["mobs", "stations", "portals", "zones", "resources", "special_resources"]:
 		var check := CheckButton.new()
 		check.text = str(key).capitalize()
 		check.button_pressed = service.preferences[key]
@@ -363,6 +374,9 @@ func _canvas_input(event: InputEvent) -> void:
 	map_art.accept_event()
 
 func _inspect(point: Vector2) -> void:
+	if dev_travel and _dev_travel_allowed():
+		_dev_travel_to(ground_at(point))
+		return
 	var record: Dictionary = marker_layer.inspect(point)
 	if not record.is_empty():
 		footer.text = "%s | %dm" % [record.get("label", "Creature"), roundi(game.hero.global_position.distance_to(record.position))]
@@ -462,3 +476,115 @@ func _input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST and is_open(): close_map()
+
+func _dev_travel_allowed() -> bool:
+	return str(ProjectSettings.get_setting("application/config/build_channel",""))=="world-preview" or OS.get_environment("OUTPOST_TEST_DEV_TRAVEL")=="1"
+
+func _toggle_dev_travel() -> void:
+	if not _dev_travel_allowed(): return
+	dev_travel = not dev_travel
+	dev_travel_button.text = "Dev travel: ON" if dev_travel else "Dev travel: OFF"
+	if dev_travel:
+		overview()
+		footer.text = "DEV TEST: tap an exploration island to travel"
+
+func _dev_travel_to(point: Vector3) -> void:
+	if dev_travel_busy or not _dev_travel_allowed() or not service.in_overworld(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain==null or remote.mine_pending or remote.mine_load_failed: return
+	var chosen := -1
+	for i in range(remote.terrain.islands.size()):
+		var island: Dictionary = remote.terrain.islands[i]
+		var cell: Vector2i = island["center"]
+		if Vector2(point.x-cell.x,point.z-cell.y).length()<=float(island["radius"])+8:
+			chosen=i
+			break
+	if chosen<0:
+		footer.text="Tap an exploration island silhouette."
+		return
+	var destination: Vector3
+	var plan = remote.terrain.settlement_plan(chosen)
+	if chosen==3 and remote.terrain.goblin_city!=null:
+		var hub: Vector2i = remote.terrain.goblin_city.hub
+		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	elif chosen==4 and remote.terrain.skeletal_city!=null:
+		var hub: Vector2i = remote.terrain.skeletal_city.hub
+		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	elif plan!=null:
+		var hub: Vector2i = plan.hub
+		destination=Vector3(hub.x+0.5,remote.terrain.height_at(hub.x,hub.y)+0.08,hub.y+0.5)
+	else:
+		var entry: Vector3 = remote.terrain.caves.entrances[chosen]
+		var cell := Vector2i(floori(entry.x)+4,floori(entry.z))
+		destination=Vector3(cell.x+0.5,remote.terrain.height_at(cell.x,cell.y)+0.08,cell.y+0.5)
+	dev_travel_busy=true
+	game.controls.cancel()
+	game.focus_target=null
+	var previous: Vector3 = game.hero.global_position
+	var was_physics: bool = game.hero.is_physics_processing()
+	game.hero.set_physics_process(false)
+	remote._queue_near(destination)
+	var key: Vector2i = remote._cell_at(destination)
+	if not remote._loaded.has(key): remote._build_chunk(key)
+	game.hero.global_position=destination
+	game.hero.velocity=Vector3.ZERO
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var ray := PhysicsRayQueryParameters3D.create(destination+Vector3.UP,destination-Vector3.UP*0.6,1,[game.hero.get_rid()])
+	var hit: Dictionary = game.hero.get_world_3d().direct_space_state.intersect_ray(ray)
+	if hit.is_empty() or (hit.normal as Vector3).y<0.7:
+		game.hero.global_position=previous
+		remote._queue_near(previous)
+		game.hud.toast("No safe landing; travel cancelled.")
+	else:
+		game.hero.global_position=Vector3(hit.position)+Vector3.UP*0.08
+		game.camera_focus_smooth=game.hero.global_position
+		service.observe_player()
+		close_map()
+		game.hud.toast("Developer travel: island %d" % (chosen+1))
+	game.hero.set_physics_process(was_physics)
+	dev_travel_busy=false
+	dev_travel=false
+	if dev_travel_button!=null: dev_travel_button.text="Dev travel: OFF"
+
+func _travel_goblin_city() -> void:
+	if not _dev_travel_allowed(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.goblin_city==null: return
+	var center: Vector2i = remote.terrain.goblin_city.hub
+	await _dev_travel_to(Vector3(center.x,0,center.y))
+
+func _regenerate_goblin_city() -> void:
+	if not _dev_travel_allowed() or dev_travel_busy or not service.in_overworld(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.goblin_city==null: return
+	if not remote.regenerate_city_for_preview(game.hero):
+		footer.text="Leave Goblin Territory before regenerating."
+		return
+	# Existing discovered terrain tiles should resample the changed city.
+	var center: Vector2i = remote.terrain.goblin_city.hub
+	for z in range(-60,61,12):
+		for x in range(-60,61,12):
+			service._touch_chunk(Vector3(center.x+x,0,center.y+z))
+	service.revision+=1
+	service.dirty=true
+	service.changed.emit()
+	footer.text="Goblin City layout %d ready; tap Goblin City to visit." % remote.terrain.goblin_city.cycle
+	dirty=true
+
+func _travel_skeletal_city() -> void:
+	if not _dev_travel_allowed(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.skeletal_city==null: return
+	var hub: Vector2i = remote.terrain.skeletal_city.hub
+	await _dev_travel_to(Vector3(hub.x,0,hub.y))
+
+func _regenerate_skeletal_city() -> void:
+	if not _dev_travel_allowed() or dev_travel_busy or not service.in_overworld(): return
+	var remote = service.biome.archipelago
+	if remote==null or remote.terrain.skeletal_city==null: return
+	if not remote.regenerate_skeletal_city_for_preview(game.hero):
+		footer.text="Leave Skeletal City before regenerating."
+		return
+	footer.text="Skeletal City layout %d ready." % remote.terrain.skeletal_city.cycle
+	dirty=true
