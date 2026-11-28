@@ -7,15 +7,18 @@ var greeted := false
 var attention := 0.0
 
 func configure_guide(ref: Node) -> bool:
+	return configure_civilian(ref,"camp_guide","Outpost guide","human_male_2")
+
+func configure_civilian(ref: Node,id: String,caption: String,kind: String) -> bool:
 	var rig := HUMANOID.new()
-	rig.name="AnimatedGuide"
-	if not rig.configure("human_male_2",0.72):
+	rig.name="AnimatedCivilian"
+	if not rig.configure(kind,0.72):
 		rig.free()
 		return false
 	avatar=rig
 	set_meta("animated_npc",true)
 	set_meta("nameplate_height",2.15)
-	setup(ref,"camp_guide","Outpost guide","npc",rig)
+	setup(ref,id,caption,"npc",rig)
 	return true
 
 func _process(delta: float) -> void:
