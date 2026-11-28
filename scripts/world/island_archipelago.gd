@@ -1539,4 +1539,5 @@ func _install_civilians(plan,key: Vector2i,game: Node,members: Array) -> void:
 			actor.queue_free()
 			continue
 		actor.message=str(info[1])
+		for point: Vector3 in spec.get("patrol",[]): actor.patrol.append(point)
 		members.append(actor)
