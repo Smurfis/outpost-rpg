@@ -24,9 +24,9 @@ func build(item: Dictionary, source) -> void:
 	var door: Vector2i = item["door"]
 	var direction: Vector2i = item["direction"]
 	var kind: String = item["kind"]
-	var wall_h := 5 if kind=="watchtower" else (4 if kind=="inn" else 3)
-	var wall_tile := 12 if kind in ["watchtower","smithy","guardhouse"] else 11
-	var roof_tile := 4 if kind in ["watchtower","smithy","guardhouse"] else 8
+	var wall_h := 5 if kind in ["watchtower","guildhall"] else (4 if kind in ["inn","bank","market"] else 3)
+	var wall_tile := 12 if kind in ["watchtower","smithy","guardhouse","bank","guildhall"] else 11
+	var roof_tile := 4 if kind in ["watchtower","smithy","guardhouse","bank","guildhall"] else 8
 	position = Vector3(rect.position.x,floor_y,rect.position.y)
 	for z in range(rect.size.y):
 		for x in range(rect.size.x):
@@ -39,7 +39,7 @@ func build(item: Dictionary, source) -> void:
 			if z==0: wall_group=3 if wall_group==0 else (6 if wall_group==1 else 7)
 			elif z==rect.size.y-1: wall_group=4 if wall_group==0 else (8 if wall_group==1 else 9)
 			if wall_group>0:
-				var is_door: bool = (cell.x-door.x)*direction.x+(cell.y-door.y)*direction.y==0 and cell.distance_squared_to(door)<=1
+				var is_door: bool = (cell.x-door.x)*direction.x+(cell.y-door.y)*direction.y==0 and cell.distance_squared_to(door)<=(4 if kind=="market" else 1)
 				for y in range(wall_h):
 					if is_door and y<3: continue
 					var tile := wall_tile
@@ -48,11 +48,13 @@ func build(item: Dictionary, source) -> void:
 					elif wall_group>=6 or y==wall_h-1: tile=8 if wall_tile==11 else 4
 					elif y==1 and (x+z)%3==0 and cell.distance_squared_to(door)>4: tile=15
 					elif kind=="watchtower" and y==wall_h-2: tile=6
+					elif kind=="guildhall" and y==wall_h-2: tile=6
+					elif kind=="market" and y==wall_h-1: tile=8
 					_put(Vector3i(x,y,z),tile,wall_group)
 			# Roof is a distinct visual group; collision remains solid.
 			_put(Vector3i(x,wall_h,z),roof_tile,5)
 	# Raised parapet on the watchtower; simple pitched stepped roofs on homes.
-	if kind in ["watchtower","guardhouse"]:
+	if kind in ["watchtower","guardhouse","bank"]:
 		for x in range(rect.size.x):
 			for z in range(rect.size.y):
 				if (x in [0,rect.size.x-1] or z in [0,rect.size.y-1]) and (x+z)%2==0:
