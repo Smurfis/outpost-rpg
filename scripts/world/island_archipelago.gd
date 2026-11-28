@@ -110,6 +110,12 @@ func _add_cache_cave_regions(route: Array) -> void:
 			if terrain.caves.floors.has(cell):
 				room[cell] = true
 	_add_region(room, center)
+	if terrain.expanded_preview:
+		var mouth: Vector3i=route.front()
+		for cavern in terrain.preview_cave_chambers:
+			var anchor: Vector2i=cavern["anchor"]
+			if anchor.distance_squared_to(Vector2i(mouth.x,mouth.z))<25*25:
+				_add_region(cavern["cells"],anchor)
 	var passage := {}
 	for i in range(route.size()-1,-1,-1):
 		var at: Vector3i = route[i]
