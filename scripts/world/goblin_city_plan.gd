@@ -14,6 +14,8 @@ var route: Array[Vector3i] = []
 var buildings: Array[Dictionary] = []
 var roads: Dictionary = {}
 var guards: Array[Dictionary] = []
+var caches: Array[Dictionary] = []
+var gatherers: Array[Dictionary] = []
 var hub := CENTER+Vector2i(0,5)
 var entrance := CENTER+Vector2i(36,0)
 var throne := CENTER+Vector2i(-17,0)
@@ -31,6 +33,8 @@ func generate(world_seed: int,iteration: int) -> void:
 	buildings.clear()
 	roads.clear()
 	guards.clear()
+	caches.clear()
+	gatherers.clear()
 	# Three-wide roofed descent from the eastern shoulder into the city.
 	for step in range(27):
 		var p := entrance-Vector2i(step,0)
@@ -85,6 +89,9 @@ func generate(world_seed: int,iteration: int) -> void:
 		if i in [0,3,6,9]: kind="watchtower"
 		_build("district_%d" % i,kind,Rect2i(CENTER+slots[i],Vector2i(7,7)),Vector2i(0,1 if i<6 else -1))
 	_build("keep","watchtower",Rect2i(CENTER+Vector2i(-5,-19),Vector2i(11,11)),Vector2i.DOWN)
+	var infill: Array[Vector2i] = [Vector2i(-12,-7),Vector2i(8,-7),Vector2i(-21,0),Vector2i(18,0),Vector2i(-7,17),Vector2i(3,17)]
+	for i in range(infill.size()):
+		_build("infill_%d" % i,["house","storehouse","house","smithy","guardhouse","house"][i],Rect2i(CENTER+infill[i],Vector2i(5,5)),Vector2i.DOWN if i<4 else Vector2i.UP)
 	for z in range(-25,24):
 		for x in range(-27,29):
 			var p := CENTER+Vector2i(x,z)
@@ -99,7 +106,24 @@ func generate(world_seed: int,iteration: int) -> void:
 		var path := _surface_route(at)
 		item["route"]=path
 		for p in path: roads[p]=true
-	for offset in [Vector2i(-9,5),Vector2i(9,5),Vector2i(0,-4),Vector2i(0,18)]:
+	for i in [0,2,4,7,10,12,15]:
+		var item: Dictionary = buildings[i]
+		var rect: Rect2i = item["rect"]
+		var cell := rect.get_center()+Vector2i(1,0)
+		caches.append({"id":"building_%d" % i,"cell":cell,"height":int(item["floor"]),"loot":{"wood":rng.randi_range(3,7),"stone":rng.randi_range(2,5),"fiber":rng.randi_range(1,4)}})
+	# Two workers have fixed storage yards and distinct collection walks.
+	for i in range(2):
+		var side := -1 if i==0 else 1
+		var yard := CENTER+Vector2i(side*12,6)
+		var source := CENTER+Vector2i(side*25,-10)
+		var to_hub := _surface_route(yard)
+		to_hub.reverse()
+		var outward := _surface_route(source)
+		if to_hub.is_empty() or outward.is_empty(): continue
+		to_hub.append_array(outward.slice(1))
+		for p in to_hub: roads[p]=true
+		gatherers.append({"id":"worker_%d" % i,"yard":yard,"source":source,"path":to_hub,"chest":yard+Vector2i(0,1)})
+	for offset in [Vector2i(-9,5),Vector2i(9,5),Vector2i(0,-4),Vector2i(0,18),Vector2i(-16,7),Vector2i(16,7)]:
 		guards.append({"id":"surface_%d_%d" % [offset.x,offset.y],"cell":CENTER+offset,"underground":false})
 
 func _surface_route(goal: Vector2i) -> Array[Vector2i]:
@@ -166,7 +190,11 @@ func contains(p: Vector2i) -> bool:
 	return Vector2(p-CENTER).length()<=RADIUS+6.0
 
 func validate() -> bool:
-	if floors.is_empty() or not floors.has(throne): return false
+	if floors.is_empty() or not floors.has(throne) or gatherers.size()!=2: return false
+	for worker in gatherers:
+		for p: Vector2i in worker["path"]:
+			if not building_at(p).is_empty(): return false
+		if not building_at(worker["chest"]).is_empty(): return false
 	for i in range(buildings.size()):
 		var a: Rect2i = buildings[i]["rect"]
 		if buildings[i]["route"].is_empty(): return false
