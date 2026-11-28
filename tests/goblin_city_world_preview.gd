@@ -1,4 +1,5 @@
 extends SceneTree
+const RIVAL = preload("res://scripts/world/regional_rival.gd")
 const WORK = preload("res://scripts/world/goblin_village_work.gd")
 const OCEAN = preload("res://scripts/world/ocean_surface.gd")
 const DATA = preload("res://scripts/world/fractal_archipelago_data.gd")
@@ -124,6 +125,7 @@ func _run() -> void:
 		check(game.hero.boat_launch_age<0.0,"Leaving water did not cancel launch")
 	await _test_village(game)
 	await _test_live_skeletal(game)
+	await _test_rivals(game)
 	game.queue_free()
 	await process_frame
 	print("WORLD PREVIEW RESULT: %d failures" % failures)
@@ -266,3 +268,68 @@ func _test_village(game) -> void:
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(game.save_path))
 	check(saved is Dictionary and saved.get("village_work",{}).has(id),"Gatherer stock not saved")
 	print("VILLAGE WORK: streamed gatherer, partial pickup, chest destruction and renewal checked")
+
+func _test_rivals(game) -> void:
+	var policy := RIVAL.fresh()
+	for rank in range(1,5):
+		check(RIVAL.promote(policy) and policy["rank"]==rank,"Rival failed to advance")
+		check(RIVAL.follower_count(rank)==[0,1,2,4,6][rank],"Wrong retinue count")
+	check(not RIVAL.promote(policy) and policy["rank"]==4,"Rival rank exceeded cap")
+	check(RIVAL.sanitize(JSON.parse_string(JSON.stringify(policy)))==policy,"Career save roundtrip mismatch")
+	RIVAL.retire(policy)
+	check(policy["rank"]==0 and policy["generation"]==1,"Successor inherited defeated rival rank")
+	var remote = game.terrain_surface.archipelago
+	for species in ["goblin","skeleton"]:
+		var city = remote.terrain.goblin_city if species=="goblin" else remote.terrain.skeletal_city
+		var cell: Vector2i = city.hub if species=="goblin" else city.heart
+		var y: int = remote.terrain.height_at(cell.x,cell.y) if species=="goblin" else city.floors[cell]
+		var at := Vector3(cell.x+0.5,y+0.08,cell.y+0.5)
+		game.hero.global_position=at
+		remote._queue_near(at)
+		for i in range(60):
+			if remote._pending.is_empty(): break
+			remote._build_pending()
+			await process_frame
+		await physics_frame
+		var killer: Node3D
+		var other: Node3D
+		for enemy in get_nodes_in_group("enemies"):
+			if not enemy.has_method("credit_player_defeat") or enemy.rival_id.is_empty() or enemy.rival_kind!=species: continue
+			if killer==null and enemy.global_position.distance_to(at)<24.0: killer=enemy
+			elif other==null: other=enemy
+		check(is_instance_valid(killer),"Missing regional "+species+" rival")
+		if not is_instance_valid(killer): continue
+		var id: String = killer.rival_id
+		var before: int = killer.rival_record["rank"]
+		var other_rank: int = other.rival_record["rank"] if is_instance_valid(other) else -1
+		game.hero.global_position=killer.global_position+Vector3(0,0,1)
+		game.hero.health=1.0
+		killer.strike_player(100.0)
+		check(game.hero.health==100.0 and game.regional_rivals[id]["rank"]==mini(before+1,4),"Lethal strike failed to credit exact rival")
+		if is_instance_valid(other): check(other.rival_record["rank"]==other_rank,"Wrong NPC gained promotion")
+		var name_before: String = killer.display_name
+		var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(game.save_path))
+		check(saved is Dictionary and saved.get("regional_rivals",{}).get(id,{}).get("rank",-1)==mini(before+1,4),"Promotion missing from death save")
+		remote._clear_stream()
+		await process_frame
+		game.hero.global_position=at
+		remote._queue_near(at)
+		for i in range(60):
+			if remote._pending.is_empty(): break
+			remote._build_pending()
+			await process_frame
+		await physics_frame
+		var returned: Node3D
+		for enemy in get_nodes_in_group("enemies"):
+			if enemy.has_method("credit_player_defeat") and enemy.rival_id==id:
+				returned=enemy
+				break
+		check(is_instance_valid(returned),"Promoted rival absent on return")
+		if is_instance_valid(returned):
+			check(returned.display_name==name_before and returned.quality==mini(before+1,4),"Named career lost on stream reload")
+			var generation: int = returned.rival_generation
+			returned.receive_damage(100000.0)
+			check(game.regional_rivals[id]["rank"]==0 and game.regional_rivals[id]["generation"]==generation+1,"Rival defeat did not retire career")
+		game.hero.global_position=Vector3(0,0.35,0)
+		await process_frame
+	print("REGIONAL RIVALS: exact lethal credit, both species, persistent rank and retirement checked")
