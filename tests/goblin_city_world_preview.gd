@@ -385,6 +385,13 @@ func _test_town_and_coves(data) -> void:
 			check(plan.buildings.size()>=(8 if index==2 else 4),"Expanded settlement lacks sufficient buildings")
 			check(plan.plaza.size()>25,"Civic square too small")
 			check(plan.road_steps.is_empty(),"Old half-road tread returned")
+			check(not plan.ring_routes.is_empty(),"No linked district roads")
+			for contact in plan.quest_anchors:
+				var patrol: Array=contact.get("patrol",[])
+				for n in range(1,patrol.size()):
+					var a: Vector3=patrol[n-1]
+					var p: Vector3=patrol[n]
+					check(absf(a.y-p.y)<=1.0 and Vector2(a.x,a.z).distance_to(Vector2(p.x,p.z))<=1.01,"Civilian patrol crosses cliff or gap")
 			var ids: Dictionary={}
 			for item in plan.buildings:
 				check(not ids.has(item["id"]),"Duplicate building identity")
@@ -410,4 +417,12 @@ func _test_town_and_coves(data) -> void:
 				var z:=step.z+lane
 				var floor_y: int=data.caves.floor_at(step.x,z)
 				check(data.is_solid(step.x,data.caves.ceiling_at(step.x,z,floor_y)+1,z),"Tunnel reopened as ravine")
+		for chamber in data.preview_cave_chambers:
+			if int(chamber["island"])!=index: continue
+			var anchor: Vector2i=chamber["anchor"]
+			check(chamber["cells"].size()>30,"Interior cavern too small")
+			for p: Vector2i in chamber["cells"]:
+				var y: int=data.caves.floor_at(p.x,p.y)
+				check(data.is_solid(p.x,data.caves.ceiling_at(p.x,p.y,y)+1,p.y),"Interior cavern roof missing")
+				check(not PATH._branch_path(data.caves,anchor,p,Vector3(p.x+0.5,y+0.1,p.y+0.5)).is_empty(),"Interior cavern disconnected")
 		print("COVE PLAN: island %d, widened roofed entrance and preserved %d route cells" % [index,route.size()])
