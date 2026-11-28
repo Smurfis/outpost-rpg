@@ -113,9 +113,10 @@ func _add_cache_cave_regions(route: Array) -> void:
 	var passage := {}
 	for i in range(route.size()-1,-1,-1):
 		var at: Vector3i = route[i]
-		for lane in terrain.caves.CORRIDOR_WIDTH:
+		var width := 2 if terrain.expanded_preview and i<3 else 1 if terrain.expanded_preview and i<6 else 0
+		for lane in range(-width,terrain.caves.CORRIDOR_WIDTH+width):
 			var cell := Vector2i(at.x,at.z+lane)
-			if not _owners.has(cell):
+			if terrain.caves.has_cave(cell.x,cell.y) and not _owners.has(cell):
 				passage[cell] = true
 		if passage.size() >= 18 or (i == 0 and not passage.is_empty()):
 			_add_region(passage,Vector2i(at.x,at.z))
