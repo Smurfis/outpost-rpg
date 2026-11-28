@@ -349,10 +349,21 @@ func _test_nameplates(game) -> void:
 			break
 	check(is_instance_valid(guide) and plates.friendly(guide),"Friendly NPC nameplate classification missing")
 	if is_instance_valid(guide):
+		check(guide.get_meta("animated_npc",false),"Guide still uses placeholder art")
+		if guide.get_meta("animated_npc",false):
+			check(is_instance_valid(guide.avatar) and guide.avatar.animation_names.has("idle") and guide.avatar.animation_names.has("wave") and guide.avatar.animation_names.has("yes"),"Guide imported animation clips missing")
+			var pick=guide.get_node_or_null("WorldPickGeometry")
+			check(pick!=null and pick.get_child_count()==1 and pick.get_child(0).shape is CapsuleShape3D,"Guide interaction capsule missing")
 		game.hero.global_position=guide.global_position+Vector3(1,0,0)
 		game._camera(1.0)
 		await physics_frame
 		check(plates.same_floor(guide),"Nearby guide failed floor check")
+		if guide.get_meta("animated_npc",false):
+			guide.greeted=false
+			guide._process(0.2)
+			check(guide.greeted and guide.avatar.current_state==guide.avatar.animation_names["wave"],"Guide did not wave at nearby player")
+			guide.interact(game.hero)
+			check(guide.avatar.current_state==guide.avatar.animation_names["yes"],"Guide did not acknowledge interaction")
 		game.hero.global_position=guide.global_position+Vector3(30,0,0)
 		check(not plates.visible_actor(guide,plates.RANGE),"Distant NPC nameplate leaked")
 		game.hero.global_position=guide.global_position+Vector3(0,8,0)
