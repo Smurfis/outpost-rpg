@@ -82,30 +82,21 @@ func _init(world_seed: int = 64012) -> void:
 		_cover_remote_caves()
 	_plan_cave_ore()
 
-# West retains the original entrance; south gets a fully roofed lateral
-# mouth. Preserve tunnel floor addresses, chest IDs and the first mine.
+# Preserve the original non-preview coastal route contract. Preview alone
+# replaces the exposed approach with a lateral roofed entrance.
 func _cover_remote_caves() -> void:
 	for index in [1,2]:
 		var route: Array = caves.routes[index]
 		if route.is_empty(): continue
-		var mouth: Vector3i = route[0]
-		if index==2:
-			# A taller opening tapering to the ordinary three-block tunnel.
-			for i in range(3):
-				var step: Vector3i = route[i]
-				for width in range(CAVES.CORRIDOR_WIDTH):
-					var cell := Vector2i(step.x,step.z+width)
-					caves.extra_ceilings[cell]=caves.floor_at(cell.x,cell.y)+(5 if i==0 else 4)
-		for i in range(0 if index==2 else 5,route.size()):
+		var mouth: Vector3i = route.front()
+		for i in range(5,route.size()):
 			var step: Vector3i = route[i]
-			for width in range(CAVES.CORRIDOR_WIDTH):
-				var cell := Vector2i(step.x,step.z+width)
-				_cover_column(cell,mouth,index==2,i<5)
+			for lane in range(CAVES.CORRIDOR_WIDTH):
+				_cover_column(Vector2i(step.x,step.z+lane),mouth,false,false)
 		var end: Vector3i = route.back()
 		for dz in range(-2,3):
 			for dx in range(-2,3):
-				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,index==2,false)
-		if index==2: _plan_cove_apron(mouth)
+				_cover_column(Vector2i(end.x+dx,end.z+dz),mouth,false,false)
 
 # Sculpt a real mountain facade into the existing Perlin terrain. Both
 # remote cave routes retain their original floor/chest coordinates. Widen
@@ -174,19 +165,6 @@ func _cover_column(cell: Vector2i,mouth: Vector3i,cove: bool,entrance: bool) -> 
 			var distance := maxi(absi(dx),absi(dz))
 			var required := roof-ceili(float(distance)*0.75) if cove and entrance else roof-distance
 			_cave_cover[q]=maxi(int(_cave_cover.get(q,BEDROCK)),required)
-
-func _plan_cove_apron(mouth: Vector3i) -> void:
-	# A level forecourt under the east-facing arch. Blend outward into the
-	# existing terraced approach, limiting each forward change to one voxel.
-	for lane in range(-1,3):
-		var previous := mouth.y
-		for step in range(1,9):
-			var p := Vector2i(mouth.x+step,mouth.z+lane)
-			if margin_at(p.x+0.5,p.y+0.5)<=2.0: break
-			var original := height_at(p.x,p.y)
-			var next := mouth.y if step<=2 else clampi(original,previous-1,previous+1)
-			_cove_apron[p]=next
-			previous=next
 
 func _plan_cave_ore() -> void:
 	# Reserve actual solid wall voxels in the remote end chambers. Base
