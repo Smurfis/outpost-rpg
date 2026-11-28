@@ -1370,6 +1370,13 @@ func regenerate_skeletal_city_for_preview(hero: Node3D) -> bool:
 func _install_skeletal_inhabitants(key: Vector2i,game: Node,members: Array) -> void:
 	var city = terrain.skeletal_city
 	if city==null or game==null: return
+	for cache in city.caches:
+		var cell: Vector2i = cache["cell"]
+		var at := Vector3(cell.x+0.5,float(cache["height"])+0.08,cell.y+0.5)
+		if _cell_at(at)!=key: continue
+		var id := "skeletal_cache:%d:%s" % [terrain.seed,cache["id"]]
+		if game.opened_world_objects.get(id,cache["loot"]).is_empty(): continue
+		_spawn_village_chest(game,id,"Ancient crypt cache",at,cache["loot"],"",members)
 	for record in city.inhabitants:
 		var cell: Vector2i = record["cell"]
 		if not city.floors.has(cell): continue
@@ -1430,6 +1437,7 @@ func _update_village(game: Node,seconds: float) -> void:
 			worker.setup(game.hero,null,0,at,"goblin")
 			worker.display_name="Goblin Gatherer"
 			worker.slain.connect(_worker_slain.bind(game,id))
+			worker.tree_exited.connect(group.queue_free,CONNECT_ONE_SHOT)
 			village_workers[id]=worker
 		var chest_cell: Vector2i = spec["chest"]
 		var chest_at := Vector3(chest_cell.x+0.5,terrain.height_at(chest_cell.x,chest_cell.y)+0.08,chest_cell.y+0.5)
