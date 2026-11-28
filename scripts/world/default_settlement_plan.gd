@@ -487,10 +487,32 @@ func _plan_quest_anchors(source) -> void:
 					"guildhall": giver_role="guild_contact"
 					"storehouse": giver_role="quartermaster"
 					_: giver_role="resident"
+		var patrol: Array[Vector3] = []
+		if expanded and giver_role in ["guard","resident","coastal_contact"]:
+			# Short local loops remain in the owning stream chunk; no actors
+			# can wander into unloaded land or block the primary street.
+			var chunk := Vector2i(floori(float(best.x)/12.0),floori(float(best.y)/12.0))
+			var current := approach
+			var used: Dictionary = {best:true,approach:true}
+			if Vector2i(floori(float(approach.x)/12.0),floori(float(approach.y)/12.0))==chunk:
+				patrol.append(Vector3(best.x+0.5,float(_heights[best])+0.04,best.y+0.5))
+				patrol.append(Vector3(approach.x+0.5,float(_heights[approach])+0.04,approach.y+0.5))
+				for n in range(4):
+					var next := Vector2i.MAX
+					for d in DIRS:
+						var q := current+d
+						if used.has(q) or not roads.has(q) or absi(int(_heights[current])-int(_heights[q]))>1: continue
+						if Vector2i(floori(float(q.x)/12.0),floori(float(q.y)/12.0))!=chunk: continue
+						next=q
+						break
+					if next==Vector2i.MAX: break
+					used[next]=true
+					patrol.append(Vector3(next.x+0.5,float(_heights[next])+0.04,next.y+0.5))
+					current=next
 		quest_anchors.append({"id":str(record["id"])+":giver","landmark_id":record["id"],"role":giver_role,
 			"cell":best,"approach":approach,"objective_hint":objective,
 			"position":Vector3(best.x+0.5,source.height_at(best.x,best.y),best.y+0.5),
-			"allows_expeditions":role=="settlement"})
+			"allows_expeditions":role=="settlement","patrol":patrol})
 
 func _validate_network(source) -> bool:
 	# A road is not merely a material: every published destination must be
