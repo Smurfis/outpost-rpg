@@ -87,6 +87,8 @@ var terrain_surface: Node3D
 var station_positions: Dictionary = {"workbench": Vector3(3.5, 0.0, 0.6), "forge": Vector3(-12, 0.0, -1.0), "loom": Vector3(8.5, 0.0, 3.0), "campfire": Vector3(-2.8, 0.0, 2.8), "enchanting": Vector3(12.0, 0.0, -12.0)}
 var experience: int = 0
 var weapon_mastery_xp: Dictionary = {} # Stored per weapon, independent of character level.
+const REGIONAL_RIVAL = preload("res://scripts/world/regional_rival.gd")
+var regional_rivals: Dictionary = {}
 const VILLAGE_WORK = preload("res://scripts/world/goblin_village_work.gd")
 var village_work: Dictionary = {}
 var regional_resource_state: Dictionary = {} # Stable regional node depletion and partial harvest state.
@@ -1953,7 +1955,10 @@ func _spawn_tombstone_node(tombstone_id: String) -> void:
 	grave.setup(self, tombstone_id, "Your Tombstone", "tombstone", art, record.get("contents", {}))
 	tombstone_nodes[tombstone_id] = grave
 
-func on_player_defeated(at: Vector3) -> void:
+func on_player_defeated(at: Vector3, attacker: Node = null) -> void:
+	var promotion: String = ""
+	if is_instance_valid(attacker) and attacker.has_method("credit_player_defeat"):
+		promotion=attacker.credit_player_defeat()
 	# Transfer once, before teleporting. No starter weapon is an inventory
 	# item. Currency and all carried equipment/resources are included.
 	var carried: Dictionary = {}
@@ -1986,7 +1991,11 @@ func on_player_defeated(at: Vector3) -> void:
 	_apply_equipment()
 	_save()
 	if hud != null:
-		hud.toast("Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost.")
+		var notice := "Defeated! Your items are in a tombstone near where you fell." if not carried.is_empty() else "Defeated! Respawned at Outpost."
+		if not promotion.is_empty():
+			hud.record_combat_event(promotion)
+			notice += " "+promotion
+		hud.toast(notice)
 
 func tombstone_contents(tombstone_id: String) -> Dictionary:
 	if not death_tombstones.has(tombstone_id):
@@ -2053,6 +2062,7 @@ func _save() -> void:
 	var data: Dictionary = {"version": 5, "equipment": equipment, "inventory": inventory, "experience": experience, "kills": kills, "spear": spear_crafted, "day_phase": day_night.phase if day_night != null else 0.38, "night_quote_seen": night_quote_seen, "coop_reward_receipts": coop_reward_receipts, "active_quick_tool": active_quick_tool, "bag_quality": bag_quality, "best_craft_rolls": best_craft_rolls, "overflow_loot": overflow_loot, "weapon_mastery_xp": weapon_mastery_xp, "gathering_skill_xp": gathering_skill_xp, "mana": mana, "last_trained_skill": last_trained_skill, "weapon_enchants": weapon_enchants, "quick_slots": quick_slots, "opened_world_objects": opened_world_objects, "death_tombstones": death_tombstones, "next_tombstone_id": next_tombstone_id}
 	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if not village_work.is_empty(): data["village_work"]=village_work
+	if not regional_rivals.is_empty(): data["regional_rivals"]=regional_rivals
 	if not regional_resource_state.is_empty():
 		data["regional_resource_state"] = regional_resource_state
 	if not natural_cave_encounters.is_empty():
@@ -2090,6 +2100,12 @@ func _load() -> void:
 				if typeof(value) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(value)) or absf(float(value)) > limit or int(value) != value:
 					player_save_valid_for_mine = false
 					break
+	regional_rivals.clear()
+	var stored_rivals: Variant = data.get("regional_rivals",{})
+	if stored_rivals is Dictionary and stored_rivals.size()<=256:
+		for id in stored_rivals:
+			if id is String and id.length()<=120:
+				regional_rivals[id]=REGIONAL_RIVAL.sanitize(stored_rivals[id])
 	village_work.clear()
 	var saved_work: Variant = data.get("village_work",{})
 	if saved_work is Dictionary and saved_work.size()<=128:
